@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Graceful Homeschooling Website
 
-## Getting Started
+This is the codebase for the Graceful Homeschooling website, featuring social media integrations with YouTube and Facebook.
 
-First, run the development server:
+## Environment Variables
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+The following environment variable is required for the YouTube integration:
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Required
+- `YOUTUBE_API_KEY`: Your YouTube API key for fetching channel and video data
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Setting Up YouTube API Key
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select an existing one
+3. Navigate to "APIs & Services" > "Library"
+4. Search for and enable the "YouTube Data API v3"
+5. Go to "APIs & Services" > "Credentials"
+6. Click "Create Credentials" > "API Key"
+7. Copy the generated API key
+8. Add it to your environment variables as `YOUTUBE_API_KEY`
 
-## Learn More
+## Facebook Integration
 
-To learn more about Next.js, take a look at the following resources:
+The Facebook integration uses Facebook's official Page Plugin, which doesn't require any API keys or app creation. It's a simple embed that shows your Facebook page's timeline directly on your website.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+If the Facebook embed doesn't appear, users will see a fallback message with a link to visit the Facebook page directly.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Troubleshooting
 
-## Deploy on Vercel
+If you're experiencing issues with the social features:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. For YouTube: Check that your YouTube API key is correctly set in the environment variables
+2. For Facebook: Make sure your site allows third-party cookies and scripts
+3. Both integrations include fallback content if the primary content fails to load
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

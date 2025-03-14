@@ -2,26 +2,161 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 30 33% 98%;
+    --foreground: 20 25% 23%;
+
+    --card: 30 33% 98%;
+    --card-foreground: 20 25% 23%;
+
+    --popover: 30 33% 98%;
+    --popover-foreground: 20 25% 23%;
+
+    /* Updated primary color to match logo purple */
+    --primary: 315 15% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Updated secondary color to match logo pink */
+    --secondary: 355 70% 85%;
+    --secondary-foreground: 20 25% 23%;
+
+    --muted: 25 30% 90%;
+    --muted-foreground: 20 15% 40%;
+
+    /* Updated accent color to match logo blue */
+    --accent: 200 35% 75%;
+    --accent-foreground: 20 25% 23%;
+
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 15% 90%;
+    --input: 30 15% 90%;
+    --ring: 315 15% 60%;
+
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 20 25% 10%;
+    --foreground: 30 33% 98%;
+
+    --card: 20 25% 10%;
+    --card-foreground: 30 33% 98%;
+
+    --popover: 20 25% 10%;
+    --popover-foreground: 30 33% 98%;
+
+    --primary: 315 15% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 355 70% 85%;
+    --secondary-foreground: 30 33% 98%;
+
+    --muted: 20 25% 20%;
+    --muted-foreground: 30 33% 70%;
+
+    --accent: 200 35% 75%;
+    --accent-foreground: 30 33% 98%;
+
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 30 33% 98%;
+
+    --border: 20 25% 20%;
+    --input: 20 25% 20%;
+    --ring: 315 15% 60%;
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-}
-
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
   }
 }
+
+/* Update cursor styles */
+@media (min-width: 768px) {
+  body {
+    cursor: auto;
+  }
+
+  a,
+  button,
+  input,
+  textarea,
+  [role="button"] {
+    cursor: pointer !important;
+  }
+
+  /* Only apply custom cursor when the feature is enabled */
+  body.custom-cursor {
+    cursor: none;
+  }
+
+  body.custom-cursor a,
+  body.custom-cursor button,
+  body.custom-cursor input,
+  body.custom-cursor textarea,
+  body.custom-cursor [role="button"] {
+    cursor: none !important;
+  }
+}
+
+/* Ensure cursor is always visible on mobile */
+@media (max-width: 767px) {
+  body,
+  a,
+  button,
+  input,
+  textarea,
+  [role="button"] {
+    cursor: auto !important;
+  }
+}
+
+/* Custom animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f9f6f2;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #b08ba5;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9a7a94;
+}
+
+/* Advanced text effects */
+.text-gradient {
+  background: linear-gradient(135deg, #b08ba5 0%, #f1b5bc 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
