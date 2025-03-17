@@ -1,9 +1,23 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { SocialWall } from "./social-wall"
-import { YouTubeFeature } from "./youtube-feature"
-import { FacebookHighlights } from "./facebook-highlights"
+import dynamic from 'next/dynamic'
+
+// Dynamically import the social components
+const SocialWall = dynamic(() => import("./social-wall").then(mod => mod.SocialWall), {
+  loading: () => <div className="w-full py-16 bg-white animate-pulse h-40"></div>,
+  ssr: false
+})
+
+const YouTubeFeature = dynamic(() => import("./youtube-feature").then(mod => mod.YouTubeFeature), {
+  loading: () => <div className="w-full py-16 bg-brand-blue/10 animate-pulse h-40"></div>,
+  ssr: false
+})
+
+const FacebookHighlights = dynamic(() => import("./facebook-highlights").then(mod => mod.FacebookHighlights), {
+  loading: () => <div className="w-full py-16 bg-white animate-pulse h-40"></div>,
+  ssr: false
+})
 
 interface SocialIntegrationProps {
   variant?: "full" | "compact" | "youtube-focus" | "facebook-focus"
@@ -53,4 +67,7 @@ export function SocialIntegration({ variant = "full" }: SocialIntegrationProps) 
     </motion.div>
   )
 }
+
+// Add default export for better compatibility with dynamic imports
+export default SocialIntegration;
 

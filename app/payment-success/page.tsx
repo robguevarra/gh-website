@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { CheckCircle, ArrowLeft, Loader2 } from "lucide-react"
+import { CheckCircle, ArrowLeft, Loader } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -65,7 +65,7 @@ function PaymentVerification() {
     return (
       <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
+          <Loader className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
           <h2 className="text-xl font-serif text-[#5d4037]">Verifying your payment...</h2>
           <p className="text-[#6d4c41] mt-2">Please wait while we confirm your payment.</p>
         </div>
@@ -128,7 +128,7 @@ function LoadingFallback() {
   return (
     <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-        <Loader2 className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
+        <Loader className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
         <h2 className="text-xl font-serif text-[#5d4037]">Loading payment information...</h2>
         <p className="text-[#6d4c41] mt-2">Please wait a moment.</p>
       </div>

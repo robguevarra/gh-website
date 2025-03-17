@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { XCircle, RefreshCw, ArrowLeft, AlertTriangle, Loader2 } from "lucide-react"
+import { XCircle, RefreshCw, ArrowLeft, Triangle, Loader } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
@@ -54,7 +54,7 @@ function PaymentFailureContent() {
             className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mx-auto"
           >
             {errorType === "expired" ? (
-              <AlertTriangle className="h-10 w-10 text-amber-500" />
+              <Triangle className="h-10 w-10 text-amber-500" />
             ) : (
               <XCircle className="h-10 w-10 text-red-500" />
             )}
@@ -102,7 +102,7 @@ function LoadingFallback() {
   return (
     <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-        <Loader2 className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
+        <Loader className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
         <h2 className="text-xl font-serif text-[#5d4037]">Loading payment information...</h2>
         <p className="text-[#6d4c41] mt-2">Please wait a moment.</p>
       </div>

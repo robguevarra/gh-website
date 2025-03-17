@@ -5,6 +5,18 @@ import { motion, useInView } from "framer-motion"
 import { Facebook } from "lucide-react"
 import Script from "next/script"
 
+// Add TypeScript declaration for Facebook SDK
+declare global {
+  interface Window {
+    FB?: {
+      XFBML: {
+        parse: () => void;
+      };
+      init: (options: any) => void;
+    }
+  }
+}
+
 export function FacebookHighlights() {
   const containerRef = useRef<HTMLDivElement>(null)
   const isInView = useInView(containerRef, { once: true, margin: "-100px" })

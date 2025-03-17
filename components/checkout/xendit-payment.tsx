@@ -7,6 +7,38 @@ import { CreditCard, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import Image from "next/image"
+
+// Add TypeScript declaration for Xendit
+declare global {
+  interface Window {
+    Xendit?: {
+      setPublishableKey: (key: string) => void;
+      card: {
+        createToken: (data: any, callback: (err: any, response: any) => void) => void;
+      };
+    }
+  }
+}
+
+// Add TypeScript interfaces for Xendit responses
+interface XenditError {
+  error_code: string;
+  message: string;
+}
+
+interface XenditCreditCardToken {
+  status: "VERIFIED" | "APPROVED" | "FAILED" | "IN_REVIEW";
+  id: string;
+  authentication_id?: string;
+  masked_card_number: string;
+  card_info?: {
+    bank: string;
+    country: string;
+    type: string;
+    brand: string;
+  };
+}
 
 interface XenditPaymentProps {
   amount: number
@@ -122,7 +154,7 @@ export function XenditPayment({ amount, onSuccess, onError }: XenditPaymentProps
     }
   }
 
-  const xenditResponseHandler = (err, creditCardToken) => {
+  const xenditResponseHandler = (err: XenditError | null, creditCardToken: XenditCreditCardToken) => {
     setIsLoading(false)
 
     if (err) {
@@ -289,9 +321,27 @@ export function XenditPayment({ amount, onSuccess, onError }: XenditPaymentProps
         </Button>
 
         <div className="flex items-center justify-center mt-4">
-          <img src="/placeholder.svg?height=24&width=60&text=Visa" alt="Visa" className="h-6 mx-1" />
-          <img src="/placeholder.svg?height=24&width=60&text=Mastercard" alt="Mastercard" className="h-6 mx-1" />
-          <img src="/placeholder.svg?height=24&width=60&text=Amex" alt="American Express" className="h-6 mx-1" />
+          <Image 
+            src="/placeholder.svg?height=24&width=60&text=Visa" 
+            alt="Visa" 
+            width={60}
+            height={24}
+            className="h-6 mx-1" 
+          />
+          <Image 
+            src="/placeholder.svg?height=24&width=60&text=Mastercard" 
+            alt="Mastercard" 
+            width={60}
+            height={24}
+            className="h-6 mx-1" 
+          />
+          <Image 
+            src="/placeholder.svg?height=24&width=60&text=Amex" 
+            alt="American Express" 
+            width={60}
+            height={24}
+            className="h-6 mx-1" 
+          />
         </div>
       </form>
     </div>

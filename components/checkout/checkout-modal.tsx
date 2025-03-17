@@ -11,9 +11,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { createPaymentIntent } from "@/app/actions/payment-actions"
+import { createPaymentIntent, type PaymentMethod } from "@/app/actions/payment-actions"
 
 type CheckoutStep = "course" | "details" | "payment" | "confirmation"
+type PaymentMethodUI = "card" | "ewallet" | "direct_debit" | "invoice" | "other"
 
 interface CheckoutModalProps {
   isOpen: boolean
@@ -23,7 +24,7 @@ interface CheckoutModalProps {
 export function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
   const [step, setStep] = useState<CheckoutStep>("course")
   const [isProcessing, setIsProcessing] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState<string>("credit-card")
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card")
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -135,7 +136,7 @@ export function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
       if (!formData.phone) newErrors.phone = "Phone number is required"
     }
 
-    if (step === "payment" && paymentMethod === "credit-card") {
+    if (step === "payment" && paymentMethod === "card") {
       if (!formData.cardNumber || formData.cardNumber.replace(/\s/g, "").length < 16) {
         newErrors.cardNumber = "Valid card number is required"
       }
@@ -184,7 +185,7 @@ export function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
       }
 
       // For redirect-based payment methods like GCash or PayMaya
-      if (paymentMethod !== "credit-card" && response.invoice_url) {
+      if (paymentMethod !== "card" && response.invoice_url) {
         // Redirect to the Xendit-hosted payment page
         window.location.href = response.invoice_url
         return
@@ -500,14 +501,18 @@ export function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
     <motion.div initial="hidden" animate="visible" exit="exit" variants={stepVariants} className="space-y-6">
       <div className="bg-[#f9f6f2] rounded-lg p-6">
         <h3 className="text-lg font-medium text-[#5d4037] mb-4">Payment Method</h3>
-        <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-3">
+        <RadioGroup
+          value={paymentMethod}
+          onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}
+          className="space-y-3"
+        >
           <div
             className={`flex items-center space-x-2 rounded-lg border p-4 cursor-pointer ${
-              paymentMethod === "credit-card" ? "border-[#ad8174] bg-[#f0e6dd]/50" : "border-gray-200 bg-white"
+              paymentMethod === "card" ? "border-[#ad8174] bg-[#f0e6dd]/50" : "border-gray-200 bg-white"
             }`}
           >
-            <RadioGroupItem value="credit-card" id="credit-card" />
-            <Label htmlFor="credit-card" className="flex items-center cursor-pointer">
+            <RadioGroupItem value="card" id="card" />
+            <Label htmlFor="card" className="flex items-center cursor-pointer">
               <CreditCard className="h-5 w-5 mr-2 text-[#5d4037]" />
               Credit / Debit Card
             </Label>
@@ -518,22 +523,22 @@ export function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
           </div>
           <div
             className={`flex items-center space-x-2 rounded-lg border p-4 cursor-pointer ${
-              paymentMethod === "gcash" ? "border-[#ad8174] bg-[#f0e6dd]/50" : "border-gray-200 bg-white"
+              paymentMethod === "ewallet" ? "border-[#ad8174] bg-[#f0e6dd]/50" : "border-gray-200 bg-white"
             }`}
           >
-            <RadioGroupItem value="gcash" id="gcash" />
-            <Label htmlFor="gcash" className="flex items-center cursor-pointer">
+            <RadioGroupItem value="ewallet" id="ewallet" />
+            <Label htmlFor="ewallet" className="flex items-center cursor-pointer">
               <Image src="/placeholder.svg?height=24&width=24&text=GCash" alt="GCash" width={24} height={24} />
               <span className="ml-2">GCash</span>
             </Label>
           </div>
           <div
             className={`flex items-center space-x-2 rounded-lg border p-4 cursor-pointer ${
-              paymentMethod === "paymaya" ? "border-[#ad8174] bg-[#f0e6dd]/50" : "border-gray-200 bg-white"
+              paymentMethod === "direct_debit" ? "border-[#ad8174] bg-[#f0e6dd]/50" : "border-gray-200 bg-white"
             }`}
           >
-            <RadioGroupItem value="paymaya" id="paymaya" />
-            <Label htmlFor="paymaya" className="flex items-center cursor-pointer">
+            <RadioGroupItem value="direct_debit" id="direct_debit" />
+            <Label htmlFor="direct_debit" className="flex items-center cursor-pointer">
               <Image src="/placeholder.svg?height=24&width=24&text=Maya" alt="PayMaya" width={24} height={24} />
               <span className="ml-2">PayMaya</span>
             </Label>
@@ -541,7 +546,7 @@ export function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
         </RadioGroup>
       </div>
 
-      {paymentMethod === "credit-card" && (
+      {paymentMethod === "card" && (
         <div className="space-y-6">
           <div className="relative perspective">
             <motion.div
@@ -723,7 +728,10 @@ export function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
           <div className="flex justify-between text-sm">
             <span className="text-[#6d4c41]">Payment Method:</span>
             <span className="font-medium text-[#5d4037]">
-              {paymentMethod === "credit-card" ? "Credit Card" : paymentMethod === "gcash" ? "GCash" : "PayMaya"}
+              {paymentMethod === "card" ? "Credit Card" : 
+               paymentMethod === "ewallet" ? "E-Wallet" : 
+               paymentMethod === "direct_debit" ? "Direct Debit" : 
+               paymentMethod === "invoice" ? "Invoice" : "Other"}
             </span>
           </div>
         </div>

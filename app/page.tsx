@@ -5,12 +5,19 @@ import Link from "next/link"
 import Image from "next/image"
 import { BookOpen, Heart, Calendar, PenTool, Bookmark, ChevronRight, ArrowRight, Star } from "lucide-react"
 import { motion, useScroll, AnimatePresence, useInView, useTransform, useMotionValue, useSpring } from "framer-motion"
+import dynamic from 'next/dynamic'
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Logo } from "@/components/ui/logo"
-import { SocialIntegration } from "@/components/social-proof/social-integration"
+// Import SocialIntegration component dynamically
+const SocialIntegration = dynamic(() => import('@/components/social-proof/social-integration').then(mod => mod.SocialIntegration), {
+  loading: () => <div className="w-full py-20 md:py-32 bg-brand-blue/10 flex items-center justify-center">
+    <div className="animate-pulse bg-gray-200 h-40 w-full max-w-4xl rounded-lg"></div>
+  </div>,
+  ssr: false
+})
 import { useMobile } from "@/hooks/use-mobile"
 
 export default function Home() {
@@ -108,6 +115,364 @@ export default function Home() {
       },
     }),
   }
+
+  // Split the page into sections for better code splitting
+  const renderHeroSection = () => (
+    <section ref={heroRef} className="w-full min-h-screen flex items-center py-12 md:py-0 relative overflow-hidden">
+      {/* Background Elements */}
+      <div className="absolute inset-0 z-0">
+        {/* Main background image with overlay */}
+        <div className="absolute inset-0 z-0">
+          <Image
+            src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Banner%201366x768-UFjnYSrbc7qq2FtAUa7UFdZalgDTAT.png"
+            alt="Grace's workspace"
+            fill
+            sizes="100vw"
+            quality={85}
+            placeholder="blur"
+            blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTM2NiIgaGVpZ2h0PSI3NjgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmVyc2lvbj0iMS4xIi8+"
+            className="object-cover object-center"
+            priority
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-brand-purple/60 to-brand-pink/40 mix-blend-multiply"></div>
+          <div className="absolute inset-0 bg-[#f9f6f2]/90"></div>
+        </div>
+
+        {/* Decorative circles */}
+        <motion.div
+          className="absolute right-0 top-1/4 w-48 h-48 rounded-full bg-brand-blue blur-3xl opacity-60"
+          style={{
+            scale: decorativeCircleScale,
+            opacity: decorativeCircleOpacity,
+          }}
+        />
+        <motion.div
+          className="absolute left-1/4 bottom-1/4 w-64 h-64 rounded-full bg-brand-pink/20 blur-3xl opacity-40"
+          animate={{
+            y: [0, -20, 0],
+            x: [0, 10, 0],
+            scale: [1, 1.05, 1],
+          }}
+          transition={{
+            duration: 10,
+            repeat: Number.POSITIVE_INFINITY,
+            repeatType: "reverse",
+          }}
+        />
+        <motion.div
+          className="absolute right-1/3 top-1/2 w-36 h-36 rounded-full bg-brand-purple/30 blur-2xl opacity-50"
+          animate={{
+            y: [0, 15, 0],
+            x: [0, -10, 0],
+            scale: [1, 1.1, 1],
+          }}
+          transition={{
+            duration: 8,
+            repeat: Number.POSITIVE_INFINITY,
+            repeatType: "reverse",
+            delay: 2,
+          }}
+        />
+      </div>
+
+      {/* Workspace pattern overlay */}
+      <div className="absolute inset-0 z-0 opacity-5">
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fillRule='evenodd'%3E%3Cg fill='%23b08ba5' fillOpacity='0.4'%3E%3Cpath d='M36 34v-4h-10v-10h-4v10h-10v4h10v10h4v-10h10zM40 0H0v40h40V0z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            backgroundSize: "60px 60px",
+          }}
+        />
+      </div>
+
+      {/* Animated Pattern */}
+      <div className="absolute inset-0 z-0 opacity-10">
+        <svg className="absolute w-full h-full" width="100%" height="100%">
+          <pattern
+            id="pattern-circles"
+            x="0"
+            y="0"
+            width="50"
+            height="50"
+            patternUnits="userSpaceOnUse"
+            patternContentUnits="userSpaceOnUse"
+          >
+            <circle id="pattern-circle" cx="10" cy="10" r="1.6257413380501518" fill="#b08ba5" />
+          </pattern>
+          <rect x="0" y="0" width="100%" height="100%" fill="url(#pattern-circles)" />
+        </svg>
+      </div>
+
+      <div className="container px-4 md:px-6 z-10 relative">
+        <div className="grid gap-6 lg:grid-cols-[1fr_600px] lg:gap-12 xl:grid-cols-[1fr_800px]">
+          <motion.div
+            initial="hidden"
+            animate={isHeroInView ? "visible" : "hidden"}
+            variants={staggerContainer}
+            className="flex flex-col justify-center space-y-8"
+            style={{ y: heroTextY }}
+          >
+            {/* Badge */}
+            <motion.div
+              variants={fadeIn}
+              className="inline-flex items-center rounded-full bg-white/80 backdrop-blur-sm px-3 py-1.5 text-sm max-w-max shadow-sm"
+            >
+              <Star className="h-4 w-4 mr-2 text-brand-purple" />
+              <span className="text-[#5d4037] font-medium">Homeschooling with Grace</span>
+            </motion.div>
+
+            {/* Main Headline */}
+            <div className="space-y-4">
+              <h1 className="relative text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif tracking-tighter text-[#5d4037] overflow-hidden">
+                {heroTextLines.map((line, lineIndex) => (
+                  <div key={lineIndex} className="overflow-hidden relative">
+                    <motion.div custom={lineIndex} variants={textReveal} className="inline-block">
+                      {line}
+                    </motion.div>
+                  </div>
+                ))}
+              </h1>
+
+              {/* Animated underline */}
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: "100px" }}
+                transition={{ duration: 1, delay: 1.2 }}
+                className="h-1 bg-gradient-to-r from-brand-purple to-brand-pink rounded-full"
+              />
+
+              <motion.p variants={fadeIn} className="max-w-[600px] text-[#6d4c41] md:text-xl font-light">
+                Empowering homeschooling parents with tools, resources, and insights to enhance their educational
+                journey.
+              </motion.p>
+            </div>
+
+            {/* CTA Buttons */}
+            <motion.div variants={fadeIn} className="flex flex-col gap-3 min-[400px]:flex-row">
+              <Button
+                size="lg"
+                className="h-14 px-8 overflow-hidden relative group"
+                onMouseEnter={() => setIsHovering(true)}
+                onMouseLeave={() => setIsHovering(false)}
+              >
+                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-brand-purple to-brand-pink group-hover:scale-105 transition-transform duration-500"></span>
+                <span className="absolute inset-0 w-full h-full bg-brand-purple opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-md"></span>
+                <span className="relative flex items-center gap-2 z-10 text-white">
+                  Join Our Class
+                  <ArrowRight className="ml-1 h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
+                </span>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-14 px-8 border-brand-purple text-brand-purple relative overflow-hidden group"
+                onMouseEnter={() => setIsHovering(true)}
+                onMouseLeave={() => setIsHovering(false)}
+              >
+                <span className="absolute inset-0 w-0 bg-brand-blue/30 transition-all duration-500 ease-out group-hover:w-full"></span>
+                <span className="relative z-10">Learn More</span>
+              </Button>
+            </motion.div>
+
+            {/* Social proof */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.5, duration: 0.8 }}
+              className="flex items-center space-x-4 mt-8"
+            >
+              <div className="flex -space-x-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div
+                    key={i}
+                    className="w-8 h-8 rounded-full border-2 border-white bg-brand-blue/20 flex items-center justify-center text-xs font-medium text-brand-purple"
+                  >
+                    {i}
+                  </div>
+                ))}
+              </div>
+              <div className="text-sm text-[#6d4c41]">
+                <span className="font-medium">1,000+ students</span> already enrolled
+              </div>
+            </motion.div>
+          </motion.div>
+
+          {/* Right side with Grace's portrait and workspace */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.7, delay: 0.3 }}
+            style={{ perspective: 1000 }}
+            className="mx-auto flex items-center justify-center lg:justify-end relative"
+          >
+            {/* Decorative elements */}
+            <motion.div
+              className="absolute -top-10 -right-10 w-40 h-40 rounded-full border-4 border-brand-pink/20 z-10"
+              animate={{
+                rotate: [0, 360],
+              }}
+              transition={{
+                duration: 20,
+                repeat: Number.POSITIVE_INFINITY,
+                ease: "linear",
+              }}
+            />
+
+            <motion.div
+              className="absolute -bottom-5 -left-5 w-24 h-24 rounded-full border-2 border-brand-purple/30 z-10"
+              animate={{
+                rotate: [360, 0],
+              }}
+              transition={{
+                duration: 15,
+                repeat: Number.POSITIVE_INFINITY,
+                ease: "linear",
+              }}
+            />
+
+            {/* Grace's Portrait */}
+            <motion.div
+              className="absolute -left-12 bottom-0 w-[300px] md:w-[400px] z-20"
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, delay: 0.5 }}
+              style={{ y: graceImageY }}
+            >
+              <Image
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/grace-tv60B3oEq1pzd4eXo8LEPPqGVA4WFd.png"
+                alt="Grace from Graceful Homeschooling"
+                width={400}
+                height={500}
+                quality={90}
+                placeholder="blur"
+                blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjUwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiLz4="
+                className="h-auto"
+                priority
+              />
+
+              {/* Floating badge */}
+              <motion.div
+                className="absolute top-10 right-0 bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg"
+                initial={{ opacity: 0, y: 20, rotate: -5 }}
+                animate={{ opacity: 1, y: 0, rotate: 0 }}
+                transition={{ delay: 1.2, duration: 0.6 }}
+              >
+                <div className="text-sm font-medium text-brand-purple">Meet Grace</div>
+                <div className="text-xs text-[#6d4c41]">Your Homeschooling Guide</div>
+              </motion.div>
+            </motion.div>
+
+            {/* Featured Content Card */}
+            <motion.div
+              className="relative w-full max-w-[600px] aspect-video rounded-xl overflow-hidden ml-auto"
+              whileHover={{ rotateY: 5, rotateX: -5, scale: 1.02 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              style={{
+                scale: heroImageScale,
+                opacity: heroImageOpacity,
+              }}
+            >
+              {/* Card frame with gradient border */}
+              <div className="absolute inset-0 p-[3px] rounded-xl bg-gradient-to-br from-white via-brand-pink/40 to-brand-purple z-10">
+                <div className="absolute inset-0 rounded-xl bg-white/90 backdrop-blur-md"></div>
+              </div>
+
+              <div className="relative w-full h-full rounded-xl overflow-hidden">
+                {/* Card content */}
+                <div className="absolute inset-0 z-20 p-8 flex flex-col justify-between">
+                  <div className="flex justify-between items-start">
+                    <motion.div
+                      initial={{ opacity: 0, y: -20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.8, duration: 0.6 }}
+                      className="bg-brand-purple/10 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-medium text-brand-purple"
+                    >
+                      Featured Course
+                    </motion.div>
+
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 1, duration: 0.6, type: "spring" }}
+                      className="bg-white/80 backdrop-blur-sm rounded-full h-10 w-10 flex items-center justify-center"
+                    >
+                      <Heart className="h-5 w-5 text-brand-pink" />
+                    </motion.div>
+                  </div>
+
+                  <div>
+                    <motion.h3
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.9, duration: 0.6 }}
+                      className="text-2xl font-serif text-[#5d4037] mb-2"
+                    >
+                      Papers to Profits
+                    </motion.h3>
+
+                    <motion.p
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1, duration: 0.6 }}
+                      className="text-sm text-[#6d4c41] mb-4"
+                    >
+                      Turn your passion for homeschooling into a sustainable business
+                    </motion.p>
+
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1.1, duration: 0.6 }}
+                    >
+                      <Link href="/papers-to-profits">
+                        <Button className="bg-brand-purple/90 hover:bg-brand-purple text-white" size="sm">
+                          Learn More
+                          <ChevronRight className="ml-1 h-4 w-4" />
+                        </Button>
+                      </Link>
+                    </motion.div>
+                  </div>
+                </div>
+
+                {/* Background pattern */}
+                <div className="absolute inset-0 z-10 opacity-5">
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23b08ba5' fillOpacity='0.4' fillRule='evenodd'%3E%3Ccircle cx='3' cy='3' r='3'/%3E%3Ccircle cx='13' cy='13' r='3'/%3E%3C/g%3E%3C/svg%3E")`,
+                      backgroundSize: "30px 30px",
+                    }}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Scroll indicator */}
+      <motion.div
+        className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10 hidden md:flex flex-col items-center"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.5, duration: 0.8 }}
+      >
+        <span className="text-[#5d4037] text-sm mb-2">Scroll to explore</span>
+        <motion.div
+          className="w-6 h-10 border-2 border-[#5d4037] rounded-full flex justify-center p-1"
+          animate={{ y: [0, 5, 0] }}
+          transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.5 }}
+        >
+          <motion.div
+            className="w-1.5 h-1.5 bg-brand-purple rounded-full"
+            animate={{ y: [0, 6, 0] }}
+            transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.5 }}
+          />
+        </motion.div>
+      </motion.div>
+    </section>
+  )
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f9f6f2] overflow-hidden">
@@ -219,354 +584,21 @@ export default function Home() {
         </div>
       </header>
       <main ref={pageRef} className="relative min-h-screen overflow-x-hidden">
-        <section ref={heroRef} className="w-full min-h-screen flex items-center py-12 md:py-0 relative overflow-hidden">
-          {/* Background Elements */}
-          <div className="absolute inset-0 z-0">
-            {/* Main background image with overlay */}
-            <div className="absolute inset-0 z-0">
-              <Image
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Banner%201366x768-UFjnYSrbc7qq2FtAUa7UFdZalgDTAT.png"
-                alt="Grace's workspace"
-                fill
-                className="object-cover object-center"
-                priority
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-brand-purple/60 to-brand-pink/40 mix-blend-multiply"></div>
-              <div className="absolute inset-0 bg-[#f9f6f2]/90"></div>
-            </div>
-
-            {/* Decorative circles */}
-            <motion.div
-              className="absolute right-0 top-1/4 w-48 h-48 rounded-full bg-brand-blue blur-3xl opacity-60"
-              style={{
-                scale: decorativeCircleScale,
-                opacity: decorativeCircleOpacity,
-              }}
-            />
-            <motion.div
-              className="absolute left-1/4 bottom-1/4 w-64 h-64 rounded-full bg-brand-pink/20 blur-3xl opacity-40"
-              animate={{
-                y: [0, -20, 0],
-                x: [0, 10, 0],
-                scale: [1, 1.05, 1],
-              }}
-              transition={{
-                duration: 10,
-                repeat: Number.POSITIVE_INFINITY,
-                repeatType: "reverse",
-              }}
-            />
-            <motion.div
-              className="absolute right-1/3 top-1/2 w-36 h-36 rounded-full bg-brand-purple/30 blur-2xl opacity-50"
-              animate={{
-                y: [0, 15, 0],
-                x: [0, -10, 0],
-                scale: [1, 1.1, 1],
-              }}
-              transition={{
-                duration: 8,
-                repeat: Number.POSITIVE_INFINITY,
-                repeatType: "reverse",
-                delay: 2,
-              }}
-            />
-          </div>
-
-          {/* Workspace pattern overlay */}
-          <div className="absolute inset-0 z-0 opacity-5">
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fillRule='evenodd'%3E%3Cg fill='%23b08ba5' fillOpacity='0.4'%3E%3Cpath d='M36 34v-4h-10v-10h-4v10h-10v4h10v10h4v-10h10zM40 0H0v40h40V0z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-                backgroundSize: "60px 60px",
-              }}
-            />
-          </div>
-
-          {/* Animated Pattern */}
-          <div className="absolute inset-0 z-0 opacity-10">
-            <svg className="absolute w-full h-full" width="100%" height="100%">
-              <pattern
-                id="pattern-circles"
-                x="0"
-                y="0"
-                width="50"
-                height="50"
-                patternUnits="userSpaceOnUse"
-                patternContentUnits="userSpaceOnUse"
-              >
-                <circle id="pattern-circle" cx="10" cy="10" r="1.6257413380501518" fill="#b08ba5" />
-              </pattern>
-              <rect x="0" y="0" width="100%" height="100%" fill="url(#pattern-circles)" />
-            </svg>
-          </div>
-
-          <div className="container px-4 md:px-6 z-10 relative">
-            <div className="grid gap-6 lg:grid-cols-[1fr_600px] lg:gap-12 xl:grid-cols-[1fr_800px]">
-              <motion.div
-                initial="hidden"
-                animate={isHeroInView ? "visible" : "hidden"}
-                variants={staggerContainer}
-                className="flex flex-col justify-center space-y-8"
-                style={{ y: heroTextY }}
-              >
-                {/* Badge */}
-                <motion.div
-                  variants={fadeIn}
-                  className="inline-flex items-center rounded-full bg-white/80 backdrop-blur-sm px-3 py-1.5 text-sm max-w-max shadow-sm"
-                >
-                  <Star className="h-4 w-4 mr-2 text-brand-purple" />
-                  <span className="text-[#5d4037] font-medium">Homeschooling with Grace</span>
-                </motion.div>
-
-                {/* Main Headline */}
-                <div className="space-y-4">
-                  <h1 className="relative text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif tracking-tighter text-[#5d4037] overflow-hidden">
-                    {heroTextLines.map((line, lineIndex) => (
-                      <div key={lineIndex} className="overflow-hidden relative">
-                        <motion.div custom={lineIndex} variants={textReveal} className="inline-block">
-                          {line}
-                        </motion.div>
-                      </div>
-                    ))}
-                  </h1>
-
-                  {/* Animated underline */}
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: "100px" }}
-                    transition={{ duration: 1, delay: 1.2 }}
-                    className="h-1 bg-gradient-to-r from-brand-purple to-brand-pink rounded-full"
-                  />
-
-                  <motion.p variants={fadeIn} className="max-w-[600px] text-[#6d4c41] md:text-xl font-light">
-                    Empowering homeschooling parents with tools, resources, and insights to enhance their educational
-                    journey.
-                  </motion.p>
-                </div>
-
-                {/* CTA Buttons */}
-                <motion.div variants={fadeIn} className="flex flex-col gap-3 min-[400px]:flex-row">
-                  <Button
-                    size="lg"
-                    className="h-14 px-8 overflow-hidden relative group"
-                    onMouseEnter={() => setIsHovering(true)}
-                    onMouseLeave={() => setIsHovering(false)}
-                  >
-                    <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-brand-purple to-brand-pink group-hover:scale-105 transition-transform duration-500"></span>
-                    <span className="absolute inset-0 w-full h-full bg-brand-purple opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-md"></span>
-                    <span className="relative flex items-center gap-2 z-10 text-white">
-                      Join Our Class
-                      <ArrowRight className="ml-1 h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
-                    </span>
-                  </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="h-14 px-8 border-brand-purple text-brand-purple relative overflow-hidden group"
-                    onMouseEnter={() => setIsHovering(true)}
-                    onMouseLeave={() => setIsHovering(false)}
-                  >
-                    <span className="absolute inset-0 w-0 bg-brand-blue/30 transition-all duration-500 ease-out group-hover:w-full"></span>
-                    <span className="relative z-10">Learn More</span>
-                  </Button>
-                </motion.div>
-
-                {/* Social proof */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.5, duration: 0.8 }}
-                  className="flex items-center space-x-4 mt-8"
-                >
-                  <div className="flex -space-x-2">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div
-                        key={i}
-                        className="w-8 h-8 rounded-full border-2 border-white bg-brand-blue/20 flex items-center justify-center text-xs font-medium text-brand-purple"
-                      >
-                        {i}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="text-sm text-[#6d4c41]">
-                    <span className="font-medium">1,000+ students</span> already enrolled
-                  </div>
-                </motion.div>
-              </motion.div>
-
-              {/* Right side with Grace's portrait and workspace */}
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.7, delay: 0.3 }}
-                style={{ perspective: 1000 }}
-                className="mx-auto flex items-center justify-center lg:justify-end relative"
-              >
-                {/* Decorative elements */}
-                <motion.div
-                  className="absolute -top-10 -right-10 w-40 h-40 rounded-full border-4 border-brand-pink/20 z-10"
-                  animate={{
-                    rotate: [0, 360],
-                  }}
-                  transition={{
-                    duration: 20,
-                    repeat: Number.POSITIVE_INFINITY,
-                    ease: "linear",
-                  }}
-                />
-
-                <motion.div
-                  className="absolute -bottom-5 -left-5 w-24 h-24 rounded-full border-2 border-brand-purple/30 z-10"
-                  animate={{
-                    rotate: [360, 0],
-                  }}
-                  transition={{
-                    duration: 15,
-                    repeat: Number.POSITIVE_INFINITY,
-                    ease: "linear",
-                  }}
-                />
-
-                {/* Grace's Portrait */}
-                <motion.div
-                  className="absolute -left-12 bottom-0 w-[300px] md:w-[400px] z-20"
-                  initial={{ opacity: 0, x: -50 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.8, delay: 0.5 }}
-                  style={{ y: graceImageY }}
-                >
-                  <Image
-                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/grace-tv60B3oEq1pzd4eXo8LEPPqGVA4WFd.png"
-                    alt="Grace from Graceful Homeschooling"
-                    width={400}
-                    height={500}
-                    className="h-auto"
-                    priority
-                  />
-
-                  {/* Floating badge */}
-                  <motion.div
-                    className="absolute top-10 right-0 bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg"
-                    initial={{ opacity: 0, y: 20, rotate: -5 }}
-                    animate={{ opacity: 1, y: 0, rotate: 0 }}
-                    transition={{ delay: 1.2, duration: 0.6 }}
-                  >
-                    <div className="text-sm font-medium text-brand-purple">Meet Grace</div>
-                    <div className="text-xs text-[#6d4c41]">Your Homeschooling Guide</div>
-                  </motion.div>
-                </motion.div>
-
-                {/* Featured Content Card */}
-                <motion.div
-                  className="relative w-full max-w-[600px] aspect-video rounded-xl overflow-hidden ml-auto"
-                  whileHover={{ rotateY: 5, rotateX: -5, scale: 1.02 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  style={{
-                    scale: heroImageScale,
-                    opacity: heroImageOpacity,
-                  }}
-                >
-                  {/* Card frame with gradient border */}
-                  <div className="absolute inset-0 p-[3px] rounded-xl bg-gradient-to-br from-white via-brand-pink/40 to-brand-purple z-10">
-                    <div className="absolute inset-0 rounded-xl bg-white/90 backdrop-blur-md"></div>
-                  </div>
-
-                  <div className="relative w-full h-full rounded-xl overflow-hidden">
-                    {/* Card content */}
-                    <div className="absolute inset-0 z-20 p-8 flex flex-col justify-between">
-                      <div className="flex justify-between items-start">
-                        <motion.div
-                          initial={{ opacity: 0, y: -20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.8, duration: 0.6 }}
-                          className="bg-brand-purple/10 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-medium text-brand-purple"
-                        >
-                          Featured Course
-                        </motion.div>
-
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          transition={{ delay: 1, duration: 0.6, type: "spring" }}
-                          className="bg-white/80 backdrop-blur-sm rounded-full h-10 w-10 flex items-center justify-center"
-                        >
-                          <Heart className="h-5 w-5 text-brand-pink" />
-                        </motion.div>
-                      </div>
-
-                      <div>
-                        <motion.h3
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.9, duration: 0.6 }}
-                          className="text-2xl font-serif text-[#5d4037] mb-2"
-                        >
-                          Papers to Profits
-                        </motion.h3>
-
-                        <motion.p
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 1, duration: 0.6 }}
-                          className="text-sm text-[#6d4c41] mb-4"
-                        >
-                          Turn your passion for homeschooling into a sustainable business
-                        </motion.p>
-
-                        <motion.div
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 1.1, duration: 0.6 }}
-                        >
-                          <Link href="/papers-to-profits">
-                            <Button className="bg-brand-purple/90 hover:bg-brand-purple text-white" size="sm">
-                              Learn More
-                              <ChevronRight className="ml-1 h-4 w-4" />
-                            </Button>
-                          </Link>
-                        </motion.div>
-                      </div>
-                    </div>
-
-                    {/* Background pattern */}
-                    <div className="absolute inset-0 z-10 opacity-5">
-                      <div
-                        className="absolute inset-0"
-                        style={{
-                          backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23b08ba5' fillOpacity='0.4' fillRule='evenodd'%3E%3Ccircle cx='3' cy='3' r='3'/%3E%3Ccircle cx='13' cy='13' r='3'/%3E%3C/g%3E%3C/svg%3E")`,
-                          backgroundSize: "30px 30px",
-                        }}
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              </motion.div>
-            </div>
-          </div>
-
-          {/* Scroll indicator */}
-          <motion.div
-            className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10 hidden md:flex flex-col items-center"
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.5, duration: 0.8 }}
-          >
-            <span className="text-[#5d4037] text-sm mb-2">Scroll to explore</span>
-            <motion.div
-              className="w-6 h-10 border-2 border-[#5d4037] rounded-full flex justify-center p-1"
-              animate={{ y: [0, 5, 0] }}
-              transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.5 }}
-            >
-              <motion.div
-                className="w-1.5 h-1.5 bg-brand-purple rounded-full"
-                animate={{ y: [0, 6, 0] }}
-                transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.5 }}
-              />
-            </motion.div>
-          </motion.div>
-        </section>
-
+        {renderHeroSection()}
+        
+        {/* Use Intersection Observer to load sections only when they come into view */}
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={{
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { duration: 0.5 } }
+          }}
+        >
+          <SocialIntegration variant="full" />
+        </motion.div>
+        
         <section className="w-full py-20 md:py-32 bg-white relative overflow-hidden">
           {/* Decorative elements */}
           <svg
@@ -647,8 +679,6 @@ export default function Home() {
             </motion.div>
           </div>
         </section>
-
-        <SocialIntegration variant="full" />
 
         <section className="w-full py-20 md:py-32 bg-brand-blue/20 relative">
           {/* Decorative elements */}
