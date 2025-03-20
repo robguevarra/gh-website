@@ -561,7 +561,7 @@ export default function Home() {
             className="flex items-center gap-4"
           >
             <Link
-              href="#"
+              href="/auth/signin"
               className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple hidden md:block relative group"
               onMouseEnter={() => setIsHovering(true)}
               onMouseLeave={() => setIsHovering(false)}
@@ -573,12 +573,15 @@ export default function Home() {
               className="relative overflow-hidden bg-transparent border border-brand-purple text-brand-purple hover:text-white group"
               onMouseEnter={() => setIsHovering(true)}
               onMouseLeave={() => setIsHovering(false)}
+              asChild
             >
-              <span className="absolute inset-0 w-full h-full bg-brand-purple translate-y-full transition-transform duration-300 ease-out group-hover:translate-y-0"></span>
-              <span className="relative flex items-center gap-1 z-10 group-hover:text-white transition-colors duration-300">
-                Get Started
-                <ChevronRight className="ml-1 h-4 w-4" />
-              </span>
+              <Link href="/auth/signup">
+                <span className="absolute inset-0 w-full h-full bg-brand-purple translate-y-full transition-transform duration-300 ease-out group-hover:translate-y-0"></span>
+                <span className="relative flex items-center gap-1 z-10 group-hover:text-white transition-colors duration-300">
+                  Get Started
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </span>
+              </Link>
             </Button>
           </motion.div>
         </div>

@@ -1,3 +1,9 @@
+import bundleAnalyzer from '@next/bundle-analyzer';
+
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
+
 let userConfig = undefined
 try {
   userConfig = await import('./v0-user-next.config')
@@ -7,6 +13,7 @@ try {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -14,12 +21,33 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
+    domains: [
+      'gracefulhomeschooling.blob.core.windows.net',
+      'hebbkx1anhila5yf.public.blob.vercel-storage.com'
+    ],
     unoptimized: true,
   },
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
   experimental: {
+    optimizeCss: true,
     webpackBuildWorker: true,
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
+    optimizePackageImports: [
+      'lucide-react',
+      'date-fns',
+      'recharts',
+      'framer-motion',
+      '@radix-ui/react-accordion',
+      '@radix-ui/react-alert-dialog',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-hover-card',
+      '@radix-ui/react-popover',
+      '@radix-ui/react-toast',
+    ],
   },
   async headers() {
     return [
@@ -58,4 +86,4 @@ function mergeConfig(nextConfig, userConfig) {
   }
 }
 
-export default nextConfig
+export default withBundleAnalyzer(nextConfig)

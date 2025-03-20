@@ -12,11 +12,17 @@ function PaymentVerification() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isVerifying, setIsVerifying] = useState(true)
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false)
+  const [accountCreated, setAccountCreated] = useState(false)
   const [paymentDetails, setPaymentDetails] = useState<{
     id: string;
     status: string;
     amount?: number;
     email?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    membershipTierId?: string;
   } | null>(null)
 
   useEffect(() => {
@@ -48,7 +54,16 @@ function PaymentVerification() {
           status: data.data.status.toLowerCase(),
           amount: data.data.amount,
           email: data.data.customer_email,
+          firstName: data.data.customer_first_name,
+          lastName: data.data.customer_last_name,
+          phone: data.data.customer_phone,
+          membershipTierId: data.data.membership_tier_id,
         })
+
+        // If payment is successful and has an email, create account
+        if (data.data.status.toLowerCase() === 'succeeded' && data.data.customer_email) {
+          await createUserAccount(data.data)
+        }
       } catch (error) {
         console.error("Failed to verify payment:", error)
         // If verification fails, redirect to failure page
@@ -60,6 +75,42 @@ function PaymentVerification() {
     
     verifyPayment()
   }, [router, searchParams])
+
+  // Function to create a user account after successful payment
+  const createUserAccount = async (paymentData: any) => {
+    if (!paymentData.customer_email) return
+
+    try {
+      setIsCreatingAccount(true)
+      
+      // Call our API to create the account
+      const response = await fetch('/api/payment-webhooks/create-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: paymentData.customer_email,
+          firstName: paymentData.customer_first_name,
+          lastName: paymentData.customer_last_name,
+          phone: paymentData.customer_phone,
+          membershipTierId: paymentData.membership_tier_id,
+        }),
+      })
+      
+      const result = await response.json()
+      
+      if (!response.ok) {
+        console.error('Failed to create account:', result.error)
+      } else {
+        setAccountCreated(true)
+      }
+    } catch (error) {
+      console.error('Error creating account:', error)
+    } finally {
+      setIsCreatingAccount(false)
+    }
+  }
 
   if (isVerifying) {
     return (
@@ -106,6 +157,19 @@ function PaymentVerification() {
                 <p>Amount: ${(paymentDetails.amount / 100).toFixed(2)}</p>
               )}
               <p className="mt-2">A confirmation email has been sent to your email address with all the details.</p>
+              
+              {isCreatingAccount && (
+                <p className="mt-2 flex items-center justify-center">
+                  <Loader className="h-4 w-4 animate-spin mr-2" />
+                  Setting up your account...
+                </p>
+              )}
+              
+              {accountCreated && paymentDetails.email && (
+                <p className="mt-2 font-medium">
+                  We've sent an email to {paymentDetails.email} with instructions to set up your account.
+                </p>
+              )}
             </div>
           )}
 
