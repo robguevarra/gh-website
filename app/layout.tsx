@@ -6,6 +6,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { CustomCursorToggle } from "@/components/custom-cursor-toggle"
 import Script from "next/script"
 import { SkipLink } from "@/components/ui/skip-link"
+import SupabaseProvider from "@/components/providers/supabase-provider"
+import { AuthProvider } from "@/context/auth-context"
 
 // Import critical CSS first for priority loading
 import './critical.css'
@@ -53,12 +55,16 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} ${playfair.variable} font-sans`}>
         <SkipLink href="#main-content">Skip to main content</SkipLink>
-        <ThemeProvider>
-          <main id="main-content" tabIndex={-1}>
-            {children}
-          </main>
-          <CustomCursorToggle />
-        </ThemeProvider>
+        <SupabaseProvider>
+          <AuthProvider>
+            <ThemeProvider>
+              <main id="main-content" tabIndex={-1}>
+                {children}
+              </main>
+              <CustomCursorToggle />
+            </ThemeProvider>
+          </AuthProvider>
+        </SupabaseProvider>
         
         <Script
           src="/scripts/analytics.js"
