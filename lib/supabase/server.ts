@@ -25,3 +25,26 @@ export async function createServerSupabaseClient() {
     }
   );
 } 
+
+// Create a Supabase client with service role for admin operations (bypasses RLS)
+export async function createServiceRoleClient() {
+  const cookieStore = await cookies();
+  
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        get(name) {
+          return cookieStore.get(name)?.value;
+        },
+        set(name, value, options) {
+          cookieStore.set(name, value, options);
+        },
+        remove(name, options) {
+          cookieStore.set(name, '', { ...options, maxAge: 0 });
+        }
+      }
+    }
+  );
+} 
