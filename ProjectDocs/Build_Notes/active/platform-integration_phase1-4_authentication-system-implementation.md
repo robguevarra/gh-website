@@ -38,7 +38,7 @@ A comprehensive authentication system with:
 - [x] Verify Supabase Auth configuration in lib/supabase/auth.ts
 - [x] Ensure proper auth callback handling (/auth/callback)
 - [x] Implement post-payment account creation flow
-- [ ] Test all authentication flows
+- [x] Test all authentication flows
 
 ### 4. Implement Protected Routes
 - [x] Create auth-protected Dashboard layout
@@ -48,11 +48,11 @@ A comprehensive authentication system with:
 ### 5. Test and Verify Authentication System
 - [x] Test sign-up flow with email verification
 - [x] Test sign-in flow with existing account
-- [ ] Test password reset flow
+- [x] Test password reset flow
 - [x] ~~Test social authentication flows~~ (Removed as per updated requirements)
 - [ ] Test post-payment account creation flow (pending Xendit integration)
 - [x] Test protected routes and redirects for authenticated users
-- [ ] Verify error handling for all authentication scenarios
+- [x] Verify error handling for all authentication scenarios
 
 ### 6. Documentation
 - [x] Document the authentication system implementation
@@ -77,6 +77,18 @@ The authentication system uses the Supabase Auth service for:
 - Authentication state is managed through the Supabase Auth client
 - Protected routes check auth state and redirect unauthenticated users
 
+### Password Reset Flow
+- User requests password reset on the /auth/reset-password page
+- System sends an email with a recovery link
+- User clicks the link and is redirected to /auth/update-password with a token
+- System verifies the token validity and shows appropriate feedback:
+  - Valid tokens allow password update
+  - Expired tokens show expiration message with option to request new link
+  - Already used tokens show appropriate message with option to request new link
+  - Invalid tokens show error message
+- After successful password update, user is redirected to sign-in page with success message
+- Animations provide visual feedback during the process
+
 ### Post-Payment Account Creation Flow
 - After a successful payment, we capture the user's email, name, and other details
 - We create an account in Supabase with a temporary random password
@@ -98,13 +110,13 @@ The authentication system uses the Supabase Auth service for:
 - Basic authentication infrastructure with Supabase
 - Sign-up and sign-in UI with validation
 - Password reset request UI
+- Password reset flow with proper error handling
 - Protected routes with middleware
 - Email-based authentication flows
+- Visual feedback and animations for all authentication processes
 
 ### Pending Testing
-- Password reset flow end-to-end validation
 - Post-payment account creation flow (pending Xendit integration)
-- Edge case error handling
 
 ### Known Issues
 - Fixed metadata exports in authentication page components to resolve "use client" directive conflicts

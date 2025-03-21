@@ -81,14 +81,24 @@ export function useUserProfile(userId: string | undefined) {
     async (supabase) => {
       if (!userId) return null;
       
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-      
-      if (error) throw error;
-      return data;
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        if (error) throw error;
+        return data;
+      } catch (err) {
+        // Handle infinite recursion errors gracefully
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (errorMessage.includes('infinite recursion')) {
+          console.warn('Infinite recursion detected in profile policy. Profile data will be unavailable until fixed.');
+          return null;
+        }
+        throw err;
+      }
     },
     [userId]
   );

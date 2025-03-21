@@ -9,7 +9,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
-export function ResetPasswordForm() {
+interface ResetPasswordFormProps {
+  showHeader?: boolean;
+}
+
+export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps) {
   const { resetPassword } = useAuth();
   
   const [email, setEmail] = useState('');
@@ -47,12 +51,14 @@ export function ResetPasswordForm() {
 
   return (
     <div className="w-full max-w-md space-y-6 rounded-lg border border-border bg-card p-6 shadow-sm">
-      <div className="space-y-2 text-center">
-        <h2 className="text-2xl font-serif text-foreground">Reset Your Password</h2>
-        <p className="text-sm text-muted-foreground">
-          Enter your email and we'll send you a link to reset your password
-        </p>
-      </div>
+      {showHeader && (
+        <div className="space-y-2 text-center">
+          <h2 className="text-2xl font-serif text-foreground">Reset Your Password</h2>
+          <p className="text-sm text-muted-foreground">
+            Enter your email and we'll send you a link to reset your password
+          </p>
+        </div>
+      )}
       
       {isSuccess ? (
         <div className="space-y-4">
@@ -98,12 +104,7 @@ export function ResetPasswordForm() {
               'Send Reset Link'
             )}
           </Button>
-          
-          <div className="text-center text-sm">
-            <Link href="/auth/signin" className="text-muted-foreground hover:text-primary">
-              Back to sign in
-            </Link>
-          </div>
+        
         </form>
       )}
     </div>
