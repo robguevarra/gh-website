@@ -6,13 +6,31 @@ import Image from 'next/image';
 import { SignInForm } from '@/components/auth/signin-form';
 import { Logo } from '@/components/ui/logo';
 import { motion } from 'framer-motion';
+import { useSearchParams } from 'next/navigation';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { CheckCircle2 } from 'lucide-react';
 
 export default function SignInPage() {
   const [mounted, setMounted] = useState(false);
+  const searchParams = useSearchParams();
+  const [showPasswordUpdatedAlert, setShowPasswordUpdatedAlert] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    
+    // Check if redirected after password update
+    const updated = searchParams.get('updated');
+    if (updated === 'true') {
+      setShowPasswordUpdatedAlert(true);
+      
+      // Auto-hide the alert after 5 seconds
+      const timer = setTimeout(() => {
+        setShowPasswordUpdatedAlert(false);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams]);
 
   if (!mounted) {
     return null; // Avoid hydration mismatch
@@ -163,6 +181,23 @@ export default function SignInPage() {
                 transition={{ duration: 1, delay: 1 }}
               />
             </motion.div>
+            
+            {/* Password Updated Success Alert */}
+            {showPasswordUpdatedAlert && (
+              <motion.div 
+                variants={fadeIn}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <Alert className="bg-green-50 text-green-800 border border-green-200">
+                  <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" />
+                  <AlertDescription>
+                    Password successfully updated! Please sign in with your new password.
+                  </AlertDescription>
+                </Alert>
+              </motion.div>
+            )}
             
             <motion.div variants={fadeIn}>
               <SignInForm />
