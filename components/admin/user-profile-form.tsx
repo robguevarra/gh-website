@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { createBrowserSupabaseClient } from '@/lib/supabase/client';
-import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -18,17 +18,25 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { toast } from '@/components/ui/use-toast';
 import { Loader2 } from 'lucide-react';
 
-// Form schema validation
-const formSchema = z.object({
+// Define the form schema with Zod for validation
+const profileFormSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
   last_name: z.string().min(1, 'Last name is required'),
   email: z.string().email('Invalid email address'),
@@ -36,185 +44,184 @@ const formSchema = z.object({
   role: z.string(),
 });
 
-type FormValues = z.infer<typeof formSchema>;
-
-interface Role {
-  id: string;
-  name: string;
-  description?: string;
-}
+type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 interface UserProfileFormProps {
   user: {
     id: string;
     first_name: string | null;
     last_name: string | null;
-    email: string | null;
+    email: string;
     phone: string | null;
     role: string;
   };
-  roles: Role[];
+  roles: Array<{
+    id: string;
+    name: string;
+    description: string;
+  }>;
 }
 
-export default function UserProfileForm({ user, roles }: UserProfileFormProps) {
+export function UserProfileForm({ user, roles }: UserProfileFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Initialize form with user data
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+
+  // Initialize the form with default values from the user
+  const form = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileFormSchema),
     defaultValues: {
       first_name: user.first_name || '',
       last_name: user.last_name || '',
-      email: user.email || '',
+      email: user.email,
       phone: user.phone || '',
-      role: user.role || 'user',
+      role: user.role,
     },
   });
-  
-  // Handle form submission
-  const onSubmit = async (values: FormValues) => {
+
+  async function onSubmit(data: ProfileFormValues) {
     setIsSubmitting(true);
     
     try {
-      const supabase = createBrowserSupabaseClient();
+      // Call the API to update the user profile
+      const response = await fetch(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
       
-      // Update profile
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          first_name: values.first_name,
-          last_name: values.last_name,
-          phone: values.phone,
-          role: values.role,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
-      
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update user profile');
       }
       
-      // Show success message
-      toast({
-        title: 'Profile updated',
-        description: 'The user profile has been updated successfully.',
-      });
-      
-      // Refresh page data
-      router.refresh();
+      toast.success('User profile updated successfully');
+      router.refresh(); // Refresh the page to show updated data
     } catch (error) {
-      console.error('Error updating profile:', error);
-      toast({
-        title: 'Error',
-        description: 'There was an error updating the profile. Please try again.',
-        variant: 'destructive',
-      });
+      toast.error(error instanceof Error ? error.message : 'An error occurred');
+      console.error('Profile update error:', error);
     } finally {
       setIsSubmitting(false);
     }
-  };
-  
+  }
+
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="first_name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>First Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="First name" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          <FormField
-            control={form.control}
-            name="last_name"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Last Name</FormLabel>
-                <FormControl>
-                  <Input placeholder="Last name" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-        
-        <FormField
-          control={form.control}
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input placeholder="Email address" type="email" {...field} disabled />
-              </FormControl>
-              <FormDescription>
-                Email cannot be changed. User must update email through their account settings.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="phone"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Phone Number</FormLabel>
-              <FormControl>
-                <Input placeholder="Phone number" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <FormField
-          control={form.control}
-          name="role"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>User Role</FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                defaultValue={field.value}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {roles.map((role) => (
-                    <SelectItem key={role.name} value={role.name}>
-                      {role.name.charAt(0).toUpperCase() + role.name.slice(1)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormDescription>
-                The user role determines what permissions they have.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        
-        <Button type="submit" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isSubmitting ? 'Saving...' : 'Save Changes'}
-        </Button>
-      </form>
-    </Form>
+    <Card>
+      <CardHeader>
+        <CardTitle>User Information</CardTitle>
+        <CardDescription>
+          Update basic user information and role.
+        </CardDescription>
+      </CardHeader>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="first_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>First Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="First name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="last_name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Last name" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Email address" {...field} disabled />
+                  </FormControl>
+                  <FormDescription>
+                    Email address cannot be changed. Contact support for assistance.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Phone Number</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Phone number (optional)" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="role"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>User Role</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {roles.map((role) => (
+                        <SelectItem key={role.id} value={role.name}>
+                          {role.name.charAt(0).toUpperCase() + role.name.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    This determines what permissions the user has.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+          <CardFooter className="flex justify-end">
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Changes'
+              )}
+            </Button>
+          </CardFooter>
+        </form>
+      </Form>
+    </Card>
   );
 } 
