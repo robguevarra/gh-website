@@ -1,10 +1,10 @@
-import * as React from "react"
+import React from 'react';
 import { cn } from "@/lib/utils"
 
-interface HeadingProps extends React.HTMLAttributes<HTMLHeadingElement> {
-  level: 1 | 2 | 3 | 4 | 5 | 6
-  as?: 1 | 2 | 3 | 4 | 5 | 6
-  children: React.ReactNode
+interface HeadingProps {
+  title: string;
+  description?: string;
+  className?: string;
 }
 
 /**
@@ -21,32 +21,16 @@ interface HeadingProps extends React.HTMLAttributes<HTMLHeadingElement> {
  * <Heading level={3}>Section Title</Heading>
  */
 export function Heading({
-  level,
-  as,
-  children,
+  title,
+  description,
   className,
-  ...props
 }: HeadingProps) {
-  const visualLevel = as || level
-  
-  const styles = {
-    1: "scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl",
-    2: "scroll-m-20 text-3xl font-semibold tracking-tight",
-    3: "scroll-m-20 text-2xl font-semibold tracking-tight",
-    4: "scroll-m-20 text-xl font-semibold tracking-tight",
-    5: "scroll-m-20 text-lg font-semibold tracking-tight",
-    6: "scroll-m-20 text-base font-semibold tracking-tight",
-  }
-
-  // Create the appropriate heading element based on level
-  const HeadingTag = `h${level}` as React.ElementType
-  
   return (
-    <HeadingTag
-      className={cn(styles[visualLevel], className)}
-      {...props}
-    >
-      {children}
-    </HeadingTag>
-  )
+    <div className={cn("scroll-m-20", className)}>
+      <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
+      {description && (
+        <p className="text-sm text-muted-foreground">{description}</p>
+      )}
+    </div>
+  );
 } 

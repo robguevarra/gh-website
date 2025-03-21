@@ -24,6 +24,7 @@ A functional admin dashboard with critical management capabilities including use
 - **Modular Structure**: Each admin section should be modularly built for maintainability
 - **Audit Logging**: Track administrative actions for security and accountability
 - **Progressive Enhancement**: Core functionality works without JS, enhanced with client interactions
+- **Mobile-first design**: Make sure the app is optimized for mobile.
 
 ### Brand Requirements
 - Admin interface should use a variation of the Graceful Homeschooling color palette with:
