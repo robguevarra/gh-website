@@ -92,8 +92,8 @@ export function UserProfileForm({ user, roles }: UserProfileFormProps) {
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to update user profile');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update profile');
       }
       
       toast.success('User profile updated successfully');

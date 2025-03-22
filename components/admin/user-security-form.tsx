@@ -137,8 +137,8 @@ export function UserSecurityForm({
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to update security settings');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update security settings');
       }
       
       toast.success('Security settings updated successfully');
@@ -160,8 +160,8 @@ export function UserSecurityForm({
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to reset password');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reset password');
       }
       
       toast.success('Password reset successfully. The user will receive an email with instructions.');
@@ -183,8 +183,8 @@ export function UserSecurityForm({
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to send verification email');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send verification email');
       }
       
       toast.success('Verification email sent successfully');
