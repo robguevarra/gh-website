@@ -135,8 +135,8 @@ export function UserCourses({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to enroll user in course');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to enroll user in course');
       }
 
       toast.success('User enrolled in course successfully');
@@ -161,8 +161,8 @@ export function UserCourses({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to remove user from course');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to remove user from course');
       }
 
       toast.success('User removed from course successfully');
@@ -186,8 +186,8 @@ export function UserCourses({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to reset course progress');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reset course progress');
       }
 
       toast.success('Course progress reset successfully');
@@ -209,8 +209,8 @@ export function UserCourses({
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to mark course as complete');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to mark course as complete');
       }
 
       toast.success('Course marked as complete');

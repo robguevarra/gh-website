@@ -14,7 +14,7 @@ export const metadata = {
 export default async function UserDetailPage({
   params,
 }: {
-  params: { userId: string };
+  params: { id: string };
 }) {
   const supabase = await createServerSupabaseClient();
   
@@ -22,7 +22,7 @@ export default async function UserDetailPage({
   const { data: user, error: userError } = await supabase
     .from('profiles')
     .select('*')
-    .eq('id', params.userId)
+    .eq('id', params.id)
     .single();
   
   // Fetch user membership data
@@ -39,7 +39,7 @@ export default async function UserDetailPage({
         features
       )
     `)
-    .eq('user_id', params.userId);
+    .eq('user_id', params.id);
   
   // Fetch membership tiers for dropdown
   const { data: membershipTiers } = await supabase
@@ -76,12 +76,12 @@ export default async function UserDetailPage({
         
         <div className="flex gap-2">
           <Button variant="outline" asChild>
-            <Link href={`/admin/users/${params.userId}/impersonate`}>
+            <Link href={`/admin/users/${params.id}/impersonate`}>
               Impersonate
             </Link>
           </Button>
           <Button variant="destructive" asChild>
-            <Link href={`/admin/users/${params.userId}/delete`}>
+            <Link href={`/admin/users/${params.id}/delete`}>
               Delete User
             </Link>
           </Button>
