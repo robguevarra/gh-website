@@ -28,30 +28,26 @@ import CourseProgress from '@/components/courses/course-progress';
 import LessonListItem from '@/components/courses/lesson-list-item';
 
 // Generate metadata for SEO
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params;
-
-  // Get course data for metadata
+export async function generateMetadata({ params }: { params: { slug: string } }) {
   const serviceClient = createServiceRoleClient();
+  
   const { data: course } = await serviceClient
     .from('courses')
-    .select('title, description, thumbnail_url')
-    .eq('slug', slug)
+    .select('title, description')
+    .eq('slug', params.slug)
+    .eq('status', 'published')
     .single();
-
+  
   if (!course) {
     return {
       title: 'Course Not Found',
-      description: 'The requested course could not be found',
+      description: 'The requested course could not be found.',
     };
   }
-
+  
   return {
-    title: `${course.title} | Growth Haven Academy`,
-    description: course.description || 'Learn from expert-led courses at Growth Haven Academy',
-    openGraph: {
-      images: [course.thumbnail_url || '/images/course-default.jpg'],
-    },
+    title: `${course.title} | Graceful Homeschooling`,
+    description: course.description || 'Learn with Graceful Homeschooling',
   };
 }
 
@@ -60,10 +56,10 @@ export default async function CoursePage({
   searchParams
 }: { 
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ preview?: string }>;
+  searchParams: { preview?: string };
 }) {
+  // Await params to properly handle dynamic API
   const { slug } = await params;
-  const { preview } = await searchParams;
   
   // Get the authenticated user if available
   const supabase = await createServerSupabaseClient();
@@ -113,7 +109,7 @@ export default async function CoursePage({
   }
   
   // Check if viewing in admin preview mode
-  const isPreviewMode = preview === 'true' && isAdmin;
+  const isPreviewMode = searchParams?.preview === 'true' && isAdmin;
   
   // Check if user has access to this course
   let hasAccess = false;

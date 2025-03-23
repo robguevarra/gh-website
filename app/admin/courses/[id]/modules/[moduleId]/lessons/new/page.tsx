@@ -6,13 +6,14 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
  * The actual lesson creation is handled by the client-side component in course-modules-manager.tsx.
  * This URL is just a convenience endpoint for linking to the lesson creation flow.
  */
-export default async function CreateLessonPage({
-  params,
-}: {
-  params: { id: string; moduleId: string };
-}) {
+export default async function CreateLessonPage(
+  props: {
+    params: Promise<{ id: string; moduleId: string }>;
+  }
+) {
+  const params = await props.params;
   const { id: courseId, moduleId } = params;
-  
+
   // Verify the course and module exist before redirecting
   const supabase = await createServerSupabaseClient();
 
@@ -22,11 +23,11 @@ export default async function CreateLessonPage({
     .select("id")
     .eq("id", courseId)
     .single();
-  
+
   if (courseError || !course) {
     redirect("/admin/courses");
   }
-  
+
   // Check module exists
   const { data: module, error: moduleError } = await supabase
     .from("modules")
@@ -34,7 +35,7 @@ export default async function CreateLessonPage({
     .eq("id", moduleId)
     .eq("course_id", courseId)
     .single();
-  
+
   if (moduleError || !module) {
     redirect(`/admin/courses/${courseId}/unified`);
   }

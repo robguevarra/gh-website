@@ -14,9 +14,10 @@ import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 export interface UpdatePasswordFormProps {
   errorMessage?: string | null;
+  redirectUrl?: string;
 }
 
-export function UpdatePasswordForm({ errorMessage }: UpdatePasswordFormProps) {
+export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?updated=true' }: UpdatePasswordFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { session, updatePassword } = useAuth();
@@ -100,7 +101,7 @@ export function UpdatePasswordForm({ errorMessage }: UpdatePasswordFormProps) {
       
       // Redirect after success animation
       setTimeout(() => {
-        router.push('/auth/signin?updated=true');
+        router.push(redirectUrl);
       }, 1500);
     } catch (err) {
       console.error('Unexpected error during password update:', err);

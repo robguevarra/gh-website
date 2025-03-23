@@ -7,42 +7,44 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { BookOpen, CheckCircle, ChevronRight, Play } from 'lucide-react';
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const serviceClient = createServiceRoleClient();
-  
+
   const { data: course } = await serviceClient
     .from('courses')
     .select('title, description')
     .eq('slug', params.slug)
     .eq('status', 'published')
     .single();
-  
+
   if (!course) {
     return {
       title: 'Course Not Found',
       description: 'The requested course could not be found.',
     };
   }
-  
+
   return {
     title: `Learn: ${course.title} | Graceful Homeschooling`,
     description: course.description || 'Learn with Graceful Homeschooling',
   };
 }
 
-export default async function CourseLearnPage({ params }: { params: { slug: string } }) {
+export default async function CourseLearnPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   // Get the authenticated user
   const supabase = await createServerSupabaseClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  
+
   if (!user) {
     // Redirect to sign in if not authenticated
     return redirect(`/auth/signin?callbackUrl=/courses/${params.slug}/learn`);
   }
-  
+
   // Use service role client to bypass RLS for course data
   const serviceClient = createServiceRoleClient();
-  
+
   // Fetch the course by slug
   const { data: course, error: courseError } = await serviceClient
     .from('courses')
@@ -57,14 +59,14 @@ export default async function CourseLearnPage({ params }: { params: { slug: stri
     `)
     .eq('slug', params.slug)
     .single();
-  
+
   if (courseError || !course) {
     notFound();
   }
-  
+
   // Check if user has access to this course
   let hasAccess = false;
-  
+
   // Check if user has required membership tier
   if (course.required_tier_id) {
     const { data: userMembership, error: membershipError } = await supabase
@@ -82,7 +84,7 @@ export default async function CourseLearnPage({ params }: { params: { slug: stri
     // Course has no tier requirement, so all logged-in users have access
     hasAccess = true;
   }
-  
+
   // Check for specific enrollment in this course (if needed)
   const { data: enrollment, error: enrollmentError } = await supabase
     .from('user_enrollments')
@@ -91,16 +93,16 @@ export default async function CourseLearnPage({ params }: { params: { slug: stri
     .eq('course_id', course.id)
     .eq('status', 'active')
     .maybeSingle();
-  
+
   if (enrollment) {
     hasAccess = true;
   }
-  
+
   // If user doesn't have access, redirect to course page
   if (!hasAccess) {
     return redirect(`/courses/${params.slug}`);
   }
-  
+
   // Fetch modules for this course
   const { data: modules, error: modulesError } = await serviceClient
     .from('modules')
@@ -112,7 +114,7 @@ export default async function CourseLearnPage({ params }: { params: { slug: stri
     `)
     .eq('course_id', course.id)
     .order('position', { ascending: true });
-  
+
   // Fetch all lessons
   const { data: allLessons, error: lessonsError } = await serviceClient
     .from('lessons')
@@ -127,7 +129,7 @@ export default async function CourseLearnPage({ params }: { params: { slug: stri
     `)
     .eq('modules.course_id', course.id)
     .order('position', { ascending: true });
-  
+
   // Get user's progress for lessons in this course
   const { data: progress, error: progressError } = await supabase
     .from('user_progress')
@@ -141,7 +143,7 @@ export default async function CourseLearnPage({ params }: { params: { slug: stri
     `)
     .eq('user_id', user.id)
     .in('lesson_id', allLessons?.map(lesson => lesson.id) || []);
-  
+
   // Organize lessons by module with progress
   const modulesWithLessons = modules?.map(module => {
     const moduleLessons = allLessons?.filter(lesson => lesson.module_id === module.id) || [];
@@ -171,14 +173,14 @@ export default async function CourseLearnPage({ params }: { params: { slug: stri
       progress: moduleProgress,
     };
   }) || [];
-  
+
   // Calculate overall course progress
   const totalLessons = allLessons?.length || 0;
   const completedLessons = progress?.filter(p => p.is_completed).length || 0;
   const courseProgress = totalLessons > 0
     ? Math.round((completedLessons / totalLessons) * 100)
     : 0;
-  
+
   // Find the next lesson to continue (first incomplete lesson)
   const findNextLesson = () => {
     for (const module of modulesWithLessons) {
@@ -191,7 +193,7 @@ export default async function CourseLearnPage({ params }: { params: { slug: stri
     // If all lessons are completed, return the first lesson
     return modulesWithLessons[0]?.lessons[0] || null;
   };
-  
+
   const nextLesson = findNextLesson();
 
   return (

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { Pencil, Trash, GripVertical, Plus, ExternalLink, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
@@ -169,7 +169,7 @@ export function LessonList({ courseId, moduleId, moduleTitle, initialLessons }: 
   };
 
   // Handle reordering lessons via drag and drop
-  const handleReorder = async (result: any) => {
+  const handleReorder = async (result: DropResult) => {
     if (!result.destination) return;
     
     const items = Array.from(lessons);

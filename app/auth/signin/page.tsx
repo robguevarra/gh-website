@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { SignInForm } from '@/components/auth/signin-form';
@@ -10,7 +10,28 @@ import { useSearchParams } from 'next/navigation';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle2 } from 'lucide-react';
 
-export default function SignInPage() {
+// Animation variants
+const fadeIn = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] }
+  }
+};
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.2,
+      delayChildren: 0.3
+    }
+  }
+};
+
+function SignInContent() {
   const [mounted, setMounted] = useState(false);
   const searchParams = useSearchParams();
   const [showPasswordUpdatedAlert, setShowPasswordUpdatedAlert] = useState(false);
@@ -35,27 +56,6 @@ export default function SignInPage() {
   if (!mounted) {
     return null; // Avoid hydration mismatch
   }
-
-  // Animation variants
-  const fadeIn = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { 
-      opacity: 1, 
-      y: 0,
-      transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] }
-    }
-  };
-
-  const staggerContainer = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.2,
-        delayChildren: 0.3
-      }
-    }
-  };
   
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-[#f9f6f2] overflow-hidden">
@@ -213,5 +213,13 @@ export default function SignInPage() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+      <SignInContent />
+    </Suspense>
   );
 } 

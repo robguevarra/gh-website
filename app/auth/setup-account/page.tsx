@@ -1,10 +1,7 @@
-import { Metadata } from 'next';
-import { UpdatePasswordForm } from '@/components/auth/update-password-form';
+'use client';
 
-export const metadata: Metadata = {
-  title: 'Set Up Your Account - Graceful Homeschooling',
-  description: 'Complete your account setup for Graceful Homeschooling',
-};
+import { Suspense } from 'react';
+import { UpdatePasswordForm } from '@/components/auth/update-password-form';
 
 export default function SetupAccountPage() {
   return (
@@ -18,7 +15,9 @@ export default function SetupAccountPage() {
             Create a password to complete your account setup
           </p>
         </div>
-        <UpdatePasswordForm redirectUrl="/dashboard" />
+        <Suspense fallback={<div className="text-center py-4">Loading...</div>}>
+          <UpdatePasswordForm redirectUrl="/dashboard" />
+        </Suspense>
       </div>
     </div>
   );

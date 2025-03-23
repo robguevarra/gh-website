@@ -3,10 +3,8 @@ import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
 import { createServerSupabaseClient as createServiceRoleClient } from '@/lib/supabase/client';
 
 // GET all modules for a course
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     // Create a Supabase client for auth validation
     const supabase = await createRouteHandlerClient();
@@ -76,10 +74,8 @@ export async function GET(
 }
 
 // Create a new module
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const body = await request.json();
     const { title, description } = body;

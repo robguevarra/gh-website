@@ -1,226 +1,224 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { createServerSupabaseClient as createServiceRoleClient } from '@/lib/supabase/client';
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
-// GET a specific module
+// GET - Retrieve a single module by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { courseId: string; moduleId: string } }
+  { params }: { params: { id: string; moduleId: string } }
 ) {
-  try {
-    const supabase = createRouteHandlerClient({ cookies });
-    
-    // Verify user is authenticated and has admin role
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-    
-    // Use service role client to bypass RLS
-    const serviceClient = createServiceRoleClient();
-    
-    // Get profile to check if admin
-    const { data: profile, error: profileError } = await serviceClient
-      .from('profiles')
-      .select('role, is_admin')
-      .eq('id', user.id)
-      .single();
-    
-    if (profileError || !profile || (profile.role !== 'admin' && !profile.is_admin)) {
-      return NextResponse.json(
-        { message: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
-    }
-    
-    // Get module
-    const { data: module, error: moduleError } = await serviceClient
-      .from('modules')
-      .select('*, lessons(id)')
-      .eq('id', params.moduleId)
-      .eq('course_id', params.courseId)
-      .single();
-    
-    if (moduleError) {
-      return NextResponse.json(
-        { message: 'Module not found', error: moduleError.message },
-        { status: 404 }
-      );
-    }
-    
-    return NextResponse.json(module);
-  } catch (error) {
-    console.error('Error fetching module:', error);
+  const { id: courseId, moduleId } = params;
+
+  // Get supabase client for authentication
+  const supabase = await createRouteHandlerClient();
+
+  // Verify user is logged in
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
     return NextResponse.json(
-      { message: 'Internal server error' },
-      { status: 500 }
+      { error: 'Unauthorized' },
+      { status: 401 }
     );
   }
+
+  // Verify course exists
+  const { data: course, error: courseError } = await supabase
+    .from('courses')
+    .select('id')
+    .eq('id', courseId)
+    .single();
+
+  if (courseError) {
+    return NextResponse.json(
+      { error: 'Course not found' },
+      { status: 404 }
+    );
+  }
+
+  // Retrieve the module with its lessons
+  const { data: module, error: moduleError } = await supabase
+    .from('modules')
+    .select(`
+      id,
+      title,
+      description,
+      position,
+      status,
+      course_id,
+      created_at,
+      updated_at,
+      lessons(
+        id,
+        title,
+        description,
+        position,
+        status,
+        module_id,
+        created_at,
+        updated_at
+      )
+    `)
+    .eq('id', moduleId)
+    .eq('course_id', courseId)
+    .single();
+
+  if (moduleError) {
+    return NextResponse.json(
+      { error: 'Module not found' },
+      { status: 404 }
+    );
+  }
+
+  return NextResponse.json(module);
 }
 
-// PATCH to update a module
+// PATCH - Update a module
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { courseId: string; moduleId: string } }
+  { params }: { params: { id: string; moduleId: string } }
 ) {
-  try {
-    const body = await request.json();
-    const supabase = createRouteHandlerClient({ cookies });
-    
-    // Verify user is authenticated and has admin role
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-    
-    // Use service role client to bypass RLS
-    const serviceClient = createServiceRoleClient();
-    
-    // Get profile to check if admin
-    const { data: profile, error: profileError } = await serviceClient
-      .from('profiles')
-      .select('role, is_admin')
-      .eq('id', user.id)
-      .single();
-    
-    if (profileError || !profile || (profile.role !== 'admin' && !profile.is_admin)) {
-      return NextResponse.json(
-        { message: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
-    }
-    
-    // Verify module exists and belongs to the course
-    const { data: existingModule, error: moduleError } = await serviceClient
-      .from('modules')
-      .select('id')
-      .eq('id', params.moduleId)
-      .eq('course_id', params.courseId)
-      .single();
-    
-    if (moduleError) {
-      return NextResponse.json(
-        { message: 'Module not found', error: moduleError.message },
-        { status: 404 }
-      );
-    }
-    
-    // Validate required fields
-    if (body.title !== undefined && body.title.trim() === '') {
-      return NextResponse.json(
-        { message: 'Module title cannot be empty' },
-        { status: 400 }
-      );
-    }
-    
-    // Update module
-    const { data: updatedModule, error: updateError } = await serviceClient
-      .from('modules')
-      .update({
-        title: body.title,
-        description: body.description,
-        // Only update position if explicitly provided
-        ...(body.position !== undefined && { position: body.position }),
-      })
-      .eq('id', params.moduleId)
-      .select()
-      .single();
-    
-    if (updateError) {
-      return NextResponse.json(
-        { message: 'Failed to update module', error: updateError.message },
-        { status: 500 }
-      );
-    }
-    
-    return NextResponse.json(updatedModule);
-  } catch (error) {
-    console.error('Error updating module:', error);
+  const { id: courseId, moduleId } = params;
+
+  // Get supabase client for authentication
+  const supabase = await createRouteHandlerClient();
+
+  // Verify user is logged in
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
+  // Verify user is an admin
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile || profile.role !== 'admin') {
+    return NextResponse.json(
+      { error: 'Forbidden' },
+      { status: 403 }
+    );
+  }
+
+  // Parse request body
+  let moduleData;
+  try {
+    moduleData = await request.json();
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Invalid request body' },
+      { status: 400 }
+    );
+  }
+
+  // Validate required fields
+  if (!moduleData.title) {
+    return NextResponse.json(
+      { error: 'Title is required' },
+      { status: 400 }
+    );
+  }
+
+  // Update the module
+  const { data: updatedModule, error: updateError } = await supabaseAdmin
+    .from('modules')
+    .update({
+      title: moduleData.title,
+      description: moduleData.description,
+      status: moduleData.status || 'draft',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', moduleId)
+    .eq('course_id', courseId)
+    .select()
+    .single();
+
+  if (updateError) {
+    console.error('Error updating module:', updateError);
+    return NextResponse.json(
+      { error: 'Failed to update module' },
       { status: 500 }
     );
   }
+
+  return NextResponse.json(updatedModule);
 }
 
-// DELETE to remove a module
+// DELETE - Delete a module
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { courseId: string; moduleId: string } }
+  { params }: { params: { id: string; moduleId: string } }
 ) {
-  try {
-    const supabase = createRouteHandlerClient({ cookies });
-    
-    // Verify user is authenticated and has admin role
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-    
-    // Use service role client to bypass RLS
-    const serviceClient = createServiceRoleClient();
-    
-    // Get profile to check if admin
-    const { data: profile, error: profileError } = await serviceClient
-      .from('profiles')
-      .select('role, is_admin')
-      .eq('id', user.id)
-      .single();
-    
-    if (profileError || !profile || (profile.role !== 'admin' && !profile.is_admin)) {
-      return NextResponse.json(
-        { message: 'Forbidden - Admin access required' },
-        { status: 403 }
-      );
-    }
-    
-    // Verify module exists and belongs to the course
-    const { data: existingModule, error: moduleError } = await serviceClient
-      .from('modules')
-      .select('id')
-      .eq('id', params.moduleId)
-      .eq('course_id', params.courseId)
-      .single();
-    
-    if (moduleError) {
-      return NextResponse.json(
-        { message: 'Module not found', error: moduleError.message },
-        { status: 404 }
-      );
-    }
-    
-    // Delete module (cascade will delete lessons)
-    const { error: deleteError } = await serviceClient
-      .from('modules')
-      .delete()
-      .eq('id', params.moduleId);
-    
-    if (deleteError) {
-      return NextResponse.json(
-        { message: 'Failed to delete module', error: deleteError.message },
-        { status: 500 }
-      );
-    }
-    
-    return NextResponse.json({ message: 'Module deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting module:', error);
+  const { id: courseId, moduleId } = params;
+
+  // Get supabase client for authentication
+  const supabase = await createRouteHandlerClient();
+
+  // Verify user is logged in
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
+  // Verify user is an admin
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile || profile.role !== 'admin') {
+    return NextResponse.json(
+      { error: 'Forbidden' },
+      { status: 403 }
+    );
+  }
+
+  // Delete the module's lessons first
+  const { error: lessonsDeleteError } = await supabaseAdmin
+    .from('lessons')
+    .delete()
+    .eq('module_id', moduleId);
+
+  if (lessonsDeleteError) {
+    console.error('Error deleting lessons:', lessonsDeleteError);
+    return NextResponse.json(
+      { error: 'Failed to delete module lessons' },
       { status: 500 }
     );
   }
+
+  // Delete the module
+  const { error: moduleDeleteError } = await supabaseAdmin
+    .from('modules')
+    .delete()
+    .eq('id', moduleId)
+    .eq('course_id', courseId);
+
+  if (moduleDeleteError) {
+    console.error('Error deleting module:', moduleDeleteError);
+    return NextResponse.json(
+      { error: 'Failed to delete module' },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ success: true });
 } 

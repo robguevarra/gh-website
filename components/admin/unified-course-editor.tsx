@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Edit, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Edit, ExternalLink, Users } from 'lucide-react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import CourseForm from './course-form';
 // @ts-ignore - This module exists but TypeScript can't find it
 import CourseModulesManager from './course-modules-manager';
+import { CourseEnrollmentManagement } from './course-enrollment-management';
 
 interface Course {
   id: string;
@@ -35,6 +36,8 @@ interface Module {
   position: number;
   lessonCount: number;
   lessons: Lesson[];
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface Lesson {
@@ -73,7 +76,7 @@ export function UnifiedCourseEditor({
   
   // Update active tab when URL params change
   useEffect(() => {
-    if (tabParam && ['basic-info', 'modules', 'all-lessons', 'settings'].includes(tabParam)) {
+    if (tabParam && ['basic-info', 'modules', 'all-lessons', 'enrollments', 'settings'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -122,6 +125,7 @@ export function UnifiedCourseEditor({
           <TabsTrigger value="basic-info">Basic Info</TabsTrigger>
           <TabsTrigger value="modules">Modules & Lessons</TabsTrigger>
           <TabsTrigger value="all-lessons">All Lessons ({totalLessons})</TabsTrigger>
+          <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
         
@@ -221,6 +225,12 @@ export function UnifiedCourseEditor({
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+        
+        <TabsContent value="enrollments" className="space-y-4">
+          <div className="grid gap-4">
+            <CourseEnrollmentManagement courseId={course.id} />
+          </div>
         </TabsContent>
         
         <TabsContent value="settings" className="space-y-4">
