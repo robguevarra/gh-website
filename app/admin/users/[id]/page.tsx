@@ -17,15 +17,16 @@ export const metadata: Metadata = {
   description: 'User details and management page',
 };
 
-export default async function UserDetailPage({
-  params,
-}: {
-  params: { id: string }
-}) {
+export default async function UserDetailPage(
+  props: {
+    params: Promise<{ id: string }>
+  }
+) {
+  const params = await props.params;
   // Create Supabase clients - standard and service role
   const supabase = await createServerSupabaseClient();
   const serviceClient = await createServiceRoleClient();
-  
+
   // Fetch user details including auth data from service client (bypasses RLS)
   const { data: user, error: userError } = await serviceClient
     .from('auth.users')

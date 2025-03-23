@@ -1,19 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import type { Database } from '@/types/supabase';
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 // POST - Reorder lessons
 export async function POST(
   request: NextRequest,
-  { params }: { params: { courseId: string; moduleId: string } }
+  props: { params: Promise<{ courseId: string; moduleId: string }> }
 ) {
+  const params = await props.params;
   const { courseId, moduleId } = params;
 
-  // Get supabase client for authentication
-  const supabase = createRouteHandlerClient({ cookies });
-  
+  // Get supabase client for authentication using the modern SSR package
+  const cookieStore = cookies();
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get: (name) => cookieStore.get(name)?.value,
+        set: (name, value, options) => cookieStore.set(name, value, options),
+        remove: (name, options) => cookieStore.set(name, '', { ...options, maxAge: 0 }),
+      },
+    }
+  );
+
   // Verify user is logged in
   const {
     data: { user },
@@ -68,11 +81,9 @@ export async function POST(
     );
   }
 
-  // Get Supabase admin client for bypassing RLS
-  const adminClient = createAdminClient();
-
+  // Use the supabaseAdmin client directly from the imported module
   // Verify course exists
-  const { data: course, error: courseError } = await adminClient
+  const { data: course, error: courseError } = await supabaseAdmin
     .from("courses")
     .select("id")
     .eq("id", courseId)
@@ -86,7 +97,7 @@ export async function POST(
   }
 
   // Verify module exists and belongs to the course
-  const { data: module, error: moduleError } = await adminClient
+  const { data: module, error: moduleError } = await supabaseAdmin
     .from("modules")
     .select("id")
     .eq("id", moduleId)
@@ -101,7 +112,7 @@ export async function POST(
   }
 
   // Fetch all lessons for this module to validate the ids in lessonOrder
-  const { data: existingLessons, error: lessonsError } = await adminClient
+  const { data: existingLessons, error: lessonsError } = await supabaseAdmin
     .from("lessons")
     .select("id")
     .eq("module_id", moduleId);
@@ -115,7 +126,7 @@ export async function POST(
   }
 
   // Verify all lesson ids in the order array belong to this module
-  const existingIds = new Set(existingLessons.map(lesson => lesson.id));
+  const existingIds = new Set(existingLessons.map((lesson: { id: string }) => lesson.id));
   const allLessonIdsExist = lessonOrder.every(item => existingIds.has(item.id));
 
   if (!allLessonIdsExist) {
@@ -127,7 +138,7 @@ export async function POST(
 
   try {
     // Use a transaction to update all lesson positions atomically
-    const { error } = await adminClient.rpc('begin_transaction');
+    const { error } = await supabaseAdmin.rpc('begin_transaction');
     
     if (error) {
       throw new Error('Failed to begin transaction');
@@ -135,7 +146,7 @@ export async function POST(
     
     // Update lesson positions
     const updatePromises = lessonOrder.map(item => 
-      adminClient
+      supabaseAdmin
         .from("lessons")
         .update({ position: item.position })
         .eq("id", item.id)
@@ -144,10 +155,10 @@ export async function POST(
     await Promise.all(updatePromises);
     
     // Commit the transaction
-    const { error: commitError } = await adminClient.rpc('commit_transaction');
+    const { error: commitError } = await supabaseAdmin.rpc('commit_transaction');
     
     if (commitError) {
-      await adminClient.rpc('rollback_transaction');
+      await supabaseAdmin.rpc('rollback_transaction');
       throw new Error('Failed to commit transaction');
     }
     
@@ -156,7 +167,7 @@ export async function POST(
     console.error("Error reordering lessons:", error);
     
     // Ensure transaction is rolled back
-    await adminClient.rpc('rollback_transaction').catch(() => {});
+    await supabaseAdmin.rpc('rollback_transaction').catch(() => {});
     
     return NextResponse.json(
       { error: "Failed to reorder lessons" },

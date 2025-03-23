@@ -10,11 +10,14 @@ export const metadata = {
   description: 'Unified interface to manage course details, modules, and lessons.',
 };
 
-export default async function UnifiedCourseEditorPage({ params }: { 
+export default async function UnifiedCourseEditorPage({
+  params 
+}: { 
   params: Promise<{ id: string }> 
 }) {
-  // Get course ID from URL params
-  const { id: courseId } = await params;
+  // Await params to properly handle dynamic API
+  const { id } = await params;
+  const courseId = id;
   
   // Use service role client to bypass RLS
   const serviceClient = createServiceRoleClient();
@@ -101,11 +104,13 @@ export default async function UnifiedCourseEditorPage({ params }: {
   }
   
   // Prepare modules with lesson data
-  const modulesWithLessons = modules?.map(module => ({
-    ...module,
-    lessons: lessonsByModule[module.id] || [],
-    lessonCount: (lessonsByModule[module.id] || []).length
-  })) || [];
+  const modulesWithLessons = modules?.map(module => {
+    return {
+      ...module,
+      lessons: lessonsByModule[module.id] || [],
+      lessonCount: (lessonsByModule[module.id] || []).length
+    };
+  }) || [];
   
   return (
     <div className="space-y-6">

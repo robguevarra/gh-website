@@ -12,18 +12,19 @@ export const metadata = {
   description: 'View and manage all user accounts in the platform.',
 };
 
-export default async function UsersPage({
-  searchParams,
-}: {
-  searchParams: { [key: string]: string | string[] | undefined };
-}) {
+export default async function UsersPage(
+  props: {
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const page = Number(searchParams.page) || 1;
   const pageSize = 10;
   const search = typeof searchParams.search === 'string' ? searchParams.search : '';
   const role = typeof searchParams.role === 'string' ? searchParams.role : '';
-  
+
   const supabase = await createServerSupabaseClient();
-  
+
   let query = supabase
     .from('profiles')
     .select(`
@@ -41,25 +42,25 @@ export default async function UsersPage({
         )
       )
     `, { count: 'exact' });
-  
+
   // Apply search filter if provided
   if (search) {
     query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
   }
-  
+
   // Apply role filter if provided
   if (role) {
     query = query.eq('role', role);
   }
-  
+
   // Execute query with pagination
   const { data: users, count, error } = await query
     .order('created_at', { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
-  
+
   // Get total pages
   const totalPages = count ? Math.ceil(count / pageSize) : 0;
-  
+
   return (
     <div className="space-y-6 py-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

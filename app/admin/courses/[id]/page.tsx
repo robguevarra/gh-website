@@ -5,8 +5,6 @@ import CourseForm from '@/components/admin/course-form';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { ArrowRight } from 'lucide-react';
 
 export const metadata = {
   title: 'Edit Course | Admin Dashboard',
@@ -14,13 +12,10 @@ export const metadata = {
 };
 
 export default async function EditCoursePage({
-  params,
-}: {
-  params: { id: string };
+  params 
+}: { 
+  params: { id: string } 
 }) {
-  // Fix the params warning by destructuring
-  const { id: courseId } = params;
-  
   // Use service role client to bypass RLS
   const serviceClient = createServiceRoleClient();
   
@@ -36,10 +31,9 @@ export default async function EditCoursePage({
       is_featured, 
       thumbnail_url,
       trailer_url,
-      required_tier_id,
-      created_at
+      required_tier_id
     `)
-    .eq('id', courseId)
+    .eq('id', params.id)
     .single();
   
   // Fetch membership tiers
@@ -53,39 +47,26 @@ export default async function EditCoursePage({
   }
   
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight mb-2">{course.title}</h1>
-          <div className="flex items-center space-x-2">
-            <Badge variant={course.status === 'published' ? 'default' : 'outline'}>
-              {course.status === 'published' ? 'Published' : 'Draft'}
-            </Badge>
-            <span className="text-muted-foreground text-sm">
-              Created on {new Date(course.created_at).toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-        <Button asChild>
-          <Link href={`/admin/courses/${courseId}/unified`}>
-            <ArrowRight className="mr-2 h-4 w-4" />
-            Edit Course
-          </Link>
-        </Button>
-      </div>
-      
+    <div className="space-y-6">
       <Alert>
         <Lightbulb className="h-4 w-4" />
         <AlertTitle>Try our new unified course editor!</AlertTitle>
         <AlertDescription className="flex justify-between items-center">
           <span>Manage all aspects of your course in one place with our new enhanced editor.</span>
           <Button asChild size="sm">
-            <Link href={`/admin/courses/${courseId}/unified`}>
+            <Link href={`/admin/courses/${params.id}/unified`}>
               Try it now
             </Link>
           </Button>
         </AlertDescription>
       </Alert>
+      
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Edit Course</h1>
+        <p className="text-muted-foreground mt-2">
+          Update course details, media, and settings.
+        </p>
+      </div>
       
       <CourseForm 
         initialData={course} 

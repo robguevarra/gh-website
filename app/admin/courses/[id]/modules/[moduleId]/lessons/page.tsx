@@ -50,28 +50,29 @@ export const metadata = {
   description: "Manage lessons for a course module",
 };
 
-export default async function ModuleLessonsPage({
-  params,
-}: {
-  params: { id: string; moduleId: string };
-}) {
+export default async function ModuleLessonsPage(
+  props: {
+    params: Promise<{ id: string; moduleId: string }>;
+  }
+) {
+  const params = await props.params;
   const { id: courseId, moduleId } = params;
-  
+
   // Create Supabase client
   const supabase = await createServerSupabaseClient();
-  
+
   // Fetch the course
   const { data: course, error: courseError } = await supabase
     .from("courses")
     .select("*")
     .eq("id", courseId)
     .single();
-  
+
   if (courseError || !course) {
     console.error("Error fetching course:", courseError);
     notFound();
   }
-  
+
   // Fetch the module
   const { data: module, error: moduleError } = await supabase
     .from("modules")
@@ -79,12 +80,12 @@ export default async function ModuleLessonsPage({
     .eq("id", moduleId)
     .eq("course_id", courseId)
     .single();
-  
+
   if (moduleError || !module) {
     console.error("Error fetching module:", moduleError);
     notFound();
   }
-  
+
   // Fetch all lessons for this module
   const { data: lessons, error: lessonsError } = await supabase
     .from("lessons")
@@ -100,7 +101,7 @@ export default async function ModuleLessonsPage({
     `)
     .eq("module_id", moduleId)
     .order("position", { ascending: true });
-  
+
   if (lessonsError) {
     console.error("Error fetching lessons:", lessonsError);
     return <div>Error loading lessons</div>;

@@ -326,17 +326,7 @@ export default function CourseModulesManager({
     setIsCreatingLesson(true);
     
     try {
-      console.log('Creating lesson with:', {
-        courseId,
-        moduleId: targetModuleId,
-        title: newLessonData.title,
-        description: newLessonData.description || null,
-      });
-      
-      const url = `/api/admin/courses/${courseId}/modules/${targetModuleId}/lessons`;
-      console.log('Request URL:', url);
-      
-      const response = await fetch(url, {
+      const response = await fetch(`/api/admin/courses/${courseId}/modules/${targetModuleId}/lessons`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -346,19 +336,18 @@ export default function CourseModulesManager({
         }),
       });
       
-      console.log('Lesson creation response:', {
-        status: response.status, 
-        statusText: response.statusText
-      });
-      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Lesson creation failed:', errorData);
-        throw new Error(errorData.error || `Failed to create lesson (${response.status})`);
+        const errorData = await response.json();
+        console.error('API response error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData.error || 'Unknown error',
+          url: `/api/admin/courses/${courseId}/modules/${targetModuleId}/lessons`
+        });
+        throw new Error(errorData.error || 'Failed to create lesson');
       }
       
       const lesson = await response.json();
-      console.log('Lesson created successfully:', lesson);
       
       toast.success(
         <div className="space-y-1">
@@ -376,8 +365,8 @@ export default function CourseModulesManager({
       // Navigate to the lesson editor
       router.push(`/admin/courses/${courseId}/modules/${targetModuleId}/lessons/${lesson.id}`);
     } catch (error) {
-      console.error('Lesson creation error:', error);
       toast.error(error instanceof Error ? error.message : 'An error occurred');
+      console.error('Create lesson error:', error);
       setIsCreatingLesson(false);
     } finally {
       setIsLoading(false);

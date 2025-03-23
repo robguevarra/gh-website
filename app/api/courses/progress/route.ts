@@ -1,142 +1,160 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 
 export async function POST(request: NextRequest) {
+  const supabase = await createRouteHandlerClient();
+
+  // Verify user is logged in
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
+  // Parse request body
+  let body;
   try {
-    const supabase = createRouteHandlerClient({ cookies });
-    
-    // Check authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-    
-    // Parse request body
-    const body = await request.json();
-    const { lessonId, completion_percentage, is_completed } = body;
-    
-    if (!lessonId) {
-      return NextResponse.json(
-        { error: 'Lesson ID is required' },
-        { status: 400 }
-      );
-    }
-    
-    // Validate lesson exists and user has access
-    const { data: lesson, error: lessonError } = await supabase
-      .from('lessons')
-      .select(`
-        id,
-        modules!inner(
-          id,
-          course_id,
-          courses!inner(
-            id,
-            required_tier_id
-          )
-        )
-      `)
-      .eq('id', lessonId)
-      .single();
-    
-    if (lessonError || !lesson) {
-      return NextResponse.json(
-        { error: 'Lesson not found' },
-        { status: 404 }
-      );
-    }
-    
-    // Get course ID from the lesson's module
-    const courseId = lesson.modules.course_id;
-    const requiredTierId = lesson.modules.courses.required_tier_id;
-    
-    // Check if user has access to this course
-    let hasAccess = false;
-    
-    // Check if user has required membership tier
-    if (requiredTierId) {
-      const { data: userMembership, error: membershipError } = await supabase
-        .from('user_memberships')
-        .select('id, status, membership_tier_id')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .maybeSingle();
-      
-      // User has access if they have an active membership with the required tier or higher
-      if (userMembership && userMembership.membership_tier_id >= requiredTierId) {
-        hasAccess = true;
-      }
-    } else {
-      // Course has no tier requirement, so all logged-in users have access
-      hasAccess = true;
-    }
-    
-    // Check for specific enrollment in this course
+    body = await request.json();
+  } catch (error) {
+    return NextResponse.json(
+      { error: 'Invalid request body' },
+      { status: 400 }
+    );
+  }
+
+  const { courseId, lessonId, status } = body;
+
+  // Validate required fields
+  if (!courseId || !lessonId) {
+    return NextResponse.json(
+      { error: 'courseId and lessonId are required' },
+      { status: 400 }
+    );
+  }
+
+  // Validate status if provided
+  if (status && !['not_started', 'in_progress', 'completed'].includes(status)) {
+    return NextResponse.json(
+      { error: 'Invalid status value' },
+      { status: 400 }
+    );
+  }
+
+  try {
+    // Check if user has access to the course
     const { data: enrollment, error: enrollmentError } = await supabase
-      .from('user_enrollments')
-      .select('id, status')
+      .from('enrollments')
+      .select('id')
       .eq('user_id', user.id)
       .eq('course_id', courseId)
-      .eq('status', 'active')
-      .maybeSingle();
-    
-    if (enrollment) {
-      hasAccess = true;
-    }
-    
-    if (!hasAccess) {
+      .single();
+
+    if (enrollmentError || !enrollment) {
       return NextResponse.json(
-        { error: 'You do not have access to this course' },
+        { error: 'You are not enrolled in this course' },
         { status: 403 }
       );
     }
-    
-    // Prepare progress data to update
-    const progressData: any = {
-      user_id: user.id,
-      lesson_id: lessonId,
-      updated_at: new Date().toISOString(),
-    };
-    
-    // Add optional fields if provided
-    if (completion_percentage !== undefined) {
-      progressData.completion_percentage = Math.min(Math.max(0, completion_percentage), 100);
-    }
-    
-    if (is_completed !== undefined) {
-      progressData.is_completed = is_completed;
-      
-      // If marking as completed, set completion to 100% and add completed_at timestamp
-      if (is_completed) {
-        progressData.completion_percentage = 100;
-        progressData.completed_at = new Date().toISOString();
-      }
-    }
-    
-    // Update or insert progress record
-    const { data: progress, error: progressError } = await supabase
-      .from('user_progress')
-      .upsert(progressData)
-      .select()
+
+    // Verify the lesson belongs to the course
+    const { data: lessonData, error: lessonError } = await supabase
+      .from('lessons')
+      .select('id, module_id, modules!inner(course_id)')
+      .eq('id', lessonId)
+      .eq('modules.course_id', courseId)
       .single();
-    
-    if (progressError) {
+
+    if (lessonError || !lessonData) {
       return NextResponse.json(
-        { error: 'Failed to update progress', details: progressError.message },
-        { status: 500 }
+        { error: 'Lesson not found in this course' },
+        { status: 404 }
       );
     }
-    
-    return NextResponse.json({
-      message: 'Progress updated successfully',
-      progress
-    });
-    
+
+    // Start a transaction
+    const { error: beginError } = await supabaseAdmin.rpc('begin_transaction');
+    if (beginError) throw beginError;
+
+    try {
+      // Check if course progress exists
+      const { data: existingProgress, error: progressError } = await supabaseAdmin
+        .from('course_progress')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('course_id', courseId)
+        .single();
+
+      // If no course progress, create one
+      if (progressError) {
+        await supabaseAdmin.from('course_progress').insert({
+          user_id: user.id,
+          course_id: courseId,
+          status: 'in_progress',
+          progress_percentage: 0,
+          last_accessed_at: new Date().toISOString(),
+        });
+      } else {
+        // Update last accessed time
+        await supabaseAdmin
+          .from('course_progress')
+          .update({
+            last_accessed_at: new Date().toISOString(),
+          })
+          .eq('id', existingProgress.id);
+      }
+
+      // Check if lesson progress exists
+      const { data: existingLessonProgress, error: lessonProgressError } = await supabaseAdmin
+        .from('lesson_progress')
+        .select('id, status')
+        .eq('user_id', user.id)
+        .eq('lesson_id', lessonId)
+        .single();
+
+      const lessonStatus = status || 'in_progress';
+      const completedAt = lessonStatus === 'completed' ? new Date().toISOString() : null;
+
+      if (lessonProgressError) {
+        // Create new lesson progress
+        await supabaseAdmin.from('lesson_progress').insert({
+          user_id: user.id,
+          lesson_id: lessonId,
+          status: lessonStatus,
+          completed_at: completedAt,
+        });
+      } else if (existingLessonProgress.status !== 'completed' || lessonStatus === 'completed') {
+        // Update lesson progress if not already completed or if marking as completed
+        await supabaseAdmin
+          .from('lesson_progress')
+          .update({
+            status: lessonStatus,
+            completed_at: completedAt,
+          })
+          .eq('id', existingLessonProgress.id);
+      }
+
+      // Update overall course progress percentage
+      await supabaseAdmin.rpc('update_course_progress', {
+        p_user_id: user.id,
+        p_course_id: courseId,
+      });
+
+      // Commit the transaction
+      const { error: commitError } = await supabaseAdmin.rpc('commit_transaction');
+      if (commitError) throw commitError;
+
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      // Rollback on error
+      await supabaseAdmin.rpc('rollback_transaction').catch(() => {});
+      throw error;
+    }
   } catch (error) {
     console.error('Error updating progress:', error);
     return NextResponse.json(
@@ -147,103 +165,75 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  try {
-    const supabase = createRouteHandlerClient({ cookies });
-    
-    // Check authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-    
-    // Get query parameters
-    const url = new URL(request.url);
-    const lessonId = url.searchParams.get('lessonId');
-    const courseId = url.searchParams.get('courseId');
-    
-    // If lesson ID is provided, get progress for specific lesson
-    if (lessonId) {
-      const { data, error } = await supabase
-        .from('user_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('lesson_id', lessonId)
-        .single();
-      
-      if (error) {
-        // If no progress found, return empty progress object
-        if (error.code === 'PGRST116') {
-          return NextResponse.json({
-            progress: {
-              user_id: user.id,
-              lesson_id: lessonId,
-              completion_percentage: 0,
-              is_completed: false,
-            }
-          });
-        }
-        
-        return NextResponse.json(
-          { error: 'Failed to fetch progress', details: error.message },
-          { status: 500 }
-        );
-      }
-      
-      return NextResponse.json({
-        progress: data
-      });
-    }
-    
-    // If course ID is provided, get progress for all lessons in that course
-    if (courseId) {
-      // Get all lesson IDs for the course
-      const { data: lessons, error: lessonsError } = await supabase
-        .from('lessons')
-        .select('id')
-        .eq('modules.course_id', courseId);
-      
-      if (lessonsError || !lessons || lessons.length === 0) {
-        return NextResponse.json({
-          progress: []
-        });
-      }
-      
-      const lessonIds = lessons.map(lesson => lesson.id);
-      
-      // Get progress for all lessons
-      const { data: progress, error: progressError } = await supabase
-        .from('user_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .in('lesson_id', lessonIds);
-      
-      if (progressError) {
-        return NextResponse.json(
-          { error: 'Failed to fetch progress', details: progressError.message },
-          { status: 500 }
-        );
-      }
-      
-      return NextResponse.json({
-        progress: progress || []
-      });
-    }
-    
-    // If no lesson ID or course ID is provided, return error
+  const supabase = await createRouteHandlerClient();
+
+  // Verify user is logged in
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
     return NextResponse.json(
-      { error: 'Lesson ID or Course ID is required' },
-      { status: 400 }
+      { error: 'Unauthorized' },
+      { status: 401 }
     );
-    
-  } catch (error) {
-    console.error('Error fetching progress:', error);
+  }
+
+  // Check if we're getting progress for a specific course
+  const { searchParams } = new URL(request.url);
+  const courseId = searchParams.get('courseId');
+
+  let query = supabase
+    .from('course_progress')
+    .select(`
+      id,
+      user_id,
+      course_id,
+      status,
+      progress_percentage,
+      created_at,
+      updated_at,
+      last_accessed_at,
+      courses (
+        id,
+        title,
+        slug,
+        thumbnail_url,
+        published
+      ),
+      lesson_progress (
+        id,
+        lesson_id,
+        status,
+        completed_at,
+        lessons (
+          id,
+          title,
+          module_id,
+          modules (
+            id,
+            title,
+            course_id
+          )
+        )
+      )
+    `)
+    .eq('user_id', user.id);
+
+  // Add courseId filter if provided
+  if (courseId) {
+    query = query.eq('course_id', courseId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Error fetching course progress:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch progress' },
+      { error: 'Failed to fetch course progress' },
       { status: 500 }
     );
   }
+
+  return NextResponse.json(data);
 } 

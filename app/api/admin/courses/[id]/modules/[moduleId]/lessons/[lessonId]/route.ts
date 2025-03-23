@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { cookies } from "next/headers";
-
-import { createAdminClient } from "@/lib/supabase/admin";
 
 // GET - Fetch a specific lesson
 export async function GET(
   request: NextRequest,
-  { params }: { params: { courseId: string; moduleId: string; lessonId: string } }
+  props: { params: Promise<{ courseId: string; moduleId: string; lessonId: string }> }
 ) {
+  const params = await props.params;
   const { courseId, moduleId, lessonId } = params;
 
   // Get supabase client for authentication
-  const supabase = createRouteHandlerClient({ cookies });
-  
+  const supabase = await createRouteHandlerClient();
+
   // Verify user is logged in
   const {
     data: { user },
@@ -41,7 +41,7 @@ export async function GET(
   }
 
   // Get Supabase admin client for bypassing RLS
-  const adminClient = createAdminClient();
+  const adminClient = await createServiceRoleClient();
 
   // Fetch the lesson
   const { data: lesson, error: lessonError } = await adminClient
@@ -79,13 +79,14 @@ export async function GET(
 // PATCH - Update a lesson
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { courseId: string; moduleId: string; lessonId: string } }
+  props: { params: Promise<{ courseId: string; moduleId: string; lessonId: string }> }
 ) {
+  const params = await props.params;
   const { courseId, moduleId, lessonId } = params;
 
   // Get supabase client for authentication
-  const supabase = createRouteHandlerClient({ cookies });
-  
+  const supabase = await createRouteHandlerClient();
+
   // Verify user is logged in
   const {
     data: { user },
@@ -134,7 +135,7 @@ export async function PATCH(
   }
 
   // Get Supabase admin client for bypassing RLS
-  const adminClient = createAdminClient();
+  const adminClient = await createServiceRoleClient();
 
   // Verify module belongs to the course
   const { data: module, error: moduleError } = await adminClient
@@ -196,13 +197,14 @@ export async function PATCH(
 // DELETE - Delete a lesson
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { courseId: string; moduleId: string; lessonId: string } }
+  props: { params: Promise<{ courseId: string; moduleId: string; lessonId: string }> }
 ) {
+  const params = await props.params;
   const { courseId, moduleId, lessonId } = params;
 
   // Get supabase client for authentication
-  const supabase = createRouteHandlerClient({ cookies });
-  
+  const supabase = await createRouteHandlerClient();
+
   // Verify user is logged in
   const {
     data: { user },
@@ -230,7 +232,7 @@ export async function DELETE(
   }
 
   // Get Supabase admin client for bypassing RLS
-  const adminClient = createAdminClient();
+  const adminClient = await createServiceRoleClient();
 
   // Verify module belongs to the course
   const { data: module, error: moduleError } = await adminClient

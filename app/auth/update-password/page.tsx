@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { UpdatePasswordForm } from '@/components/auth/update-password-form';
 import Link from 'next/link';
 import { Logo } from '@/components/ui/logo';
@@ -10,8 +10,29 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 
-export default function UpdatePasswordPage() {
-  const [mounted, setMounted] = useState(false);
+// Animation variants
+const fadeIn = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] }
+  }
+};
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.2,
+      delayChildren: 0.3
+    }
+  }
+};
+
+// Component that uses searchParams
+function UpdatePasswordContent() {
   const [error, setError] = useState<string | null>(null);
   const [tokenStatus, setTokenStatus] = useState<'valid' | 'invalid' | 'expired' | 'used' | 'loading' | null>(null);
   const searchParams = useSearchParams();
@@ -22,8 +43,6 @@ export default function UpdatePasswordPage() {
   const type = searchParams.get('type');
 
   useEffect(() => {
-    setMounted(true);
-
     // Handle token-based authentication if present in URL
     const handleTokenAuth = async () => {
       if (token && type === 'recovery') {
@@ -66,30 +85,51 @@ export default function UpdatePasswordPage() {
     handleTokenAuth();
   }, [token, type]);
 
+  return (
+    <>
+      {/* Show token used/expired errors as an alert above the form */}
+      {(tokenStatus === 'used' || tokenStatus === 'expired' || tokenStatus === 'invalid') && (
+        <motion.div
+          variants={fadeIn}
+          className="w-full"
+        >
+          <Alert variant="destructive" className="bg-red-50 text-red-800 border border-red-200">
+            <AlertCircle className="h-4 w-4 mr-2" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+          <motion.div 
+            className="mt-4 text-center" 
+            variants={fadeIn}
+          >
+            <Link href="/auth/reset-password" 
+              className="text-brand-purple font-medium hover:underline text-sm"
+            >
+              Request a new password reset link
+            </Link>
+          </motion.div>
+        </motion.div>
+      )}
+      
+      {/* Show the form only if token is valid or there's no token */}
+      {(tokenStatus === 'valid' || tokenStatus === 'loading' || (!token && !tokenStatus)) && (
+        <motion.div variants={fadeIn}>
+          <UpdatePasswordForm errorMessage={error} />
+        </motion.div>
+      )}
+    </>
+  );
+}
+
+export default function UpdatePasswordPage() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   if (!mounted) {
     return null; // Avoid hydration mismatch
   }
-
-  // Animation variants
-  const fadeIn = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { 
-      opacity: 1, 
-      y: 0,
-      transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] }
-    }
-  };
-
-  const staggerContainer = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.2,
-        delayChildren: 0.3
-      }
-    }
-  };
   
   return (
     <div className="relative flex min-h-screen w-full flex-col bg-[#f9f6f2] overflow-hidden">
@@ -188,35 +228,9 @@ export default function UpdatePasswordPage() {
               />
             </motion.div>
             
-            {/* Show token used/expired errors as an alert above the form */}
-            {(tokenStatus === 'used' || tokenStatus === 'expired' || tokenStatus === 'invalid') && (
-              <motion.div
-                variants={fadeIn}
-                className="w-full"
-              >
-                <Alert variant="destructive" className="bg-red-50 text-red-800 border border-red-200">
-                  <AlertCircle className="h-4 w-4 mr-2" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-                <motion.div 
-                  className="mt-4 text-center" 
-                  variants={fadeIn}
-                >
-                  <Link href="/auth/reset-password" 
-                    className="text-brand-purple font-medium hover:underline text-sm"
-                  >
-                    Request a new password reset link
-                  </Link>
-                </motion.div>
-              </motion.div>
-            )}
-            
-            {/* Show the form only if token is valid or there's no token */}
-            {(tokenStatus === 'valid' || tokenStatus === 'loading' || (!token && !tokenStatus)) && (
-              <motion.div variants={fadeIn}>
-                <UpdatePasswordForm errorMessage={error} />
-              </motion.div>
-            )}
+            <Suspense fallback={<div className="text-center py-4">Loading...</div>}>
+              <UpdatePasswordContent />
+            </Suspense>
           </div>
         </motion.div>
       </div>
