@@ -1,33 +1,21 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/supabase';
-
-type CookieOptions = {
-  name?: string;
-  value?: string;
-  maxAge?: number;
-  expires?: Date;
-  path?: string;
-  domain?: string;
-  secure?: boolean;
-  httpOnly?: boolean;
-  sameSite?: 'strict' | 'lax' | 'none';
-};
 
 /**
  * Creates a Supabase client for use in route handlers
  * Using the modern SSR package from Supabase
  */
-export const createRouteHandlerClient = () => {
-  const cookieStore = cookies();
+export const createRouteHandlerClient = async () => {
+  const cookieStore = await cookies();
   
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get: (name: string) => {
-          const cookie = cookieStore.get(name);
+        get: async (name: string) => {
+          const cookie = await cookieStore.get(name);
           return cookie?.value;
         },
         set: (name: string, value: string, options: CookieOptions) => {
