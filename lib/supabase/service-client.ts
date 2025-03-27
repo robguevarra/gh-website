@@ -1,3 +1,5 @@
+'use client';
+
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 
@@ -11,6 +13,12 @@ export function createServiceRoleClient() {
   // The keys are restricted to admin routes through middleware and component checks
   return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY! // Use anon key for now as service role key isn't publicly exposed
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, // Use anon key for now as service role key isn't publicly exposed
+    {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+      }
+    }
   );
 } 

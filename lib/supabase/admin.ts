@@ -4,7 +4,7 @@ import type { Database } from '@/types/supabase';
 // Create a Supabase client with admin privileges using the service role key
 // This should be used ONLY in server contexts (Server Components, Route Handlers, Server Actions)
 // NEVER expose this client to the browser
-export const createAdminClient = () => {
+const createAdminClient = () => {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -18,7 +18,11 @@ export const createAdminClient = () => {
     {
       auth: {
         autoRefreshToken: false,
-        persistSession: false
+        persistSession: false,
+        detectSessionInUrl: false
+      },
+      db: {
+        schema: 'public'
       }
     }
   );
@@ -66,6 +70,41 @@ export const adminDb = {
         return { data, error: null };
       } catch (error) {
         console.error('Error deleting user:', error);
+        return { data: null, error };
+      }
+    }
+  },
+  
+  // Course management operations
+  courses: {
+    async getById(courseId: string) {
+      try {
+        const { data, error } = await supabaseAdmin
+          .from('courses')
+          .select('*')
+          .eq('id', courseId)
+          .single();
+          
+        if (error) throw error;
+        return { data, error: null };
+      } catch (error) {
+        console.error('Error fetching course by ID:', error);
+        return { data: null, error };
+      }
+    },
+    
+    async getModules(courseId: string) {
+      try {
+        const { data, error } = await supabaseAdmin
+          .from('modules')
+          .select('*')
+          .eq('course_id', courseId)
+          .order('position');
+          
+        if (error) throw error;
+        return { data, error: null };
+      } catch (error) {
+        console.error('Error fetching course modules:', error);
         return { data: null, error };
       }
     }

@@ -2,16 +2,30 @@
 
 import { useEffect, useState } from 'react'
 import { useEditor, EditorContent } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Placeholder from '@tiptap/extension-placeholder'
-import Image from '@tiptap/extension-image'
-import Link from '@tiptap/extension-link'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
+import { extensions } from './tiptap-extensions'
+import { EditorToolbar } from './editor-toolbar'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { Loader2, Save } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Save, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAutosave } from './use-autosave'
+import { fetchLesson } from '@/app/actions/modules'
+
+// Client-side only wrapper component
+function ClientOnlyEditor({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  if (!isMounted) {
+    return null
+  }
+
+  return <EditorContent editor={editor} />
+}
 
 interface ContentEditorProps {
   courseId: string
@@ -27,69 +41,77 @@ export function ContentEditor({
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [isSaving, setIsSaving] = useState(false)
-  const supabase = createClient()
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({
-        placeholder: 'Start writing your lesson content...',
-      }),
-      Image.configure({
-        HTMLAttributes: {
-          class: 'rounded-lg max-w-full h-auto',
-        },
-      }),
-      Link.configure({
-        openOnClick: false,
-      }),
-    ],
+    extensions,
     editorProps: {
       attributes: {
-        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none',
+        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-2xl focus:outline-none min-h-[200px] max-w-none',
       },
     },
+    immediatelyRender: false,
+  })
+
+  const { save } = useAutosave({
+    lessonId: selectedLessonId,
+    editor,
+    title,
+    description,
   })
 
   useEffect(() => {
     const fetchContent = async () => {
       if (!selectedLessonId) return
 
-      const { data: lesson } = await supabase
-        .from('lessons')
-        .select('*')
-        .eq('id', selectedLessonId)
-        .single()
-
-      if (lesson) {
+      setIsLoading(true)
+      setError(null)
+      
+      try {
+        const lesson = await fetchLesson(selectedLessonId)
+        
         setTitle(lesson.title)
         setDescription(lesson.description || '')
         editor?.commands.setContent(lesson.content_json || '')
+      } catch (err) {
+        console.error('Error fetching lesson:', err)
+        setError('Failed to load lesson content')
+      } finally {
+        setIsLoading(false)
       }
     }
 
     fetchContent()
-  }, [selectedLessonId])
+  }, [selectedLessonId, editor])
 
-  const handleSave = async () => {
+  const handleManualSave = async () => {
     if (!selectedLessonId) return
 
     setIsSaving(true)
     try {
-      const content = editor?.getJSON()
-      await supabase
-        .from('lessons')
-        .update({
-          title,
-          description,
-          content_json: content,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', selectedLessonId)
-    } catch (error) {
-      console.error('Error saving lesson:', error)
+      await save()
+    } catch (err) {
+      console.error('Error saving lesson:', err)
+    } finally {
+      setIsSaving(false)
     }
-    setIsSaving(false)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-6 h-6 animate-spin" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full text-red-500">
+        {error}
+      </div>
+    )
   }
 
   if (!selectedLessonId) {
@@ -119,7 +141,7 @@ export function ContentEditor({
           />
         </div>
         <Button
-          onClick={handleSave}
+          onClick={handleManualSave}
           disabled={isSaving}
           className="ml-4"
         >
@@ -132,8 +154,11 @@ export function ContentEditor({
         </Button>
       </div>
 
-      <div className={cn('border rounded-lg p-4', editor && 'min-h-[500px]')}>
-        <EditorContent editor={editor} />
+      <div className={cn('border rounded-lg overflow-hidden')}>
+        <EditorToolbar editor={editor} courseId={courseId} />
+        <div className="p-4">
+          <ClientOnlyEditor editor={editor} />
+        </div>
       </div>
     </div>
   )
