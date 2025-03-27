@@ -50,10 +50,13 @@ const roleColorMap: Record<string, string> = {
 
 type User = {
   id: string;
-  full_name: string | null;
-  email: string | null;
-  created_at: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  avatar_url: string | null;
   role: string;
+  created_at: string;
+  is_admin: boolean;
   user_memberships: Array<{
     id: string;
     status: string;
@@ -127,13 +130,17 @@ export default function UserTable({
   };
   
   // Generate user initials for avatar
-  const getUserInitials = (name: string | null) => {
-    if (!name) return 'U';
-    return name.split(' ')
-      .map(part => part[0])
-      .join('')
-      .toUpperCase()
-      .substring(0, 2);
+  const getUserInitials = (firstName: string | null, lastName: string | null) => {
+    if (!firstName && !lastName) return 'U';
+    const first = firstName?.[0] || '';
+    const last = lastName?.[0] || '';
+    return (first + last).toUpperCase();
+  };
+  
+  // Get full name
+  const getFullName = (firstName: string | null, lastName: string | null) => {
+    if (!firstName && !lastName) return 'Unknown User';
+    return [firstName, lastName].filter(Boolean).join(' ');
   };
   
   // Format date
@@ -191,7 +198,6 @@ export default function UserTable({
         <TableHeader>
           <TableRow>
             <TableHead>Name</TableHead>
-            <TableHead>Email</TableHead>
             <TableHead>Role</TableHead>
             <TableHead>Membership</TableHead>
             <TableHead>Joined</TableHead>
@@ -199,72 +205,71 @@ export default function UserTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {users.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={6} className="h-24 text-center">
-                No users found.
+          {users.map((user) => (
+            <TableRow key={user.id}>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <Avatar>
+                    {user.avatar_url ? (
+                      <AvatarImage src={user.avatar_url} alt={getFullName(user.first_name, user.last_name)} />
+                    ) : (
+                      <AvatarFallback>{getUserInitials(user.first_name, user.last_name)}</AvatarFallback>
+                    )}
+                  </Avatar>
+                  <div>
+                    <div className="font-medium">{getFullName(user.first_name, user.last_name)}</div>
+                    {user.phone && <div className="text-sm text-muted-foreground">{user.phone}</div>}
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>
+                <Badge variant="secondary" className={roleColorMap[user.role]}>
+                  {user.role}
+                </Badge>
+                {user.is_admin && (
+                  <Badge variant="secondary" className="ml-2 bg-red-500">
+                    Admin
+                  </Badge>
+                )}
+              </TableCell>
+              <TableCell>
+                {user.user_memberships?.length > 0 ? (
+                  user.user_memberships.map((membership) => (
+                    <Badge key={membership.id} variant="outline">
+                      {membership.membership_tiers[0]?.name || 'Unknown'}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-muted-foreground">No membership</span>
+                )}
+              </TableCell>
+              <TableCell>{formatDate(user.created_at)}</TableCell>
+              <TableCell className="text-right">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="h-8 w-8 p-0">
+                      <span className="sr-only">Open menu</span>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                    <DropdownMenuItem asChild>
+                      <Link href={`/admin/users/${user.id}`}>
+                        <UserCog className="mr-2 h-4 w-4" />
+                        Edit User
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive">
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete User
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </TableCell>
             </TableRow>
-          ) : (
-            users.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center">
-                    <Avatar className="mr-2 h-8 w-8">
-                      <AvatarFallback>{getUserInitials(user.full_name)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium">
-                        {user.full_name || 'No Name'}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        ID: {user.id.substring(0, 8)}...
-                      </div>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
-                    className={`border-0 ${roleColorMap[user.role] || 'bg-gray-500'} text-white`}
-                  >
-                    {user.role}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {user.user_memberships?.[0]?.membership_tiers?.[0]?.name || 'No membership'}
-                </TableCell>
-                <TableCell>{formatDate(user.created_at)}</TableCell>
-                <TableCell className="text-right">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem asChild>
-                        <Link href={`/admin/users/${user.id}`}>
-                          <UserCog className="mr-2 h-4 w-4" />
-                          <span>Edit User</span>
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-red-500 focus:text-red-500" asChild>
-                        <Link href={`/admin/users/${user.id}/delete`}>
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          <span>Delete User</span>
-                        </Link>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
+          ))}
         </TableBody>
       </Table>
       

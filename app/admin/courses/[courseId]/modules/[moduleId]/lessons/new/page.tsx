@@ -14,85 +14,78 @@ import { useForm } from "react-hook-form";
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const courseFormSchema = z.object({
+const lessonFormSchema = z.object({
   title: z.string().min(3, {
     message: "Title must be at least 3 characters.",
   }),
   description: z.string().min(10, {
     message: "Description must be at least 10 characters.",
   }),
-  slug: z.string().min(3, {
-    message: "Slug must be at least 3 characters.",
-  }).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
-    message: "Slug can only contain lowercase letters, numbers, and hyphens.",
-  }),
+  position: z.number().int().min(0),
   status: z.enum(["draft", "published", "archived"], {
     required_error: "Please select a status.",
   }),
-  level: z.enum(["beginner", "intermediate", "advanced", "all-levels"], {
-    required_error: "Please select a difficulty level.",
-  }),
 });
 
-type CourseFormValues = z.infer<typeof courseFormSchema>;
+type LessonFormValues = z.infer<typeof lessonFormSchema>;
 
-export default function NewCoursePage() {
+interface NewLessonPageProps {
+  params: {
+    courseId: string;
+    moduleId: string;
+  };
+}
+
+export default function NewLessonPage({ params }: NewLessonPageProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { courseId, moduleId } = params;
 
-  const form = useForm<CourseFormValues>({
-    resolver: zodResolver(courseFormSchema),
+  const form = useForm<LessonFormValues>({
+    resolver: zodResolver(lessonFormSchema),
     defaultValues: {
       title: "",
       description: "",
-      slug: "",
+      position: 0,
       status: "draft",
-      level: "all-levels",
     },
   });
 
-  // Convert title to slug-friendly format
-  const handleTitleChange = (value: string) => {
-    const slugValue = value
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "")
-      .replace(/-+/g, "-");
-    
-    form.setValue("slug", slugValue);
-  };
-
-  const onSubmit = async (data: CourseFormValues) => {
+  const onSubmit = async (data: LessonFormValues) => {
     setIsSubmitting(true);
     
     try {
-      const response = await fetch("/api/admin/courses", {
+      const response = await fetch(`/api/admin/courses/${courseId}/modules/${moduleId}/lessons`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          ...data,
+          module_id: moduleId,
+          content: "", // Empty content to be filled with rich text editor
+        }),
       });
       
       if (!response.ok) {
-        throw new Error("Failed to create course");
+        throw new Error("Failed to create lesson");
       }
       
-      const course = await response.json();
+      const lesson = await response.json();
       
       toast({
-        title: "Course created",
-        description: "Your new course has been created successfully.",
+        title: "Lesson created",
+        description: "Your new lesson has been created successfully.",
       });
       
-      // Redirect to the unified editor for the new course
-      router.push(`/admin/courses/${course.id}/unified`);
+      // Redirect to the unified editor for the course with the new lesson selected
+      router.push(`/admin/courses/${courseId}/unified?module=${moduleId}&lesson=${lesson.id}`);
     } catch (error) {
-      console.error("Error creating course:", error);
+      console.error("Error creating lesson:", error);
       toast({
         title: "Error",
-        description: "Failed to create course. Please try again.",
+        description: "Failed to create lesson. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -102,13 +95,13 @@ export default function NewCoursePage() {
 
   return (
     <div className="max-w-3xl mx-auto py-8">
-      <h1 className="text-3xl font-bold tracking-tight mb-6">Create New Course</h1>
+      <h1 className="text-3xl font-bold tracking-tight mb-6">Create New Lesson</h1>
       
       <Card>
         <CardHeader>
-          <CardTitle>Course Details</CardTitle>
+          <CardTitle>Lesson Details</CardTitle>
           <CardDescription>
-            Fill in the basic information to create your new course.
+            Add a new lesson to your module. After creating, you'll be able to add content using the rich text editor.
           </CardDescription>
         </CardHeader>
         
@@ -123,16 +116,12 @@ export default function NewCoursePage() {
                     <FormLabel>Title</FormLabel>
                     <FormControl>
                       <Input 
-                        placeholder="e.g. Introduction to Programming" 
+                        placeholder="e.g. Getting Started with the Basics" 
                         {...field}
-                        onChange={(e) => {
-                          field.onChange(e);
-                          handleTitleChange(e.target.value);
-                        }}
                       />
                     </FormControl>
                     <FormDescription>
-                      The name of your course as it will appear to students.
+                      The name of your lesson as it will appear to students.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -147,30 +136,13 @@ export default function NewCoursePage() {
                     <FormLabel>Description</FormLabel>
                     <FormControl>
                       <Textarea 
-                        placeholder="Brief overview of what students will learn..." 
+                        placeholder="Brief overview of this lesson's content..." 
                         className="min-h-32"
                         {...field}
                       />
                     </FormControl>
                     <FormDescription>
-                      A short description that summarizes the course content and objectives.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              
-              <FormField
-                control={form.control}
-                name="slug"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Slug</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. introduction-to-programming" {...field} />
-                    </FormControl>
-                    <FormDescription>
-                      The URL-friendly version of the title that will be used in course links.
+                      A short description that explains what this lesson covers.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -178,6 +150,30 @@ export default function NewCoursePage() {
               />
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <FormField
+                  control={form.control}
+                  name="position"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Position</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          min="0"
+                          step="1"
+                          {...field}
+                          onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                          value={field.value}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        The order in which this lesson appears in the module.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
                 <FormField
                   control={form.control}
                   name="status"
@@ -200,37 +196,7 @@ export default function NewCoursePage() {
                         </Select>
                       </FormControl>
                       <FormDescription>
-                        Determines if the course is visible to students.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="level"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Difficulty Level</FormLabel>
-                      <FormControl>
-                        <Select
-                          value={field.value}
-                          onValueChange={field.onChange}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select difficulty level" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="beginner">Beginner</SelectItem>
-                            <SelectItem value="intermediate">Intermediate</SelectItem>
-                            <SelectItem value="advanced">Advanced</SelectItem>
-                            <SelectItem value="all-levels">All Levels</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </FormControl>
-                      <FormDescription>
-                        The recommended skill level for students taking this course.
+                        Determines if the lesson is visible to students.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -243,7 +209,7 @@ export default function NewCoursePage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => router.back()}
+                onClick={() => router.push(`/admin/courses/${courseId}/unified?module=${moduleId}`)}
               >
                 Cancel
               </Button>
@@ -257,7 +223,7 @@ export default function NewCoursePage() {
                     Creating...
                   </>
                 ) : (
-                  "Create Course"
+                  "Create Lesson"
                 )}
               </Button>
             </CardFooter>

@@ -13,7 +13,7 @@ import {
   getCurrentSession,
   AuthError
 } from '@/lib/supabase/auth';
-import { useUserProfile } from '@/lib/supabase/hooks';
+import { useUserProfile, useAdminStatus } from '@/lib/supabase/hooks';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 
 // Auth context type
@@ -21,6 +21,7 @@ type AuthContextType = {
   user: User | null;
   session: Session | null;
   profile: any | null;
+  isAdmin: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
@@ -46,6 +47,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   
   // Use the profile hook to fetch the user's profile
   const { data: profile, isLoading: isProfileLoading } = useUserProfile(user?.id);
+  
+  // Use the admin status hook
+  const { data: adminData, isLoading: isAdminLoading } = useAdminStatus(user?.id);
 
   // Initialize auth state
   useEffect(() => {
@@ -163,7 +167,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     user,
     session,
     profile,
-    isLoading: isLoading || isProfileLoading,
+    isAdmin: adminData?.isAdmin || false,
+    isLoading: isLoading || isProfileLoading || isAdminLoading,
     signIn,
     signUp,
     signInWithProvider: socialSignIn,

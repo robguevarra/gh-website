@@ -29,10 +29,13 @@ export default async function UsersPage(
     .from('profiles')
     .select(`
       id,
-      full_name,
-      email,
-      created_at,
+      first_name,
+      last_name,
+      phone,
+      avatar_url,
       role,
+      created_at,
+      is_admin,
       user_memberships (
         id,
         status,
@@ -45,7 +48,7 @@ export default async function UsersPage(
 
   // Apply search filter if provided
   if (search) {
-    query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+    query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%`);
   }
 
   // Apply role filter if provided
@@ -57,6 +60,15 @@ export default async function UsersPage(
   const { data: users, count, error } = await query
     .order('created_at', { ascending: false })
     .range((page - 1) * pageSize, page * pageSize - 1);
+
+  if (error) {
+    console.error('Error fetching users:', error);
+    return (
+      <div className="p-6">
+        <div className="text-red-500">Error loading users. Please try again later.</div>
+      </div>
+    );
+  }
 
   // Get total pages
   const totalPages = count ? Math.ceil(count / pageSize) : 0;
