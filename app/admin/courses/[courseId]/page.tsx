@@ -1,29 +1,23 @@
 import { notFound } from 'next/navigation'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { CourseEditor } from '@/components/admin/courses/course-editor'
+import { adminDb } from '@/lib/supabase/admin'
 
-interface CoursePageProps {
-  params: Promise<{
-    courseId: string
-  }>
-}
-
-export default async function CoursePage({ params }: CoursePageProps) {
-  const { courseId } = await params
-  const supabase = await createServerSupabaseClient()
-
-  const { data: course } = await supabase
-    .from('courses')
-    .select('*')
-    .eq('id', courseId)
-    .single()
-
-  if (!course) {
+export default async function CoursePage({ params }: { params: { courseId: string } }) {
+  const { courseId } = params
+  
+  console.log('Server: Fetching course data for courseId:', courseId)
+  
+  const { data: course, error } = await adminDb.courses.getById(courseId)
+  
+  if (error || !course) {
+    console.error('Server: Error fetching course:', error)
     notFound()
   }
-
+  
+  console.log('Server: Successfully fetched course:', course)
+  
   return (
-    <div className="h-full">
+    <div className="container mx-auto py-6">
       <CourseEditor course={course} />
     </div>
   )
