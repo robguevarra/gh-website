@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createBrowserSupabaseClient } from './client';
 import type { Database } from '@/types/supabase';
 import { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
+import { useAuth } from '@/context/auth-context';
 
 // Type for Supabase realtime subscription
 type SubscriptionCallback<T> = (payload: { new: T; old: T | null }) => void;
@@ -82,22 +83,22 @@ export function useUserProfile(userId: string | undefined) {
       if (!userId) return null;
       
       try {
+        // Use a more targeted query with only the fields we need
         const { data, error } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, first_name, last_name, phone, avatar_url, role, preferences')
           .eq('id', userId)
           .single();
         
-        if (error) throw error;
-        return data;
-      } catch (err) {
-        // Handle infinite recursion errors gracefully
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        if (errorMessage.includes('infinite recursion')) {
-          console.warn('Infinite recursion detected in profile policy. Profile data will be unavailable until fixed.');
+        if (error) {
+          console.error('Profile fetch error:', error.message);
           return null;
         }
-        throw err;
+        return data;
+      } catch (err) {
+        console.error('Profile fetch exception:', err instanceof Error ? err.message : String(err));
+        // Return null instead of throwing to prevent component errors
+        return null;
       }
     },
     [userId]
@@ -279,4 +280,104 @@ export function useUpdateUserProgress() {
   };
   
   return { updateProgress, isLoading, error };
+}
+
+// Specialized hook for checking admin status without depending on profiles table
+export function useAdminStatus(userId: string | undefined) {
+  return useSupabaseQuery(
+    async (supabase) => {
+      if (!userId) return { isAdmin: false };
+      
+      try {
+        // First try to get user roles from a direct query with service key
+        const { data, error } = await supabase
+          .rpc('check_if_user_is_admin', { user_id: userId });
+        
+        if (!error && data) {
+          return { isAdmin: !!data };
+        }
+        
+        // Fallback to checking the profile directly with minimal fields
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', userId)
+          .single();
+        
+        if (profileError) {
+          console.error('Admin status check error:', profileError.message);
+          return { isAdmin: false };
+        }
+        
+        return { isAdmin: profile?.role === 'admin' };
+      } catch (err) {
+        console.error('Admin status check exception:', err instanceof Error ? err.message : String(err));
+        return { isAdmin: false };
+      }
+    },
+    [userId]
+  );
+}
+
+// Specialized hook for admin data fetching that bypasses RLS
+export function useAdminData<T>(
+  queryFn: (supabase: ReturnType<typeof createBrowserSupabaseClient>) => Promise<T>,
+  deps: any[] = []
+) {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const { isAdmin } = useAuth();
+
+  useEffect(() => {
+    // Only fetch data if user is admin
+    if (!isAdmin) {
+      setError(new Error('Unauthorized'));
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const supabase = createBrowserSupabaseClient();
+        
+        // First try with regular client
+        try {
+          const result = await queryFn(supabase);
+          setData(result);
+          setError(null);
+          setIsLoading(false);
+          return;
+        } catch (err) {
+          // If this is a policy recursion error, try with service client
+          if (err instanceof Error && 
+             (err.message.includes('infinite recursion') || 
+              err.message.includes('42P17'))) {
+            
+            // Import dynamically to avoid issues in SSR
+            const { createServiceRoleClient } = await import('./service-client');
+            const serviceClient = createServiceRoleClient();
+            
+            // Run the same query with service client
+            const result = await queryFn(serviceClient);
+            setData(result);
+            setError(null);
+          } else {
+            throw err;
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching admin data:', err instanceof Error ? err.message : JSON.stringify(err));
+        setError(err instanceof Error ? err : new Error(String(err)));
+        setData(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [...deps, isAdmin]);
+
+  return { data, error, isLoading };
 } 

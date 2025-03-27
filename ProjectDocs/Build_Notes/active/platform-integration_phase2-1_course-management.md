@@ -1,130 +1,171 @@
-# Platform Integration - Phase 2-1: Course Management
+# Platform Integration - Phase 2-1: Course Management Foundation
 
 ## Task Objective
-Implement comprehensive course management capabilities for the Graceful Homeschooling platform, enabling administrators to create, edit, publish, and manage courses and their content.
+Establish the foundational data structures and APIs for a unified course management system in the Graceful Homeschooling platform.
 
 ## Current State Assessment
-The platform currently has basic database schema for courses but lacks user interfaces and functionality for course creation, content management, and publishing workflows. Administrators need a way to manage course content through the admin interface.
+The platform requires a robust foundation for course management that will support:
+- Unified course editing experience
+- Real-time collaboration
+- Rich content management
+- Media handling
 
 ## Future State Goal
-A fully functional course management system with intuitive interfaces for administrators to create courses, organize content into modules and lessons, upload media, and control publishing status. Course content should be structured consistently and accessed efficiently by the user-facing course delivery system.
+A solid foundation for course management that enables:
 
-## Relevant Context
+1. **Efficient Data Structure**:
+   - Optimized database schema for courses, modules, and lessons
+   - Support for rich content and media assets
+   - Real-time capabilities through Supabase
 
-> **Important**: When working on this build note, always ensure proper context integration from:
-> 1. Previously completed build notes (Phase 1-0 through Phase 1-6)
-> 2. Project context (`ProjectContext.md`)
-> 3. Design context (`designContext.md`)
->
-> This ensures consistency and alignment with project goals and standards.
+2. **Comprehensive API Layer**:
+   - RESTful endpoints for all course operations
+   - Real-time subscriptions for collaborative features
+   - Secure media handling endpoints
 
-### From Project Context
-From the `ProjectContext.md`, the following key points inform our course management approach:
-- **Course Structure**: Hierarchical organization with courses, modules, and lessons
-- **Content Types**: Support for text, images, video, and interactive elements
-- **User Roles**: Different access levels for course creation and management
-- **Publishing Workflow**: Draft, review, and published states for course content
-
-### From Design Context
-From the `designContext.md`, the following design principles apply:
-- **Admin Interfaces**: Clean, structured layouts with clear hierarchies
-- **Form Design**: Consistent validation patterns and error states
-- **Content Editing**: WYSIWYG interfaces for content creation
-- **Media Management**: Intuitive uploading and embedding of images and videos
-
-### From Previously Completed Phases
-The project has already completed:
-- **Phase 1-3**: Database Schema Implementation (including course-related tables)
-- **Phase 1-6**: Project Structure (establishing coding patterns and documentation standards)
-
-These implementations have established patterns that should be leveraged in this phase.
+3. **Type Safety**:
+   - Complete TypeScript definitions
+   - Zod validation schemas
+   - Proper error handling
 
 ## Implementation Plan
 
-### 1. Course Creation Interface
-- [ ] Design and implement course creation form
-  - Create form for basic course information (title, description, etc.)
-  - Implement thumbnail image upload and management
-  - Add pricing and availability controls
-- [ ] Develop course metadata management
-  - Create tagging system for courses
-  - Implement category selection
-  - Add prerequisite selection interface
+### 1. Database Schema
+- [ ] Implement core tables
+  ```sql
+  -- Courses table
+  CREATE TABLE courses (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    thumbnail_url TEXT,
+    status TEXT DEFAULT 'draft',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    published_at TIMESTAMP WITH TIME ZONE,
+    CONSTRAINT valid_status CHECK (status IN ('draft', 'published', 'archived'))
+  );
 
-### 2. Module and Lesson Management
-- [ ] Implement module management interfaces
-  - Create module creation and editing interface
-  - Develop module ordering capabilities
-  - Add module visibility controls
-- [ ] Build lesson creation system
-  - Implement lesson type selection
-  - Create content editing interface
-  - Add media embedding capabilities
+  -- Modules table
+  CREATE TABLE modules (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    description TEXT,
+    position INTEGER NOT NULL,
+    status TEXT DEFAULT 'draft',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT valid_status CHECK (status IN ('draft', 'published', 'archived'))
+  );
 
-### 3. Content Editing Tools
-- [ ] Implement rich text editor for lesson content
-  - Integrate WYSIWYG editor with formatting options
-  - Add media insertion capabilities
-  - Implement content validation
-- [ ] Create media management system
-  - Build media library interface
-  - Implement media upload functionality
-  - Create media organization capabilities
+  -- Lessons table
+  CREATE TABLE lessons (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    module_id UUID REFERENCES modules(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    content_json JSONB,
+    position INTEGER NOT NULL,
+    status TEXT DEFAULT 'draft',
+    version INTEGER DEFAULT 1,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT valid_status CHECK (status IN ('draft', 'published', 'archived'))
+  );
+  ```
 
-### 4. Publishing Workflow
-- [ ] Implement content status management
-  - Create draft/published states for all content
-  - Implement status change workflow
-  - Add validation before publishing
-- [ ] Develop preview capabilities
-  - Create course preview functionality
-  - Implement module and lesson previews
-  - Add device-specific preview options
+### 2. Type Definitions
+- [ ] Create TypeScript interfaces
+  ```typescript
+  // Types for course management
+  interface Course {
+    id: string;
+    title: string;
+    slug: string;
+    description?: string;
+    thumbnailUrl?: string;
+    status: 'draft' | 'published' | 'archived';
+    createdAt: Date;
+    updatedAt: Date;
+    publishedAt?: Date;
+  }
 
-### 5. Course Organization and Navigation
-- [ ] Build course organization tools
-  - Implement drag-and-drop reordering for modules and lessons
-  - Create sorting and filtering options
-  - Add search capabilities for course content
-- [ ] Develop navigation controls
-  - Implement breadcrumb navigation
-  - Create quick navigation between related content
-  - Add navigation history
+  interface Module {
+    id: string;
+    courseId: string;
+    title: string;
+    description?: string;
+    position: number;
+    status: 'draft' | 'published' | 'archived';
+    createdAt: Date;
+    updatedAt: Date;
+  }
+
+  interface Lesson {
+    id: string;
+    moduleId: string;
+    title: string;
+    contentJson?: Record<string, unknown>;
+    position: number;
+    status: 'draft' | 'published' | 'archived';
+    version: number;
+    createdAt: Date;
+    updatedAt: Date;
+  }
+  ```
+
+### 3. API Implementation
+- [ ] Create API routes
+  ```typescript
+  // API route structure
+  app/
+    api/
+      courses/
+        route.ts               # GET, POST
+        [courseId]/
+          route.ts            # GET, PATCH, DELETE
+          modules/
+            route.ts          # GET, POST
+            [moduleId]/
+              route.ts        # GET, PATCH, DELETE
+              lessons/
+                route.ts      # GET, POST
+                [lessonId]/
+                  route.ts    # GET, PATCH, DELETE
+  ```
+
+### 4. Real-time Subscriptions
+- [ ] Implement Supabase real-time features
+  - [ ] Course updates subscription
+  - [ ] Module position changes
+  - [ ] Lesson content changes
+  - [ ] Collaboration presence
 
 ## Technical Considerations
 
-### Database Interactions
-- Use optimistic updates for quick UI feedback
-- Implement proper error handling for failed operations
-- Cache course data appropriately to minimize database calls
-
-### User Experience
-- Implement autosave functionality for content editing
-- Use drag-and-drop interfaces for content ordering
-- Provide clear feedback on publishing status
-
 ### Performance
-- Lazy load content in admin interfaces to improve load times
-- Optimize media handling to prevent performance issues
-- Use pagination for lists of courses, modules, and lessons
+- Implement database indexes for frequent queries
+- Use optimistic updates for real-time operations
+- Cache frequently accessed course data
 
 ### Security
-- Implement proper permission checks for all course management actions
-- Sanitize all user-generated content to prevent XSS attacks
-- Validate all uploads for file type and size constraints
+- Implement row-level security policies
+- Validate all user input
+- Secure media upload endpoints
 
-## Completion Status
+### Scalability
+- Design for horizontal scaling
+- Implement proper database partitioning
+- Plan for high concurrent access
 
-This phase is not yet started. Upon completion, this section will be updated with achievements, challenges addressed, and any pending items.
-
-## Next Steps After Completion
-After establishing the course management capabilities, we will move on to Phase 2-2: Course Delivery, building upon the management system to implement the user-facing course experience.
+## Next Steps
+After establishing this foundation:
+1. Implement the unified course editor interface
+2. Add rich text editing capabilities
+3. Integrate media management
+4. Enable real-time collaboration
 
 ---
 
-> **Note to AI Developers**: When working with this project, always ensure that you:
-> 1. Review previously completed build notes for context and established patterns
-> 2. Consult the implementation strategy and architecture planning documents
-> 3. Align your work with the project context and design context guidelines
-> 4. Follow the established folder structure, naming conventions, and coding standards
-> 5. Include this reminder in all future build notes to maintain consistency 
+> **Note**: This foundation will support the seamless course editing experience detailed in Phase 2-2. 

@@ -37,17 +37,26 @@ export default async function AdminLayout({
   // Get the user's profile to check if they are an admin
   const { data: profile, error: profileError } = await serviceClient
     .from('profiles')
-    .select('*')
+    .select('id, role')
     .eq('id', user.id)
     .single();
   
   console.log('Profile check result:', { 
-    profile: profile ? { id: profile.id, role: profile.role, is_admin: profile.is_admin } : null, 
+    profile: profile ? { id: profile.id, role: profile.role } : null, 
     error: profileError?.message 
   });
   
+  // Also check directly with the admin check function for reliability
+  const { data: isAdmin, error: adminCheckError } = await serviceClient
+    .rpc('check_if_user_is_admin', { user_id: user.id });
+    
+  console.log('Admin check result:', {
+    isAdmin,
+    error: adminCheckError?.message
+  });
+  
   // If user is not an admin, redirect to dashboard
-  if (!profile || (profile.role !== 'admin' && !profile.is_admin)) {
+  if ((!profile) || (profile.role !== 'admin' && !isAdmin)) {
     console.log('User does not have admin privileges, redirecting to dashboard');
     redirect('/dashboard');
   }

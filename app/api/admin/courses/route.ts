@@ -5,13 +5,23 @@ import { createServerSupabaseClient as createServiceRoleClient } from '@/lib/sup
 // GET all courses with relevant information
 export async function GET(request: NextRequest) {
   try {
-    // Create a Supabase client for auth validation
+    // Get query parameters
+    const searchParams = request.nextUrl.searchParams;
+    const search = searchParams.get('search') || '';
+    const status = searchParams.get('status') || 'all';
+    const sort = searchParams.get('sort') || 'updated_at';
+    const order = searchParams.get('order') || 'desc';
+    const page = parseInt(searchParams.get('page') || '1');
+    const pageSize = parseInt(searchParams.get('pageSize') || '10');
+
+    // Create the Supabase clients
     const supabase = await createRouteHandlerClient();
+    const serviceClient = createServiceRoleClient();
     
     // Verify user is authenticated and has admin role
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    console.log('Admin courses API auth check:', { 
+    console.log('Admin courses GET auth check:', { 
       isAuthenticated: !!user, 
       userId: user?.id,
       authError: authError?.message
@@ -25,13 +35,13 @@ export async function GET(request: NextRequest) {
     }
     
     // Check if user has admin role
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await serviceClient
       .from('profiles')
       .select('role, is_admin')
       .eq('id', user.id)
       .single();
     
-    console.log('Admin check result:', { 
+    console.log('Admin GET check result:', { 
       profileExists: !!profile,
       role: profile?.role,
       isAdmin: profile?.is_admin,
@@ -45,56 +55,77 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // Use service role client to bypass RLS for admin operations
-    const serviceClient = createServiceRoleClient();
-    
-    // Get query parameters
-    const searchParams = request.nextUrl.searchParams;
-    const status = searchParams.get('status');
-    const tier = searchParams.get('tier');
-    
-    // Initialize query
+    // Build the query
     let query = serviceClient
       .from('courses')
-      .select(`
-        id, 
-        title, 
-        slug, 
-        description, 
-        status, 
-        is_featured, 
-        thumbnail_url,
-        created_at,
-        updated_at,
-        required_tier_id,
-        membership_tiers(name)
-      `)
-      .order('updated_at', { ascending: false });
+      .select('*');
     
-    // Apply filters if provided
-    if (status) {
+    // Apply search filter if provided
+    if (search) {
+      const searchLower = `%${search.toLowerCase()}%`;
+      query = query.or(`title.ilike.${searchLower},description.ilike.${searchLower}`);
+    }
+    
+    // Apply status filter if not 'all'
+    if (status !== 'all') {
       query = query.eq('status', status);
     }
     
-    if (tier) {
-      query = query.eq('required_tier_id', tier);
+    // Get total count for pagination
+    const countQuery = serviceClient
+      .from('courses')
+      .select('*', { count: 'exact', head: true });
+      
+    // Apply same filters as the main query
+    if (search) {
+      const searchLower = `%${search.toLowerCase()}%`;
+      countQuery.or(`title.ilike.${searchLower},description.ilike.${searchLower}`);
     }
     
-    const { data: courses, error } = await query;
+    if (status !== 'all') {
+      countQuery.eq('status', status);
+    }
     
-    if (error) {
+    const { count, error: countError } = await countQuery;
+    
+    if (countError) {
+      console.error('Error counting courses:', countError);
       return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to count courses' },
         { status: 500 }
       );
     }
     
-    return NextResponse.json(courses);
+    // Apply ordering and pagination
+    query = query
+      .order(sort, { ascending: order === 'asc' })
+      .range((page - 1) * pageSize, page * pageSize - 1);
     
+    // Execute the query
+    const { data: courses, error: coursesError } = await query;
+    
+    if (coursesError) {
+      console.error('Error fetching courses:', coursesError);
+      return NextResponse.json(
+        { error: 'Failed to fetch courses' },
+        { status: 500 }
+      );
+    }
+    
+    // Calculate pagination values
+    const totalCount = count || 0;
+    const totalPages = Math.ceil(totalCount / pageSize);
+    
+    return NextResponse.json({
+      courses: courses || [],
+      totalPages,
+      totalCount,
+      currentPage: page,
+    });
   } catch (error) {
-    console.error('Error in courses GET route:', error);
+    console.error("Error in courses API:", error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: "Failed to fetch courses" },
       { status: 500 }
     );
   }
