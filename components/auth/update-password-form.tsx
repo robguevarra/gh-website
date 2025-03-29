@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ export interface UpdatePasswordFormProps {
 
 export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?updated=true' }: UpdatePasswordFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { updatePassword } = useAuth();
   
   const [password, setPassword] = useState('');
@@ -50,13 +51,34 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
       setError('Passwords do not match');
       return;
     }
+
+    const token = searchParams.get('token');
+    const type = searchParams.get('type');
+
+    if (!token || type !== 'recovery') {
+      setError('Invalid or missing recovery token');
+      return;
+    }
     
     setIsLoading(true);
     
     try {
       const supabase = createBrowserSupabaseClient();
       
-      // Update password using the session
+      // First verify the recovery token
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token,
+        type: 'recovery'
+      });
+
+      if (verifyError) {
+        console.error('Error verifying recovery token:', verifyError);
+        setError(verifyError.message || 'Invalid recovery token. Please request a new password reset.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Now update the password
       const { error: updateError } = await supabase.auth.updateUser({
         password: password
       });
@@ -70,6 +92,9 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
       
       // Success path
       setIsSuccess(true);
+      
+      // Sign out after success to ensure clean state
+      await supabase.auth.signOut();
       
       // Redirect after success animation
       setTimeout(() => {
