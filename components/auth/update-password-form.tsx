@@ -22,47 +22,14 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
   const [error, setError] = useState<string | null>(errorMessage || null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [canUpdatePassword, setCanUpdatePassword] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
   
+  // Listen for auth state changes
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
     
-    // Check if we have a session - but add a delay to allow auth state to stabilize
-    const checkSession = async () => {
-      // Delay to let the auth state settle
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log('Session check result:', { session, error: sessionError });
-        
-        if (session) {
-          setCanUpdatePassword(true);
-          setError(null);
-        }
-      } catch (e) {
-        console.error('Session check error:', e);
-      } finally {
-        setCheckingSession(false);
-      }
-    };
-    
-    checkSession();
-    
-    // Also listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Setup listener for PASSWORD_RECOVERY event for debugging
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth event:', event, session);
-      
-      if (event === 'PASSWORD_RECOVERY') {
-        setCanUpdatePassword(true);
-        setError(null);
-        setCheckingSession(false);
-      } else if (event === 'SIGNED_IN' && session) {
-        setCanUpdatePassword(true);
-        setError(null);
-        setCheckingSession(false);
-      }
     });
 
     // Cleanup subscription
@@ -74,11 +41,6 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    
-    if (!canUpdatePassword) {
-      setError('Cannot update password - invalid recovery session');
-      return;
-    }
     
     // Basic validation
     if (!password) {
@@ -166,7 +128,7 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              disabled={isLoading || isSuccess || !canUpdatePassword}
+              disabled={isLoading || isSuccess}
               className="bg-white/80 border-[#e7d9ce] focus:border-brand-purple focus:ring-brand-purple/20 transition-all duration-300"
             />
           </div>
@@ -182,7 +144,7 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
               required
-              disabled={isLoading || isSuccess || !canUpdatePassword}
+              disabled={isLoading || isSuccess}
               className="bg-white/80 border-[#e7d9ce] focus:border-brand-purple focus:ring-brand-purple/20 transition-all duration-300"
             />
           </div>
@@ -191,7 +153,7 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
         <Button 
           type="submit" 
           className={`w-full h-11 relative overflow-hidden group ${isSuccess ? 'bg-green-500' : ''}`}
-          disabled={isLoading || isSuccess || !canUpdatePassword}
+          disabled={isLoading || isSuccess}
         >
           <span className={`absolute inset-0 w-full h-full transition-all duration-500 ${isSuccess ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-brand-purple to-brand-pink group-hover:scale-105'}`}></span>
           
@@ -206,24 +168,6 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
                 <CheckCircle2 className="mr-2 h-5 w-5" />
                 Password Updated!
               </motion.div>
-            ) : checkingSession ? (
-              <>
-                <motion.div 
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, ease: "linear", repeat: Infinity }}
-                >
-                  <Loader2 className="h-4 w-4" />
-                </motion.div>
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.2, duration: 0.3 }}
-                >
-                  Checking session...
-                </motion.span>
-              </>
-            ) : !canUpdatePassword ? (
-              'Waiting for recovery session...'
             ) : isLoading ? (
               <>
                 <motion.div 
