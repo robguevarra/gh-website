@@ -11,14 +11,7 @@ export async function GET(request: NextRequest) {
     try {
       const supabase = await createRouteHandlerClient();
       
-      // For recovery flow, pass the token to update password page
-      if (type === 'recovery') {
-        return NextResponse.redirect(
-          new URL(`/auth/update-password?token=${code}&type=${type}`, requestUrl.origin)
-        );
-      }
-
-      // For other flows, exchange the code for a session
+      // Exchange the code for a session
       const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
       
       if (sessionError) {
@@ -28,17 +21,14 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // Get the user to verify the session was created successfully
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        console.error('User validation error:', userError);
+      // For recovery flow, redirect to update password page
+      if (type === 'recovery') {
         return NextResponse.redirect(
-          new URL('/auth/signin?error=session_validation_failed', requestUrl.origin)
+          new URL('/auth/update-password', requestUrl.origin)
         );
       }
 
-      // Successful authentication, redirect to the intended destination
+      // For other flows, redirect to the intended destination
       return NextResponse.redirect(new URL(next, requestUrl.origin));
     } catch (error) {
       console.error('Unexpected error in auth callback:', error);
