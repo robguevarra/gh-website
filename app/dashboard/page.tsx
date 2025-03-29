@@ -5,18 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function DashboardPage() {
-  const { user, profile, logout } = useAuth();
+  const { user, profile } = useAuth();
 
   return (
     <div className="container mx-auto py-10">
-      <div className="mb-8 flex flex-col space-y-2 md:flex-row md:items-center md:justify-between md:space-y-0">
-        <div>
-          <h1 className="text-3xl font-serif font-bold">Welcome to Your Dashboard</h1>
-          <p className="text-muted-foreground">
-            Manage your homeschooling journey with Graceful Homeschooling
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => logout()}>Sign Out</Button>
+      <div className="mb-8">
+        <h1 className="text-3xl font-serif font-bold">Welcome to Your Dashboard</h1>
+        <p className="text-muted-foreground">
+          Manage your homeschooling journey with Graceful Homeschooling
+        </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

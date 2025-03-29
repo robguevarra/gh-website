@@ -44,6 +44,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [authInitialized, setAuthInitialized] = useState(false);
   
   // Use the profile hook to fetch the user's profile
   const { data: profile, isLoading: isProfileLoading } = useUserProfile(user?.id);
@@ -53,23 +54,44 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   // Initialize auth state
   useEffect(() => {
+    let mounted = true;
+    
     const initializeAuth = async () => {
+      if (authInitialized) return;
+      
       setIsLoading(true);
       
-      // Get current session
-      const { session: currentSession } = await getCurrentSession();
-      
-      if (currentSession) {
-        // Get current user
-        const { user: currentUser } = await getCurrentUser();
-        setUser(currentUser);
-        setSession(currentSession);
-      } else {
-        setUser(null);
-        setSession(null);
+      try {
+        // Get current session
+        const { session: currentSession, error: sessionError } = await getCurrentSession();
+        
+        if (sessionError || !mounted) {
+          setIsLoading(false);
+          return;
+        }
+        
+        if (currentSession) {
+          // Get current user
+          const { user: currentUser } = await getCurrentUser();
+          
+          if (mounted) {
+            setUser(currentUser);
+            setSession(currentSession);
+          }
+        } else {
+          if (mounted) {
+            setUser(null);
+            setSession(null);
+          }
+        }
+      } catch (err) {
+        // Silent error handling
+      } finally {
+        if (mounted) {
+          setAuthInitialized(true);
+          setIsLoading(false);
+        }
       }
-      
-      setIsLoading(false);
     };
 
     initializeAuth();
@@ -78,22 +100,54 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     const supabase = createBrowserSupabaseClient();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
+      async (event, currentSession) => {
+        if (!mounted) return;
+        
         if (currentSession) {
-          setUser(currentSession.user);
-          setSession(currentSession);
+          if (event === 'SIGNED_IN') {
+            const { data: { user: authenticatedUser }, error } = await supabase.auth.getUser();
+            
+            if (!error && authenticatedUser && mounted) {
+              setUser(authenticatedUser);
+              setSession(currentSession);
+            } else if (mounted) {
+              setUser(null);
+              setSession(null);
+            }
+          } else {
+            // For other events with valid session, use the session user
+            if (mounted) {
+              setUser(currentSession.user);
+              setSession(currentSession);
+            }
+          }
         } else {
-          setUser(null);
-          setSession(null);
+          if (mounted) {
+            setUser(null);
+            setSession(null);
+          }
         }
         
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     );
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
+  }, []);
+
+  // Handle loading state to make sure it doesn't get stuck
+  useEffect(() => {
+    // Force loading to false after a timeout as a failsafe
+    const timeout = setTimeout(() => {
+      setIsLoading(false);
+    }, 5000);
+
+    return () => clearTimeout(timeout);
   }, []);
 
   // Sign in with email and password
@@ -104,6 +158,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     if (!error) {
       setUser(signedInUser);
       setSession(newSession);
+      
+      // Wait for admin status to be loaded
+      const supabase = createBrowserSupabaseClient();
+      const { data: adminData } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', signedInUser.id)
+        .single();
+      
+      // Redirect based on admin status
+      window.location.href = '/dashboard';
     }
     
     setIsLoading(false);
@@ -162,13 +227,16 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return { error };
   };
 
+  // Determine combined loading state
+  const combinedLoadingState = isLoading && (user ? (isProfileLoading || isAdminLoading) : true);
+
   // Create value object
   const value = {
     user,
     session,
     profile,
     isAdmin: adminData?.isAdmin || false,
-    isLoading: isLoading || isProfileLoading || isAdminLoading,
+    isLoading: combinedLoadingState,
     signIn,
     signUp,
     signInWithProvider: socialSignIn,
