@@ -15,9 +15,11 @@ export async function middleware(request: NextRequest) {
       cookies: {
         get(name: string) {
           const cookie = request.cookies.get(name)?.value
+          console.log('Reading cookie:', name, cookie ? 'found' : 'not found')
           return cookie
         },
         set(name: string, value: string, options: CookieOptions) {
+          console.log('Setting cookie:', name)
           response.cookies.set({
             name,
             value,
@@ -25,6 +27,7 @@ export async function middleware(request: NextRequest) {
           })
         },
         remove(name: string, options: CookieOptions) {
+          console.log('Removing cookie:', name)
           response.cookies.set({
             name,
             value: '',
@@ -37,6 +40,12 @@ export async function middleware(request: NextRequest) {
 
   // Refresh the session
   const { data: { session }, error } = await supabase.auth.getSession()
+  
+  console.log('Middleware session check:', {
+    hasSession: !!session,
+    error: error?.message,
+    url: request.url
+  })
 
   // Add session info to request headers for debugging
   const requestHeaders = new Headers(request.headers)

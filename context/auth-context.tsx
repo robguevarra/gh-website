@@ -44,7 +44,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [authInitialized, setAuthInitialized] = useState(false);
   
   // Use the profile hook to fetch the user's profile
   const { data: profile, isLoading: isProfileLoading } = useUserProfile(user?.id);
@@ -54,18 +53,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   // Initialize auth state
   useEffect(() => {
-    let mounted = true;
-    
     const initializeAuth = async () => {
-      if (authInitialized) return;
-      
       setIsLoading(true);
       
       try {
         // Get current session
         const { session: currentSession, error: sessionError } = await getCurrentSession();
         
-        if (sessionError || !mounted) {
+        if (sessionError) {
+          console.error('Session fetch error:', sessionError);
           setIsLoading(false);
           return;
         }
@@ -73,24 +69,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         if (currentSession) {
           // Get current user
           const { user: currentUser } = await getCurrentUser();
-          
-          if (mounted) {
-            setUser(currentUser);
-            setSession(currentSession);
-          }
+          console.log('Auth initialized with session:', { 
+            userId: currentUser?.id,
+            email: currentUser?.email,
+            sessionId: currentSession.access_token.slice(-8) // Log last 8 chars for debugging
+          });
+          setUser(currentUser);
+          setSession(currentSession);
         } else {
-          if (mounted) {
-            setUser(null);
-            setSession(null);
-          }
+          console.log('No active session found during initialization');
+          setUser(null);
+          setSession(null);
         }
       } catch (err) {
-        // Silent error handling
+        console.error('Auth initialization error:', err);
       } finally {
-        if (mounted) {
-          setAuthInitialized(true);
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     };
 
@@ -101,53 +95,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        if (!mounted) return;
+        console.log('Auth state change:', { 
+          event, 
+          userId: currentSession?.user?.id,
+          sessionId: currentSession?.access_token.slice(-8) // Log last 8 chars for debugging
+        });
         
         if (currentSession) {
-          if (event === 'SIGNED_IN') {
-            const { data: { user: authenticatedUser }, error } = await supabase.auth.getUser();
-            
-            if (!error && authenticatedUser && mounted) {
-              setUser(authenticatedUser);
-              setSession(currentSession);
-            } else if (mounted) {
-              setUser(null);
-              setSession(null);
-            }
-          } else {
-            // For other events with valid session, use the session user
-            if (mounted) {
-              setUser(currentSession.user);
-              setSession(currentSession);
-            }
-          }
+          setUser(currentSession.user);
+          setSession(currentSession);
         } else {
-          if (mounted) {
-            setUser(null);
-            setSession(null);
-          }
+          setUser(null);
+          setSession(null);
         }
         
-        if (mounted) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     );
 
     return () => {
-      mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
-
-  // Handle loading state to make sure it doesn't get stuck
-  useEffect(() => {
-    // Force loading to false after a timeout as a failsafe
-    const timeout = setTimeout(() => {
-      setIsLoading(false);
-    }, 5000);
-
-    return () => clearTimeout(timeout);
   }, []);
 
   // Sign in with email and password
@@ -227,16 +195,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     return { error };
   };
 
-  // Determine combined loading state
-  const combinedLoadingState = isLoading && (user ? (isProfileLoading || isAdminLoading) : true);
-
   // Create value object
   const value = {
     user,
     session,
     profile,
     isAdmin: adminData?.isAdmin || false,
-    isLoading: combinedLoadingState,
+    isLoading: isLoading || isProfileLoading || isAdminLoading,
     signIn,
     signUp,
     signInWithProvider: socialSignIn,
