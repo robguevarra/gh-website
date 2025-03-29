@@ -27,16 +27,27 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
     
-    // Listen for auth state changes
+    // Check if we have a session immediately
+    const checkSession = async () => {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (session) {
+        setCanUpdatePassword(true);
+        setError(null);
+      } else if (!isSuccess) {
+        router.replace('/auth/signin?error=recovery_session_missing');
+      }
+    };
+    
+    checkSession();
+    
+    // Also listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth event:', event);
       
       if (event === 'PASSWORD_RECOVERY') {
-        // We're in password recovery mode, ready to accept the new password
         setCanUpdatePassword(true);
         setError(null);
       } else if (!session && !isSuccess) {
-        // No session and not after successful update - redirect to sign in
         router.replace('/auth/signin?error=recovery_session_missing');
       }
     });
@@ -108,27 +119,6 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
     }
   }
 
-  // Animation variants
-  const loadingBarVariants = {
-    initial: { width: 0 },
-    animate: { 
-      width: "100%", 
-      transition: { duration: 1.5, ease: [0.22, 1, 0.36, 1] }
-    }
-  };
-
-  const successVariants = {
-    initial: { scale: 0.8, opacity: 0 },
-    animate: { 
-      scale: 1, 
-      opacity: 1, 
-      transition: { 
-        duration: 0.5, 
-        ease: "easeOut" 
-      } 
-    }
-  };
-
   return (
     <motion.div 
       className="w-full space-y-6 rounded-2xl border border-[#e7d9ce] bg-white/80 backdrop-blur-sm p-6 shadow-sm"
@@ -185,66 +175,47 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
           </div>
         </div>
         
-        <motion.div 
-          whileHover={!isLoading && !isSuccess ? { scale: 1.03 } : {}} 
-          whileTap={!isLoading && !isSuccess ? { scale: 0.97 } : {}}
-          transition={{ type: "spring", stiffness: 400, damping: 10 }}
-          className="relative"
+        <Button 
+          type="submit" 
+          className={`w-full h-11 relative overflow-hidden group ${isSuccess ? 'bg-green-500' : ''}`}
+          disabled={isLoading || isSuccess || !canUpdatePassword}
         >
-          <Button 
-            type="submit" 
-            className={`w-full h-11 relative overflow-hidden group ${isSuccess ? 'bg-green-500' : ''}`}
-            disabled={isLoading || isSuccess || !canUpdatePassword}
-          >
-            {/* Background gradient */}
-            <span className={`absolute inset-0 w-full h-full transition-all duration-500 ${isSuccess ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-brand-purple to-brand-pink group-hover:scale-105'}`}></span>
-            
-            {/* Loading progress bar */}
-            {isLoading && (
-              <motion.span
-                className="absolute bottom-0 left-0 h-1 bg-white/70"
-                variants={loadingBarVariants}
-                initial="initial"
-                animate="animate"
-              />
-            )}
-            
-            {/* Button content */}
-            <span className="relative flex items-center justify-center gap-2 z-10 text-white font-medium">
-              {isSuccess ? (
+          <span className={`absolute inset-0 w-full h-full transition-all duration-500 ${isSuccess ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-brand-purple to-brand-pink group-hover:scale-105'}`}></span>
+          
+          <span className="relative flex items-center justify-center gap-2 z-10 text-white font-medium">
+            {isSuccess ? (
+              <motion.div 
+                className="flex items-center justify-center"
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+              >
+                <CheckCircle2 className="mr-2 h-5 w-5" />
+                Password Updated!
+              </motion.div>
+            ) : !canUpdatePassword ? (
+              'Waiting for recovery session...'
+            ) : isLoading ? (
+              <>
                 <motion.div 
-                  className="flex items-center justify-center"
-                  variants={successVariants}
-                  initial="initial"
-                  animate="animate"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, ease: "linear", repeat: Infinity }}
                 >
-                  <CheckCircle2 className="mr-2 h-5 w-5" />
-                  Password Updated!
+                  <Loader2 className="h-4 w-4" />
                 </motion.div>
-              ) : !canUpdatePassword ? (
-                'Waiting for recovery session...'
-              ) : isLoading ? (
-                <>
-                  <motion.div 
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, ease: "linear", repeat: Infinity }}
-                  >
-                    <Loader2 className="h-4 w-4" />
-                  </motion.div>
-                  <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.2, duration: 0.3 }}
-                  >
-                    Updating Password...
-                  </motion.span>
-                </>
-              ) : (
-                'Update Password'
-              )}
-            </span>
-          </Button>
-        </motion.div>
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2, duration: 0.3 }}
+                >
+                  Updating Password...
+                </motion.span>
+              </>
+            ) : (
+              'Update Password'
+            )}
+          </span>
+        </Button>
       </form>
     </motion.div>
   );
