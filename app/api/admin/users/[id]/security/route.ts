@@ -1,147 +1,141 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
+import { getAdminClient } from '@/lib/supabase/admin';
+import { validateAdminAccess } from '@/lib/supabase/route-handler';
 
-export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
-  const params = await props.params;
+// PATCH to update user security settings
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
-    // Create Supabase clients
-    const supabase = await createServerSupabaseClient();
-    const serviceClient = await createServiceRoleClient();
+    const { id } = params;
+    const body = await request.json();
     
-    // Check if the current user is authenticated and has admin privileges
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
+    // Validate admin access
+    const validation = await validateAdminAccess();
+    if ('error' in validation) {
       return NextResponse.json(
-        { message: 'Unauthorized: Authentication required' },
-        { status: 401 }
+        { error: validation.error },
+        { status: validation.status }
       );
     }
     
-    // Check if the current user has admin role
-    const { data: currentUserProfile } = await serviceClient
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    // Use admin client for database operations
+    const adminClient = getAdminClient();
     
-    if (!currentUserProfile?.is_admin) {
+    // Check if user exists
+    const { data: user, error: userError } = await adminClient.auth.admin.getUserById(id);
+    
+    if (userError || !user) {
       return NextResponse.json(
-        { message: 'Forbidden: Admin privileges required' },
-        { status: 403 }
+        { error: 'User not found' },
+        { status: 404 }
       );
     }
     
-    // Parse the request body
-    const requestData = await request.json();
-    
-    // Basic validation
-    if (!requestData.email) {
-      return NextResponse.json(
-        { message: 'Email is required' },
-        { status: 400 }
-      );
-    }
-    
-    const updates = [];
-    
-    // Update auth user if email change is requested
-    if (requestData.email) {
-      const { error: emailUpdateError } = await serviceClient.auth.admin.updateUserById(
-        params.id,
-        { email: requestData.email }
-      );
-      
-      if (emailUpdateError) {
-        console.error('Error updating user email:', emailUpdateError);
-        return NextResponse.json(
-          { message: 'Failed to update user email' },
-          { status: 500 }
-        );
-      }
-      
-      updates.push('email');
-    }
-    
-    // Update email verification status if requested
-    if (requestData.email_confirmed !== undefined) {
-      let updateData = {};
-      
-      if (requestData.email_confirmed) {
-        updateData = { email_confirmed_at: new Date().toISOString() };
-      } else {
-        updateData = { email_confirmed_at: null };
-      }
-      
-      const { error: confirmError } = await serviceClient.auth.admin.updateUserById(
-        params.id,
-        updateData
-      );
-      
-      if (confirmError) {
-        console.error('Error updating email confirmation status:', confirmError);
-        return NextResponse.json(
-          { message: 'Failed to update email confirmation status' },
-          { status: 500 }
-        );
-      }
-      
-      updates.push('email verification status');
-    }
-    
-    // Update password if provided
-    if (requestData.password) {
-      const { error: passwordError } = await serviceClient.auth.admin.updateUserById(
-        params.id,
-        { password: requestData.password }
+    // Handle password update if provided
+    if (body.password) {
+      const { error: passwordError } = await adminClient.auth.admin.updateUserById(
+        id,
+        { password: body.password }
       );
       
       if (passwordError) {
-        console.error('Error updating user password:', passwordError);
         return NextResponse.json(
-          { message: 'Failed to update user password' },
+          { error: 'Failed to update password' },
+          { status: 500 }
+        );
+      }
+    }
+    
+    // Handle email update if provided
+    if (body.email && body.email !== user.user.email) {
+      const { error: emailError } = await adminClient.auth.admin.updateUserById(
+        id,
+        { 
+          email: body.email,
+          email_confirm: true
+        }
+      );
+      
+      if (emailError) {
+        return NextResponse.json(
+          { error: 'Failed to update email' },
           { status: 500 }
         );
       }
       
-      updates.push('password');
+      // Update email in profiles table
+      const { error: profileError } = await adminClient
+        .from('profiles')
+        .update({ 
+          email: body.email,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+      
+      if (profileError) {
+        return NextResponse.json(
+          { error: 'Failed to update profile email' },
+          { status: 500 }
+        );
+      }
     }
     
-    // Update profile settings
-    const profileUpdates = {
-      is_admin: requestData.admin_role,
-      is_blocked: requestData.is_blocked,
-      require_password_change: requestData.require_password_change,
-      updated_at: new Date().toISOString()
-    };
+    // Handle account status update if provided
+    if (body.disabled !== undefined) {
+      const { error: statusError } = await adminClient.auth.admin.updateUserById(
+        id,
+        { 
+          ban_duration: body.disabled ? 'infinite' : undefined,
+          user_metadata: {
+            ...user.user.user_metadata,
+            disabled_at: body.disabled ? new Date().toISOString() : null,
+            disabled_reason: body.disabled ? (body.reason || 'Account disabled by admin') : null
+          }
+        }
+      );
+      
+      if (statusError) {
+        return NextResponse.json(
+          { error: 'Failed to update account status' },
+          { status: 500 }
+        );
+      }
+      
+      // Update status in profiles table
+      const { error: profileError } = await adminClient
+        .from('profiles')
+        .update({ 
+          status: body.disabled ? 'disabled' : 'active',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+      
+      if (profileError) {
+        return NextResponse.json(
+          { error: 'Failed to update profile status' },
+          { status: 500 }
+        );
+      }
+    }
     
-    const { error: profileUpdateError } = await serviceClient
-      .from('profiles')
-      .update(profileUpdates)
-      .eq('id', params.id);
+    // Get updated user data
+    const { data: updatedUser, error: fetchError } = await adminClient.auth.admin.getUserById(id);
     
-    if (profileUpdateError) {
-      console.error('Error updating user profile security settings:', profileUpdateError);
+    if (fetchError) {
       return NextResponse.json(
-        { message: 'Failed to update user security settings' },
+        { error: 'Failed to fetch updated user data' },
         { status: 500 }
       );
     }
     
-    updates.push('security settings');
-    
-    return NextResponse.json(
-      { 
-        message: 'User security settings updated successfully',
-        updates 
-      },
-      { status: 200 }
-    );
+    return NextResponse.json(updatedUser);
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('Error updating user security:', error);
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { error: 'Internal Server Error' },
       { status: 500 }
     );
   }

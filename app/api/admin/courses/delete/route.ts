@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
-import { createServerSupabaseClient as createServiceRoleClient } from '@/lib/supabase/client';
+import { getAdminClient } from '@/lib/supabase/admin';
+import { validateAdminAccess } from '@/lib/supabase/route-handler';
 
 // Log that this route is loaded and ready
 console.log('DELETE course route loaded and ready to receive requests');
@@ -12,6 +12,19 @@ export async function POST(request: NextRequest) {
   });
   
   try {
+    // Validate admin access
+    const validation = await validateAdminAccess();
+    if ('error' in validation) {
+      return NextResponse.json(
+        { error: validation.error },
+        { status: validation.status }
+      );
+    }
+    
+    // Use admin client for database operations
+    const adminClient = getAdminClient();
+    
+    // Parse request body
     const body = await request.json();
     const { courseId } = body;
     
@@ -25,72 +38,20 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Create a Supabase client for auth validation
-    const supabase = await createRouteHandlerClient();
-    
-    // Verify user is authenticated and has admin role
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    console.log('Delete course auth check:', { 
-      isAuthenticated: !!user, 
-      userId: user?.id,
-      authError: authError?.message
-    });
-    
-    if (!user) {
-      console.log('DELETE course unauthorized');
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-    
-    // Check if user has admin role - use service client to bypass RLS
-    const serviceClient = createServiceRoleClient();
-    const { data: profile, error: profileError } = await serviceClient
-      .from('profiles')
-      .select('role, is_admin')
-      .eq('id', user.id)
+    // Check if course exists
+    const { data: course, error: courseError } = await adminClient
+      .from('courses')
+      .select('id')
+      .eq('id', courseId)
       .single();
     
-    console.log('Delete course admin check:', { 
-      profileExists: !!profile,
-      role: profile?.role,
-      isAdmin: profile?.is_admin,
-      profileError: profileError?.message
-    });
-    
-    if (profileError || (profile?.role !== 'admin' && !profile?.is_admin)) {
-      console.log('DELETE course forbidden - not admin');
-      return NextResponse.json(
-        { error: 'Forbidden: Admin access required' },
-        { status: 403 }
-      );
-    }
-    
-    // Check if course exists
-    const { data: existingCourse, error: checkError } = await serviceClient
-      .from('courses')
-      .select('id, title')
-      .eq('id', courseId)
-      .maybeSingle();
-    
     console.log('DELETE course existence check:', {
-      courseExists: !!existingCourse,
+      courseExists: !!course,
       courseId,
-      courseTitle: existingCourse?.title,
-      error: checkError?.message
+      error: courseError?.message
     });
     
-    if (checkError) {
-      console.log('DELETE course database error', { error: checkError });
-      return NextResponse.json(
-        { error: checkError.message },
-        { status: 500 }
-      );
-    }
-    
-    if (!existingCourse) {
+    if (courseError || !course) {
       console.log('DELETE course not found', { courseId });
       return NextResponse.json(
         { error: 'Course not found' },
@@ -98,54 +59,27 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Check if course has related modules
-    const { data: modules, error: modulesError } = await serviceClient
-      .from('modules')
-      .select('id')
-      .eq('course_id', courseId)
-      .limit(1);
+    // Delete course and related data in a transaction
+    const { error: deleteError } = await adminClient
+      .rpc('delete_course', { course_id: courseId });
     
-    console.log('DELETE course module check:', {
-      hasModules: modules && modules.length > 0,
-      moduleCount: modules?.length,
-      error: modulesError?.message
-    });
-    
-    if (modules && modules.length > 0) {
-      console.log('DELETE course has modules', { 
-        courseId,
-        moduleCount: modules.length
-      });
+    if (deleteError) {
+      console.error('Error deleting course:', deleteError);
       return NextResponse.json(
-        { error: 'Cannot delete course with existing modules. Delete the modules first.' },
-        { status: 409 }
-      );
-    }
-    
-    // Delete the course
-    const { error } = await serviceClient
-      .from('courses')
-      .delete()
-      .eq('id', courseId);
-    
-    if (error) {
-      console.log('DELETE course error during deletion', { error });
-      return NextResponse.json(
-        { error: error.message },
+        { error: 'Failed to delete course' },
         { status: 500 }
       );
     }
     
     console.log('DELETE course successful', { courseId });
-    return NextResponse.json(
-      { message: 'Course deleted successfully' },
-      { status: 200 }
-    );
-    
+    return NextResponse.json({
+      message: 'Course deleted successfully',
+      courseId
+    });
   } catch (error) {
-    console.error('Error in DELETE course route:', error);
+    console.error('Unexpected error:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

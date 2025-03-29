@@ -23,13 +23,48 @@ const createAdminClient = () => {
       },
       db: {
         schema: 'public'
+      },
+      global: {
+        headers: {
+          'x-admin-access': 'true'
+        }
       }
     }
   );
 };
 
-// Singleton instance - use this when you need admin access
-export const supabaseAdmin = createAdminClient();
+// Create a singleton instance for admin operations
+let adminClient: ReturnType<typeof createAdminClient>;
+
+export function getAdminClient() {
+  if (!adminClient) {
+    adminClient = createAdminClient();
+  }
+  return adminClient;
+}
+
+// Helper function to validate admin status
+export async function validateAdminStatus(userId: string) {
+  const admin = getAdminClient();
+  
+  try {
+    const { data: profile, error } = await admin
+      .from('profiles')
+      .select('role, is_admin')
+      .eq('id', userId)
+      .single();
+      
+    if (error) {
+      console.error('Admin validation error:', error);
+      return false;
+    }
+    
+    return profile?.role === 'admin' || profile?.is_admin === true;
+  } catch (err) {
+    console.error('Admin validation exception:', err);
+    return false;
+  }
+}
 
 // Safe admin operations with error handling
 export const adminDb = {
@@ -38,7 +73,7 @@ export const adminDb = {
     // Get a user by ID with full profile
     async getById(userId: string) {
       try {
-        const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
+        const { data, error } = await getAdminClient().auth.admin.getUserById(userId);
         if (error) throw error;
         return { data, error: null };
       } catch (error) {
@@ -50,7 +85,7 @@ export const adminDb = {
     // Update user data
     async update(userId: string, userData: any) {
       try {
-        const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
+        const { data, error } = await getAdminClient().auth.admin.updateUserById(
           userId,
           userData
         );
@@ -65,7 +100,7 @@ export const adminDb = {
     // Delete a user by ID
     async delete(userId: string) {
       try {
-        const { data, error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+        const { data, error } = await getAdminClient().auth.admin.deleteUser(userId);
         if (error) throw error;
         return { data, error: null };
       } catch (error) {
@@ -79,7 +114,7 @@ export const adminDb = {
   courses: {
     async getById(courseId: string) {
       try {
-        const { data, error } = await supabaseAdmin
+        const { data, error } = await getAdminClient()
           .from('courses')
           .select('*')
           .eq('id', courseId)
@@ -95,7 +130,7 @@ export const adminDb = {
     
     async getModules(courseId: string) {
       try {
-        const { data, error } = await supabaseAdmin
+        const { data, error } = await getAdminClient()
           .from('modules')
           .select('*')
           .eq('course_id', courseId)

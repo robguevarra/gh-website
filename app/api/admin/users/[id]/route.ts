@@ -1,37 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAdminClient } from '@/lib/supabase/admin';
+import { validateAdminAccess } from '@/lib/supabase/route-handler';
 
 export async function PATCH(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
-    // Create Supabase clients
-    const supabase = await createServerSupabaseClient();
-    const serviceClient = await createServiceRoleClient();
-    
-    // Check if the current user is authenticated and has admin privileges
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
+    // Validate admin access
+    const validation = await validateAdminAccess();
+    if ('error' in validation) {
       return NextResponse.json(
-        { message: 'Unauthorized: Authentication required' },
-        { status: 401 }
+        { error: validation.error },
+        { status: validation.status }
       );
     }
     
-    // Check if the current user has admin role
-    const { data: profile } = await serviceClient
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-    
-    if (!profile?.is_admin) {
-      return NextResponse.json(
-        { message: 'Forbidden: Admin privileges required' },
-        { status: 403 }
-      );
-    }
+    // Use admin client for database operations
+    const adminClient = getAdminClient();
     
     // Parse the request body
     const requestData = await request.json();
@@ -39,13 +23,23 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     // Basic validation
     if (!requestData.first_name || !requestData.last_name) {
       return NextResponse.json(
-        { message: 'First name and last name are required' },
+        { error: 'First name and last name are required' },
         { status: 400 }
       );
     }
     
-    // Update the user profile with the service role client
-    const { error: updateError } = await serviceClient
+    // Check if user exists
+    const { data: user, error: userError } = await adminClient.auth.admin.getUserById(params.id);
+    
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Update the user profile
+    const { error: updateError } = await adminClient
       .from('profiles')
       .update({
         first_name: requestData.first_name,
@@ -59,19 +53,37 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ id:
     if (updateError) {
       console.error('Error updating user profile:', updateError);
       return NextResponse.json(
-        { message: 'Failed to update user profile' },
+        { error: 'Failed to update user profile' },
         { status: 500 }
       );
     }
     
-    return NextResponse.json(
-      { message: 'User profile updated successfully' },
-      { status: 200 }
-    );
+    // Get updated profile data
+    const { data: updatedProfile, error: fetchError } = await adminClient
+      .from('profiles')
+      .select(`
+        *,
+        auth_users:auth.users!user_id(
+          email_confirmed_at,
+          last_sign_in_at
+        )
+      `)
+      .eq('id', params.id)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching updated profile:', fetchError);
+      return NextResponse.json(
+        { error: 'Failed to fetch updated profile' },
+        { status: 500 }
+      );
+    }
+    
+    return NextResponse.json(updatedProfile);
   } catch (error) {
     console.error('Unexpected error:', error);
     return NextResponse.json(
-      { message: 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

@@ -14,12 +14,19 @@ export async function middleware(request: NextRequest) {
     {
       cookies: {
         get(name: string) {
-          const cookie = request.cookies.get(name)?.value
-          console.log('Reading cookie:', name, cookie ? 'found' : 'not found')
-          return cookie
+          return request.cookies.get(name)?.value
         },
         set(name: string, value: string, options: CookieOptions) {
-          console.log('Setting cookie:', name)
+          request.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
           response.cookies.set({
             name,
             value,
@@ -27,7 +34,16 @@ export async function middleware(request: NextRequest) {
           })
         },
         remove(name: string, options: CookieOptions) {
-          console.log('Removing cookie:', name)
+          request.cookies.set({
+            name,
+            value: '',
+            ...options,
+          })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
           response.cookies.set({
             name,
             value: '',
@@ -38,28 +54,32 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh the session
-  const { data: { session }, error } = await supabase.auth.getSession()
-  
-  console.log('Middleware session check:', {
-    hasSession: !!session,
-    error: error?.message,
-    url: request.url
-  })
+  // Refresh session if expired - required for Server Components
+  // This will validate the session with the Supabase Auth server
+  const { data: { user }, error } = await supabase.auth.getUser()
 
-  // Add session info to request headers for debugging
-  const requestHeaders = new Headers(request.headers)
-  requestHeaders.set('x-session-status', session ? 'authenticated' : 'unauthenticated')
-  if (error) {
-    requestHeaders.set('x-session-error', error.message)
+  // If there's an error or no user, clear the session
+  if (error || !user) {
+    response.cookies.set({
+      name: 'supabase-auth-token',
+      value: '',
+      maxAge: 0,
+      path: '/',
+    })
   }
 
-  // Create a new response with the updated headers
-  response = NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  })
+  // Handle protected routes
+  const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
+  const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') || 
+                          request.nextUrl.pathname.startsWith('/admin')
+
+  if (!user && isProtectedRoute) {
+    return NextResponse.redirect(new URL('/auth/signin', request.url))
+  }
+
+  if (user && isAuthPage) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
+  }
 
   return response
 }
@@ -72,8 +92,7 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
-     * - api folder
      */
-    '/((?!_next/static|_next/image|favicon.ico|public|api).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 } 

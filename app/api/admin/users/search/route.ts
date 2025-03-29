@@ -1,36 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
-import { createServerSupabaseClient as createServiceRoleClient } from '@/lib/supabase/client';
+import { getAdminClient } from '@/lib/supabase/admin';
+import { validateAdminAccess } from '@/lib/supabase/route-handler';
 
 export async function GET(request: NextRequest) {
   try {
-    // Create a Supabase client for auth validation
-    const supabase = await createRouteHandlerClient();
-    
-    // Verify user is authenticated and has admin role
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
+    // Validate admin access
+    const validation = await validateAdminAccess();
+    if ('error' in validation) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: validation.error },
+        { status: validation.status }
       );
     }
     
-    // Check if user has admin role - use service client to bypass RLS
-    const serviceClient = createServiceRoleClient();
-    const { data: profile, error: profileError } = await serviceClient
-      .from('profiles')
-      .select('role, is_admin')
-      .eq('id', user.id)
-      .single();
-    
-    if (profileError || (profile?.role !== 'admin' && !profile?.is_admin)) {
-      return NextResponse.json(
-        { error: 'Forbidden: Admin access required' },
-        { status: 403 }
-      );
-    }
+    // Use admin client for database operations
+    const adminClient = getAdminClient();
     
     // Get search parameters
     const searchParams = request.nextUrl.searchParams;
@@ -45,9 +29,22 @@ export async function GET(request: NextRequest) {
     }
     
     // Create base query
-    let query = serviceClient
+    let query = adminClient
       .from('profiles')
-      .select('id, first_name, last_name, email')
+      .select(`
+        id,
+        first_name,
+        last_name,
+        email,
+        role,
+        status,
+        created_at,
+        updated_at,
+        auth_users:auth.users!user_id(
+          email_confirmed_at,
+          last_sign_in_at
+        )
+      `)
       .limit(10);
     
     // Apply filters based on parameters
@@ -56,33 +53,25 @@ export async function GET(request: NextRequest) {
     }
     
     if (name) {
-      const nameParts = name.split(' ');
-      if (nameParts.length > 1) {
-        // If multiple name parts, search first and last names
-        query = query.or(`first_name.ilike.%${nameParts[0]}%,last_name.ilike.%${nameParts[1]}%`);
-      } else {
-        // Single name part, search in both first and last name
-        query = query.or(`first_name.ilike.%${name}%,last_name.ilike.%${name}%`);
-      }
+      query = query.or(`first_name.ilike.%${name}%,last_name.ilike.%${name}%`);
     }
     
     // Execute query
-    const { data: users, error: searchError } = await query;
+    const { data: users, error } = await query;
     
-    if (searchError) {
-      console.error('Error searching users:', searchError);
+    if (error) {
+      console.error('Error searching users:', error);
       return NextResponse.json(
         { error: 'Failed to search users' },
         { status: 500 }
       );
     }
     
-    return NextResponse.json({ users: users || [] });
-    
+    return NextResponse.json({ users });
   } catch (error) {
-    console.error('Error in user search route:', error);
+    console.error('Unexpected error:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

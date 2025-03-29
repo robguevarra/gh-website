@@ -1,15 +1,17 @@
 import { redirect } from 'next/navigation';
-import type { Database } from '@/types/supabase';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
-
-import AdminSidebar from '@/components/admin/admin-sidebar';
+import { validateAdminStatus } from '@/lib/supabase/admin';
 import AdminHeader from '@/components/admin/admin-header';
+import AdminSidebar from '@/components/admin/admin-sidebar';
+import { headers } from 'next/headers';
 
 export const metadata = {
   title: 'Admin Dashboard | Graceful Homeschooling',
   description: 'Administrative dashboard for managing Graceful Homeschooling platform content and users.',
 };
+
+// Revalidate the page every 60 seconds
+export const revalidate = 60;
 
 export default async function AdminLayout({
   children,
@@ -17,55 +19,54 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   try {
+    // Get the request headers for proper session handling
+    const requestHeaders = await headers();
+    const pathname = requestHeaders.get('x-pathname') || '/admin';
+    
     // Create a Supabase client for server components
     const supabase = await createServerSupabaseClient();
     
-    // Get the current session and user
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // Get the authenticated user directly from the Auth server
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    if (sessionError || !session) {
-      console.log('No valid session, redirecting to sign in');
-      redirect('/auth/signin?callbackUrl=/admin');
+    // Handle authentication errors
+    if (userError) {
+      console.error('Authentication error:', userError);
+      redirect(`/auth/signin?callbackUrl=${encodeURIComponent(pathname)}&error=auth_error`);
     }
-    
-    // Get the current user from the session
-    const { user } = session;
     
     if (!user) {
       console.log('No authenticated user, redirecting to sign in');
-      redirect('/auth/signin?callbackUrl=/admin');
+      redirect(`/auth/signin?callbackUrl=${encodeURIComponent(pathname)}`);
     }
     
-    // Use service role client to bypass RLS for admin checks
-    const serviceClient = await createServiceRoleClient();
+    // Check if user is an admin
+    const isAdmin = await validateAdminStatus(user.id);
     
-    // Get the user's profile to check if they are an admin
-    const { data: profile, error: profileError } = await serviceClient
-      .from('profiles')
-      .select('id, is_admin')
-      .eq('id', user.id)
-      .single();
-    
-    console.log('Profile check result:', { 
-      profile: profile ? { id: profile.id, isAdmin: profile.is_admin } : null, 
-      error: profileError?.message 
-    });
-    
-    // If user is not an admin, redirect to dashboard
-    if (!profile || !profile.is_admin) {
-      console.log('User does not have admin privileges, redirecting to dashboard');
-      redirect('/dashboard');
+    if (!isAdmin) {
+      console.log('User does not have admin privileges');
+      // Store the attempted admin access in analytics
+      await supabase
+        .from('admin_access_attempts')
+        .insert({
+          user_id: user.id,
+          email: user.email,
+          attempted_path: pathname,
+          timestamp: new Date().toISOString()
+        })
+        .select()
+        .single();
+      
+      redirect('/dashboard?error=insufficient_permissions');
     }
-    
-    console.log('Admin access granted');
     
     return (
-      <div className="flex min-h-screen flex-col">
+      <div className="flex min-h-screen flex-col bg-gray-50">
         <AdminHeader />
         <div className="flex flex-1 flex-col md:flex-row">
           <AdminSidebar />
-          <main className="flex-1 p-4 md:p-6">
-            <div className="mx-auto max-w-7xl">
+          <main className="flex-1 overflow-auto p-4 md:p-6">
+            <div className="mx-auto max-w-7xl space-y-4">
               {children}
             </div>
           </main>
@@ -73,7 +74,10 @@ export default async function AdminLayout({
       </div>
     );
   } catch (error) {
-    console.error('Error in admin layout:', error);
-    redirect('/auth/signin?callbackUrl=/admin');
+    console.error('Critical error in admin layout:', error);
+    // Log the error to your error tracking service
+    
+    // Redirect to error page for critical failures
+    redirect('/error?type=admin_layout');
   }
 } 

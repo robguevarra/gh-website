@@ -59,48 +59,82 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
     }
   }
 
-  const inputVariants = {
-    focus: { scale: 1.02, borderColor: '#b08ba5' },
-    blur: { scale: 1, borderColor: '#e2e8f0' }
-  };
-
   // Loading animation variants
   const loadingBarVariants = {
     initial: { width: 0 },
     animate: { 
       width: "100%", 
-      transition: { duration: 1.5, ease: [0.22, 1, 0.36, 1] }
+      transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
     }
   };
 
   // Success animation variants
   const successVariants = {
-    initial: { scale: 0.8, opacity: 0 },
+    initial: { scale: 0.95, opacity: 0 },
     animate: { 
       scale: 1, 
       opacity: 1, 
       transition: { 
-        duration: 0.5, 
-        ease: "easeOut" 
+        duration: 0.2,
+        ease: [0.22, 1, 0.36, 1]
       } 
+    }
+  };
+
+  // Input focus animation variants
+  const inputVariants = {
+    focus: { 
+      scale: 1.01,
+      transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] }
+    },
+    blur: { 
+      scale: 1,
+      transition: { duration: 0.2, ease: [0.22, 1, 0.36, 1] }
+    }
+  };
+
+  // Form container animation
+  const formContainerVariants = {
+    initial: { opacity: 0, y: 10 },
+    animate: { 
+      opacity: 1, 
+      y: 0,
+      transition: {
+        duration: 0.3,
+        ease: [0.22, 1, 0.36, 1],
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  // Form element animation
+  const formElementVariants = {
+    initial: { opacity: 0, y: 5 },
+    animate: { 
+      opacity: 1, 
+      y: 0,
+      transition: {
+        duration: 0.2,
+        ease: [0.22, 1, 0.36, 1]
+      }
     }
   };
 
   return (
     <motion.div 
       className="w-full space-y-6 rounded-2xl border border-[#e7d9ce] bg-white/80 backdrop-blur-sm p-6 shadow-sm"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+      variants={formContainerVariants}
+      initial="initial"
+      animate="animate"
     >
       <form onSubmit={handleSubmit} className="space-y-5">
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {error && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0, y: -10, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: 'auto' }}
+              exit={{ opacity: 0, y: -10, height: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
             >
               <Alert variant="destructive" className="bg-red-50 text-red-800 border border-red-200">
                 <AlertCircle className="h-4 w-4 mr-2" />
@@ -110,7 +144,7 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
           )}
         </AnimatePresence>
         
-        <motion.div className="space-y-2">
+        <motion.div variants={formElementVariants} className="space-y-2">
           <Label htmlFor="email" className="text-[#5d4037] font-medium">Email</Label>
           <div className="relative">
             <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-[#b08ba5]" />
@@ -127,19 +161,23 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading || isSuccess}
-                className="pl-10 bg-white/80 border-[#e7d9ce] focus:border-brand-purple focus:ring-brand-purple/20 transition-all duration-300"
+                className="pl-10 bg-white/80 border-[#e7d9ce] focus:border-[#b08ba5] focus:ring-[#b08ba5]/20 transition-all duration-200"
               />
             </motion.div>
           </div>
         </motion.div>
         
-        <motion.div className="space-y-2">
+        <motion.div variants={formElementVariants} className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="password" className="text-[#5d4037] font-medium">Password</Label>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <motion.div 
+              whileHover={{ scale: 1.02 }} 
+              whileTap={{ scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+            >
               <Link 
                 href="/auth/reset-password" 
-                className="text-xs text-brand-purple hover:underline font-medium"
+                className="text-xs text-[#b08ba5] hover:text-[#9ac5d9] font-medium transition-colors duration-200"
               >
                 Forgot password?
               </Link>
@@ -160,39 +198,41 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={isLoading || isSuccess}
-                className="pl-10 bg-white/80 border-[#e7d9ce] focus:border-brand-purple focus:ring-brand-purple/20 transition-all duration-300"
+                className="pl-10 bg-white/80 border-[#e7d9ce] focus:border-[#b08ba5] focus:ring-[#b08ba5]/20 transition-all duration-200"
               />
             </motion.div>
           </div>
         </motion.div>
         
         <motion.div 
-          whileHover={!isLoading && !isSuccess ? { scale: 1.03 } : {}} 
-          whileTap={!isLoading && !isSuccess ? { scale: 0.97 } : {}}
-          transition={{ type: "spring", stiffness: 400, damping: 10 }}
+          variants={formElementVariants}
           className="relative"
         >
           <Button 
             type="submit" 
-            className={`w-full h-11 relative overflow-hidden group ${isSuccess ? 'bg-green-500' : ''}`}
+            className={`w-full h-11 relative overflow-hidden group ${isSuccess ? 'bg-[#9ac5d9]' : ''}`}
             disabled={isLoading || isSuccess}
           >
-            {/* Background gradient */}
-            <span className={`absolute inset-0 w-full h-full transition-all duration-500 ${isSuccess ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-brand-purple to-brand-pink group-hover:scale-105'}`}></span>
+            {/* Background gradient with brand colors */}
+            <span className={`absolute inset-0 w-full h-full transition-all duration-300 ${
+              isSuccess 
+                ? 'bg-gradient-to-r from-[#9ac5d9] to-[#b08ba5]' 
+                : 'bg-gradient-to-r from-[#b08ba5] to-[#f1b5bc]'
+            }`}></span>
             
             {/* Hover effect */}
-            {!isSuccess && (
-              <span className="absolute inset-0 w-full h-full bg-brand-purple opacity-0 group-hover:opacity-100 transition-opacity duration-500"></span>
-            )}
+            <span className="absolute inset-0 w-full h-full bg-[#b08ba5] opacity-0 group-hover:opacity-20 transition-opacity duration-300"></span>
             
             {/* Loading progress bar */}
             {isLoading && (
-              <motion.span
-                className="absolute bottom-0 left-0 h-1 bg-white/70"
-                variants={loadingBarVariants}
-                initial="initial"
-                animate="animate"
-              />
+              <motion.div className="absolute bottom-0 left-0 right-0 h-0.5">
+                <motion.span
+                  className="absolute inset-0 bg-white/30"
+                  initial={{ scaleX: 0, originX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 1.5, ease: [0.22, 1, 0.36, 1], repeat: Infinity }}
+                />
+              </motion.div>
             )}
             
             {/* Button content */}
@@ -208,7 +248,7 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
                   Success!
                 </motion.div>
               ) : isLoading ? (
-                <>
+                <motion.div className="flex items-center gap-2">
                   <motion.div 
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, ease: "linear", repeat: Infinity }}
@@ -216,15 +256,21 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
                     <Loader2 className="h-4 w-4" />
                   </motion.div>
                   <motion.span
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.2, duration: 0.3 }}
+                    initial={{ opacity: 0, x: -5 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2, duration: 0.2 }}
                   >
                     Signing in...
                   </motion.span>
-                </>
+                </motion.div>
               ) : (
-                'Sign In'
+                <motion.span
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  Sign In
+                </motion.span>
               )}
             </span>
           </Button>

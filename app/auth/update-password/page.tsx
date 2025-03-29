@@ -50,9 +50,11 @@ function UpdatePasswordContent() {
           setTokenStatus('loading');
           console.log('Processing recovery token from email link');
           const supabase = createBrowserSupabaseClient();
+          
+          // Verify the token
           const { error } = await supabase.auth.verifyOtp({
             token_hash: token,
-            type: 'recovery',
+            type: 'recovery'
           });
 
           if (error) {

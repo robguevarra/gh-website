@@ -18,19 +18,17 @@ export async function createServerSupabaseClient() {
         },
         set(name: string, value: string, options: any) {
           try {
-            // Use the correct method from ReadonlyRequestCookies
             cookieStore.set({
               name,
               value,
               ...options,
             });
           } catch (error) {
-            // Handle cookie mutation error in static generation
+            console.error('Cookie set error:', error);
           }
         },
         remove(name: string, options: any) {
           try {
-            // Set empty value with maxAge 0 to remove
             cookieStore.set({
               name,
               value: '',
@@ -38,9 +36,14 @@ export async function createServerSupabaseClient() {
               maxAge: 0,
             });
           } catch (error) {
-            // Handle cookie mutation error in static generation
+            console.error('Cookie remove error:', error);
           }
         },
+      },
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
       },
     }
   );
@@ -59,6 +62,10 @@ export async function createServiceRoleClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
+      detectSessionInUrl: false,
+    },
+    db: {
+      schema: 'public'
     },
   });
 } 
