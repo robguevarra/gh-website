@@ -86,17 +86,18 @@ export function useUserProfile(userId: string | undefined) {
         // Use a more targeted query with only the fields we need
         const { data, error } = await supabase
           .from('profiles')
-          .select('id, first_name, last_name, phone, avatar_url, role, preferences')
+          .select('id, first_name, last_name, phone, avatar_url, role, preferences, is_admin')
           .eq('id', userId)
           .single();
         
         if (error) {
-          console.error('Profile fetch error:', error.message);
+          if (error.code !== 'PGRST116') { // Not found is not a real error
+            console.error('Profile fetch error:', error.message);
+          }
           return null;
         }
         return data;
       } catch (err) {
-        console.error('Profile fetch exception:', err instanceof Error ? err.message : String(err));
         // Return null instead of throwing to prevent component errors
         return null;
       }
@@ -289,29 +290,27 @@ export function useAdminStatus(userId: string | undefined) {
       if (!userId) return { isAdmin: false };
       
       try {
-        // First try to get user roles from a direct query with service key
-        const { data, error } = await supabase
-          .rpc('check_if_user_is_admin', { user_id: userId });
-        
-        if (!error && data) {
-          return { isAdmin: !!data };
-        }
-        
-        // Fallback to checking the profile directly with minimal fields
+        // Simplified admin check - try profile first as it's most reliable
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('role')
+          .select('is_admin')
           .eq('id', userId)
           .single();
         
-        if (profileError) {
-          console.error('Admin status check error:', profileError.message);
-          return { isAdmin: false };
+        if (!profileError && profile) {
+          return { isAdmin: !!profile.is_admin };
         }
         
-        return { isAdmin: profile?.role === 'admin' };
+        // Fallback to RPC function
+        const { data, error } = await supabase
+          .rpc('check_if_user_is_admin', { user_id: userId });
+        
+        if (!error) {
+          return { isAdmin: !!data };
+        }
+        
+        return { isAdmin: false };
       } catch (err) {
-        console.error('Admin status check exception:', err instanceof Error ? err.message : String(err));
         return { isAdmin: false };
       }
     },

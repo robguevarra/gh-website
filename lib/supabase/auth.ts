@@ -25,7 +25,6 @@ export async function signInWithEmail(email: string, password: string) {
 
     return { user: data.user, session: data.session, error: null };
   } catch (err) {
-    console.error('Sign in error:', err);
     return { 
       user: null, 
       session: null, 
@@ -55,7 +54,6 @@ export async function signUpWithEmail(email: string, password: string) {
 
     return { user: data.user, session: data.session, error: null };
   } catch (err) {
-    console.error('Sign up error:', err);
     return { 
       user: null, 
       session: null, 
@@ -84,7 +82,6 @@ export async function signInWithProvider(provider: Provider) {
 
     return { error: null };
   } catch (err) {
-    console.error('Social sign in error:', err);
     return { 
       error: { 
         message: err instanceof Error ? err.message : 'An unexpected error occurred',
@@ -106,7 +103,6 @@ export async function signOut() {
 
     return { error: null };
   } catch (err) {
-    console.error('Sign out error:', err);
     return { 
       error: { 
         message: err instanceof Error ? err.message : 'An unexpected error occurred',
@@ -130,7 +126,6 @@ export async function resetPassword(email: string) {
 
     return { error: null };
   } catch (err) {
-    console.error('Reset password error:', err);
     return { 
       error: { 
         message: err instanceof Error ? err.message : 'An unexpected error occurred',
@@ -154,7 +149,6 @@ export async function updatePassword(password: string) {
 
     return { error: null };
   } catch (err) {
-    console.error('Update password error:', err);
     return { 
       error: { 
         message: err instanceof Error ? err.message : 'An unexpected error occurred',
@@ -176,7 +170,6 @@ export async function getCurrentUser() {
 
     return { user: data.user, error: null };
   } catch (err) {
-    console.error('Get current user error:', err);
     return { 
       user: null, 
       error: { 
@@ -199,7 +192,6 @@ export async function getCurrentSession() {
 
     return { session: data.session, error: null };
   } catch (err) {
-    console.error('Get current session error:', err);
     return { 
       session: null, 
       error: { 
