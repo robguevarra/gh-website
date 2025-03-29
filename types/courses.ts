@@ -1,70 +1,43 @@
 export interface Course {
   id: string
   title: string
-  slug: string
-  description?: string
-  thumbnailUrl?: string
-  trailerUrl?: string
-  status: 'draft' | 'published' | 'archived'
-  isFeatured?: boolean
-  requiredTierId?: string
-  metadata?: Record<string, unknown>
-  createdAt: Date
-  updatedAt: Date
+  description: string
+  content_json?: Record<string, unknown>
+  modules: Module[]
+  created_at: string
+  updated_at: string
+  is_published: boolean
+  metadata: Record<string, unknown>
   version: number
-  publishedVersion?: number
-  settings: {
-    access: {
-      dripContent: boolean
-      prerequisiteCourses: string[]
-    }
-    display: {
-      showProgress: boolean
-      showCompletion: boolean
-      showDiscussions: boolean
-    }
-    enrollment: {
-      type: 'open'
-      price?: number
-      currency: string
-      trialDays: number
-    }
-  }
+  published_version?: number
 }
 
 export interface Module {
   id: string
-  courseId: string
   title: string
   description?: string
+  content_json?: Record<string, unknown>
   position: number
-  createdAt: Date
-  updatedAt: Date
-  sectionId?: string
-  isPublished: boolean
+  course_id: string
+  lessons: Lesson[]
+  created_at: string
+  updated_at: string
+  is_published: boolean
   metadata: Record<string, unknown>
+  version: number
 }
 
 export interface Lesson {
   id: string
-  moduleId: string
   title: string
   description?: string
-  videoUrl?: string
-  duration?: number
+  content_json?: Record<string, unknown>
   position: number
-  isPreview?: boolean
-  content?: string
-  contentJson?: Record<string, unknown>
-  attachments?: Array<{
-    name: string
-    url: string
-    type: string
-    size?: number
-  }>
+  module_id: string
+  created_at: string
+  updated_at: string
+  is_published: boolean
   metadata: Record<string, unknown>
-  createdAt: Date
-  updatedAt: Date
-  status: 'draft' | 'published' | 'archived'
   version: number
+  status: 'draft' | 'published' | 'archived'
 } 

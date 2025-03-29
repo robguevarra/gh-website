@@ -31,6 +31,9 @@ export async function GET(
   { params }: { params: { courseId: string } }
 ) {
   try {
+    // Await params to comply with Next.js 15 dynamic APIs
+    const { courseId } = await params
+    
     // Create the Supabase clients
     const supabase = await createRouteHandlerClient();
     const serviceClient = createServiceRoleClient();
@@ -82,7 +85,7 @@ export async function GET(
           lessons:lessons(*)
         )
       `)
-      .eq('id', params.courseId)
+      .eq('id', courseId)
       .single();
 
     if (error) throw error;
@@ -100,6 +103,9 @@ export async function PATCH(
   { params }: { params: { courseId: string } }
 ) {
   try {
+    // Await params to comply with Next.js 15 dynamic APIs
+    const { courseId } = await params
+    
     // Create the Supabase clients
     const supabase = await createRouteHandlerClient();
     const serviceClient = createServiceRoleClient();
@@ -135,7 +141,7 @@ export async function PATCH(
     const { data: course, error } = await serviceClient
       .from('courses')
       .update(validatedData)
-      .eq('id', params.courseId)
+      .eq('id', courseId)
       .select()
       .single();
 
@@ -157,6 +163,9 @@ export async function DELETE(
   { params }: { params: { courseId: string } }
 ) {
   try {
+    // Await params to comply with Next.js 15 dynamic APIs
+    const { courseId } = await params
+    
     // Create the Supabase clients
     const supabase = await createRouteHandlerClient();
     const serviceClient = createServiceRoleClient();
@@ -189,7 +198,7 @@ export async function DELETE(
     const { error } = await serviceClient
       .from('courses')
       .delete()
-      .eq('id', params.courseId);
+      .eq('id', courseId);
 
     if (error) throw error;
 

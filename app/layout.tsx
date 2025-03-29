@@ -2,7 +2,7 @@ import type React from "react"
 import { Inter } from "next/font/google"
 import { Playfair_Display } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
-// ... other imports
+import { Toaster } from "@/components/ui/sonner"
 import { CustomCursorToggle } from "@/components/custom-cursor-toggle"
 import Script from "next/script"
 import { SkipLink } from "@/components/ui/skip-link"
@@ -62,6 +62,7 @@ export default function RootLayout({
                 {children}
               </main>
               <CustomCursorToggle />
+              <Toaster />
             </ThemeProvider>
           </AuthProvider>
         </SupabaseProvider>
