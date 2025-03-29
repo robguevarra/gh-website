@@ -22,6 +22,7 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
   const searchParams = useSearchParams();
   const { session, updatePassword } = useAuth();
   const token = searchParams.get('token');
+  const type = searchParams.get('type');
   
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
@@ -57,25 +58,38 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
     setIsLoading(true);
     
     try {
-      if (token) {
-        // Token-based password update (using recovery token)
-        const supabase = createBrowserSupabaseClient();
-        const { error: tokenError } = await supabase.auth.updateUser({
-          password: password,
+      const supabase = createBrowserSupabaseClient();
+      
+      if (token && type === 'recovery') {
+        // For recovery flow, first verify the token
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: token,
+          type: 'recovery'
         });
         
-        if (tokenError) {
-          console.error('Error updating password with token:', tokenError);
-          
-          // Handle specific token errors
-          if (tokenError.message.includes('Token has expired') || 
-              tokenError.message.includes('Invalid user')) {
+        if (verifyError) {
+          console.error('Token verification error:', verifyError);
+          if (verifyError.message.includes('Token has expired')) {
             setError('This password reset link has expired. Please request a new one.');
-          } else if (tokenError.message.includes('Token has been used')) {
+          } else if (verifyError.message.includes('Token has been used')) {
             setError('This password reset link has already been used. Please request a new link.');
+          } else if (verifyError.message.includes('Invalid token')) {
+            setError('Invalid password reset link. Please request a new one.');
           } else {
-            setError(tokenError.message || 'Failed to update password. Please try again.');
+            setError('Invalid or expired recovery link. Please request a new password reset.');
           }
+          setIsLoading(false);
+          return;
+        }
+        
+        // After verification, update the password
+        const { error: updateError } = await supabase.auth.updateUser({
+          password: password
+        });
+        
+        if (updateError) {
+          console.error('Error updating password:', updateError);
+          setError(updateError.message || 'Failed to update password. Please try again.');
           setIsLoading(false);
           return;
         }

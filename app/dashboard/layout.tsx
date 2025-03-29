@@ -11,15 +11,27 @@ interface DashboardLayoutProps {
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isAuthReady } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    // If user is not authenticated and not loading, redirect to signin
-    if (!isLoading && !user) {
+    // Only redirect if auth is ready and user is not authenticated
+    if (isAuthReady && !user) {
       router.push('/auth/signin');
     }
-  }, [user, isLoading, router]);
+  }, [user, isAuthReady, router]);
+
+  // Show initial loading state while auth is being initialized
+  if (!isAuthReady) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Initializing...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Show loading state while checking authentication
   if (isLoading) {

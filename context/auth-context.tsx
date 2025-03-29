@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { getBrowserClient } from '@/lib/supabase/client';
 import {
   signInWithEmail,
   signUpWithEmail,
@@ -10,11 +11,12 @@ import {
   resetPassword,
   updatePassword,
   getCurrentUser,
-  getCurrentSession,
   AuthError
 } from '@/lib/supabase/auth';
 import { useUserProfile, useAdminStatus } from '@/lib/supabase/hooks';
-import { createBrowserSupabaseClient } from '@/lib/supabase/client';
+
+// Get the singleton browser client instance
+const supabase = getBrowserClient();
 
 // Auth context type
 type AuthContextType = {
@@ -23,6 +25,7 @@ type AuthContextType = {
   profile: any | null;
   isAdmin: boolean;
   isLoading: boolean;
+  isAuthReady: boolean; // New flag to indicate when auth is initialized
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signInWithProvider: (provider: 'google' | 'facebook' | 'github') => Promise<{ error: AuthError | null }>;
@@ -34,16 +37,17 @@ type AuthContextType = {
 // Create the auth context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Auth provider props
-interface AuthProviderProps {
+// Auth provider props type
+type AuthProviderProps = {
   children: React.ReactNode;
-}
+};
 
 // Auth provider component
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   
   // Use the profile hook to fetch the user's profile
   const { data: profile, isLoading: isProfileLoading } = useUserProfile(user?.id);
@@ -53,58 +57,71 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   // Initialize auth state
   useEffect(() => {
+    let mounted = true;
+    
     const initializeAuth = async () => {
-      setIsLoading(true);
-      
       try {
-        // Get current session
-        const { session: currentSession, error: sessionError } = await getCurrentSession();
+        // Get current user - this is secure as it validates with the Supabase server
+        const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
         
-        if (sessionError) {
-          console.error('Session fetch error:', sessionError);
-          setIsLoading(false);
+        if (userError) {
+          console.error('User fetch error:', userError);
+          if (mounted) {
+            setUser(null);
+            setSession(null);
+          }
           return;
         }
         
-        if (currentSession) {
-          // Get current user
-          const { user: currentUser } = await getCurrentUser();
-          console.log('Auth initialized with session:', { 
+        if (currentUser && mounted) {
+          console.log('Auth initialized with user:', { 
             userId: currentUser?.id,
-            email: currentUser?.email,
-            sessionId: currentSession.access_token.slice(-8) // Log last 8 chars for debugging
+            email: currentUser?.email
           });
           setUser(currentUser);
-          setSession(currentSession);
-        } else {
-          console.log('No active session found during initialization');
+        } else if (mounted) {
+          console.log('No active user found during initialization');
           setUser(null);
           setSession(null);
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
+        if (mounted) {
+          setUser(null);
+          setSession(null);
+        }
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsAuthReady(true);
+        }
       }
     };
 
-    initializeAuth();
-
     // Set up auth state change listener
-    const supabase = createBrowserSupabaseClient();
-    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         console.log('Auth state change:', { 
           event, 
-          userId: currentSession?.user?.id,
-          sessionId: currentSession?.access_token.slice(-8) // Log last 8 chars for debugging
+          userId: currentSession?.user?.id
         });
         
-        if (currentSession) {
-          setUser(currentSession.user);
-          setSession(currentSession);
-        } else {
+        if (currentSession && mounted) {
+          // Validate the user with the server on auth state change
+          const { data: { user: validatedUser }, error: validationError } = 
+            await supabase.auth.getUser();
+            
+          if (validationError) {
+            console.error('User validation error:', validationError);
+            setUser(null);
+            setSession(null);
+            return;
+          }
+          
+          if (validatedUser) {
+            setUser(validatedUser);
+            setSession(currentSession);
+          }
+        } else if (mounted) {
           setUser(null);
           setSession(null);
         }
@@ -113,7 +130,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     );
 
+    // Initialize auth
+    initializeAuth();
+
+    // Cleanup function
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -128,7 +150,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setSession(newSession);
       
       // Wait for admin status to be loaded
-      const supabase = createBrowserSupabaseClient();
       const { data: adminData } = await supabase
         .from('profiles')
         .select('is_admin')
@@ -201,7 +222,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     session,
     profile,
     isAdmin: adminData?.isAdmin || false,
-    isLoading: isLoading || isProfileLoading || isAdminLoading,
+    isLoading: !isAuthReady || isLoading || isProfileLoading || isAdminLoading,
+    isAuthReady,
     signIn,
     signUp,
     signInWithProvider: socialSignIn,

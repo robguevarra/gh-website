@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import type { Database } from '@/types/supabase';
+import { createServiceRoleClient } from './server';
 
 /**
  * Creates a Supabase client for use in route handlers
@@ -35,8 +36,45 @@ export const createRouteHandlerClient = async () => {
           }
         },
       },
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
     }
   );
+};
+
+// Helper function to validate admin access
+export const validateAdminAccess = async () => {
+  const supabase = await createRouteHandlerClient();
+  const serviceClient = await createServiceRoleClient();
+  
+  // Check if user is authenticated
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  
+  if (authError || !user) {
+    return {
+      error: 'Unauthorized: Authentication required',
+      status: 401
+    };
+  }
+  
+  // Check if user has admin role
+  const { data: profile, error: profileError } = await serviceClient
+    .from('profiles')
+    .select('role, is_admin')
+    .eq('id', user.id)
+    .single();
+  
+  if (profileError || (profile?.role !== 'admin' && !profile?.is_admin)) {
+    return {
+      error: 'Forbidden: Admin access required',
+      status: 403
+    };
+  }
+  
+  return { user, profile };
 };
 
 // Helper function to handle unauthorized access
