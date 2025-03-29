@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
-import { supabaseAdmin } from '@/lib/supabase/admin';
+import { getAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(request: NextRequest) {
   const supabase = await createRouteHandlerClient();
+  const adminClient = getAdminClient();
 
   // Verify user is logged in
   const {
@@ -78,12 +79,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Start a transaction
-    const { error: beginError } = await supabaseAdmin.rpc('begin_transaction');
+    const { error: beginError } = await adminClient.rpc('begin_transaction');
     if (beginError) throw beginError;
 
     try {
       // Check if course progress exists
-      const { data: existingProgress, error: progressError } = await supabaseAdmin
+      const { data: existingProgress, error: progressError } = await adminClient
         .from('course_progress')
         .select('id')
         .eq('user_id', user.id)
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
 
       // If no course progress, create one
       if (progressError) {
-        await supabaseAdmin.from('course_progress').insert({
+        await adminClient.from('course_progress').insert({
           user_id: user.id,
           course_id: courseId,
           status: 'in_progress',
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
         });
       } else {
         // Update last accessed time
-        await supabaseAdmin
+        await adminClient
           .from('course_progress')
           .update({
             last_accessed_at: new Date().toISOString(),
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Check if lesson progress exists
-      const { data: existingLessonProgress, error: lessonProgressError } = await supabaseAdmin
+      const { data: existingLessonProgress, error: lessonProgressError } = await adminClient
         .from('lesson_progress')
         .select('id, status')
         .eq('user_id', user.id)
@@ -122,7 +123,7 @@ export async function POST(request: NextRequest) {
 
       if (lessonProgressError) {
         // Create new lesson progress
-        await supabaseAdmin.from('lesson_progress').insert({
+        await adminClient.from('lesson_progress').insert({
           user_id: user.id,
           lesson_id: lessonId,
           status: lessonStatus,
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
         });
       } else if (existingLessonProgress.status !== 'completed' || lessonStatus === 'completed') {
         // Update lesson progress if not already completed or if marking as completed
-        await supabaseAdmin
+        await adminClient
           .from('lesson_progress')
           .update({
             status: lessonStatus,
@@ -140,19 +141,23 @@ export async function POST(request: NextRequest) {
       }
 
       // Update overall course progress percentage
-      await supabaseAdmin.rpc('update_course_progress', {
+      await adminClient.rpc('update_course_progress', {
         p_user_id: user.id,
         p_course_id: courseId,
       });
 
       // Commit the transaction
-      const { error: commitError } = await supabaseAdmin.rpc('commit_transaction');
+      const { error: commitError } = await adminClient.rpc('commit_transaction');
       if (commitError) throw commitError;
 
       return NextResponse.json({ success: true });
     } catch (error) {
       // Rollback on error
-      await supabaseAdmin.rpc('rollback_transaction').catch(() => {});
+      try {
+        await adminClient.rpc('rollback_transaction');
+      } catch (rollbackError) {
+        console.error('Failed to rollback transaction:', rollbackError);
+      }
       throw error;
     }
   } catch (error) {
@@ -198,42 +203,44 @@ export async function GET(request: NextRequest) {
         id,
         title,
         slug,
+        description,
         thumbnail_url,
-        published
-      ),
-      lesson_progress (
-        id,
-        lesson_id,
-        status,
-        completed_at,
-        lessons (
+        modules (
           id,
           title,
-          module_id,
-          modules (
+          position,
+          lessons (
             id,
             title,
-            course_id
+            position,
+            lesson_progress (
+              status,
+              completed_at
+            )
           )
         )
       )
     `)
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .order('last_accessed_at', { ascending: false });
 
-  // Add courseId filter if provided
   if (courseId) {
     query = query.eq('course_id', courseId);
   }
 
-  const { data, error } = await query;
+  try {
+    const { data, error } = await query;
 
-  if (error) {
-    console.error('Error fetching course progress:', error);
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error fetching progress:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch course progress' },
+      { error: 'Failed to fetch progress' },
       { status: 500 }
     );
   }
-
-  return NextResponse.json(data);
 } 
