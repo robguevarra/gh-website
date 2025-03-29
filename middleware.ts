@@ -68,16 +68,24 @@ export async function middleware(request: NextRequest) {
     })
   }
 
+  // Check for special auth routes that shouldn't be redirected
+  const isPasswordResetFlow = request.nextUrl.pathname.startsWith('/auth/update-password')
+  
   // Handle protected routes
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
   const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') || 
                           request.nextUrl.pathname.startsWith('/admin')
 
+  // Allow password reset flow even without authentication
+  if (isPasswordResetFlow) {
+    return response
+  }
+
   if (!user && isProtectedRoute) {
     return NextResponse.redirect(new URL('/auth/signin', request.url))
   }
 
-  if (user && isAuthPage) {
+  if (user && isAuthPage && !isPasswordResetFlow) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
