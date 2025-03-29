@@ -24,10 +24,25 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   
-  // Update error state if errorMessage prop changes
   useEffect(() => {
-    setError(errorMessage || null);
-  }, [errorMessage]);
+    const supabase = createBrowserSupabaseClient();
+    
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        // We're in password recovery mode, ready to accept the new password
+        setError(null);
+      } else if (!session && !isSuccess) {
+        // No session and not after successful update - redirect to sign in
+        router.replace('/auth/signin?error=recovery_session_missing');
+      }
+    });
+
+    // Cleanup subscription
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router, isSuccess]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,7 +69,7 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
     try {
       const supabase = createBrowserSupabaseClient();
       
-      // Update the password using the session that Supabase has already established
+      // Update the password
       const { error: updateError } = await supabase.auth.updateUser({
         password: password
       });
