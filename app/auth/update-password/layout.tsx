@@ -5,10 +5,17 @@ export const metadata: Metadata = {
   description: 'Set a new password for your Graceful Homeschooling account.',
 };
 
+// This ensures we don't inherit the dashboard layout
+export const dynamic = 'force-dynamic';
+
 export default function UpdatePasswordLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen">
+      {children}
+    </div>
+  );
 } 
