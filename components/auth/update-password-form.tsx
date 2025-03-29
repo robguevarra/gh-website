@@ -17,20 +17,23 @@ export interface UpdatePasswordFormProps {
 
 export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?updated=true' }: UpdatePasswordFormProps) {
   const router = useRouter();
-  
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [error, setError] = useState<string | null>(errorMessage || null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [canUpdatePassword, setCanUpdatePassword] = useState(false);
   
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
     
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth event:', event);
+      
       if (event === 'PASSWORD_RECOVERY') {
         // We're in password recovery mode, ready to accept the new password
+        setCanUpdatePassword(true);
         setError(null);
       } else if (!session && !isSuccess) {
         // No session and not after successful update - redirect to sign in
@@ -47,6 +50,11 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    
+    if (!canUpdatePassword) {
+      setError('Cannot update password - invalid recovery session');
+      return;
+    }
     
     // Basic validation
     if (!password) {
@@ -70,7 +78,7 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
       const supabase = createBrowserSupabaseClient();
       
       // Update the password
-      const { error: updateError } = await supabase.auth.updateUser({
+      const { data, error: updateError } = await supabase.auth.updateUser({
         password: password
       });
       
@@ -80,17 +88,19 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
         setIsLoading(false);
         return;
       }
-      
-      // Success path
-      setIsSuccess(true);
-      
-      // Sign out after success to ensure clean state
-      await supabase.auth.signOut();
-      
-      // Redirect after success animation
-      setTimeout(() => {
-        router.push(redirectUrl);
-      }, 1500);
+
+      if (data) {
+        // Success path
+        setIsSuccess(true);
+        
+        // Sign out after success to ensure clean state
+        await supabase.auth.signOut();
+        
+        // Redirect after success animation
+        setTimeout(() => {
+          router.push(redirectUrl);
+        }, 1500);
+      }
     } catch (err) {
       console.error('Unexpected error during password update:', err);
       setError('An unexpected error occurred. Please try again.');
@@ -153,7 +163,7 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              disabled={isLoading || isSuccess}
+              disabled={isLoading || isSuccess || !canUpdatePassword}
               className="bg-white/80 border-[#e7d9ce] focus:border-brand-purple focus:ring-brand-purple/20 transition-all duration-300"
             />
           </div>
@@ -169,7 +179,7 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
               value={passwordConfirm}
               onChange={(e) => setPasswordConfirm(e.target.value)}
               required
-              disabled={isLoading || isSuccess}
+              disabled={isLoading || isSuccess || !canUpdatePassword}
               className="bg-white/80 border-[#e7d9ce] focus:border-brand-purple focus:ring-brand-purple/20 transition-all duration-300"
             />
           </div>
@@ -184,7 +194,7 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
           <Button 
             type="submit" 
             className={`w-full h-11 relative overflow-hidden group ${isSuccess ? 'bg-green-500' : ''}`}
-            disabled={isLoading || isSuccess}
+            disabled={isLoading || isSuccess || !canUpdatePassword}
           >
             {/* Background gradient */}
             <span className={`absolute inset-0 w-full h-full transition-all duration-500 ${isSuccess ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-brand-purple to-brand-pink group-hover:scale-105'}`}></span>
@@ -211,6 +221,8 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
                   <CheckCircle2 className="mr-2 h-5 w-5" />
                   Password Updated!
                 </motion.div>
+              ) : !canUpdatePassword ? (
+                'Waiting for recovery session...'
               ) : isLoading ? (
                 <>
                   <motion.div 
