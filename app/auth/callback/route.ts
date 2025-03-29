@@ -1,6 +1,8 @@
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get('code');
@@ -14,7 +16,14 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createRouteHandlerClient();
     
-    // Always exchange the code for a session first, as per Supabase docs
+    // For recovery flow, we don't need to exchange the code yet
+    if (type === 'recovery') {
+      return NextResponse.redirect(
+        new URL('/auth/update-password', requestUrl.origin)
+      );
+    }
+
+    // For other flows, exchange the code for a session
     const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
     
     if (sessionError) {
@@ -24,14 +33,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // For recovery flow, redirect to update password page
-    if (type === 'recovery') {
-      return NextResponse.redirect(
-        new URL('/auth/update-password', requestUrl.origin)
-      );
-    }
-
-    // For other flows, redirect to the intended destination
+    // Redirect to the intended destination
     return NextResponse.redirect(new URL(next, requestUrl.origin));
   } catch (error) {
     console.error('Unexpected error in auth callback:', error);
