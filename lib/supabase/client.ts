@@ -22,7 +22,7 @@ const createBrowserSupabaseClient = () => {
         autoRefreshToken: true,
         detectSessionInUrl: true,
         persistSession: true,
-        debug: false // Disable debug mode
+        debug: true // Enable debug mode
       }
     }
   );

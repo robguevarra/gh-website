@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Loader2 } from 'lucide-react';
@@ -13,29 +13,16 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const [hasCheckedAuth, setHasCheckedAuth] = useState(false);
 
   useEffect(() => {
     // If user is not authenticated and not loading, redirect to signin
-    if (!isLoading) {
-      setHasCheckedAuth(true);
-      if (!user) {
-        router.push('/auth/signin');
-      }
+    if (!isLoading && !user) {
+      router.push('/auth/signin');
     }
   }, [user, isLoading, router]);
 
-  // Failsafe to prevent infinite loading
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setHasCheckedAuth(true);
-    }, 3000);
-    
-    return () => clearTimeout(timeout);
-  }, []);
-
-  // Show loading state while checking authentication (but only for a reasonable time)
-  if (isLoading && !hasCheckedAuth) {
+  // Show loading state while checking authentication
+  if (isLoading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
@@ -58,17 +45,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     );
   }
 
-  // If we've checked auth, aren't loading, and have no user, show a message until redirect happens
-  if (hasCheckedAuth && !user) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <p className="text-sm text-muted-foreground">Redirecting to sign in...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Fallback return (shouldn't be reached)
+  // This return shouldn't be reached because of the redirect,
+  // but we need a return value to satisfy TypeScript
   return null;
 } 

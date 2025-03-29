@@ -11,6 +11,7 @@ import {
   HelpCircle,
   Shield,
 } from 'lucide-react';
+import { signOut } from '@/lib/supabase/auth';
 import { useAuth } from '@/context/auth-context';
 
 import {
@@ -29,17 +30,8 @@ export default function DashboardHeader() {
   const { user, profile, isAdmin, logout } = useAuth();
   
   const handleSignOut = async () => {
-    try {
-      const { error } = await logout();
-      if (error) {
-        console.error('Logout error:', error);
-      } else {
-        // Navigate using window.location for a full page reload
-        window.location.href = '/auth/signin';
-      }
-    } catch (err) {
-      console.error('Unexpected logout error:', err);
-    }
+    await logout();
+    router.push('/auth/signin');
   };
   
   // Generate avatar initials from user name
