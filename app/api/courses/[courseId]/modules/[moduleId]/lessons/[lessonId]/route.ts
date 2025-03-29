@@ -18,7 +18,9 @@ export async function GET(
   { params }: { params: { courseId: string; moduleId: string; lessonId: string } }
 ) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
+    const { courseId, moduleId, lessonId } = params;
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -28,7 +30,7 @@ export async function GET(
         },
         global: {
           headers: {
-            cookie: cookieStore.toString()
+            cookie: await cookieStore.toString()
           }
         }
       }
@@ -37,8 +39,8 @@ export async function GET(
     const { data: lesson, error } = await supabase
       .from('lessons')
       .select('*')
-      .eq('id', params.lessonId)
-      .eq('module_id', params.moduleId)
+      .eq('id', lessonId)
+      .eq('module_id', moduleId)
       .single();
 
     if (error) throw error;
@@ -56,7 +58,9 @@ export async function PATCH(
   { params }: { params: { courseId: string; moduleId: string; lessonId: string } }
 ) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
+    const { courseId, moduleId, lessonId } = params;
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -66,11 +70,23 @@ export async function PATCH(
         },
         global: {
           headers: {
-            cookie: cookieStore.toString()
+            cookie: await cookieStore.toString()
           }
         }
       }
     );
+
+    // Verify the lesson exists and belongs to the module
+    const { data: existingLesson, error: checkError } = await supabase
+      .from('lessons')
+      .select('*')
+      .eq('id', lessonId)
+      .eq('module_id', moduleId)
+      .single();
+
+    if (checkError || !existingLesson) {
+      return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
+    }
     
     const body = await request.json();
     const validatedData = lessonSchema.parse(body);
@@ -82,14 +98,23 @@ export async function PATCH(
     
     const { data: lesson, error } = await supabase
       .from('lessons')
-      .update(validatedData)
-      .eq('id', params.lessonId)
-      .eq('module_id', params.moduleId)
+      .update({
+        ...validatedData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', lessonId)
+      .eq('module_id', moduleId)
       .select()
       .single();
 
-    if (error) throw error;
-    if (!lesson) return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
+    if (error) {
+      console.error('Update error:', error);
+      throw error;
+    }
+
+    if (!lesson) {
+      return NextResponse.json({ error: 'Failed to update lesson' }, { status: 500 });
+    }
 
     return NextResponse.json(lesson);
   } catch (error) {
@@ -106,7 +131,9 @@ export async function DELETE(
   { params }: { params: { courseId: string; moduleId: string; lessonId: string } }
 ) {
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
+    const { courseId, moduleId, lessonId } = params;
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -116,7 +143,7 @@ export async function DELETE(
         },
         global: {
           headers: {
-            cookie: cookieStore.toString()
+            cookie: await cookieStore.toString()
           }
         }
       }
@@ -125,8 +152,8 @@ export async function DELETE(
     const { error } = await supabase
       .from('lessons')
       .delete()
-      .eq('id', params.lessonId)
-      .eq('module_id', params.moduleId);
+      .eq('id', lessonId)
+      .eq('module_id', moduleId);
 
     if (error) throw error;
 
