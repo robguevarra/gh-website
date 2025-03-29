@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -9,6 +9,8 @@ import { useCourseStore } from '@/lib/stores/course-store';
 import { Navigation } from './Navigation';
 import { ContentEditor } from './ContentEditor';
 import { Preview } from './Preview';
+import { ModuleTreeV2, ModuleTreeHandle } from '@/components/admin/courses/course-editor/module-tree-v2';
+import { Loader2 } from 'lucide-react';
 
 type EditingItem = {
   type: 'course' | 'module' | 'lesson';
@@ -16,17 +18,20 @@ type EditingItem = {
   parentId?: string;
 };
 
-export function CourseEditor() {
+interface CourseEditorProps {
+  courseId: string;
+}
+
+export function CourseEditor({ courseId }: CourseEditorProps) {
   const params = useParams();
   // Ensure courseId exists and is a string
-  const courseId = typeof params.courseId === 'string' ? params.courseId : '';
-  const [isLoading, setIsLoading] = useState(true);
+  const courseIdStr = typeof params.courseId === 'string' ? params.courseId : '';
+  const [isLoading, setIsLoading] = useState(false);
   const [editingItem, setEditingItem] = useState<EditingItem | null>(null);
-  const { course, fetchCourse } = useCourseStore();
+  const { course, fetchCourse, selectedModuleId, selectedLessonId, selectModule, selectLesson } = useCourseStore();
+  const moduleTreeRef = useRef<ModuleTreeHandle>(null);
 
   useEffect(() => {
-    if (!courseId) return;
-    
     const loadCourse = async () => {
       setIsLoading(true);
       try {
@@ -44,44 +49,38 @@ export function CourseEditor() {
   }, [courseId, fetchCourse]);
 
   if (isLoading) {
-    return <LoadingSkeleton />;
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!course) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <p className="text-muted-foreground">Course not found</p>
+      </div>
+    );
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] w-full">
-      <ResizablePanelGroup direction="horizontal">
-        {/* Navigation Panel */}
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={30}>
-          <ScrollArea className="h-full">
-            <Navigation
-              course={course}
-              editingItem={editingItem}
-              onSelectItem={setEditingItem}
-            />
-          </ScrollArea>
-        </ResizablePanel>
-
-        <ResizableHandle />
-
-        {/* Content Editor Panel */}
-        <ResizablePanel defaultSize={40}>
-          <ScrollArea className="h-full">
-            <ContentEditor
-              editingItem={editingItem}
-              onSave={() => courseId && fetchCourse(courseId)}
-            />
-          </ScrollArea>
-        </ResizablePanel>
-
-        <ResizableHandle />
-
-        {/* Preview Panel */}
-        <ResizablePanel defaultSize={35}>
-          <ScrollArea className="h-full">
-            <Preview editingItem={editingItem} />
-          </ScrollArea>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+    <div className="grid grid-cols-[300px_1fr] gap-4 h-[calc(100vh-4rem)]">
+      <div className="border-r pr-4 overflow-y-auto">
+        <ModuleTreeV2
+          ref={moduleTreeRef}
+          courseId={courseId}
+          selectedModuleId={selectedModuleId}
+          selectedLessonId={selectedLessonId}
+          onModuleSelect={selectModule}
+          onLessonSelect={selectLesson}
+        />
+      </div>
+      <div className="overflow-y-auto px-4">
+        <ContentEditor
+          moduleTreeRef={moduleTreeRef}
+        />
+      </div>
     </div>
   );
 }

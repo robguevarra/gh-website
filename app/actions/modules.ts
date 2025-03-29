@@ -1,42 +1,68 @@
 'use server'
 
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import { createServerActionClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { createClient } from '@supabase/supabase-js'
+import type { Module, Lesson } from '@/types/courses'
 
-export async function fetchModules(courseId: string) {
-  console.log('[Server] fetchModules: Starting fetch for courseId:', courseId)
-  
-  const { data: modules, error } = await supabaseAdmin
-    .from('modules')
-    .select('*')
-    .eq('course_id', courseId)
-    .order('position')
+// Initialize supabaseAdmin
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
-  if (error) {
-    console.error('[Server] fetchModules: Error:', error)
-    throw new Error('Failed to fetch modules')
+export async function fetchModules(courseId: string): Promise<Module[]> {
+  try {
+    console.log('📥 Fetching modules for course:', courseId)
+    const cookiesInstance = cookies()
+    const supabase = createServerActionClient({ cookies: () => cookiesInstance })
+    
+    const { data, error } = await supabase
+      .from('modules')
+      .select(`
+        *,
+        lessons (*)
+      `)
+      .eq('course_id', courseId)
+      .order('position')
+
+    if (error) {
+      console.error('❌ Error fetching modules:', error)
+      throw new Error('Failed to fetch modules')
+    }
+
+    console.log('✅ Successfully fetched modules:', data.length)
+    return data
+  } catch (err) {
+    console.error('❌ Error in fetchModules:', err)
+    throw err
   }
-
-  console.log('[Server] fetchModules: Success, found', modules.length, 'modules')
-  return modules
 }
 
-export async function fetchLessons(moduleId: string) {
-  console.log('[Server] fetchLessons: Starting fetch for moduleId:', moduleId)
-  
-  const { data: lessons, error } = await supabaseAdmin
-    .from('lessons')
-    .select('*')
-    .eq('module_id', moduleId)
-    .order('position')
+export async function fetchLessons(moduleId: string): Promise<Lesson[]> {
+  try {
+    console.log('📥 Fetching lessons for module:', moduleId)
+    const cookiesInstance = cookies()
+    const supabase = createServerActionClient({ cookies: () => cookiesInstance })
+    
+    const { data, error } = await supabase
+      .from('lessons')
+      .select('*')
+      .eq('module_id', moduleId)
+      .order('position')
 
-  if (error) {
-    console.error('[Server] fetchLessons: Error:', error)
-    throw new Error('Failed to fetch lessons')
+    if (error) {
+      console.error('❌ Error fetching lessons:', error)
+      throw new Error('Failed to fetch lessons')
+    }
+
+    console.log('✅ Successfully fetched lessons:', data.length)
+    return data
+  } catch (err) {
+    console.error('❌ Error in fetchLessons:', err)
+    throw err
   }
-
-  console.log('[Server] fetchLessons: Success, found', lessons.length, 'lessons')
-  return lessons
 }
 
 export async function fetchLesson(lessonId: string) {
@@ -88,67 +114,100 @@ export async function saveLesson(lessonId: string, data: {
     .eq('id', lessonId)
     .single()
 
-  if (lesson) {
-    const courseId = lesson.modules.course_id
+  if (lesson && lesson.modules) {
+    const courseId = (lesson.modules as any).course_id
     revalidatePath(`/admin/courses/${courseId}`)
     console.log('[Server] saveLesson: Revalidated path:', `/admin/courses/${courseId}`)
   }
 }
 
-export async function addModule(courseId: string) {
-  console.log('[Server] addModule: Starting add for courseId:', courseId)
-  
-  const { data: modules } = await supabaseAdmin
-    .from('modules')
-    .select('id')
-    .eq('course_id', courseId)
+export async function addModule(courseId: string): Promise<Module> {
+  try {
+    console.log('➕ Adding new module to course:', courseId)
+    const cookiesInstance = cookies()
+    const supabase = createServerActionClient({ cookies: () => cookiesInstance })
+    
+    // Get the current highest position
+    const { data: existingModules, error: posError } = await supabase
+      .from('modules')
+      .select('position')
+      .eq('course_id', courseId)
+      .order('position', { ascending: false })
+      .limit(1)
 
-  const position = modules?.length || 0
-  console.log('[Server] addModule: Calculated position:', position)
+    if (posError) {
+      console.error('❌ Error getting module positions:', posError)
+      throw new Error('Failed to get module positions')
+    }
 
-  const { data: newModule, error } = await supabaseAdmin
-    .from('modules')
-    .insert({
-      course_id: courseId,
-      title: 'New Module',
-      position,
-      is_published: false,
-      metadata: {},
-    })
-    .select()
-    .single()
+    const newPosition = existingModules?.[0]?.position ?? 0
 
-  if (error) {
-    console.error('[Server] addModule: Error:', error)
-    throw new Error('Failed to add module')
+    // Insert new module
+    const { data, error } = await supabase
+      .from('modules')
+      .insert({
+        course_id: courseId,
+        title: 'New Module',
+        position: newPosition + 1,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('❌ Error adding module:', error)
+      throw new Error('Failed to add module')
+    }
+
+    console.log('✅ Successfully added new module:', data.id)
+    revalidatePath(`/admin/courses/${courseId}`)
+    return data
+  } catch (err) {
+    console.error('❌ Error in addModule:', err)
+    throw err
   }
-
-  console.log('[Server] addModule: Success, created module:', newModule.id)
-  
-  // Revalidate the course page
-  revalidatePath(`/admin/courses/${courseId}`)
-  console.log('[Server] addModule: Revalidated path:', `/admin/courses/${courseId}`)
-  
-  return newModule
 }
 
-export async function updateModulePositions(updates: { id: string; position: number }[]) {
-  console.log('[Server] updateModulePositions: Starting update for', updates.length, 'modules')
-  
-  const { error } = await supabaseAdmin
-    .from('modules')
-    .upsert(updates)
+interface ModulePosition {
+  id: string
+  position: number
+}
 
-  if (error) {
-    console.error('[Server] updateModulePositions: Error:', error)
-    throw new Error('Failed to update module positions')
+export async function updateModulePositions(updates: ModulePosition[]): Promise<void> {
+  try {
+    console.log('🔄 Updating module positions:', updates.length)
+    const cookiesInstance = cookies()
+    const supabase = createServerActionClient({ cookies: () => cookiesInstance })
+    
+    // Update each module's position
+    await Promise.all(
+      updates.map(async ({ id, position }) => {
+        const { error } = await supabase
+          .from('modules')
+          .update({ position })
+          .eq('id', id)
+
+        if (error) {
+          console.error(`❌ Error updating position for module ${id}:`, error)
+          throw new Error(`Failed to update position for module ${id}`)
+        }
+      })
+    )
+
+    console.log('✅ Successfully updated module positions')
+    // Get courseId from first module to revalidate path
+    if (updates.length > 0) {
+      const { data } = await supabase
+        .from('modules')
+        .select('course_id')
+        .eq('id', updates[0].id)
+        .single()
+      
+      if (data?.course_id) {
+        revalidatePath(`/admin/courses/${data.course_id}`)
+      }
+    }
+  } catch (err) {
+    console.error('❌ Error in updateModulePositions:', err)
+    throw err
   }
-
-  console.log('[Server] updateModulePositions: Success')
-  
-  // Since we don't have the courseId in this function, we'll need to
-  // revalidate all course pages. In production, you might want to
-  // pass the courseId as a parameter to make this more specific.
-  revalidatePath('/admin/courses/[id]', 'layout')
-  console.log('[Server] updateModulePositions: Revalidated course pages')
 } 

@@ -8,17 +8,14 @@ import { useCourseStore, type Course, type Module, type Lesson } from '@/lib/sto
 import {
   DndContext,
   DragEndEvent,
-  DragOverlay,
   DragStartEvent,
   MouseSensor,
-  PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
 import {
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
@@ -56,8 +53,17 @@ export function Navigation({ onSelect }: NavigationProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
-    useSensor(MouseSensor),
-    useSensor(TouchSensor)
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 5, // 5px of movement required before drag starts
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250, // 250ms delay before touch drag starts
+        tolerance: 5, // 5px of movement allowed during delay
+      },
+    })
   );
 
   if (!course) return null;
@@ -91,8 +97,12 @@ export function Navigation({ onSelect }: NavigationProps) {
 
     // Handle module reordering
     if (activeId.startsWith('module-') && overId.startsWith('module-')) {
-      const oldIndex = course.modules?.findIndex((m: Module) => m.id === activeId.replace('module-', '')) ?? -1;
-      const newIndex = course.modules?.findIndex((m: Module) => m.id === overId.replace('module-', '')) ?? -1;
+      const oldIndex = course.modules?.findIndex(
+        (m) => `module-${m.id}` === activeId
+      ) ?? -1;
+      const newIndex = course.modules?.findIndex(
+        (m) => `module-${m.id}` === overId
+      ) ?? -1;
       
       if (oldIndex !== -1 && newIndex !== -1) {
         await reorderModule(oldIndex, newIndex);
@@ -100,12 +110,14 @@ export function Navigation({ onSelect }: NavigationProps) {
     }
     // Handle lesson reordering
     else if (activeId.startsWith('lesson-') && overId.startsWith('lesson-')) {
-      const [, moduleId] = activeId.split('-');
-      const lessons = course.modules?.find((m: Module) => m.id === moduleId)?.lessons;
-      if (!lessons) return;
+      const [, moduleId, lessonId] = activeId.split('-');
+      const module = course.modules?.find((m) => m.id === moduleId);
+      if (!module?.lessons) return;
 
-      const oldIndex = lessons.findIndex((l: Lesson) => l.id === activeId.split('-')[2]);
-      const newIndex = lessons.findIndex((l: Lesson) => l.id === overId.split('-')[2]);
+      const oldIndex = module.lessons.findIndex((l) => l.id === lessonId);
+      const newIndex = module.lessons.findIndex(
+        (l) => `lesson-${moduleId}-${l.id}` === overId
+      );
       
       if (oldIndex !== -1 && newIndex !== -1) {
         await reorderLesson(moduleId, oldIndex, newIndex);
@@ -132,7 +144,7 @@ export function Navigation({ onSelect }: NavigationProps) {
         onDragEnd={handleDragEnd}
       >
         <div className="space-y-1">
-          {course.modules?.map((module: Module) => (
+          {course.modules?.map((module) => (
             <ModuleItem
               key={module.id}
               module={module}
@@ -165,21 +177,22 @@ function ModuleItem({
   };
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} className="relative">
       <div className="flex items-center">
         <Button
           variant="ghost"
           size="sm"
-          className="flex-1 justify-start"
+          className="flex-1 justify-start group"
           onClick={() => onSelect({ type: 'module', id: module.id })}
         >
-          <div {...attributes} {...listeners} className="cursor-grab">
+          <div {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
             <GripVertical className="mr-2 h-4 w-4" />
           </div>
           <ChevronDown
-            className={`mr-2 h-4 w-4 transition-transform ${
+            className={cn(
+              'mr-2 h-4 w-4 transition-transform',
               isExpanded ? 'rotate-0' : '-rotate-90'
-            }`}
+            )}
             onClick={(e) => {
               e.stopPropagation();
               onToggle();
@@ -190,11 +203,11 @@ function ModuleItem({
       </div>
 
       {isExpanded && lessons && (
-        <SortableContext
-          items={lessons.map((l) => `lesson-${module.id}-${l.id}`)}
-          strategy={verticalListSortingStrategy}
-        >
-          <div className="ml-6 mt-1 space-y-1">
+        <div className="ml-6 mt-1 space-y-1">
+          <SortableContext
+            items={lessons.map((l) => `lesson-${module.id}-${l.id}`)}
+            strategy={verticalListSortingStrategy}
+          >
             {lessons.map((lesson) => (
               <LessonItem
                 key={lesson.id}
@@ -203,8 +216,8 @@ function ModuleItem({
                 onSelect={onSelect}
               />
             ))}
-          </div>
-        </SortableContext>
+          </SortableContext>
+        </div>
       )}
     </div>
   );
@@ -221,16 +234,14 @@ function LessonItem({ lesson, moduleId, onSelect }: LessonItemProps) {
   };
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} className="relative">
       <Button
         variant="ghost"
         size="sm"
-        className="w-full justify-start"
-        onClick={() =>
-          onSelect({ type: 'lesson', id: lesson.id, moduleId })
-        }
+        className="w-full justify-start group"
+        onClick={() => onSelect({ type: 'lesson', id: lesson.id, moduleId })}
       >
-        <div {...attributes} {...listeners} className="cursor-grab">
+        <div {...attributes} {...listeners} className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
           <GripVertical className="mr-2 h-4 w-4" />
         </div>
         {lesson.title}

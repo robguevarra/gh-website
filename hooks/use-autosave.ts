@@ -15,10 +15,9 @@ export function useAutosave<T>({
 }: AutosaveOptions<T>) {
   const timeoutRef = useRef<NodeJS.Timeout>()
   const previousDataRef = useRef<T>(data)
-  const isSavingRef = useRef(false)
 
   useEffect(() => {
-    if (!enabled || isSavingRef.current) return
+    if (!enabled) return
 
     // Check if data has changed
     if (JSON.stringify(data) === JSON.stringify(previousDataRef.current)) {
@@ -33,13 +32,10 @@ export function useAutosave<T>({
     // Set new timeout
     timeoutRef.current = setTimeout(async () => {
       try {
-        isSavingRef.current = true
         await onSave()
         previousDataRef.current = data
       } catch (error) {
         console.error('Autosave failed:', error)
-      } finally {
-        isSavingRef.current = false
       }
     }, interval)
 

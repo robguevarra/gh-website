@@ -1,260 +1,132 @@
-# Course Editor Enhancement - Phase 2: Kajabi-like Features
+# Course Editor Enhancement Phase 2: Intuitive Course Creation
 
 ## Task Objective
-Enhance the course editor with professional-grade functionality similar to Kajabi while maintaining Next.js 15+ best practices and proper handling of dynamic APIs.
+Create a user-friendly course editor that prioritizes simplicity and efficiency, enabling course creators to build engaging content without technical complexity.
 
 ## Current State Assessment
-Our course editor currently has:
-- Basic course editing with server-side rendering using Next.js 15+
-- Supabase integration with proper dynamic API handling
-- TipTap editor integration for basic content editing
-- Simple module/lesson management structure
-- Server Components with proper client/server separation
-- Route handlers with cookie-based authentication
-
-Technical implementation details:
-```typescript
-// Server-side Supabase client with proper dynamic API handling
-const supabase = await createServerSupabaseClient()
-const { data: course } = await supabase.from('courses').select('*')
-
-// Route handler with proper cookie management
-const cookieStore = await cookies()
-const client = await createRouteHandlerClient()
-```
+- Basic course editor with module/lesson management
+- TipTap integration for content editing
+- Drag-and-drop functionality with @dnd-kit/core
+- Basic autosave functionality
+- Database schema ready for advanced features
 
 ## Future State Goal
-A professional-grade course editor that:
-1. Matches or exceeds Kajabi's functionality
-2. Maintains Next.js 15+ best practices and performance
-3. Properly handles all dynamic APIs and server/client components
-4. Provides real-time collaboration and autosaving
-5. Offers advanced content management capabilities
-
-## Relevant Context
-
-> **Important**: When working on this build note, always ensure proper context integration from:
-> 1. Previously completed build notes (Phase 1-0 through Phase 1-6)
-> 2. Project context (`ProjectContext.md`)
-> 3. Design context (`designContext.md`)
->
-> This ensures consistency and alignment with project goals and standards.
-
-### From Project Context
-From the `ProjectContext.md`, the following key points inform our course editor approach:
-- **Architecture**: Next.js 15+ with App Router and React Server Components
-- **Database**: Supabase with proper RLS and dynamic API handling
-- **State Management**: Zustand for client-side state
-- **UI Components**: Shadcn UI with consistent styling
-
-### From Previously Completed Phases
-The project has established:
-- **Database Schema**: Courses, modules, and lessons tables in Supabase
-- **Authentication**: Cookie-based auth with proper dynamic API handling
-- **Base Editor**: Initial TipTap integration
-- **Component Structure**: Proper server/client component separation
-
-### Current Technical Implementation
-Key technical aspects currently in place:
-
-1. **Server Components**:
-```typescript
-// Proper dynamic params handling in Next.js 15+
-interface CoursePageProps {
-  params: Promise<{
-    courseId: string
-  }>
-}
-
-export default async function CoursePage({ params }: CoursePageProps) {
-  const { courseId } = await params
-  const supabase = await createServerSupabaseClient()
-  // ...
-}
-```
-
-2. **Route Handlers**:
-```typescript
-export const createRouteHandlerClient = async () => {
-  const cookieStore = await cookies()
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get: async (name: string) => {
-          const cookie = await cookieStore.get(name)
-          return cookie?.value
-        },
-        // ...
-      }
-    }
-  )
-}
-```
+An intuitive, efficient course editor that:
+- Simplifies content creation with a clean, two-pane layout
+- Provides smart assistance and templates
+- Offers just-in-time features and guidance
+- Maintains professional capabilities without overwhelming users
 
 ## Implementation Plan
 
-### 1. Dynamic API and Server Component Optimization
-- [ ] Update all route handlers for proper cookie handling
-  - Implement async cookie access
-  - Add proper error handling
-  - Ensure type safety
-- [ ] Optimize server components
-  - Add proper dynamic params handling
-  - Implement streaming where appropriate
-  - Add proper error boundaries
+### 1. Layout Enhancement (In Progress)
+- [x] Implement basic module tree with drag-and-drop
+- [x] Set up content editor with TipTap
+- [ ] Create intuitive two-pane layout
+  - [ ] Collapsible course structure sidebar (left)
+  - [ ] Content workspace (right)
+    - [ ] Content editor mode
+    - [ ] Preview mode with device toggle
+  - [ ] Smart contextual toolbar
+- [ ] Add responsive design
+  - [ ] Stack layout on mobile
+  - [ ] Touch-friendly interactions
+- [ ] Implement smart navigation
+  - [ ] Breadcrumbs for context
+  - [ ] Quick actions menu
+  - [ ] Recent items list
 
-### 2. Enhanced UI/UX Layout
-- [ ] Implement multi-pane layout
-  - Left: Course structure tree (client component)
-  - Center: Content editor (client component)
-  - Right: Live preview (server component)
-- [ ] Add collapsible panels
-- [ ] Implement responsive design
-- [ ] Add keyboard shortcuts
+### 2. Smart Content Editor
+- [x] Basic TipTap integration
+- [ ] Content Templates
+  - [ ] Lesson templates (Video, Text, Quiz, etc.)
+  - [ ] Common content patterns
+  - [ ] Quick-start guides
+- [ ] Intelligent Assistance
+  - [ ] AI-powered content suggestions
+  - [ ] Writing improvements
+  - [ ] SEO recommendations
+- [ ] Media Enhancement
+  - [ ] Simplified media library
+  - [ ] Drag-and-drop uploads
+  - [ ] Auto-optimization
+- [ ] Version Control
+  - [ ] Simple revision history
+  - [ ] One-click restore
+  - [ ] Auto-backups
 
-### 3. Course Structure Management
-- [ ] Enhanced drag-and-drop
-  - Vertical reordering
-  - Cross-section dragging
-  - Real-time Supabase sync
-- [ ] Bulk operations
-  - Multi-select functionality
-  - Batch updates with proper error handling
-- [ ] Quick edit capabilities
-  - Inline editing
-  - Context menus
-  - Real-time validation
+### 3. Module Management
+- [x] Basic drag-and-drop reordering
+- [ ] Smart Organization
+  - [ ] Quick module creation
+  - [ ] Bulk lesson import
+  - [ ] Template-based modules
+- [ ] Status Management
+  - [ ] Visual status indicators
+  - [ ] Quick publish toggle
+  - [ ] Schedule publishing
+- [ ] Progress Tracking
+  - [ ] Completion checklist
+  - [ ] Content validation
+  - [ ] Publishing readiness
 
-### 4. Advanced Content Editor
-- [ ] Enhanced TipTap integration
-  - Custom extensions
-  - Table support
-  - Code blocks
-- [ ] Content blocks system
-  - Video blocks
-  - Quiz blocks
-  - Assignment blocks
-- [ ] Media management
-  - Supabase storage integration
-  - Image optimization
-  - File management
+### 4. User Assistance
+- [ ] Contextual Help
+  - [ ] Interactive tutorials
+  - [ ] Quick tips
+  - [ ] Best practice suggestions
+- [ ] Smart Validation
+  - [ ] Content completeness check
+  - [ ] Accessibility suggestions
+  - [ ] Mobile readiness check
+- [ ] Feedback System
+  - [ ] Clear success messages
+  - [ ] Helpful error resolution
+  - [ ] Progress indicators
 
-### 5. Real-time Features
-- [ ] Auto-save functionality
-  - Supabase real-time subscriptions
-  - Optimistic updates
-  - Version history
-- [ ] Collaborative editing
-  - Presence indicators
-  - Change tracking
-  - Comments system
+### 5. Performance & Reliability
+- [ ] Smart Loading
+  - [ ] Progressive content loading
+  - [ ] Background saves
+  - [ ] Offline support
+- [ ] Error Prevention
+  - [ ] Auto-recovery
+  - [ ] Conflict resolution
+  - [ ] Data preservation
 
-### 6. Course Settings & Analytics
-- [ ] Advanced settings
-  - Access control
-  - Prerequisites
-  - Completion rules
-- [ ] Analytics integration
-  - Progress tracking
-  - Engagement metrics
-  - Performance monitoring
+## Technical Dependencies
+- Next.js 15+
+- Supabase
+- TipTap
+- @dnd-kit/core
+- Zustand
+- Shadcn UI
 
-## Technical Considerations
+## Success Criteria
+1. New users can create content within 5 minutes
+2. Zero technical terminology in the interface
+3. All common tasks achievable in 3 clicks or less
+4. 100% mobile-responsive
+5. 99.9% save reliability
 
-### Next.js 15+ Compliance
-- Proper handling of dynamic APIs
-- Correct server/client component separation
-- Streaming and suspense boundaries
-
-### Database Operations
-- Optimistic updates for better UX
-- Proper error handling
-- Real-time subscriptions
-- RLS policies
-
-### Performance
-- Lazy loading for large courses
-- Proper state management
-- Strategic caching
-- Bundle optimization
-
-## Dependencies
-- TipTap and extensions
-- React DnD
-- Supabase client
-- Analytics tools
-- Media processing libraries
-
-## Migration Strategy
-1. Update dynamic API handling first
-2. Implement features incrementally
-3. Use feature flags for rollout
-4. Maintain backward compatibility
-
-## Success Metrics
-- Editor load time < 2s
-- Auto-save latency < 500ms
-- Preview update time < 100ms
-- Zero dynamic API warnings
-- Proper TypeScript coverage
-
-## Completion Status
-Currently in progress:
-- ✅ Dynamic API fixes implemented
-- ✅ Basic course editor structure in place
-- ✅ Initial TipTap integration complete
-- ✅ Enhanced TipTap editor with tables, code blocks, and custom blocks
-- ✅ Media management with Supabase storage integration
-- ✅ Real-time autosave functionality
-- ✅ Advanced toolbar with formatting controls
-
-Challenges addressed:
-- ✅ Resolved Next.js 15+ dynamic API warnings
-- ✅ Implemented proper cookie handling
-- ✅ Fixed server component issues
-- ✅ Implemented proper file upload and management
-- ✅ Added real-time content saving
-
-Pending:
-- Real-time collaboration
-- Analytics integration
-- Course settings implementation
-- Enhanced drag-and-drop functionality
-- Bulk operations for modules/lessons
+## Notes
+- Prioritize user success over feature complexity
+- Use progressive disclosure for advanced features
+- Provide constant feedback and guidance
+- Test with non-technical users frequently
+- Focus on content quality over quantity
 
 ## Next Steps
-1. Implement real-time collaboration features:
-   - User presence indicators
-   - Concurrent editing
-   - Change tracking
-   - Comments system
-
-2. Add analytics integration:
-   - Progress tracking
-   - Engagement metrics
-   - Performance monitoring
-
-3. Enhance course structure management:
-   - Improved drag-and-drop
-   - Bulk operations
-   - Quick edit capabilities
-
-4. Implement course settings:
-   - Access control
-   - Prerequisites
-   - Completion rules
-
-5. Move to Phase 2-3: Course Delivery System
+1. Implement the two-pane layout
+2. Create the smart content templates
+3. Add the intelligent assistance features
+4. Develop the contextual help system
 
 ---
 
 > **Note to AI Developers**: When working with this project, always ensure that you:
-> 1. Review previously completed build notes for context and established patterns
-> 2. Properly handle all dynamic APIs in Next.js 15+
-> 3. Maintain strict separation between server and client components
-> 4. Follow the established folder structure and naming conventions
-> 5. Implement proper error handling and type safety
-> 6. Use appropriate Supabase client based on context (server/client/route handler)
-> 7. Include this reminder in all future build notes to maintain consistency 
+> 1. Prioritize user experience over technical complexity
+> 2. Test with non-technical users
+> 3. Follow progressive disclosure principles
+> 4. Maintain consistent feedback mechanisms
+> 5. Document all user-facing features clearly 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition, useCallback, useMemo } from 'react'
+import { useEffect, useState, useTransition, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react'
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd'
 import { Module, Lesson } from '@/types/courses'
 import { Button } from '@/components/ui/button'
@@ -17,13 +17,17 @@ interface ModuleTreeProps {
   onLessonSelect: (lessonId: string) => void
 }
 
-export function ModuleTree({
+export interface ModuleTreeHandle {
+  refresh: () => Promise<void>
+}
+
+export const ModuleTree = forwardRef<ModuleTreeHandle, ModuleTreeProps>(({
   courseId,
   selectedModuleId,
   selectedLessonId,
   onModuleSelect,
   onLessonSelect,
-}: ModuleTreeProps) {
+}, ref) => {
   const [modules, setModules] = useState<Module[]>([])
   const [lessons, setLessons] = useState<Record<string, Lesson[]>>({})
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set())
@@ -32,55 +36,43 @@ export function ModuleTree({
   const [isPending, startTransition] = useTransition()
   const { isAdmin } = useAuth()
 
-  // Fetch modules and lessons
-  useEffect(() => {
-    let isMounted = true
-    const controller = new AbortController()
-
-    const loadModules = async () => {
-      if (!courseId) return
+  const loadModules = useCallback(async () => {
+    if (!courseId) return
+    
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      const modulesData = await fetchModules(courseId)
+      setModules(modulesData)
       
-      setIsLoading(true)
-      setError(null)
+      // Fetch lessons for each module
+      const lessonsMap: Record<string, Lesson[]> = {}
+      await Promise.all(
+        modulesData.map(async (module) => {
+          const lessonData = await fetchLessons(module.id)
+          lessonsMap[module.id] = lessonData
+        })
+      )
       
-      try {
-        const modulesData = await fetchModules(courseId)
-        
-        if (!isMounted) return
-        
-        setModules(modulesData)
-        
-        // Fetch lessons for each module
-        const lessonsMap: Record<string, Lesson[]> = {}
-        await Promise.all(
-          modulesData.map(async (module) => {
-            if (!isMounted) return
-            const lessonData = await fetchLessons(module.id)
-            if (!isMounted) return
-            lessonsMap[module.id] = lessonData
-          })
-        )
-        
-        if (!isMounted) return
-        setLessons(lessonsMap)
-      } catch (err) {
-        if (!isMounted) return
-        console.error('Error loading modules:', err)
-        setError('Failed to load course content')
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    loadModules()
-
-    return () => {
-      isMounted = false
-      controller.abort()
+      setLessons(lessonsMap)
+    } catch (err) {
+      console.error('Error loading modules:', err)
+      setError('Failed to load course content')
+    } finally {
+      setIsLoading(false)
     }
   }, [courseId])
+
+  // Expose refresh method through ref
+  useImperativeHandle(ref, () => ({
+    refresh: loadModules
+  }), [loadModules])
+
+  // Initial load
+  useEffect(() => {
+    loadModules()
+  }, [loadModules])
 
   const handleDragEnd = useCallback(async (result: any) => {
     if (!result.destination) return
@@ -245,4 +237,4 @@ export function ModuleTree({
       {modulesList}
     </div>
   )
-} 
+}) 
