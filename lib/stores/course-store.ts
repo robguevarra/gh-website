@@ -2,6 +2,26 @@ import { create } from 'zustand';
 import { toast } from '@/components/ui/use-toast';
 import type { Course, Module, Lesson } from '@/types/course';
 import { debounce } from 'lodash';
+import { z } from 'zod';
+
+// Add schema validation
+const lessonUpdateSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  content_json: z.record(z.unknown()).optional(),
+  position: z.number().int().min(0).optional(),
+  status: z.enum(['draft', 'published', 'archived']).optional(),
+  version: z.number().int().min(1).optional(),
+  metadata: z.record(z.unknown()).optional()
+});
+
+const moduleUpdateSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().optional(),
+  position: z.number().int().min(0).optional(),
+  status: z.enum(['draft', 'published', 'archived']).optional(),
+  metadata: z.record(z.unknown()).optional()
+});
 
 interface CourseStore {
   course: Course | null;
@@ -76,13 +96,16 @@ export const useCourseStore = create<CourseStore>((set, get) => {
     if (!module) throw new Error('Module not found');
 
     try {
+      // Validate data before sending
+      const validatedData = moduleUpdateSchema.parse(data);
+      
       set({ pendingSave: true, error: null });
 
       const response = await fetch(`/api/courses/${course.id}/modules/${moduleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...data,
+          ...validatedData,
           updated_at: new Date().toISOString()
         }),
       });
@@ -138,13 +161,17 @@ export const useCourseStore = create<CourseStore>((set, get) => {
     if (!module) throw new Error('Module not found for lesson');
 
     try {
+      // Validate data before sending
+      const validatedData = lessonUpdateSchema.parse(data);
+      
       set({ pendingSave: true, error: null });
 
       const response = await fetch(`/api/courses/${course.id}/modules/${module.id}/lessons/${lessonId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Important for sending cookies
         body: JSON.stringify({
-          ...data,
+          ...validatedData,
           updated_at: new Date().toISOString()
         }),
       });
@@ -206,7 +233,9 @@ export const useCourseStore = create<CourseStore>((set, get) => {
     fetchCourse: async (courseId: string) => {
       set({ isLoading: true, error: null });
       try {
-        const response = await fetch(`/api/courses/${courseId}`);
+        const response = await fetch(`/api/courses/${courseId}`, {
+          credentials: 'include', // Important for sending cookies
+        });
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error || 'Failed to fetch course');
@@ -266,6 +295,7 @@ export const useCourseStore = create<CourseStore>((set, get) => {
             fetch(`/api/courses/${course.id}/modules/${module.id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include', // Important for sending cookies
               body: JSON.stringify({ 
                 position: module.position,
                 updated_at: new Date().toISOString()
@@ -311,6 +341,7 @@ export const useCourseStore = create<CourseStore>((set, get) => {
             fetch(`/api/courses/${course.id}/modules/${module.id}/lessons/${lesson.id}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
+              credentials: 'include', // Important for sending cookies
               body: JSON.stringify({ 
                 position: lesson.position,
                 updated_at: new Date().toISOString()
