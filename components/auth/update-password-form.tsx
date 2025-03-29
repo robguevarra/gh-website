@@ -61,25 +61,33 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
       const supabase = createBrowserSupabaseClient();
       
       if (token && type === 'recovery') {
-        // For recovery flow, verify the token and update password in one call
+        // For recovery flow, first verify OTP
+        const { error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: token,
+          type: 'recovery'
+        });
+
+        if (verifyError) {
+          console.error('Error verifying token:', verifyError);
+          if (verifyError.message.includes('expired')) {
+            setError('This password reset link has expired. Please request a new one.');
+          } else if (verifyError.message.includes('been used')) {
+            setError('This password reset link has already been used. Please request a new link.');
+          } else {
+            setError('Invalid recovery link. Please request a new password reset.');
+          }
+          setIsLoading(false);
+          return;
+        }
+
+        // After verification, update the password
         const { error: updateError } = await supabase.auth.updateUser({
           password: password
-        }, {
-          emailRedirectTo: redirectUrl
         });
         
         if (updateError) {
           console.error('Error updating password:', updateError);
-          // Handle specific error cases
-          if (updateError.message.includes('Token has expired')) {
-            setError('This password reset link has expired. Please request a new one.');
-          } else if (updateError.message.includes('Token has been used')) {
-            setError('This password reset link has already been used. Please request a new link.');
-          } else if (updateError.message.includes('Invalid token')) {
-            setError('Invalid password reset link. Please request a new one.');
-          } else {
-            setError(updateError.message || 'Failed to update password. Please try again.');
-          }
+          setError(updateError.message || 'Failed to update password. Please try again.');
           setIsLoading(false);
           return;
         }
