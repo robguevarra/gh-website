@@ -13,6 +13,7 @@ export type Course = {
   metadata?: Record<string, unknown>;
   version: number;
   published_version?: number;
+  status: 'draft' | 'published' | 'archived';
 };
 
 export type Module = {
@@ -86,12 +87,23 @@ export const useCourseStore = create<CourseStore>((set, get) => ({
     console.log('🔄 Updating course:', courseId, data);
     set({ isLoading: true, error: null });
     try {
+      // Ensure we have a valid status
+      if (!data.status) {
+        const currentCourse = get().course;
+        data.status = currentCourse?.status || 'draft';
+      }
+      
       const response = await fetch(`/api/courses/${courseId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to update course');
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update course');
+      }
+      
       const updatedCourse = await response.json();
       console.log('✅ Course updated successfully:', updatedCourse.id);
       set({ course: updatedCourse, isLoading: false });
@@ -107,6 +119,7 @@ export const useCourseStore = create<CourseStore>((set, get) => ({
       toast.error('Error', {
         description: message
       });
+      throw error; // Re-throw to allow handling in the editor
     }
   },
 
@@ -117,16 +130,34 @@ export const useCourseStore = create<CourseStore>((set, get) => ({
       const course = get().course;
       if (!course) throw new Error('No course loaded');
 
+      // Ensure we have a valid status
+      const existingModule = course.modules?.find(m => m.id === moduleId);
+      data.status = data.status || existingModule?.status || 'draft';
+
       const response = await fetch(`/api/courses/${course.id}/modules/${moduleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to update module');
-      
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update module');
+      }
+
+      const updatedModule = await response.json();
       console.log('✅ Module updated successfully:', moduleId);
-      // Refresh the course data to get the updated module
-      await get().fetchCourse(course.id);
+      
+      // Update the local state with the new module data
+      set(state => ({
+        course: state.course ? {
+          ...state.course,
+          modules: state.course.modules?.map(m =>
+            m.id === moduleId ? { ...m, ...updatedModule } : m
+          ) || state.course.modules
+        } : null
+      }));
+      
       set({ isLoading: false });
       console.log('🔔 Showing success toast: Module updated');
       toast.success('Success', {
@@ -140,6 +171,7 @@ export const useCourseStore = create<CourseStore>((set, get) => ({
       toast.error('Error', {
         description: message
       });
+      throw error; // Re-throw to allow handling in the editor
     }
   },
 
@@ -150,19 +182,48 @@ export const useCourseStore = create<CourseStore>((set, get) => ({
       const course = get().course;
       if (!course) throw new Error('No course loaded');
 
+      // Find the module containing this lesson
       const module = course.modules?.find(m => m.lessons?.some(l => l.id === lessonId));
       if (!module) throw new Error('Module not found for lesson');
+
+      // Find the existing lesson
+      const existingLesson = module.lessons?.find(l => l.id === lessonId);
+      if (!existingLesson) throw new Error('Lesson not found');
+
+      // Ensure we have a valid status
+      if (!data.status) {
+        data.status = existingLesson.status || 'draft';
+      }
 
       const response = await fetch(`/api/courses/${course.id}/modules/${module.id}/lessons/${lessonId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to update lesson');
-      
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update lesson');
+      }
+
+      const updatedLesson = await response.json();
       console.log('✅ Lesson updated successfully:', lessonId);
-      // Refresh the course data to get the updated lesson
-      await get().fetchCourse(course.id);
+      
+      // Update the local state with the new lesson data
+      set(state => ({
+        course: state.course ? {
+          ...state.course,
+          modules: state.course.modules?.map(m => 
+            m.id === module.id ? {
+              ...m,
+              lessons: m.lessons?.map(l =>
+                l.id === lessonId ? { ...l, ...updatedLesson } : l
+              )
+            } : m
+          )
+        } : null
+      }));
+      
       set({ isLoading: false });
       console.log('🔔 Showing success toast: Lesson updated');
       toast.success('Success', {
@@ -176,6 +237,7 @@ export const useCourseStore = create<CourseStore>((set, get) => ({
       toast.error('Error', {
         description: message
       });
+      throw error; // Re-throw to allow handling in the editor
     }
   },
 

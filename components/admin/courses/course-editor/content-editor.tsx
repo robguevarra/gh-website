@@ -1,109 +1,106 @@
 'use client'
 
-import { useEffect, useState, useRef, RefObject } from 'react'
-import { toast } from 'sonner'
-import { Editor } from './editor'
-import { Button } from '@/components/ui/button'
-import { Loader2 } from 'lucide-react'
-import { useCourseStore } from '@/lib/stores/course-store'
-import { useAutosave } from './use-autosave'
-import type { ModuleTreeHandle } from './module-tree-v2'
+import { useEffect, useState } from "react"
+import { useCourseContext } from "."
+import { Editor, EditorContent, useEditor } from "@tiptap/react"
+import StarterKit from "@tiptap/starter-kit"
+import { Button } from "@/components/ui/button"
+import { Bold, Italic, List, ListOrdered } from "lucide-react"
 
-interface ContentEditorProps {
-  moduleTreeRef: RefObject<ModuleTreeHandle>
-}
+export default function ContentEditor() {
+  const { modules, setModules, activeModuleId, activeItemId } = useCourseContext()
+  const [currentContent, setCurrentContent] = useState("")
 
-export function ContentEditor({ moduleTreeRef }: ContentEditorProps) {
-  const [content, setContent] = useState('')
-  const [title, setTitle] = useState('')
-  const [isSaving, setIsSaving] = useState(false)
-  const { 
-    course, 
-    selectedModuleId, 
-    selectedLessonId,
-    updateModule,
-    updateLesson 
-  } = useCourseStore()
-
-  // Get the currently selected item
-  const selectedModule = course?.modules?.find(m => m.id === selectedModuleId)
-  const selectedLesson = selectedModule?.lessons?.find(l => l.id === selectedLessonId)
-  const selectedItem = selectedLessonId ? selectedLesson : selectedModule
-
-  // Update local state when selection changes
-  useEffect(() => {
-    if (selectedItem) {
-      setTitle(selectedItem.title || '')
-      setContent((selectedItem.content_json as any)?.content || '')
-    }
-  }, [selectedItem])
-
-  const handleSave = async () => {
-    if (!selectedItem) return
-
-    setIsSaving(true)
-    try {
-      const data = { 
-        title, 
-        content_json: { content } 
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: currentContent,
+    onUpdate: ({ editor }) => {
+      setCurrentContent(editor.getHTML())
+      // Update the module content
+      if (activeModuleId && activeItemId) {
+        setModules(
+          modules.map((module) => {
+            if (module.id === activeModuleId) {
+              return {
+                ...module,
+                items: module.items.map((item) => {
+                  if (item.id === activeItemId) {
+                    return {
+                      ...item,
+                      content: editor.getHTML(),
+                    }
+                  }
+                  return item
+                }),
+              }
+            }
+            return module
+          })
+        )
       }
-      if (selectedLessonId) {
-        await updateLesson(selectedLessonId, data)
-      } else if (selectedModuleId) {
-        await updateModule(selectedModuleId, data)
-      }
-      
-      // Refresh the module tree to show updated titles
-      await moduleTreeRef.current?.refresh()
-    } catch (error) {
-      console.error('Error saving:', error)
-      toast.error('Error', {
-        description: 'Failed to save changes'
-      })
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  // Setup autosave
-  useAutosave({
-    data: { title, content },
-    onSave: handleSave,
-    interval: 3000,
-    enabled: !!selectedItem,
+    },
   })
 
-  if (!selectedItem) {
+  useEffect(() => {
+    // Update editor content when active item changes
+    if (activeModuleId && activeItemId) {
+      const module = modules.find((m) => m.id === activeModuleId)
+      const item = module?.items.find((i) => i.id === activeItemId)
+      if (item?.content) {
+        editor?.commands.setContent(item.content)
+      } else {
+        editor?.commands.setContent("")
+      }
+    }
+  }, [activeModuleId, activeItemId, modules, editor])
+
+  if (!activeModuleId || !activeItemId) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-muted-foreground">Select a module or lesson to edit</p>
+      <div className="p-8 text-center text-muted-foreground">
+        Select a module or item to start editing
       </div>
     )
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="text-2xl font-bold bg-transparent border-none focus:outline-none"
-          placeholder="Enter title..."
-        />
-        <Button 
-          onClick={handleSave}
-          disabled={isSaving}
+    <div className="p-4">
+      <div className="mb-4 flex items-center space-x-2 border-b pb-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => editor?.chain().focus().toggleBold().run()}
+          className={editor?.isActive("bold") ? "bg-accent" : ""}
         >
-          {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-          Save
+          <Bold className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => editor?.chain().focus().toggleItalic().run()}
+          className={editor?.isActive("italic") ? "bg-accent" : ""}
+        >
+          <Italic className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => editor?.chain().focus().toggleBulletList().run()}
+          className={editor?.isActive("bulletList") ? "bg-accent" : ""}
+        >
+          <List className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => editor?.chain().focus().toggleOrderedList().run()}
+          className={editor?.isActive("orderedList") ? "bg-accent" : ""}
+        >
+          <ListOrdered className="h-4 w-4" />
         </Button>
       </div>
-      <Editor
-        value={content}
-        onChange={setContent}
-        placeholder="Start writing your content..."
-      />
+      <div className="prose max-w-none">
+        <EditorContent editor={editor} />
+      </div>
     </div>
   )
 } 

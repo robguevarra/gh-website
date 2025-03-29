@@ -1,22 +1,62 @@
 'use server'
 
-import { createServerActionClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@supabase/supabase-js'
 import type { Module, Lesson } from '@/types/courses'
+import type { Database } from '@/types/supabase'
 
 // Initialize supabaseAdmin
-const supabaseAdmin = createClient(
+const supabaseAdmin = createClient<Database>(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
 )
 
 export async function fetchModules(courseId: string): Promise<Module[]> {
   try {
     console.log('📥 Fetching modules for course:', courseId)
-    const cookiesInstance = cookies()
-    const supabase = createServerActionClient({ cookies: () => cookiesInstance })
+    const cookieStore = await cookies()
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            try {
+              cookieStore.set({
+                name,
+                value,
+                ...options,
+              })
+            } catch (error) {
+              // Handle cookie mutation error in static generation
+            }
+          },
+          remove(name: string, options: any) {
+            try {
+              cookieStore.set({
+                name,
+                value: '',
+                ...options,
+                maxAge: 0,
+              })
+            } catch (error) {
+              // Handle cookie mutation error in static generation
+            }
+          },
+        },
+      }
+    )
     
     const { data, error } = await supabase
       .from('modules')
@@ -43,8 +83,41 @@ export async function fetchModules(courseId: string): Promise<Module[]> {
 export async function fetchLessons(moduleId: string): Promise<Lesson[]> {
   try {
     console.log('📥 Fetching lessons for module:', moduleId)
-    const cookiesInstance = cookies()
-    const supabase = createServerActionClient({ cookies: () => cookiesInstance })
+    const cookieStore = await cookies()
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            try {
+              cookieStore.set({
+                name,
+                value,
+                ...options,
+              })
+            } catch (error) {
+              // Handle cookie mutation error in static generation
+            }
+          },
+          remove(name: string, options: any) {
+            try {
+              cookieStore.set({
+                name,
+                value: '',
+                ...options,
+                maxAge: 0,
+              })
+            } catch (error) {
+              // Handle cookie mutation error in static generation
+            }
+          },
+        },
+      }
+    )
     
     const { data, error } = await supabase
       .from('lessons')
@@ -124,8 +197,41 @@ export async function saveLesson(lessonId: string, data: {
 export async function addModule(courseId: string): Promise<Module> {
   try {
     console.log('➕ Adding new module to course:', courseId)
-    const cookiesInstance = cookies()
-    const supabase = createServerActionClient({ cookies: () => cookiesInstance })
+    const cookieStore = await cookies()
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            try {
+              cookieStore.set({
+                name,
+                value,
+                ...options,
+              })
+            } catch (error) {
+              // Handle cookie mutation error in static generation
+            }
+          },
+          remove(name: string, options: any) {
+            try {
+              cookieStore.set({
+                name,
+                value: '',
+                ...options,
+                maxAge: 0,
+              })
+            } catch (error) {
+              // Handle cookie mutation error in static generation
+            }
+          },
+        },
+      }
+    )
     
     // Get the current highest position
     const { data: existingModules, error: posError } = await supabase
@@ -175,8 +281,41 @@ interface ModulePosition {
 export async function updateModulePositions(updates: ModulePosition[]): Promise<void> {
   try {
     console.log('🔄 Updating module positions:', updates.length)
-    const cookiesInstance = cookies()
-    const supabase = createServerActionClient({ cookies: () => cookiesInstance })
+    const cookieStore = await cookies()
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            try {
+              cookieStore.set({
+                name,
+                value,
+                ...options,
+              })
+            } catch (error) {
+              // Handle cookie mutation error in static generation
+            }
+          },
+          remove(name: string, options: any) {
+            try {
+              cookieStore.set({
+                name,
+                value: '',
+                ...options,
+                maxAge: 0,
+              })
+            } catch (error) {
+              // Handle cookie mutation error in static generation
+            }
+          },
+        },
+      }
+    )
     
     // Update each module's position
     await Promise.all(

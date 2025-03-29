@@ -5,7 +5,7 @@ import type { Database } from '@/types/supabase';
 
 // Create a Supabase client for server components
 export async function createServerSupabaseClient() {
-  // In Next.js, cookies() is an async function that must be awaited
+  // In Next.js 15+, cookies() returns a Promise that must be awaited
   const cookieStore = await cookies();
   
   return createServerClient<Database>(
@@ -13,25 +13,52 @@ export async function createServerSupabaseClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name) {
+        get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name, value, options) {
-          cookieStore.set(name, value, options);
+        set(name: string, value: string, options: any) {
+          try {
+            // Use the correct method from ReadonlyRequestCookies
+            cookieStore.set({
+              name,
+              value,
+              ...options,
+            });
+          } catch (error) {
+            // Handle cookie mutation error in static generation
+          }
         },
-        remove(name, options) {
-          cookieStore.set(name, '', { ...options, maxAge: 0 });
-        }
-      }
+        remove(name: string, options: any) {
+          try {
+            // Set empty value with maxAge 0 to remove
+            cookieStore.set({
+              name,
+              value: '',
+              ...options,
+              maxAge: 0,
+            });
+          } catch (error) {
+            // Handle cookie mutation error in static generation
+          }
+        },
+      },
     }
   );
-} 
+}
 
 // Create a Supabase client with service role for admin operations (bypasses RLS)
 export async function createServiceRoleClient() {
-  // Using direct createClient without cookies to properly bypass RLS
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   
-  return createClient<Database>(supabaseUrl, supabaseKey);
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Missing Supabase service role credentials');
+  }
+  
+  return createClient<Database>(supabaseUrl, supabaseKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
 } 

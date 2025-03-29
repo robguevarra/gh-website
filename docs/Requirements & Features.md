@@ -49,3 +49,6 @@ So we have to be careful that
 2. Some form of guideline to maintain global coherence of the full site. 
 3. Is thinking of site-wide implementations valid? if yes, how will we make sure this happens?
 4. Maintain look and feel, and best industry practices. 
+
+-------------
+Further Clarifications
