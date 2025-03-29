@@ -11,20 +11,20 @@ export async function GET(request: NextRequest) {
     try {
       const supabase = await createRouteHandlerClient();
       
-      // If this is a recovery flow, redirect to update password page
-      if (type === 'recovery') {
+      // Exchange the code for a session first, regardless of type
+      const { error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+      
+      if (sessionError) {
+        console.error('Auth callback error:', sessionError);
         return NextResponse.redirect(
-          new URL(`/auth/update-password?token=${code}&type=${type}`, requestUrl.origin)
+          new URL(`/auth/signin?error=auth_callback_failed&message=${sessionError.message}`, requestUrl.origin)
         );
       }
-      
-      // For other flows, exchange the code for a session
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      
-      if (error) {
-        console.error('Auth callback error:', error);
+
+      // For recovery flow, redirect to update password page
+      if (type === 'recovery') {
         return NextResponse.redirect(
-          new URL(`/auth/signin?error=auth_callback_failed&message=${error.message}`, requestUrl.origin)
+          new URL('/auth/update-password', requestUrl.origin)
         );
       }
 

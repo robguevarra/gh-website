@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,10 +18,7 @@ export interface UpdatePasswordFormProps {
 
 export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?updated=true' }: UpdatePasswordFormProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const { session, updatePassword } = useAuth();
-  const token = searchParams.get('token');
-  const type = searchParams.get('type');
+  const { updatePassword } = useAuth();
   
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
@@ -60,40 +56,14 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
     try {
       const supabase = createBrowserSupabaseClient();
       
-      if (token && type === 'recovery') {
-        // For recovery flow, directly update password
-        const { error: updateError } = await supabase.auth.updateUser({
-          password: password
-        });
-        
-        if (updateError) {
-          console.error('Error updating password:', updateError);
-          // Handle specific error cases
-          if (updateError.message.includes('expired')) {
-            setError('This password reset link has expired. Please request a new one.');
-          } else if (updateError.message.includes('been used')) {
-            setError('This password reset link has already been used. Please request a new link.');
-          } else if (updateError.message.includes('Invalid token')) {
-            setError('Invalid recovery link. Please request a new password reset.');
-          } else {
-            setError(updateError.message || 'Failed to update password. Please try again.');
-          }
-          setIsLoading(false);
-          return;
-        }
-      } else if (session) {
-        // Session-based password update (user is logged in)
-        const { error: updateError } = await updatePassword(password);
-        
-        if (updateError) {
-          console.error('Error updating password with session:', updateError);
-          setError(updateError.message || 'Failed to update password. Please try again.');
-          setIsLoading(false);
-          return;
-        }
-      } else {
-        // No token and no session - should not happen in normal flow
-        setError('Authentication error. Please request a new password reset link.');
+      // Update password using the session
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password
+      });
+      
+      if (updateError) {
+        console.error('Error updating password:', updateError);
+        setError(updateError.message || 'Failed to update password. Please try again.');
         setIsLoading(false);
         return;
       }
