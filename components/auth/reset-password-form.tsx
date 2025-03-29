@@ -67,11 +67,6 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
               Password reset link sent! Please check your email for instructions to reset your password.
             </AlertDescription>
           </Alert>
-          <div className="text-center">
-            <Link href="/auth/signin" className="text-primary hover:underline">
-              Return to sign in
-            </Link>
-          </div>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
