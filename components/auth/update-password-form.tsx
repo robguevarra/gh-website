@@ -23,18 +23,28 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [canUpdatePassword, setCanUpdatePassword] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   
   useEffect(() => {
     const supabase = createBrowserSupabaseClient();
     
-    // Check if we have a session immediately
+    // Check if we have a session - but add a delay to allow auth state to stabilize
     const checkSession = async () => {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (session) {
-        setCanUpdatePassword(true);
-        setError(null);
-      } else if (!isSuccess) {
-        router.replace('/auth/signin?error=recovery_session_missing');
+      // Delay to let the auth state settle
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log('Session check result:', { session, error: sessionError });
+        
+        if (session) {
+          setCanUpdatePassword(true);
+          setError(null);
+        }
+      } catch (e) {
+        console.error('Session check error:', e);
+      } finally {
+        setCheckingSession(false);
       }
     };
     
@@ -42,13 +52,16 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
     
     // Also listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event);
+      console.log('Auth event:', event, session);
       
       if (event === 'PASSWORD_RECOVERY') {
         setCanUpdatePassword(true);
         setError(null);
-      } else if (!session && !isSuccess) {
-        router.replace('/auth/signin?error=recovery_session_missing');
+        setCheckingSession(false);
+      } else if (event === 'SIGNED_IN' && session) {
+        setCanUpdatePassword(true);
+        setError(null);
+        setCheckingSession(false);
       }
     });
 
@@ -56,7 +69,7 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
     return () => {
       subscription.unsubscribe();
     };
-  }, [router, isSuccess]);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -193,6 +206,22 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
                 <CheckCircle2 className="mr-2 h-5 w-5" />
                 Password Updated!
               </motion.div>
+            ) : checkingSession ? (
+              <>
+                <motion.div 
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, ease: "linear", repeat: Infinity }}
+                >
+                  <Loader2 className="h-4 w-4" />
+                </motion.div>
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2, duration: 0.3 }}
+                >
+                  Checking session...
+                </motion.span>
+              </>
             ) : !canUpdatePassword ? (
               'Waiting for recovery session...'
             ) : isLoading ? (
