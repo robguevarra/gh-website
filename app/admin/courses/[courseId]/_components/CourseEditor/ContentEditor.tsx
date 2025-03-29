@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useCourseStore, type Course, type Module, type Lesson } from '@/lib/stores/course-store';
+import { useCourseStore } from '@/lib/stores/course-store';
+import type { Course, Module, Lesson } from '@/types/course';
 import { Button } from '@/components/ui/button';
 import { Loader2, Check } from 'lucide-react';
 import {
@@ -35,7 +36,7 @@ export type EditingItem = {
 const courseFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  is_published: z.boolean().default(false),
+  status: z.enum(['draft', 'published', 'archived']),
 });
 
 const moduleFormSchema = z.object({
@@ -48,32 +49,31 @@ const moduleFormSchema = z.object({
 const lessonFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  content_json: z.record(z.unknown()).optional(),
+  content_json: z.any(),
   position: z.number(),
   status: z.enum(['draft', 'published', 'archived']),
 });
 
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
-
-type ContentEditorProps = {
-  editingItem: EditingItem | null;
-  moduleTreeRef: React.RefObject<ModuleTreeHandle>;
-};
+interface ContentEditorProps {
+  editingItem: EditingItem;
+  moduleTreeRef?: React.RefObject<any>;
+}
 
 export function ContentEditor({ editingItem, moduleTreeRef }: ContentEditorProps) {
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const course = useCourseStore((state: { course: Course | null }) => state.course);
-  const updateCourse = useCourseStore((state: { updateCourse: (courseId: string, data: Partial<Course>) => Promise<void> }) => state.updateCourse);
-  const updateModule = useCourseStore((state: { updateModule: (moduleId: string, data: Partial<Module>) => Promise<void> }) => state.updateModule);
-  const updateLesson = useCourseStore((state: { updateLesson: (lessonId: string, data: Partial<Lesson>) => Promise<void> }) => state.updateLesson);
+  const course = useCourseStore((state) => state.course);
+  const updateCourse = useCourseStore((state) => state.updateCourse);
+  const updateModule = useCourseStore((state) => state.updateModule);
+  const updateLesson = useCourseStore((state) => state.updateLesson);
+  const pendingSave = useCourseStore((state) => state.pendingSave);
+  const lastSaveTime = useCourseStore((state) => state.lastSaveTime);
+  const error = useCourseStore((state) => state.error);
 
   const courseForm = useForm<z.infer<typeof courseFormSchema>>({
     resolver: zodResolver(courseFormSchema),
     defaultValues: {
       title: '',
       description: '',
-      is_published: false,
+      status: 'draft',
     },
   });
 
@@ -98,66 +98,73 @@ export function ContentEditor({ editingItem, moduleTreeRef }: ContentEditorProps
     },
   });
 
+  // Reset form when editing item changes
   useEffect(() => {
     if (!course || !editingItem) return;
 
     if (editingItem.type === 'course') {
       courseForm.reset({
         title: course.title,
-        description: course.description,
-        is_published: course.is_published,
+        description: course.description || '',
+        status: course.status,
       });
     } else if (editingItem.type === 'module') {
-      const module = course.modules?.find((m: Module) => m.id === editingItem.id);
+      const module = course.modules?.find((m) => m.id === editingItem.id);
       if (module) {
         moduleForm.reset({
           title: module.title,
-          description: module.description,
+          description: module.description || '',
           position: module.position,
-          status: module.status || 'draft',
+          status: module.status,
         });
       }
     } else if (editingItem.type === 'lesson') {
-      const module = course.modules?.find((m: Module) => m.id === editingItem.moduleId);
-      const lesson = module?.lessons?.find((l: Lesson) => l.id === editingItem.id);
+      const module = course.modules?.find((m) => m.id === editingItem.moduleId);
+      const lesson = module?.lessons?.find((l) => l.id === editingItem.id);
       if (lesson) {
         lessonForm.reset({
           title: lesson.title,
-          description: lesson.description,
+          description: lesson.description || '',
           content_json: lesson.content_json || {},
           position: lesson.position,
-          status: lesson.status || 'draft',
+          status: lesson.status,
         });
       }
     }
   }, [course, editingItem, courseForm, moduleForm, lessonForm]);
 
-  const handleSave = useCallback(async (data: any) => {
-    setSaveStatus('saving');
-    setErrorMessage(null);
+  // Handle form submissions
+  const onCourseSubmit = async (data: z.infer<typeof courseFormSchema>) => {
+    if (!course) return;
     try {
-      if (!editingItem || !course) return;
-
-      switch (editingItem.type) {
-        case 'course':
-          await updateCourse(course.id, data);
-          break;
-        case 'module':
-          await updateModule(editingItem.id, data);
-          break;
-        case 'lesson':
-          await updateLesson(editingItem.id, data);
-          break;
-      }
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      await updateCourse(course.id, data);
+      courseForm.reset(data);
     } catch (error) {
-      setSaveStatus('error');
-      setErrorMessage((error as Error).message);
+      console.error('Failed to save course:', error);
     }
-  }, [editingItem, course, updateCourse, updateModule, updateLesson]);
+  };
 
-  // Debounce the form values for autosave
+  const onModuleSubmit = async (data: z.infer<typeof moduleFormSchema>) => {
+    if (!editingItem.id) return;
+    try {
+      await updateModule(editingItem.id, data);
+      moduleForm.reset(data);
+    } catch (error) {
+      console.error('Failed to save module:', error);
+    }
+  };
+
+  const onLessonSubmit = async (data: z.infer<typeof lessonFormSchema>) => {
+    if (!editingItem.id) return;
+    try {
+      await updateLesson(editingItem.id, data);
+      lessonForm.reset(data);
+    } catch (error) {
+      console.error('Failed to save lesson:', error);
+    }
+  };
+
+  // Watch form values for autosave
   const debouncedCourseValues = useDebounce(courseForm.watch(), 1000);
   const debouncedModuleValues = useDebounce(moduleForm.watch(), 1000);
   const debouncedLessonValues = useDebounce(lessonForm.watch(), 1000);
@@ -166,6 +173,27 @@ export function ContentEditor({ editingItem, moduleTreeRef }: ContentEditorProps
   useEffect(() => {
     if (!editingItem || !course) return;
 
+    const handleSave = async (data: any) => {
+      try {
+        switch (editingItem.type) {
+          case 'course':
+            await updateCourse(course.id, data);
+            courseForm.reset(data, { keepDirty: false });
+            break;
+          case 'module':
+            await updateModule(editingItem.id, data);
+            moduleForm.reset(data, { keepDirty: false });
+            break;
+          case 'lesson':
+            await updateLesson(editingItem.id, data);
+            lessonForm.reset(data, { keepDirty: false });
+            break;
+        }
+      } catch (error) {
+        console.error('Autosave failed:', error);
+      }
+    };
+
     if (editingItem.type === 'course' && courseForm.formState.isDirty) {
       handleSave(debouncedCourseValues);
     } else if (editingItem.type === 'module' && moduleForm.formState.isDirty) {
@@ -173,7 +201,7 @@ export function ContentEditor({ editingItem, moduleTreeRef }: ContentEditorProps
     } else if (editingItem.type === 'lesson' && lessonForm.formState.isDirty) {
       handleSave(debouncedLessonValues);
     }
-  }, [debouncedCourseValues, debouncedModuleValues, debouncedLessonValues, editingItem, course, handleSave]);
+  }, [debouncedCourseValues, debouncedModuleValues, debouncedLessonValues, editingItem, course]);
 
   if (!course || !editingItem) {
     return (
@@ -184,286 +212,282 @@ export function ContentEditor({ editingItem, moduleTreeRef }: ContentEditorProps
   }
 
   const renderSaveStatus = () => {
-    switch (saveStatus) {
-      case 'saving':
-        return (
-          <div className="flex items-center text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            Saving...
-          </div>
-        );
-      case 'saved':
-        return (
-          <div className="flex items-center text-green-600">
-            <Check className="h-4 w-4 mr-2" />
-            Saved
-          </div>
-        );
-      case 'error':
-        return (
-          <div className="flex items-center text-destructive">
-            {errorMessage || 'Error saving changes'}
-          </div>
-        );
-      default:
-        return null;
+    if (error) {
+      return (
+        <div className="flex items-center text-destructive">
+          {error}
+        </div>
+      );
     }
+
+    if (pendingSave) {
+      return (
+        <div className="flex items-center text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          Saving...
+        </div>
+      );
+    }
+
+    if (lastSaveTime) {
+      return (
+        <div className="flex items-center text-green-600">
+          <Check className="h-4 w-4 mr-2" />
+          Last saved at {new Date(lastSaveTime).toLocaleTimeString()}
+        </div>
+      );
+    }
+
+    return null;
   };
 
-  const renderForm = () => {
-    switch (editingItem.type) {
-      case 'course':
-        return (
-          <Form {...courseForm}>
-            <form className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Course Details</h2>
-                {renderSaveStatus()}
-              </div>
-              <FormField
-                control={courseForm.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Title</FormLabel>
+  return (
+    <div className="p-4">
+      {editingItem.type === 'course' && (
+        <Form {...courseForm}>
+          <form onSubmit={courseForm.handleSubmit(onCourseSubmit)} className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold">Course Details</h2>
+              {renderSaveStatus()}
+            </div>
+            <FormField
+              control={courseForm.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Title</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={courseForm.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={courseForm.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
-                      <Input {...field} />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={courseForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={courseForm.control}
-                name="is_published"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Published</FormLabel>
-                    <FormControl>
-                      <Select
-                        value={field.value ? 'true' : 'false'}
-                        onValueChange={(value) => field.onChange(value === 'true')}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="false">Draft</SelectItem>
-                          <SelectItem value="true">Published</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit">Save Changes</Button>
-            </form>
-          </Form>
-        );
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="published">Published</SelectItem>
+                      <SelectItem value="archived">Archived</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit">Save Changes</Button>
+          </form>
+        </Form>
+      )}
 
-      case 'module':
-        return (
-          <Form {...moduleForm}>
-            <form className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Module Details</h2>
-                {renderSaveStatus()}
-              </div>
-              <FormField
-                control={moduleForm.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Title</FormLabel>
+      {editingItem.type === 'module' && (
+        <Form {...moduleForm}>
+          <form onSubmit={moduleForm.handleSubmit(onModuleSubmit)} className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold">Module Details</h2>
+              {renderSaveStatus()}
+            </div>
+            <FormField
+              control={moduleForm.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Title</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={moduleForm.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={moduleForm.control}
+              name="position"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Position</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      {...field}
+                      onChange={(e) => field.onChange(parseInt(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={moduleForm.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
-                      <Input {...field} />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a status" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={moduleForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={moduleForm.control}
-                name="position"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Position</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={moduleForm.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="published">Published</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit">Save Changes</Button>
-            </form>
-          </Form>
-        );
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="published">Published</SelectItem>
+                      <SelectItem value="archived">Archived</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit">Save Changes</Button>
+          </form>
+        </Form>
+      )}
 
-      case 'lesson':
-        return (
-          <Form {...lessonForm}>
-            <form className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Lesson Details</h2>
-                {renderSaveStatus()}
-              </div>
-              <FormField
-                control={lessonForm.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Title</FormLabel>
+      {editingItem.type === 'lesson' && (
+        <Form {...lessonForm}>
+          <form onSubmit={lessonForm.handleSubmit(onLessonSubmit)} className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h2 className="text-lg font-semibold">Lesson Details</h2>
+              {renderSaveStatus()}
+            </div>
+            <FormField
+              control={lessonForm.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Title</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={lessonForm.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={lessonForm.control}
+              name="content_json"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Content</FormLabel>
+                  <FormControl>
+                    <TipTapEditor
+                      content={field.value ? JSON.stringify(field.value) : ''}
+                      onChange={(content) => {
+                        try {
+                          const json = JSON.parse(content);
+                          field.onChange(json);
+                        } catch (error) {
+                          console.error('Failed to parse JSON:', error);
+                        }
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={lessonForm.control}
+              name="position"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Position</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      {...field}
+                      onChange={(e) => field.onChange(parseInt(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={lessonForm.control}
+              name="status"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
-                      <Input {...field} />
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a status" />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={lessonForm.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={lessonForm.control}
-                name="content_json"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Content</FormLabel>
-                    <FormControl>
-                      <TipTapEditor
-                        content={field.value ? JSON.stringify(field.value) : ''}
-                        onChange={(content) => {
-                          try {
-                            const json = JSON.parse(content);
-                            field.onChange(json);
-                          } catch (error) {
-                            console.error('Failed to parse JSON:', error);
-                          }
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={lessonForm.control}
-                name="position"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Position</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={lessonForm.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="published">Published</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit">Save Changes</Button>
-            </form>
-          </Form>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return <div className="p-4">{renderForm()}</div>;
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="published">Published</SelectItem>
+                      <SelectItem value="archived">Archived</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="submit">Save Changes</Button>
+          </form>
+        </Form>
+      )}
+    </div>
+  );
 } 

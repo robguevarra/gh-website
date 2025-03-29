@@ -2,28 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
 import { createServerSupabaseClient as createServiceRoleClient } from '@/lib/supabase/client';
 import { z } from 'zod';
+import type { CourseStatus } from '@/types/course';
 
 const courseSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  status: z.enum(['draft', 'published', 'archived']),
-  settings: z.object({
-    access: z.object({
-      drip_content: z.boolean(),
-      prerequisite_courses: z.array(z.string())
-    }),
-    display: z.object({
-      show_progress: z.boolean(),
-      show_completion: z.boolean(),
-      show_discussions: z.boolean()
-    }),
-    enrollment: z.object({
-      type: z.enum(['open', 'invite', 'paid']),
-      price: z.number().nullable(),
-      currency: z.string(),
-      trial_days: z.number()
-    })
-  }).optional()
+  status: z.enum(['draft', 'published', 'archived'] as const),
+  is_published: z.boolean().optional(),
+  content_json: z.record(z.unknown()).optional(),
+  version: z.number().optional(),
+  published_version: z.number().optional(),
+  metadata: z.record(z.unknown()).optional(),
+  updated_at: z.string().datetime().optional()
 });
 
 export async function GET(
@@ -100,20 +90,21 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { courseId: string } }
+  { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
     // Await params to comply with Next.js 15 dynamic APIs
-    const { courseId } = await params
+    const { courseId } = await params;
     
     // Create the Supabase clients
     const supabase = await createRouteHandlerClient();
-    const serviceClient = createServiceRoleClient();
+    const serviceClient = await createServiceRoleClient();
     
     // Verify user is authenticated and has admin role
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    if (!user) {
+    if (authError || !user) {
+      console.error('Auth error:', authError);
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -128,6 +119,7 @@ export async function PATCH(
       .single();
     
     if (profileError || (profile?.role !== 'admin' && !profile?.is_admin)) {
+      console.error('Profile error:', profileError);
       return NextResponse.json(
         { error: 'Forbidden: Admin access required' },
         { status: 403 }
@@ -135,26 +127,57 @@ export async function PATCH(
     }
     
     const body = await request.json();
-    const validatedData = courseSchema.parse(body);
     
-    // Use service client to bypass RLS
-    const { data: course, error } = await serviceClient
-      .from('courses')
-      .update(validatedData)
-      .eq('id', courseId)
-      .select()
-      .single();
+    try {
+      const validatedData = courseSchema.parse(body);
+      
+      // Add updated_at if not provided
+      if (!validatedData.updated_at) {
+        validatedData.updated_at = new Date().toISOString();
+      }
+      
+      // Use service client to bypass RLS
+      const { data: course, error: updateError } = await serviceClient
+        .from('courses')
+        .update(validatedData)
+        .eq('id', courseId)
+        .select(`
+          *,
+          modules:modules(
+            *,
+            lessons:lessons(*)
+          )
+        `)
+        .single();
 
-    if (error) throw error;
-    if (!course) return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+      if (updateError) {
+        console.error('Update error:', updateError);
+        throw updateError;
+      }
+      
+      if (!course) {
+        return NextResponse.json(
+          { error: 'Course not found' },
+          { status: 404 }
+        );
+      }
 
-    return NextResponse.json(course);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: error.errors }, { status: 400 });
+      return NextResponse.json(course);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return NextResponse.json(
+          { error: error.errors },
+          { status: 400 }
+        );
+      }
+      throw error;
     }
+  } catch (error) {
     console.error('Error updating course:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
   }
 }
 
