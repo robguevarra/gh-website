@@ -43,48 +43,9 @@ function UpdatePasswordContent() {
   const type = searchParams.get('type');
 
   useEffect(() => {
-    // Handle token-based authentication if present in URL
-    const handleTokenAuth = async () => {
-      if (token && type === 'recovery') {
-        try {
-          setTokenStatus('loading');
-          console.log('Processing recovery token from email link');
-          const supabase = createBrowserSupabaseClient();
-          
-          // Verify the token
-          const { error } = await supabase.auth.verifyOtp({
-            token_hash: token,
-            type: 'recovery'
-          });
-
-          if (error) {
-            console.error('Token verification error:', error);
-            // Check for specific error messages
-            if (error.message.includes('Token has expired')) {
-              setTokenStatus('expired');
-              setError('This password reset link has expired. Please request a new one.');
-            } else if (error.message.includes('Token has been used')) {
-              setTokenStatus('used');
-              setError('This password reset link has already been used. If you need to reset your password again, please request a new link.');
-            } else if (error.message.includes('Invalid token')) {
-              setTokenStatus('invalid');
-              setError('Invalid password reset link. Please request a new one.');
-            } else {
-              setTokenStatus('invalid');
-              setError('Invalid or expired recovery link. Please request a new password reset.');
-            }
-          } else {
-            setTokenStatus('valid');
-          }
-        } catch (err) {
-          console.error('Unexpected error during token verification:', err);
-          setTokenStatus('invalid');
-          setError('An unexpected error occurred. Please try again.');
-        }
-      }
-    };
-
-    handleTokenAuth();
+    if (token && type === 'recovery') {
+      setTokenStatus('valid'); // Initially assume token is valid
+    }
   }, [token, type]);
 
   return (
@@ -113,7 +74,7 @@ function UpdatePasswordContent() {
       )}
       
       {/* Show the form only if token is valid or there's no token */}
-      {(tokenStatus === 'valid' || tokenStatus === 'loading' || (!token && !tokenStatus)) && (
+      {(tokenStatus === 'valid' || (!token && !tokenStatus)) && (
         <motion.div variants={fadeIn}>
           <UpdatePasswordForm errorMessage={error} />
         </motion.div>

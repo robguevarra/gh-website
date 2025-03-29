@@ -6,6 +6,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@supabase/supabase-js'
 import type { Module, Lesson } from '@/types/courses'
 import type { Database } from '@/types/supabase'
+import { getAdminClient } from '@/lib/supabase/admin'
 
 // Initialize supabaseAdmin
 const supabaseAdmin = createClient<Database>(
@@ -348,5 +349,159 @@ export async function updateModulePositions(updates: ModulePosition[]): Promise<
   } catch (err) {
     console.error('❌ Error in updateModulePositions:', err)
     throw err
+  }
+}
+
+type ModuleWithCourse = {
+  course_id: string;
+};
+
+interface LessonData {
+  id: string;
+  modules: {
+    course_id: string;
+  };
+}
+
+export async function createLesson(moduleId: string, title: string, position: number) {
+  try {
+    const adminClient = getAdminClient();
+    
+    // Get the course ID for the module
+    const { data: module, error: moduleError } = await adminClient
+      .from('modules')
+      .select('course_id')
+      .eq('id', moduleId)
+      .single();
+      
+    if (moduleError || !module) {
+      console.error('Error fetching module:', moduleError);
+      return { error: moduleError || new Error('Module not found') };
+    }
+    
+    // Create the lesson
+    const { data: lesson, error } = await adminClient
+      .from('lessons')
+      .insert({
+        title,
+        module_id: moduleId,
+        position,
+        content: '',
+        status: 'draft',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating lesson:', error);
+      return { error };
+    }
+
+    // Revalidate the course page
+    revalidatePath(`/admin/courses/${(module as ModuleWithCourse).course_id}`);
+    revalidatePath(`/courses/${(module as ModuleWithCourse).course_id}`);
+
+    return { data: lesson };
+  } catch (error) {
+    console.error('Unexpected error creating lesson:', error);
+    return { error };
+  }
+}
+
+export async function updateLesson(lessonId: string, data: Partial<Database['public']['Tables']['lessons']['Update']>) {
+  try {
+    const adminClient = getAdminClient();
+    
+    // Get the course ID for the lesson
+    const { data: lessonData, error: lessonError } = await adminClient
+      .from('lessons')
+      .select(`
+        id,
+        modules!inner (
+          course_id
+        )
+      `)
+      .eq('id', lessonId)
+      .single();
+      
+    if (lessonError || !lessonData) {
+      console.error('Error fetching lesson:', lessonError);
+      return { error: lessonError || new Error('Lesson not found') };
+    }
+    
+    // Update the lesson
+    const { error } = await adminClient
+      .from('lessons')
+      .update({
+        ...data,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', lessonId);
+
+    if (error) {
+      console.error('Error updating lesson:', error);
+      return { error };
+    }
+
+    // Get the course ID from the nested modules object
+    const typedLessonData = lessonData as unknown as LessonData;
+    const courseId = typedLessonData.modules.course_id;
+
+    // Revalidate the course page
+    revalidatePath(`/admin/courses/${courseId}`);
+    revalidatePath(`/courses/${courseId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Unexpected error updating lesson:', error);
+    return { error };
+  }
+}
+
+export async function deleteLesson(lessonId: string) {
+  try {
+    const adminClient = getAdminClient();
+    
+    // Get the course ID for the lesson before deletion
+    const { data: lessonData } = await adminClient
+      .from('lessons')
+      .select(`
+        id,
+        modules!inner (
+          course_id
+        )
+      `)
+      .eq('id', lessonId)
+      .single();
+      
+    if (!lessonData) {
+      return { error: new Error('Lesson not found') };
+    }
+    
+    // Get the course ID from the nested modules object
+    const typedLessonData = lessonData as unknown as LessonData;
+    const courseId = typedLessonData.modules.course_id;
+    
+    // Delete the lesson
+    const { error } = await adminClient
+      .from('lessons')
+      .delete()
+      .eq('id', lessonId);
+
+    if (error) {
+      console.error('Error deleting lesson:', error);
+      return { error };
+    }
+
+    // Revalidate the course page
+    revalidatePath(`/admin/courses/${courseId}`);
+    revalidatePath(`/courses/${courseId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Unexpected error deleting lesson:', error);
+    return { error };
   }
 } 
