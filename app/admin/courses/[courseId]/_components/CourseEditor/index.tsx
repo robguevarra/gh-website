@@ -79,6 +79,7 @@ export function CourseEditor({ courseId }: CourseEditorProps) {
       <div className="overflow-y-auto px-4">
         <ContentEditor
           moduleTreeRef={moduleTreeRef}
+          editingItem={editingItem}
         />
       </div>
     </div>

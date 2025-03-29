@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { TipTapEditor } from './TipTapEditor';
 import { useDebounce } from '@/lib/hooks/use-debounce';
+import { ModuleTreeHandle } from '@/components/admin/courses/course-editor/module-tree-v2';
 
 export type EditingItem = {
   type: 'course' | 'module' | 'lesson';
@@ -34,7 +35,7 @@ export type EditingItem = {
 const courseFormSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  status: z.enum(['draft', 'published', 'archived']),
+  is_published: z.boolean().default(false),
 });
 
 const moduleFormSchema = z.object({
@@ -56,9 +57,10 @@ type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 type ContentEditorProps = {
   editingItem: EditingItem | null;
+  moduleTreeRef: React.RefObject<ModuleTreeHandle>;
 };
 
-export function ContentEditor({ editingItem }: ContentEditorProps) {
+export function ContentEditor({ editingItem, moduleTreeRef }: ContentEditorProps) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const course = useCourseStore((state: { course: Course | null }) => state.course);
@@ -71,7 +73,7 @@ export function ContentEditor({ editingItem }: ContentEditorProps) {
     defaultValues: {
       title: '',
       description: '',
-      status: 'draft',
+      is_published: false,
     },
   });
 
@@ -103,7 +105,7 @@ export function ContentEditor({ editingItem }: ContentEditorProps) {
       courseForm.reset({
         title: course.title,
         description: course.description,
-        status: course.status,
+        is_published: course.is_published,
       });
     } else if (editingItem.type === 'module') {
       const module = course.modules?.find((m: Module) => m.id === editingItem.id);
@@ -246,25 +248,24 @@ export function ContentEditor({ editingItem }: ContentEditorProps) {
               />
               <FormField
                 control={courseForm.control}
-                name="status"
+                name="is_published"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
+                    <FormLabel>Published</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value ? 'true' : 'false'}
+                        onValueChange={(value) => field.onChange(value === 'true')}
+                      >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select a status" />
+                          <SelectValue placeholder="Select status" />
                         </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="published">Published</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
+                        <SelectContent>
+                          <SelectItem value="false">Draft</SelectItem>
+                          <SelectItem value="true">Published</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
