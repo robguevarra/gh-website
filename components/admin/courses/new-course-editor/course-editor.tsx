@@ -23,6 +23,11 @@ export interface ModuleItem {
   title: string
   type: "lesson" | "video" | "quiz" | "assignment"
   content?: string
+  content_json?: {
+    content: string
+    type: string
+    version: number
+  }
   duration: number
 }
 
@@ -44,6 +49,7 @@ type CourseContextType = {
   setActiveItemId: (id: string | null) => void
   savedState: string
   setSavedState: (state: string) => void
+  courseId: string
 }
 
 export const CourseContext = createContext<CourseContextType | undefined>(undefined)
@@ -67,56 +73,18 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
   const { toast } = useToast()
   
   // Load data from the course store
-  const { course, fetchCourse, updateCourse, isLoading, error } = useCourseStore()
-  
-  // Use store's selection state instead of local state
-  const { selectedModuleId: activeModuleId, selectedLessonId: activeItemId, selectModule: setActiveModuleId, selectLesson: setActiveItemId } = useCourseStore()
-  
-  // Convert course modules and lessons to the editor format only once when course changes
-  const modules = useMemo(() => {
-    if (!course?.modules) return []
-    
-    return course.modules.map((module) => {
-      const items: ModuleItem[] = module.lessons?.map((lesson) => {
-        // Parse content_json and extract content as string
-        let contentStr = "";
-        if (lesson.content_json) {
-          try {
-            if (typeof lesson.content_json === 'string') {
-              contentStr = lesson.content_json;
-            } else if (typeof lesson.content_json === 'object' && lesson.content_json !== null) {
-              const content = (lesson.content_json as Record<string, unknown>).content;
-              contentStr = typeof content === 'string' ? content : JSON.stringify(content || lesson.content_json);
-            }
-          } catch (error) {
-            console.error("Error parsing content_json:", error);
-            contentStr = "";
-          }
-        }
-        
-        return {
-          id: lesson.id,
-          title: lesson.title,
-          type: "lesson",
-          content: contentStr,
-          duration: 0,
-        };
-      }) || []
-      
-      return {
-        id: module.id,
-        title: module.title,
-        description: module.description || "",
-        expanded: false,
-        items,
-      }
-    })
-  }, [course?.modules])
-  
-  // Load course data only once
-  useEffect(() => {
-    fetchCourse(courseId)
-  }, [courseId, fetchCourse])
+  const { 
+    course, 
+    modules,
+    updateCourse, 
+    isLoading, 
+    error,
+    selectedModuleId: activeModuleId,
+    selectedLessonId: activeItemId,
+    selectModule: setActiveModuleId,
+    selectLesson: setActiveItemId,
+    expandedModules
+  } = useCourseStore()
   
   // Set initial selection if none exists
   useEffect(() => {
@@ -124,11 +92,23 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
       const firstModule = modules[0]
       setActiveModuleId(firstModule.id)
       
-      if (!activeItemId && firstModule.items.length > 0) {
-        setActiveItemId(firstModule.items[0].id)
+      const items = firstModule.items || []
+      if (items.length > 0) {
+        setActiveItemId(items[0].id)
       }
     }
   }, [modules, activeModuleId, activeItemId, setActiveModuleId, setActiveItemId])
+
+  // Transform modules to EditorModule type
+  const editorModules: EditorModule[] = useMemo(() => {
+    return modules.map(module => ({
+      id: module.id,
+      title: module.title,
+      description: module.description || "",
+      expanded: expandedModules.has(module.id),
+      items: module.items || []
+    }))
+  }, [modules, expandedModules])
 
   // Handle save functionality
   const handleSave = async () => {
@@ -173,11 +153,11 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
         description: "All your changes have been saved successfully.",
       })
     } catch (error) {
+      console.error("Failed to save:", error)
       setSavedState("unsaved")
-      console.error("Save failed:", error)
       toast({
         title: "Error saving changes",
-        description: error instanceof Error ? error.message : "Failed to save changes",
+        description: "Your changes could not be saved. Please try again.",
         variant: "destructive",
       })
     }
@@ -270,7 +250,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
         <div className="p-6 max-w-md mx-auto bg-destructive/10 rounded-lg text-center">
           <h2 className="text-lg font-semibold mb-2">Error Loading Course</h2>
           <p>{error}</p>
-          <Button onClick={() => fetchCourse(courseId)} className="mt-4">
+          <Button onClick={() => useCourseStore.getState().fetchCourse(courseId)} className="mt-4">
             Try Again
           </Button>
         </div>
@@ -292,7 +272,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
   return (
     <CourseContext.Provider
       value={{
-        modules,
+        modules: editorModules,
         setModules: () => {},
         activeModuleId,
         setActiveModuleId: (id: string | null) => id && setActiveModuleId(id),
@@ -300,6 +280,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
         setActiveItemId: (id: string | null) => id && setActiveItemId(id),
         savedState,
         setSavedState,
+        courseId,
       }}
     >
       <div className="flex flex-col h-screen overflow-hidden bg-background">

@@ -1,34 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
 import { createServerSupabaseClient as createServiceRoleClient } from '@/lib/supabase/client';
+import { getAdminClient } from '@/lib/supabase/admin';
+import { validateAdminAccess } from '@/lib/supabase/route-handler';
 
 // GET a specific course by ID
 export async function GET(
   request: NextRequest,
-  { params }: { params: { courseId: string } }
+  { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
-    const courseId = params.courseId;
+    // Await dynamic params
+    const resolvedParams = await params;
+    const { courseId } = resolvedParams;
+
+    // Validate admin access
+    const validation = await validateAdminAccess();
+    if ('error' in validation) {
+      return NextResponse.json(
+        { error: validation.error },
+        { status: validation.status }
+      );
+    }
     
-    // Check if course exists in our mock data
-    const course = {
-      id: courseId,
-      title: "Complete Web Development Bootcamp",
-      description: "A comprehensive guide to modern web development",
-      content: "<p>This course will take you from beginner to advanced in web development.</p>",
-      status: "published",
-      price: 99.99,
-      slug: "complete-web-development-bootcamp",
-      featured_image: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxzZWFyY2h8M3x8Y29kaW5nfGVufDB8fDB8fA%3D%3D&auto=format&fit=crop&w=800&q=60",
-      created_at: "2023-11-10T09:00:00Z",
-      updated_at: "2023-11-14T15:00:00Z",
-      modules_count: 3,
-      lessons_count: 7
-    };
+    // Use admin client for database operations
+    const adminClient = getAdminClient();
     
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
+    // Fetch course with modules and lessons in a single query
+    const { data: course, error } = await adminClient
+      .from('courses')
+      .select(`
+        *,
+        modules:modules (
+          *,
+          lessons:lessons (
+            *,
+            content_json,
+            metadata
+          )
+        )
+      `)
+      .eq('id', courseId)
+      .order('position', { foreignTable: 'modules' })
+      .order('position', { foreignTable: 'modules.lessons' })
+      .single();
+
+    if (error) {
+      console.error('Error fetching course:', error);
+      return NextResponse.json(
+        { error: 'Failed to fetch course' },
+        { status: 500 }
+      );
+    }
+
+    if (!course) {
+      return NextResponse.json(
+        { error: 'Course not found' },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(course);
   } catch (error) {
     console.error("Error fetching course:", error);

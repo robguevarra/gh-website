@@ -82,6 +82,7 @@ export async function POST(
   { params }: { params: { courseId: string; moduleId: string } }
 ) {
   try {
+    const { moduleId } = await params;
     const body = await request.json();
     
     // In a real implementation, you would validate the input and insert into the database
@@ -93,7 +94,7 @@ export async function POST(
       content: body.content || "",
       position: body.position || 0,
       status: body.status || "draft",
-      module_id: params.moduleId,
+      module_id: moduleId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };

@@ -74,13 +74,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         }
         
         if (currentUser && mounted) {
-          console.log('Auth initialized with user:', { 
-            userId: currentUser?.id,
-            email: currentUser?.email
-          });
           setUser(currentUser);
         } else if (mounted) {
-          console.log('No active user found during initialization');
           setUser(null);
           setSession(null);
         }
@@ -100,10 +95,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log('Auth state change:', { 
-          event, 
-          userId: currentSession?.user?.id
-        });
         
         if (currentSession && mounted) {
           // Validate the user with the server on auth state change

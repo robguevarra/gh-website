@@ -4,9 +4,13 @@ import { validateAdminAccess } from '@/lib/supabase/route-handler';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { courseId: string } }
+  { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
+    // Await dynamic params
+    const resolvedParams = await params;
+    const { courseId } = resolvedParams;
+
     // Validate admin access
     const validation = await validateAdminAccess();
     if ('error' in validation) {
@@ -23,7 +27,7 @@ export async function GET(
     const { data: course, error: courseError } = await adminClient
       .from('courses')
       .select('id')
-      .eq('id', params.courseId)
+      .eq('id', courseId)
       .single();
     
     if (courseError || !course) {
@@ -40,7 +44,7 @@ export async function GET(
         *,
         lessons(*)
       `, { count: 'exact' })
-      .eq('course_id', params.courseId)
+      .eq('course_id', courseId)
       .order('position', { ascending: true });
     
     if (modulesError) {
@@ -66,9 +70,13 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { courseId: string } }
+  { params }: { params: Promise<{ courseId: string }> }
 ) {
   try {
+    // Await dynamic params
+    const resolvedParams = await params;
+    const { courseId } = resolvedParams;
+
     // Validate admin access
     const validation = await validateAdminAccess();
     if ('error' in validation) {
@@ -96,7 +104,7 @@ export async function POST(
     const { data: course, error: courseError } = await adminClient
       .from('courses')
       .select('id')
-      .eq('id', params.courseId)
+      .eq('id', courseId)
       .single();
     
     if (courseError || !course) {
@@ -110,7 +118,7 @@ export async function POST(
     const { data: lastModule } = await adminClient
       .from('modules')
       .select('position')
-      .eq('course_id', params.courseId)
+      .eq('course_id', courseId)
       .order('position', { ascending: false })
       .limit(1)
       .single();
@@ -121,7 +129,7 @@ export async function POST(
     const { data: module, error: createError } = await adminClient
       .from('modules')
       .insert({
-        course_id: params.courseId,
+        course_id: courseId,
         title: body.title,
         description: body.description || null,
         position: newPosition,

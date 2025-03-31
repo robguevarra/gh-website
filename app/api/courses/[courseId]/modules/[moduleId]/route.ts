@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
+import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 const moduleSchema = z.object({
   title: z.string().min(1),
@@ -15,57 +17,99 @@ const moduleSchema = z.object({
 }));
 
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ courseId: string; moduleId: string }> }
 ) {
   try {
+    console.log('🔵 [API] GET request received:', {
+      endpoint: '/api/courses/[courseId]/modules/[moduleId]',
+      timestamp: new Date().toISOString()
+    })
+
+    // Get authenticated user
+    const supabase = await createRouteHandlerClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      console.error('🔒 [API] Authentication error:', {
+        error: authError,
+        userId: user?.id,
+        timestamp: new Date().toISOString()
+      })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    console.log('👤 [API] User authenticated:', {
+      userId: user.id,
+      timestamp: new Date().toISOString()
+    })
+
     // Await dynamic params
-    const { courseId, moduleId } = await params;
-    
-    // Get cookies and convert to string properly
-    const cookieStore = await cookies();
-    const cookieList = cookieStore.getAll();
-    const cookieString = cookieList.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
-    
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          persistSession: false
-        },
-        global: {
-          headers: {
-            cookie: cookieString
-          }
-        }
-      }
-    );
-    
-    // First verify the module exists and belongs to the course
-    const { data: module, error } = await supabase
+    const resolvedParams = await params
+    const { courseId, moduleId } = resolvedParams
+
+    console.log('🔍 [API] Resolved params:', {
+      courseId,
+      moduleId,
+      timestamp: new Date().toISOString()
+    })
+
+    // Use service role client to bypass RLS
+    const serviceClient = createServiceRoleClient()
+
+    // Fetch module with its lessons
+    const { data: module, error: moduleError } = await serviceClient
       .from('modules')
       .select(`
         *,
-        lessons(*)
+        lessons (
+          id,
+          title,
+          description,
+          position,
+          content,
+          content_json,
+          metadata,
+          is_preview,
+          created_at,
+          updated_at
+        )
       `)
       .eq('id', moduleId)
       .eq('course_id', courseId)
-      .single();
+      .order('position', { foreignTable: 'lessons' })
+      .single()
 
-    if (error) {
-      console.error('Error fetching module:', error);
-      return NextResponse.json({ error: 'Module not found' }, { status: 404 });
+    if (moduleError) {
+      console.error('❌ [API] Error fetching module:', {
+        error: moduleError,
+        moduleId,
+        timestamp: new Date().toISOString()
+      })
+      return NextResponse.json({ error: 'Failed to fetch module' }, { status: 500 })
     }
-    
+
     if (!module) {
-      return NextResponse.json({ error: 'Module not found' }, { status: 404 });
+      console.error('❌ [API] Module not found:', {
+        moduleId,
+        timestamp: new Date().toISOString()
+      })
+      return NextResponse.json({ error: 'Module not found' }, { status: 404 })
     }
 
-    return NextResponse.json(module);
+    console.log('✅ [API] Module fetched successfully:', {
+      moduleId: module.id,
+      lessonCount: module.lessons?.length || 0,
+      timestamp: new Date().toISOString()
+    })
+
+    return NextResponse.json(module)
   } catch (error) {
-    console.error('Error fetching module:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('❌ [API] Unexpected error:', {
+      error,
+      timestamp: new Date().toISOString()
+    })
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
 
