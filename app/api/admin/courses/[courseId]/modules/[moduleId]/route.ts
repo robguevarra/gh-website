@@ -47,13 +47,16 @@ const mockModules: Module[] = [
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { courseId: string; moduleId: string } }
+  { params }: { params: Promise<{ courseId: string; moduleId: string }> }
 ) {
   try {
+    // Await dynamic params
+    const resolvedParams = await params;
+    const { courseId, moduleId } = resolvedParams;
+
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    const moduleId = params.moduleId;
     const module = mockModules.find(module => module.id === moduleId);
     
     if (!module) {
@@ -75,10 +78,13 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { courseId: string; moduleId: string } }
+  { params }: { params: Promise<{ courseId: string; moduleId: string }> }
 ) {
   try {
-    const moduleId = params.moduleId;
+    // Await dynamic params
+    const resolvedParams = await params;
+    const { courseId, moduleId } = resolvedParams;
+
     const body = await request.json();
     
     // Find the module to update
@@ -114,10 +120,12 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { courseId: string; moduleId: string } }
+  { params }: { params: Promise<{ courseId: string; moduleId: string }> }
 ) {
   try {
-    const moduleId = params.moduleId;
+    // Await dynamic params
+    const resolvedParams = await params;
+    const { courseId, moduleId } = resolvedParams;
     
     // Find the module
     const moduleIndex = mockModules.findIndex(module => module.id === moduleId);

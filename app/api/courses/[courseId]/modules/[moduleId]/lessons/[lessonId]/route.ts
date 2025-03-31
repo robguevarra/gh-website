@@ -17,11 +17,14 @@ const lessonSchema = z.object({
 
 export async function GET(
   request: Request,
-  { params }: { params: { courseId: string; moduleId: string; lessonId: string } }
+  { params }: { params: Promise<{ courseId: string; moduleId: string; lessonId: string }> }
 ) {
   try {
+    // Await dynamic params
+    const resolvedParams = await params;
+    const { courseId, moduleId, lessonId } = resolvedParams;
+
     const cookieStore = await cookies();
-    const { courseId, moduleId, lessonId } = params;
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
