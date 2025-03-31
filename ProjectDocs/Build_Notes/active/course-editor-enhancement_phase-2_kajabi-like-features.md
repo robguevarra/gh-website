@@ -10,16 +10,22 @@ Create a stable, user-friendly course editor that enables course creators to eff
 - Drag-and-drop functionality with @hello-pangea/dnd
 - Collapsible module tree with folder icons
 - Module and lesson API routes updated for Next.js 15 dynamic params
+- Reliable save functionality with visual feedback
+- Autosave with debounce
+- Cursor position preservation during saves
+- Content state synchronization
+- Consolidated PATCH requests for better performance
+- Next.js 15 dynamic route parameter handling
 
 ### Current Issues
-- Save functionality not working reliably
-  - Root cause: Mismatch between client-side state and API expectations
-  - Related to Supabase Auth Helpers deprecation and SSR migration
 - Student preview mode broken
   - Needs update to handle Next.js 15 dynamic routing
 - State management needs optimization
   - Multiple sources of truth causing conflicts
   - Unnecessary re-renders and data fetching
+- Technical Debt
+  - Punycode module deprecation warning needs to be addressed
+  - Consider using a userland alternative for URL encoding/decoding
 
 ## Critical Context Updates
 
@@ -27,6 +33,7 @@ Create a stable, user-friendly course editor that enables course creators to eff
 - Dynamic route parameters are now Promises
 - Cookie handling requires proper async/await
 - Static and dynamic routes have different client creation methods
+- All route handlers updated to properly await dynamic params
 
 ### Supabase Migration Requirements
 - @supabase/auth-helpers-nextjs is deprecated
@@ -45,15 +52,15 @@ A stable, efficient course editor that:
 
 ## Implementation Plan
 
-### 1. Stability Enhancement (IN PROGRESS)
+### 1. Stability Enhancement (COMPLETED)
 - [x] Fix random reload issues
   - [x] Investigate state management triggers
   - [x] Optimize component lifecycle
   - [x] Review and fix event handlers
-- [ ] Implement proper state persistence
+- [x] Implement proper state persistence
   - [x] Add state debugging logs
-  - [ ] Update Zustand store for SSR compatibility
-  - [ ] Implement state recovery mechanisms
+  - [x] Update Zustand store for SSR compatibility
+  - [x] Implement state recovery mechanisms
 
 ### 2. Core Functionality Fixes (COMPLETED)
 - [x] Module Management
@@ -65,17 +72,46 @@ A stable, efficient course editor that:
   - [x] Stabilize content editor
   - [x] Implement proper content state handling
 
-### 3. Save System Implementation (CRITICAL PRIORITY)
-- [ ] Update save functionality for Next.js 15
-  - [ ] Migrate from auth-helpers to @supabase/ssr
-  - [ ] Update cookie handling for dynamic routes
-  - [ ] Implement proper error handling
-- [ ] Optimize save operations
-  - [ ] Implement debounced saves
-  - [ ] Add save queuing system
-  - [ ] Handle concurrent edits
+### 3. Save System Implementation (COMPLETED)
+- [x] Implement reliable save functionality
+  - [x] Add visual feedback for save states
+  - [x] Implement debounced autosave
+  - [x] Add manual save trigger
+  - [x] Preserve cursor position during saves
+- [x] Optimize save operations
+  - [x] Implement debounced saves (2000ms delay)
+  - [x] Add save queuing system
+  - [x] Handle concurrent edits
+  - [x] Add error handling and recovery
+- [x] Save State Indicators
+  - [x] "Unsaved" state for pending changes
+  - [x] "Saving" state during save operations
+  - [x] "Saved" state for successful saves
+  - [x] Error handling with toast notifications
+- [x] API Route Optimization
+  - [x] Consolidate PATCH requests for title and content
+  - [x] Implement proper Next.js 15 dynamic params handling
+  - [x] Add comprehensive request logging
+  - [x] Optimize version increment logic
 
-### 4. Student Preview Mode Fix (HIGH PRIORITY)
+### 4. Content Editor Improvements (COMPLETED)
+- [x] Cursor Position Handling
+  - [x] Implement MutationObserver for DOM changes
+  - [x] Save selection state before content updates
+  - [x] Restore selection after React updates
+  - [x] Handle edge cases and errors
+- [x] Content Change Management
+  - [x] Optimize content update flow
+  - [x] Prevent unnecessary re-renders
+  - [x] Improve state synchronization
+  - [x] Add content validation
+- [x] Save Operation Optimization
+  - [x] Consolidate title and content updates
+  - [x] Implement atomic updates
+  - [x] Add optimistic updates
+  - [x] Improve error recovery
+
+### 5. Student Preview Mode Fix (HIGH PRIORITY)
 - [ ] Update preview mode for Next.js 15
   - [ ] Fix dynamic routing in preview
   - [ ] Update state management for preview
@@ -84,7 +120,7 @@ A stable, efficient course editor that:
   - [ ] Handle SSR properly
   - [ ] Update client-side state management
 
-### 5. Performance & Reliability (IN PROGRESS)
+### 6. Performance & Reliability (IN PROGRESS)
 - [ ] State Management
   - [x] Implement proper state hydration
   - [ ] Add state validation
@@ -102,50 +138,50 @@ A stable, efficient course editor that:
 - Zustand
 - Shadcn UI
 
-## Fix Implementation Strategy
+## Recent Improvements
 
-1. **Save Functionality Fix**
-   - Root cause: Mismatch between client state and API expectations
-   - Solution steps:
-     1. Migrate to @supabase/ssr
-     2. Update client creation in route handlers
-     3. Fix cookie handling for dynamic routes
-     4. Update state management to match API schema
+### Save System Enhancements
+1. **Autosave Implementation**
+   - Debounced save functionality (2000ms delay)
+   - Consolidated title and content saves into single request
+   - Visual feedback for save states
+   - Error handling with user notifications
 
-2. **Student Preview Fix**
-   - Root cause: Incompatibility with Next.js 15 dynamic routing
-   - Solution steps:
-     1. Update preview route to handle dynamic params
-     2. Fix state management in preview mode
-     3. Implement proper SSR handling
-     4. Update client-side navigation
+2. **Cursor Position Preservation**
+   - MutationObserver for tracking DOM changes
+   - Selection state management
+   - Proper timing for selection restoration
+   - Error handling for edge cases
 
-## Success Criteria
-1. Save functionality works reliably with proper error handling
-2. Preview mode renders correctly and maintains state
-3. No unexpected page reloads
-4. All API routes handle dynamic params correctly
-5. State management follows single source of truth
+3. **Content State Management**
+   - Optimized content update flow
+   - Reduced unnecessary re-renders
+   - Improved state synchronization
+   - Better error handling
 
-## Current Status
+4. **API Route Optimization**
+   - Consolidated PATCH requests for better performance
+   - Proper handling of Next.js 15 dynamic params
+   - Improved version increment logic
+   - Comprehensive request logging
 
-Recent fixes:
-- Updated module API routes for Next.js 15
-- Fixed random page reloads
-- Improved error handling
-- Added proper cookie handling
-
-Remaining challenges:
-- Save functionality needs migration to @supabase/ssr
-- Student preview mode broken
-- State management optimization needed
+### Success Metrics
+- Save functionality works reliably with proper error handling ✅
+- Cursor position maintains during saves and updates ✅
+- Visual feedback provides clear save state indication ✅
+- Content changes persist correctly ✅
+- Error handling provides clear user feedback ✅
+- Single PATCH request for title and content updates ✅
+- Next.js 15 dynamic params handled correctly ✅
 
 ## Next Steps
-1. Migrate to @supabase/ssr
-2. Update save functionality
-3. Fix student preview mode
-4. Optimize state management
-5. Implement comprehensive testing
+1. Complete student preview mode updates
+2. Optimize state management
+3. Implement comprehensive testing
+4. Complete performance optimizations
+5. Address technical debt
+   - Replace deprecated punycode module
+   - Update URL handling to use modern alternatives
 
 ---
 

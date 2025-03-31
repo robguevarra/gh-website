@@ -130,128 +130,66 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     }
   }, [modules, activeModuleId, activeItemId, setActiveModuleId, setActiveItemId])
 
-  // Handle editor save events with debounced save
-  const debouncedSave = useMemo(() => 
-    debounce(async (updatedCourse: Partial<Course>) => {
-      try {
-        await updateCourse(courseId, updatedCourse)
-        setSavedState("saved")
-      } catch (error) {
-        setSavedState("unsaved")
-        console.error("Save failed:", error)
-      }
-    }, 1000),
-    [courseId, updateCourse]
-  )
+  // Handle save functionality
+  const handleSave = async () => {
+    if (savedState === "saving" || !course) return
 
-  useEffect(() => {
-    const handleEditorSave = async () => {
-      if (savedState === "saving") return
-      if (!course) return
-      
-      setSavedState("saving")
-      
-      // First update the course basic info
+    setSavedState("saving")
+    
+    try {
+      // Find the active module and lesson
+      const activeModule = course.modules?.find(m => m.id === activeModuleId)
+      const activeLesson = activeModule?.lessons?.find(l => l.id === activeItemId)
+
+      if (activeLesson) {
+        // Get the current content from the editor
+        const contentEditor = document.querySelector('[contenteditable="true"]')
+        const currentContent = contentEditor?.innerHTML || ''
+
+        // Update lesson content and title
+        await useCourseStore.getState().updateLesson(activeLesson.id, {
+          content_json: {
+            content: currentContent,
+            type: "html",
+            version: 1
+          },
+          title: activeLesson.title
+        })
+      }
+
+      // Update course with current state
       const updatedCourse: Partial<Course> = {
         title: course.title,
         description: course.description,
-        status: course.status || 'draft', // Ensure status is included
+        status: course.status || 'draft',
       }
       
-      try {
-        // Update course first
-        await updateCourse(courseId, updatedCourse)
-        
-        // Then update each module separately
-        for (const module of modules) {
-          // Ensure we send the correct module data structure
-          const moduleData = {
-            title: module.title,
-            description: module.description || '',
-            position: modules.indexOf(module),
-            status: 'draft' as const // Explicitly type as const to match enum
-          }
-          
-          await useCourseStore.getState().updateModule(module.id, moduleData)
-          
-          // Update each lesson in the module
-          for (const item of module.items) {
-            const lessonData = {
-              title: item.title,
-              content_json: item.content ? { content: item.content } : {},
-              position: module.items.indexOf(item),
-              status: 'draft' as const // Explicitly type as const to match enum
-            }
-            
-            await useCourseStore.getState().updateLesson(item.id, lessonData)
-          }
-        }
-        
-        setSavedState("saved")
-        toast({
-          title: "Changes saved",
-          description: "All your changes have been saved successfully.",
-        })
-      } catch (error) {
-        setSavedState("unsaved")
-        console.error("Save failed:", error)
-        toast({
-          title: "Error saving changes",
-          description: error instanceof Error ? error.message : "Failed to save changes",
-          variant: "destructive",
-        })
-      }
-    }
-
-    window.addEventListener("editor-save", handleEditorSave)
-    return () => {
-      window.removeEventListener("editor-save", handleEditorSave)
-      debouncedSave.cancel()
-    }
-  }, [course, modules, courseId, debouncedSave])
-
-  const handleSave = () => {
-    // Prevent multiple rapid saves
-    if (savedState === "saving") return
-
-    setSavedState("saving")
-
-    // Dispatch a custom event to trigger save in the content editor
-    window.dispatchEvent(new Event("editor-save"))
-
-    // Convert editor data back to course format
-    const updatedCourse: Partial<Course> = {
-      title: course?.title || "",
-      description: course?.description || "",
-    }
-    
-    // Save to backend
-    updateCourse(courseId, updatedCourse)
-      .then(() => {
-        setSavedState("saved")
-        toast({
-          title: "Changes saved",
-          description: "All your changes have been saved successfully.",
-        })
+      // Single update call
+      await updateCourse(courseId, updatedCourse)
+      
+      setSavedState("saved")
+      toast({
+        title: "Changes saved",
+        description: "All your changes have been saved successfully.",
       })
-      .catch((error) => {
-        setSavedState("unsaved")
-        toast({
-          title: "Error saving changes",
-          description: error.message || "Failed to save changes. Please try again.",
-          variant: "destructive",
-        })
+    } catch (error) {
+      setSavedState("unsaved")
+      console.error("Save failed:", error)
+      toast({
+        title: "Error saving changes",
+        description: error instanceof Error ? error.message : "Failed to save changes",
+        variant: "destructive",
       })
+    }
   }
 
   const handlePublish = () => {
     // First save any pending changes
-    window.dispatchEvent(new Event("editor-save"))
-
-    setSavedState("saving")
-    
-    // Update course to published state
-    updateCourse(courseId, { is_published: true })
+    handleSave()
+      .then(() => {
+        // Only update publish state if save was successful
+        return updateCourse(courseId, { is_published: true })
+      })
       .then(() => {
         setSavedState("saved")
         toast({
@@ -304,7 +242,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
   const toggleViewMode = () => {
     // Save content before switching to student view
     if (viewMode === "editor") {
-      window.dispatchEvent(new Event("editor-save"))
+      handleSave()
     }
 
     setViewMode(viewMode === "editor" ? "student" : "editor")
@@ -425,7 +363,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
                 <ScrollArea className="flex-1 p-6 bg-white">
                   <div className="max-w-5xl mx-auto pb-10">
                     <TabsContent value="content" className="mt-0 h-full">
-                      <ContentEditor />
+                      <ContentEditor onSave={handleSave} />
                     </TabsContent>
                     <TabsContent value="modules" className="mt-0">
                       <ModuleManager />

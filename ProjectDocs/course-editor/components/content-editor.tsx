@@ -352,7 +352,7 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
             setSavedState("saved")
           }, 1000)
         }
-      }, 2000) // Autosave after 2 seconds of inactivity
+      }, 5000) // Autosave after 5 seconds of inactivity
     }
   }
 

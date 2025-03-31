@@ -49,9 +49,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { useCourseStore } from "@/lib/stores/course-store"
+import { debounce } from "lodash"
 
 interface ContentEditorProps {
-  onSave?: () => void
+  onSave: () => Promise<void>
 }
 
 export default function ContentEditor({ onSave }: ContentEditorProps) {
@@ -65,6 +67,12 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef("")
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const selectionStateRef = useRef<{
+    startContainer: Node;
+    startOffset: number;
+    endContainer: Node;
+    endOffset: number;
+  } | null>(null)
 
   // Find the active module and item
   const activeModule = modules.find((m) => m.id === activeModuleId)
@@ -107,82 +115,185 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
     }
   }, [content, editorMode, isEditorInitialized]);
 
-  // Save content to modules without affecting the editor
-  const saveContent = () => {
-    if (!activeModule || !activeItem) return;
+  // Initialize MutationObserver to handle content changes
+  useEffect(() => {
+    if (!editorRef.current) return;
 
-    // Get the current content from the editor
-    const currentContent = editorRef.current?.innerHTML || content;
+    const observer = new MutationObserver(() => {
+      // Restore selection after mutation
+      if (selectionStateRef.current) {
+        requestAnimationFrame(() => {
+          const selection = window.getSelection();
+          if (!selection || !selectionStateRef.current) return;
 
-    // Update the module item content
-    const updatedModules = modules.map((module) => {
-      if (module.id === activeModuleId) {
-        const updatedItems = module.items.map((item) => {
-          if (item.id === activeItemId) {
-            return { ...item, content: currentContent };
+          try {
+            const range = document.createRange();
+            const { startContainer, startOffset, endContainer, endOffset } = selectionStateRef.current;
+            
+            range.setStart(startContainer, startOffset);
+            range.setEnd(endContainer, endOffset);
+            
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } catch (error) {
+            console.error('Failed to restore selection:', error);
           }
-          return item;
         });
-        return { ...module, items: updatedItems };
       }
-      return module;
     });
 
-    setModules(updatedModules);
-    setSavedState("saving");
+    observer.observe(editorRef.current, {
+      childList: true,
+      subtree: true,
+      characterData: true
+    });
 
-    // Simulate saving delay
-    setTimeout(() => {
+    return () => observer.disconnect();
+  }, []);
+
+  // Save selection state before any content changes
+  const saveSelection = () => {
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return;
+
+    const range = selection.getRangeAt(0);
+    selectionStateRef.current = {
+      startContainer: range.startContainer,
+      startOffset: range.startOffset,
+      endContainer: range.endContainer,
+      endOffset: range.endOffset
+    };
+  };
+
+  // Handle editor input without resetting cursor position
+  const handleEditorInput = () => {
+    if (!editorRef.current) return;
+
+    saveSelection();
+    const newContent = editorRef.current.innerHTML;
+    
+    // Only update if content actually changed
+    if (newContent !== contentRef.current) {
+      contentRef.current = newContent;
+      setContent(newContent);
+      
+      // Only trigger the debounced save without updating the entire modules tree
+      if (activeItemId) {
+        debouncedSave(newContent, title, activeItemId);
+      }
+
+      setSavedState("unsaved");
+    }
+  };
+
+  // Consolidated debounced save function
+  const debouncedSave = useRef(
+    debounce(async (content: string, title: string, itemId: string) => {
+      if (!itemId) return
+
+      try {
+        setSavedState("saving")
+        await useCourseStore.getState().updateLesson(itemId, {
+          content_json: {
+            content,
+            type: "html",
+            version: 1
+          },
+          title
+        })
+        setSavedState("saved")
+      } catch (error) {
+        console.error("Failed to save:", error)
+        setSavedState("unsaved")
+        toast({
+          title: "Error saving changes",
+          description: "Your changes could not be saved. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }, 2000)
+  ).current
+
+  // Clean up debounced function on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSave.cancel()
+    }
+  }, [debouncedSave])
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    const newTitle = e.target.value
+    setTitle(newTitle)
+    setSavedState("unsaved")
+
+    // Only trigger the debounced save without updating the entire modules tree
+    if (activeItemId) {
+      debouncedSave(content, newTitle, activeItemId)
+    }
+  }
+
+  // Handle content changes and trigger save
+  const handleContentChange = (newContent: string) => {
+    setContent(newContent)
+    setSavedState("unsaved")
+    
+    // Only trigger the debounced save without updating the entire modules tree
+    if (activeItemId) {
+      debouncedSave(newContent, title, activeItemId)
+    }
+  }
+
+  // Save content to modules
+  const saveContent = async () => {
+    if (!activeModule || !activeItem || !activeItemId) return;
+
+    saveSelection();
+    const currentContent = editorRef.current?.innerHTML || content;
+
+    try {
+      setSavedState("saving");
+      
+      // Cancel any pending debounced saves
+      debouncedSave.cancel();
+
+      // Single update with both title and content
+      await useCourseStore.getState().updateLesson(activeItemId, {
+        content_json: {
+          content: currentContent,
+          type: "html",
+          version: 1
+        },
+        title
+      });
+
+      contentRef.current = currentContent;
       setSavedState("saved");
-    }, 1000);
-
-    // Update the content ref to track the saved content
-    contentRef.current = currentContent;
+    } catch (error) {
+      console.error("Failed to save changes:", error);
+      setSavedState("unsaved");
+      toast({
+        title: "Error saving changes",
+        description: "Your changes could not be saved. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Add this useEffect to connect the onSave prop to the saveContent function
   useEffect(() => {
-    // This will make the component respond to the editor-save event
     const handleSave = () => {
       saveContent()
     }
 
-    // Create a custom event listener for save
     window.addEventListener("editor-save", handleSave)
 
     return () => {
       window.removeEventListener("editor-save", handleSave)
     }
-  }, [activeModuleId, activeItemId])
+  }, [])
 
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTitle(e.target.value)
-
-    if (activeModule && activeItem) {
-      // Update the module item title
-      const updatedModules = modules.map((module) => {
-        if (module.id === activeModuleId) {
-          const updatedItems = module.items.map((item) => {
-            if (item.id === activeItemId) {
-              return { ...item, title: e.target.value }
-            }
-            return item
-          })
-          return { ...module, items: updatedItems }
-        }
-        return module
-      })
-
-      setModules(updatedModules)
-      setSavedState("unsaved")
-    }
-  }
-
-  const handleContentChange = (newContent: string) => {
-    setContent(newContent)
-    setSavedState("unsaved")
-  }
-
+  // Handle formatting without losing cursor position
   const applyFormatting = (command: string, value = "") => {
     if (!editorRef.current) return
 
@@ -335,67 +446,6 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
     handleContentChange(newContent)
     setIsEditorInitialized(false) // Reset so editor will update when switching back
   }
-
-  // Handle editor input without resetting cursor position
-  const handleEditorInput = () => {
-    if (editorRef.current) {
-      // Only update the content state, don't modify the DOM
-      setContent(editorRef.current.innerHTML)
-
-      // Mark as unsaved
-      setSavedState("unsaved")
-
-      // Clear any existing timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current)
-      }
-
-      // Set a new timeout for autosave
-      saveTimeoutRef.current = setTimeout(() => {
-        if (activeModule && activeItem) {
-          // Update the module item content
-          const updatedModules = modules.map((module) => {
-            if (module.id === activeModuleId) {
-              const updatedItems = module.items.map((item) => {
-                if (item.id === activeItemId) {
-                  return { ...item, content: editorRef.current?.innerHTML || content }
-                }
-                return item
-              })
-              return { ...module, items: updatedItems }
-            }
-            return module
-          })
-
-          setModules(updatedModules)
-          setSavedState("saving")
-
-          // Simulate saving delay
-          setTimeout(() => {
-            setSavedState("saved")
-          }, 1000)
-        }
-      }, 2000) // Autosave after 2 seconds of inactivity
-    }
-  }
-
-  // Clean up on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current)
-        saveContent() // Save any pending changes
-      }
-    }
-  }, [])
 
   if (!activeModule || !activeItem) {
     return (
