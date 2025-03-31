@@ -31,11 +31,7 @@ export async function GET(
     // Verify user is authenticated and has admin role
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
-    console.log('Course GET auth check:', { 
-      isAuthenticated: !!user, 
-      userId: user?.id,
-      authError: authError?.message
-    });
+   
     
     if (!user) {
       return NextResponse.json(
@@ -51,12 +47,7 @@ export async function GET(
       .eq('id', user.id)
       .single();
     
-    console.log('Course GET admin check:', { 
-      profileExists: !!profile,
-      role: profile?.role,
-      isAdmin: profile?.is_admin,
-      profileError: profileError?.message
-    });
+    
     
     if (profileError || (profile?.role !== 'admin' && !profile?.is_admin)) {
       return NextResponse.json(
@@ -152,12 +143,15 @@ export async function PATCH(
 
       if (updateError) {
         console.error('Update error:', updateError);
-        throw updateError;
+        return NextResponse.json(
+          { error: { message: updateError.message || 'Failed to update course' } },
+          { status: 400 }
+        );
       }
       
       if (!course) {
         return NextResponse.json(
-          { error: 'Course not found' },
+          { error: { message: 'Course not found' } },
           { status: 404 }
         );
       }
@@ -166,7 +160,15 @@ export async function PATCH(
     } catch (error) {
       if (error instanceof z.ZodError) {
         return NextResponse.json(
-          { error: error.errors },
+          { 
+            error: { 
+              message: 'Validation failed',
+              details: error.errors.map(e => ({
+                field: e.path.join('.'),
+                message: e.message
+              }))
+            } 
+          },
           { status: 400 }
         );
       }
@@ -175,7 +177,7 @@ export async function PATCH(
   } catch (error) {
     console.error('Error updating course:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: { message: 'Internal Server Error' } },
       { status: 500 }
     );
   }

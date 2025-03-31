@@ -57,19 +57,42 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { courseId: string; moduleId: string; lessonId: string } }
+  { params }: { params: Promise<{ courseId: string; moduleId: string; lessonId: string }> }
 ) {
   try {
+    console.log('🔵 [API] PATCH request received:', {
+      endpoint: '/api/courses/[courseId]/modules/[moduleId]/lessons/[lessonId]',
+      timestamp: new Date().toISOString()
+    });
+
     // Get authenticated user
     const supabase = await createRouteHandlerClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.error('Authentication error:', authError);
+      console.error('🔒 [API] Authentication error:', {
+        error: authError,
+        userId: user?.id,
+        timestamp: new Date().toISOString()
+      });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { courseId, moduleId, lessonId } = params;
+    console.log('👤 [API] User authenticated:', {
+      userId: user.id,
+      timestamp: new Date().toISOString()
+    });
+
+    // Await dynamic params
+    const resolvedParams = await params;
+    const { courseId, moduleId, lessonId } = resolvedParams;
+
+    console.log('🔍 [API] Resolved params:', {
+      courseId,
+      moduleId,
+      lessonId,
+      timestamp: new Date().toISOString()
+    });
 
     // Use service role client to bypass RLS
     const serviceClient = createServiceRoleClient();
@@ -83,18 +106,50 @@ export async function PATCH(
       .single();
 
     if (checkError || !existingLesson) {
-      console.error('Lesson check error:', checkError);
+      console.error('❌ [API] Lesson verification failed:', {
+        error: checkError,
+        lessonId,
+        moduleId,
+        timestamp: new Date().toISOString()
+      });
       return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
     }
 
+    console.log('✅ [API] Lesson verified:', {
+      lessonId,
+      moduleId,
+      timestamp: new Date().toISOString()
+    });
+
     // Parse and validate request body
     const body = await request.json();
+    console.log('📦 [API] Request body:', {
+      body,
+      timestamp: new Date().toISOString()
+    });
+
     const validatedData = lessonSchema.parse(body);
+    console.log('✨ [API] Data validated:', {
+      validatedData,
+      timestamp: new Date().toISOString()
+    });
 
     // Increment version if content is being updated
-    if (validatedData.content_json) {
+    if (validatedData.content_json || validatedData.title) {
       validatedData.version = (existingLesson.version || 1) + 1;
+      console.log('📝 [API] Version incremented:', {
+        oldVersion: existingLesson.version,
+        newVersion: validatedData.version,
+        timestamp: new Date().toISOString()
+      });
     }
+
+    console.log('🚀 [API] Updating lesson:', {
+      lessonId,
+      moduleId,
+      data: validatedData,
+      timestamp: new Date().toISOString()
+    });
 
     // Update the lesson using service role client
     const { data: lesson, error: updateError } = await serviceClient
@@ -109,20 +164,44 @@ export async function PATCH(
       .single();
 
     if (updateError) {
-      console.error('Update error:', updateError);
+      console.error('❌ [API] Update failed:', {
+        error: updateError,
+        lessonId,
+        moduleId,
+        timestamp: new Date().toISOString()
+      });
       return NextResponse.json({ error: 'Failed to update lesson' }, { status: 500 });
     }
 
     if (!lesson) {
+      console.error('❌ [API] No lesson returned after update:', {
+        lessonId,
+        moduleId,
+        timestamp: new Date().toISOString()
+      });
       return NextResponse.json({ error: 'Failed to update lesson' }, { status: 500 });
     }
+
+    console.log('✅ [API] Lesson updated successfully:', {
+      lessonId,
+      moduleId,
+      lesson,
+      timestamp: new Date().toISOString()
+    });
 
     return NextResponse.json(lesson);
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.error('❌ [API] Validation error:', {
+        error: error.errors,
+        timestamp: new Date().toISOString()
+      });
       return NextResponse.json({ error: error.errors }, { status: 400 });
     }
-    console.error('Error updating lesson:', error);
+    console.error('❌ [API] Unexpected error:', {
+      error,
+      timestamp: new Date().toISOString()
+    });
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

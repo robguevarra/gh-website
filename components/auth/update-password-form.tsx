@@ -59,19 +59,24 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
     }
     
     setIsLoading(true);
+    console.time('password-update-total');
     
     try {
       const supabase = createBrowserSupabaseClient();
       
       // Update the password
+      console.time('supabase-update-user');
+      console.log('Updating password...');
       const { data, error: updateError } = await supabase.auth.updateUser({
         password: password
       });
+      console.timeEnd('supabase-update-user');
       
       if (updateError) {
         console.error('Error updating password:', updateError);
         setError(updateError.message || 'Failed to update password. Please try again.');
         setIsLoading(false);
+        console.timeEnd('password-update-total');
         return;
       }
 
@@ -80,17 +85,24 @@ export function UpdatePasswordForm({ errorMessage, redirectUrl = '/auth/signin?u
         setIsSuccess(true);
         
         // Sign out after success to ensure clean state
+        console.time('supabase-sign-out');
+        console.log('Signing out...');
         await supabase.auth.signOut();
+        console.timeEnd('supabase-sign-out');
         
-        // Redirect after success animation
+        // Redirect after success animation (reduced from 1500ms to 800ms)
+        console.log('Starting redirect timer...');
         setTimeout(() => {
+          console.log('Redirecting to', redirectUrl);
           router.push(redirectUrl);
-        }, 1500);
+        }, 800);
       }
+      console.timeEnd('password-update-total');
     } catch (err) {
       console.error('Unexpected error during password update:', err);
       setError('An unexpected error occurred. Please try again.');
       setIsLoading(false);
+      console.timeEnd('password-update-total');
     }
   }
 

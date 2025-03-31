@@ -133,6 +133,29 @@ export function ContentEditor({ editingItem, moduleTreeRef }: ContentEditorProps
     }
   }, [course, editingItem, courseForm, moduleForm, lessonForm]);
 
+  // Watch form values for autosave
+  const debouncedCourseValues = useDebounce(courseForm.watch(), 1000);
+  const debouncedModuleValues = useDebounce(moduleForm.watch(), 1000);
+  const debouncedLessonValues = useDebounce(lessonForm.watch(), 1000);
+
+  // Remove all autosave related effects
+  // Add logging for form state changes
+  useEffect(() => {
+    console.log('🔍 [Form State]', {
+      timestamp: new Date().toISOString(),
+      courseFormDirty: courseForm.formState.isDirty,
+      moduleFormDirty: moduleForm.formState.isDirty,
+      lessonFormDirty: lessonForm.formState.isDirty,
+      editingItemType: editingItem?.type,
+      editingItemId: editingItem?.id
+    });
+  }, [
+    courseForm.formState.isDirty,
+    moduleForm.formState.isDirty,
+    lessonForm.formState.isDirty,
+    editingItem
+  ]);
+
   // Handle form submissions
   const onCourseSubmit = async (data: z.infer<typeof courseFormSchema>) => {
     if (!course) return;
@@ -163,45 +186,6 @@ export function ContentEditor({ editingItem, moduleTreeRef }: ContentEditorProps
       console.error('Failed to save lesson:', error);
     }
   };
-
-  // Watch form values for autosave
-  const debouncedCourseValues = useDebounce(courseForm.watch(), 1000);
-  const debouncedModuleValues = useDebounce(moduleForm.watch(), 1000);
-  const debouncedLessonValues = useDebounce(lessonForm.watch(), 1000);
-
-  // Autosave effect
-  useEffect(() => {
-    if (!editingItem || !course) return;
-
-    const handleSave = async (data: any) => {
-      try {
-        switch (editingItem.type) {
-          case 'course':
-            await updateCourse(course.id, data);
-            courseForm.reset(data, { keepDirty: false });
-            break;
-          case 'module':
-            await updateModule(editingItem.id, data);
-            moduleForm.reset(data, { keepDirty: false });
-            break;
-          case 'lesson':
-            await updateLesson(editingItem.id, data);
-            lessonForm.reset(data, { keepDirty: false });
-            break;
-        }
-      } catch (error) {
-        console.error('Autosave failed:', error);
-      }
-    };
-
-    if (editingItem.type === 'course' && courseForm.formState.isDirty) {
-      handleSave(debouncedCourseValues);
-    } else if (editingItem.type === 'module' && moduleForm.formState.isDirty) {
-      handleSave(debouncedModuleValues);
-    } else if (editingItem.type === 'lesson' && lessonForm.formState.isDirty) {
-      handleSave(debouncedLessonValues);
-    }
-  }, [debouncedCourseValues, debouncedModuleValues, debouncedLessonValues, editingItem, course]);
 
   if (!course || !editingItem) {
     return (
