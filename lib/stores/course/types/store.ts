@@ -40,7 +40,15 @@ export interface CourseStore {
   selectModule: (moduleId: string | null) => void;
   selectLesson: (lessonId: string | null) => void;
   fetchModuleTree: (courseId: string, moduleId: string) => Promise<void>;
-  addContent: (courseId: string, moduleId: string, type: string) => Promise<void>;
+  addContent: (courseId: string, moduleId: string, type: string) => Promise<{
+    id: string;
+    title: string;
+    content_json?: {
+      content: string;
+      type: string;
+      version: number;
+    };
+  }>;
   toggleExpandedModule: (moduleId: string) => void;
   setModules: (modules: ExtendedModule[]) => void;
   setSavedState: (state: 'saved' | 'unsaved' | 'saving') => void;

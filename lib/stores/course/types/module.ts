@@ -6,12 +6,13 @@ export interface Module {
   title: string;
   description?: string;
   position: number;
-  status: 'draft' | 'published' | 'archived';
+  lessons?: Lesson[];
+  items?: ModuleItem[];
   metadata?: Record<string, unknown>;
   updated_at?: string;
-  lessons?: Lesson[];
 }
 
 export interface ExtendedModule extends Module {
-  items?: ModuleItem[];
+  items: ModuleItem[];
+  lessons: Lesson[];
 } 
