@@ -56,7 +56,6 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
                   lesson.id === lessonId
                     ? {
                         ...lesson,
-                        content: data.content_json?.content || lesson.content,
                         content_json: {
                           content: data.content_json?.content || lesson.content_json?.content || '',
                           type: 'lesson',
@@ -80,7 +79,7 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
                 )
               }
             : m
-        );
+        ) as ExtendedModule[];
 
         return {
           ...state,
@@ -154,7 +153,7 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
                 )
               }
             : m
-        );
+        ) as ExtendedModule[];
 
         return {
           ...state,

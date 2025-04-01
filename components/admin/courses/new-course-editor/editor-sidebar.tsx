@@ -132,10 +132,9 @@ export default function EditorSidebar() {
       id: `module-${Date.now()}`,
       title: newModuleTitle,
       description: "New module description",
-      status: "draft",
       position: modules.length,
       metadata: { courseId },
-      items: []
+      lessons: []
     };
 
     setSavedState("unsaved");
@@ -157,20 +156,20 @@ export default function EditorSidebar() {
     const sourceModule = modules.find(m => m.id === result.source.droppableId);
     const destModule = modules.find(m => m.id === result.destination?.droppableId);
 
-    if (!sourceModule?.items || !destModule?.items) return;
+    if (!sourceModule?.lessons || !destModule?.lessons) return;
 
-    const sourceItems = [...sourceModule.items];
-    const destItems = sourceModule === destModule ? sourceItems : [...destModule.items];
+    const sourceLessons = [...sourceModule.lessons];
+    const destLessons = sourceModule === destModule ? sourceLessons : [...destModule.lessons];
 
-    const [movedItem] = sourceItems.splice(result.source.index, 1);
-    destItems.splice(result.destination.index, 0, movedItem);
+    const [movedLesson] = sourceLessons.splice(result.source.index, 1);
+    destLessons.splice(result.destination.index, 0, movedLesson);
 
     const newModules = modules.map(m => {
       if (m.id === sourceModule.id) {
-        return { ...m, items: sourceItems };
+        return { ...m, lessons: sourceLessons };
       }
       if (m.id === destModule.id) {
-        return { ...m, items: destItems };
+        return { ...m, lessons: destLessons };
       }
       return m;
     });
@@ -359,8 +358,8 @@ export default function EditorSidebar() {
                         {...provided.droppableProps}
                         className="pl-9 mt-1"
                       >
-                        {(module.items || []).map((item, index) => (
-                          <Draggable key={item.id} draggableId={item.id} index={index}>
+                        {(module.lessons || []).map((lesson, index) => (
+                          <Draggable key={lesson.id} draggableId={lesson.id} index={index}>
                             {(provided) => (
                               <div
                                 ref={provided.innerRef}
@@ -368,13 +367,13 @@ export default function EditorSidebar() {
                                 {...provided.dragHandleProps}
                                 className={cn(
                                   "flex items-center gap-2 py-1.5 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-pointer text-sm",
-                                  selectedLessonId === item.id && "bg-primary/10 text-primary font-medium"
+                                  selectedLessonId === lesson.id && "bg-primary/10 text-primary font-medium"
                                 )}
-                                onClick={() => handleSelectItem(module.id, item.id)}
+                                onClick={() => handleSelectItem(module.id, lesson.id)}
                               >
                                 <GripVertical className="h-3 w-3 text-muted-foreground" />
-                                {getItemIcon(item.type)}
-                                <span className="truncate">{item.title}</span>
+                                {getItemIcon(lesson.metadata?.type || 'lesson')}
+                                <span className="truncate">{lesson.title}</span>
                               </div>
                             )}
                           </Draggable>
