@@ -18,13 +18,14 @@ export const createCourseActions = (
     console.log('📥 [Course] Fetching course:', courseId);
     
     // Check if we're already loading this course
-    if (get().isLoading) {
-      console.log('⏳ [Course] Already loading course');
+    const state = get();
+    if (state.isLoading && state.course?.id === courseId) {
+      console.log('⏳ [Course] Already loading course:', courseId);
       return;
     }
 
-    // Don't set loading state if we already have this course
-    const currentCourse = get().course;
+    // Don't set loading state if we already have this course and it's not stale
+    const currentCourse = state.course;
     if (currentCourse?.id === courseId) {
       console.log('✅ [Course] Course already loaded:', courseId);
       return;
@@ -35,6 +36,10 @@ export const createCourseActions = (
     try {
       const response = await fetch(`/api/admin/courses/${courseId}`, {
         credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
         signal
       });
 
@@ -44,18 +49,22 @@ export const createCourseActions = (
 
       const courseData = await response.json();
       
-      // Transform modules to include items from lessons
-      const transformedModules = courseData.modules?.map((module: Module) => ({
-        ...module,
-        items: module.lessons?.map((lesson: Lesson) => ({
-          id: lesson.id,
-          title: lesson.title,
-          type: lesson.metadata?.type || 'lesson',
-          duration: lesson.metadata?.duration || 0,
-          content: lesson.content_json?.content || '',
-          content_json: lesson.content_json
-        })) || []
-      })) || [];
+      // Transform modules to maintain consistent structure
+      const transformedModules = courseData.modules?.map((module: Module) => {
+        const lessons = module.lessons || [];
+        return {
+          ...module,
+          lessons,
+          items: lessons.map((lesson: Lesson) => ({
+            id: lesson.id,
+            title: lesson.title,
+            type: lesson.metadata?.type || 'lesson',
+            duration: lesson.metadata?.duration || 0,
+            content: lesson.content_json?.content || '',
+            content_json: lesson.content_json
+          }))
+        };
+      }) || [];
 
       // Check if the request was aborted before updating state
       if (signal?.aborted) {
@@ -65,11 +74,14 @@ export const createCourseActions = (
 
       // Set the transformed data
       set({
-        course: courseData,
+        course: {
+          ...courseData,
+          modules: transformedModules
+        },
         modules: transformedModules,
         modulesCount: transformedModules.length,
-        selectedModuleId: transformedModules[0]?.id || null,
-        selectedLessonId: transformedModules[0]?.lessons?.[0]?.id || null,
+        selectedModuleId: state.selectedModuleId || transformedModules[0]?.id || null,
+        selectedLessonId: state.selectedLessonId || transformedModules[0]?.lessons?.[0]?.id || null,
         isLoading: false,
         error: null,
         savedState: 'saved'

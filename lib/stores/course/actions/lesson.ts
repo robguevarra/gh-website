@@ -1,157 +1,179 @@
-import { toast } from '@/components/ui/use-toast';
-import type { StoreApi } from 'zustand';
-import type { CourseStore, ExtendedModule, Lesson, ModuleItem } from '../types';
+import { Course } from '@/types/course';
+import { ExtendedModule } from '../types/module';
+import { CourseStore, ModuleItem } from '../types/store';
+import { StoreApi } from 'zustand';
+import type { CourseStore as CourseStoreType } from '../types/store';
 import { validateLessonUpdate } from '../utils/validation';
 import { cacheManager } from '../utils/cache';
+import { ExtendedModule as ExtendedModuleType } from '../types/module';
 
-export const createLessonActions = (set: StoreApi<CourseStore>['setState'], get: () => CourseStore) => ({
-  updateLesson: async (lessonId: string, data: Partial<Lesson>) => {
+// Define Lesson type
+interface Lesson {
+  id: string;
+  title: string;
+  description?: string;
+  content?: string;
+  content_json?: {
+    content: string;
+    type?: string;
+    version?: number;
+  };
+  module_id: string;
+  updated_at: string;
+}
+
+export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], get: () => CourseStoreType) => ({
+  updateLesson: async (lessonId: string, data: Partial<ModuleItem>) => {
     console.log('🔄 [Lesson] Starting update:', { lessonId, data });
-    
-    const state = get();
-    const { course } = state;
-    
-    if (!course) {
+
+    const { course } = get();
+    if (!course?.modules) {
+      console.error('❌ [Lesson] No course loaded');
       throw new Error('No course loaded');
     }
 
-    // Find the module containing this lesson
-    const module = course.modules?.find(m => m.lessons?.some(l => l.id === lessonId));
+    // Find module containing the lesson
+    const module = course.modules.find(m => 
+      m.lessons?.some(l => l.id === lessonId) || 
+      m.items?.some(item => item.id === lessonId)
+    );
+
     if (!module) {
+      console.error('❌ [Lesson] Lesson not found in any module');
       throw new Error('Lesson not found in any module');
     }
 
     try {
-      // Start optimistic update immediately
-      const optimisticModules = course.modules?.map(m => {
-        if (m.id === module.id) {
-          const updatedLessons = m.lessons?.map(l => 
-            l.id === lessonId 
-              ? { ...l, ...data }
-              : l
-          ) || [];
+      // Apply optimistic update first
+      set((state) => {
+        if (!state.course?.modules) return state;
+        
+        const updatedModules = state.course.modules.map((m) =>
+          m.id === module.id
+            ? {
+                ...m,
+                lessons: (m.lessons || []).map((lesson) =>
+                  lesson.id === lessonId
+                    ? {
+                        ...lesson,
+                        content: data.content_json?.content || lesson.content,
+                        content_json: {
+                          content: data.content_json?.content || lesson.content_json?.content || '',
+                          type: 'lesson',
+                          version: (lesson.content_json?.version || 0) + 1
+                        }
+                      }
+                    : lesson
+                ),
+                items: (m.items || []).map((item) =>
+                  item.id === lessonId
+                    ? {
+                        ...item,
+                        content: data.content_json?.content || item.content,
+                        content_json: {
+                          content: data.content_json?.content || item.content_json?.content || '',
+                          type: 'lesson',
+                          version: (item.content_json?.version || 0) + 1
+                        }
+                      }
+                    : item
+                )
+              }
+            : m
+        );
 
-          return {
-            ...m,
-            lessons: updatedLessons,
-            items: updatedLessons.map(lesson => ({
-              id: lesson.id,
-              title: lesson.title, // This ensures item title stays in sync
-              type: (lesson.metadata?.type || 'lesson') as ModuleItem['type'],
-              duration: Number(lesson.metadata?.duration) || 0,
-              content: lesson.content_json?.content || '',
-              content_json: lesson.content_json
-            }))
-          } as ExtendedModule;
+        return {
+          ...state,
+          course: {
+            ...state.course,
+            modules: updatedModules
+          },
+          modules: updatedModules,
+          savedState: 'saving'
+        };
+      });
+
+      // Prepare update data
+      const updatePayload = {
+        ...data,
+        module_id: module.id,
+        updated_at: new Date().toISOString(),
+        content_json: {
+          content: data.content_json?.content || '',
+          type: 'lesson',
+          version: ((module.lessons?.find(l => l.id === lessonId)?.content_json?.version || 0) + 1)
         }
-        return m;
-      }) || [];
+      };
 
-      // Apply optimistic update in a single state change
-      set({
-        course: { ...course, modules: optimisticModules },
-        modules: optimisticModules,
-        pendingSave: true,
-        error: null,
-        savedState: 'saving'
-      });
-      
-      // Validate data before API call
-      if (data.content_json && typeof data.content_json.content !== 'string') {
-        throw new Error('Invalid content format');
-      }
-
-      // Cache the update request
-      const cacheKey = `lesson-update-${lessonId}`;
-      const cachedPromise = cacheManager.get(cacheKey);
-      if (cachedPromise) {
-        await cachedPromise;
-      }
-
+      // Log the update request
       console.log('📤 [Lesson] Sending update request:', {
-        courseId: course.id,
-        moduleId: module.id,
         lessonId,
-        data
+        moduleId: module.id,
+        version: updatePayload.content_json.version
       });
 
-      // Make API call with debounced request
-      const updatePromise = fetch(`/api/courses/${course.id}/modules/${module.id}/lessons/${lessonId}`, {
+      // Make API call with proper endpoint following Next.js 13+ conventions
+      const response = await fetch(`/api/admin/courses/${course.id}/lessons/${lessonId}`, {
         method: 'PATCH',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(updatePayload),
       });
-
-      // Cache the promise
-      cacheManager.set(cacheKey, updatePromise, 5000); // Cache for 5 seconds
-
-      const response = await updatePromise;
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ [Lesson] API Error:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData
-        });
-        throw new Error(errorData.error?.message || 'Failed to update lesson');
+        throw new Error('Failed to update lesson');
       }
 
-      const updatedLesson = await response.json() as Lesson;
-      console.log('✅ [Lesson] Update successful:', { lessonId, updatedLesson });
+      const updatedLesson = await response.json();
+      console.log('✅ [Lesson] Update successful:', updatedLesson);
 
-      // Update final state with server response
-      const finalModules = course.modules?.map(m => {
-        if (m.id === module.id) {
-          const updatedLessons = m.lessons?.map(l => 
-            l.id === lessonId 
-              ? { ...l, ...updatedLesson }
-              : l
-          ) || [];
+      // Update state with server response
+      set(state => {
+        if (!state.course?.modules) return state;
+        
+        const updatedModules = state.course.modules.map(m =>
+          m.id === module.id
+            ? {
+                ...m,
+                lessons: (m.lessons || []).map(l =>
+                  l.id === lessonId
+                    ? { ...l, ...updatedLesson }
+                    : l
+                ),
+                items: (m.items || []).map(item =>
+                  item.id === lessonId
+                    ? {
+                        ...item,
+                        content: updatedLesson.content_json?.content || item.content,
+                        content_json: updatedLesson.content_json
+                      }
+                    : item
+                )
+              }
+            : m
+        );
 
-          return {
-            ...m,
-            lessons: updatedLessons,
-            items: updatedLessons.map(lesson => ({
-              id: lesson.id,
-              title: lesson.title,
-              type: (lesson.metadata?.type || 'lesson') as ModuleItem['type'],
-              duration: Number(lesson.metadata?.duration) || 0,
-              content: lesson.content_json?.content || '',
-              content_json: lesson.content_json
-            }))
-          } as ExtendedModule;
-        }
-        return m;
-      }) || [];
-
-      // Single state update with final data
-      set({
-        course: { ...course, modules: finalModules },
-        modules: finalModules,
-        pendingSave: false,
-        lastSaveTime: new Date().toISOString(),
-        error: null,
-        savedState: 'saved'
+        return {
+          ...state,
+          course: {
+            ...state.course,
+            modules: updatedModules
+          },
+          modules: updatedModules,
+          savedState: 'saved',
+          lastSaveTime: new Date().toISOString()
+        };
       });
-
-      console.log('✅ [Lesson] Successfully updated:', { lessonId });
-      return updatedLesson;
     } catch (error) {
       console.error('❌ [Lesson] Update failed:', error);
-      
-      // Revert to original state on error
-      set({ 
-        course: { ...course },
-        modules: course.modules || [],
-        error: error instanceof Error ? error.message : 'Failed to update lesson',
-        pendingSave: false,
-        savedState: 'unsaved'
-      });
-      
+      set(state => ({
+        ...state,
+        savedState: 'unsaved',
+        error: error instanceof Error ? error.message : 'Failed to update lesson'
+      }));
       throw error;
     }
   },
@@ -187,18 +209,10 @@ export const createLessonActions = (set: StoreApi<CourseStore>['setState'], get:
       );
 
       await get().fetchCourse(course.id);
-      toast({
-        title: 'Success',
-        description: `Lesson moved from position ${oldPosition} to ${newPosition}`,
-      });
     } catch (error) {
       const message = (error as Error).message;
       set({ error: message, isLoading: false });
-      toast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive',
-      });
+      throw error;
     }
   },
 
@@ -209,9 +223,9 @@ export const createLessonActions = (set: StoreApi<CourseStore>['setState'], get:
     set({ isLoading: true, error: null, savedState: 'saving' });
     
     try {
-      // Create optimistic update
-      const tempId = `temp-${Date.now()}`;
-      const optimisticContent: Lesson = {
+      // Create optimistic update with a proper temporary ID format
+      const tempId = `temp_${type}_${Date.now()}`;
+      const optimisticContent = {
         id: tempId,
         title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
         type: type as ModuleItem['type'],
@@ -221,110 +235,115 @@ export const createLessonActions = (set: StoreApi<CourseStore>['setState'], get:
           content: `<p>New ${type} content goes here</p>`,
           type: 'html',
           version: 1
+        },
+        status: 'draft',
+        is_preview: false,
+        description: null,
+        metadata: {
+          type: type
         }
       };
 
-      // Store the pending operation
-      const operationPromise = (async () => {
-        try {
-          // Apply optimistic update
-          set(state => ({
-            modules: state.modules.map(m => 
-              m.id === moduleId 
-                ? { ...m, items: [...(m.items || []), optimisticContent] }
-                : m
-            )
-          }));
-
-          // Make API call
-          const response = await fetch(`/api/admin/courses/${courseId}/modules/${moduleId}/lessons`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              title: optimisticContent.title,
-              content_json: optimisticContent.content_json,
-              status: 'draft',
-              description: null,
-              is_preview: false,
-              metadata: {
-                type: type
-              }
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error('Failed to create content');
-          }
-
-          const newContent = await response.json();
-          
-          // Update with real data
-          set(state => ({
-            modules: state.modules.map(m => 
-              m.id === moduleId 
-                ? {
-                    ...m,
-                    items: (m.items || []).map(item => 
-                      item.id === tempId 
-                        ? {
-                            id: newContent.id,
-                            title: newContent.title,
-                            type: type as ModuleItem['type'],
-                            duration: 0,
-                            content: newContent.content_json?.content || '',
-                            content_json: newContent.content_json
-                          }
-                        : item
-                    )
-                  }
-                : m
-            ),
-            selectedLessonId: newContent.id,
-            isLoading: false,
-            error: null,
-            savedState: 'saved'
-          }));
-
-          return newContent;
-        } finally {
-          get().pendingOperations.delete(tempId);
-        }
-      })();
-
-      get().pendingOperations.set(tempId, operationPromise);
-      const result = await operationPromise;
-
-      // Ensure module is expanded
+      // Apply optimistic update
       set(state => ({
-        expandedModules: new Set([...state.expandedModules, moduleId])
+        modules: state.modules.map(m => 
+          m.id === moduleId 
+            ? { ...m, items: [...(m.items || []), optimisticContent] }
+            : m
+        ),
+        selectedLessonId: tempId // Select the new content immediately
       }));
-      
-      toast({
-        title: 'Success',
-        description: `New ${type} added successfully`,
+
+      console.log('📤 [Store] Creating new lesson:', {
+        courseId,
+        moduleId,
+        type,
+        tempId
       });
 
-      return result;
+      // Make API call to create the lesson
+      const response = await fetch(`/api/admin/courses/${courseId}/modules/${moduleId}/lessons`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: optimisticContent.title,
+          content_json: optimisticContent.content_json,
+          status: optimisticContent.status,
+          description: optimisticContent.description,
+          is_preview: optimisticContent.is_preview,
+          metadata: optimisticContent.metadata
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Failed to create content');
+      }
+
+      const newContent = await response.json();
+      console.log('✅ [Store] Lesson created successfully:', newContent);
+
+      // Validate the response
+      if (!newContent.id) {
+        throw new Error('Invalid response: Missing lesson ID');
+      }
+      
+      // Update with real data
+      set(state => {
+        // Find the module again to ensure we have latest state
+        const targetModule = state.modules.find(m => m.id === moduleId);
+        if (!targetModule) {
+          console.error('Module not found after lesson creation');
+          return state;
+        }
+
+        const updatedModules = state.modules.map(m => 
+          m.id === moduleId 
+            ? {
+                ...m,
+                items: (m.items || []).map(item => 
+                  item.id === tempId 
+                    ? {
+                        ...newContent,
+                        content: newContent.content_json?.content || '',
+                        content_json: newContent.content_json,
+                        type: type as ModuleItem['type']
+                      }
+                    : item
+                )
+              }
+            : m
+        );
+
+        return {
+          ...state,
+          modules: updatedModules,
+          selectedLessonId: newContent.id,
+          isLoading: false,
+          error: null,
+          savedState: 'saved',
+          expandedModules: new Set([...state.expandedModules, moduleId])
+        };
+      });
+
+      return newContent;
     } catch (error) {
+      console.error('❌ [Store] Failed to create lesson:', error);
+      
       // Rollback optimistic update
       set(state => ({
         modules: state.modules.map(m => 
           m.id === moduleId 
-            ? { ...m, items: m.items?.filter(item => !item.id.startsWith('temp-')) || [] }
+            ? { ...m, items: m.items?.filter(item => !item.id.startsWith('temp_')) || [] }
             : m
         ),
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to add content',
-        savedState: 'saved'
+        savedState: 'unsaved'
       }));
 
-      toast({
-        title: 'Error adding content',
-        description: error instanceof Error ? error.message : 'Failed to add content',
-        variant: 'destructive',
-      });
       throw error;
     }
   }

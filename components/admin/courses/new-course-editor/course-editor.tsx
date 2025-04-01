@@ -125,12 +125,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     // Cleanup function
     return () => {
       isSubscribed = false;
-      // Only abort if we're unmounting permanently
-      setTimeout(() => {
-        if (!isSubscribed) {
-          controller.abort();
-        }
-      }, 100);
+      controller.abort();
     };
   }, [courseId, course?.id, fetchCourse, toast]);
 

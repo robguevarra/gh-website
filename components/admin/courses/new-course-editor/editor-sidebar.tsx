@@ -76,7 +76,10 @@ export default function EditorSidebar() {
   const [newContentType, setNewContentType] = useState("")
 
   const handleAddContent = async (type: string, e?: React.MouseEvent) => {
-    e?.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     
     setNewContentType(type);
 
@@ -94,9 +97,24 @@ export default function EditorSidebar() {
 
     try {
       setNewContentDialogOpen(false);
-      await addContent(courseId, targetModule.id, type);
+      const newContent = await addContent(courseId, targetModule.id, type);
+      
+      // Select the new content immediately
+      selectModule(targetModule.id);
+      selectLesson(newContent.id);
+      setSavedState("unsaved");
+
+      toast({
+        title: "Success",
+        description: `New ${type} added successfully`
+      });
     } catch (error) {
       console.error('Failed to add content:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add content. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
