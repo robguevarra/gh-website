@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -29,6 +29,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Loader2,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useCourseContext } from "./course-editor"
@@ -49,21 +50,40 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { useCourseStore } from "@/lib/stores/course-store"
+import { useCourseStore } from "@/lib/stores/course"
 import { debounce } from "lodash"
 
 interface ContentEditorProps {
-  onSave: () => Promise<void>
+  onSave: () => void
 }
 
 export default function ContentEditor({ onSave }: ContentEditorProps) {
   const { toast } = useToast()
-  const { modules, setModules, activeModuleId, activeItemId, setSavedState } = useCourseContext()
+  const { 
+    modules, 
+    activeModuleId, 
+    activeItemId, 
+    setSavedState, 
+    currentContent: contextContent,
+    setCurrentContent,
+    setActiveModuleId,
+    setActiveItemId
+  } = useCourseContext()
+  
+  const { course, selectedModuleId, selectedLessonId, updateLesson } = useCourseStore()
 
+  // All state declarations moved to the top
   const [addContentDialogOpen, setAddContentDialogOpen] = useState(false)
   const [videoDialogOpen, setVideoDialogOpen] = useState(false)
   const [videoUrl, setVideoUrl] = useState("")
   const [editorMode, setEditorMode] = useState("editor")
+  const [isEditorInitialized, setIsEditorInitialized] = useState(false)
+  const [isContentLoading, setIsContentLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [title, setTitle] = useState("")
+  const [content, setContent] = useState("")
+
+  // All refs declared at the top
   const editorRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef("")
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -74,224 +94,224 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
     endOffset: number;
   } | null>(null)
 
-  // Find the active module and item
-  const activeModule = modules.find((m) => m.id === activeModuleId)
-  const activeItem = activeModule?.items.find((i) => i.id === activeItemId)
-
-  const [title, setTitle] = useState(activeItem?.title || "")
-  const [content, setContent] = useState(activeItem?.content || "")
-  const [isEditorInitialized, setIsEditorInitialized] = useState(false)
-
-  // Update title and content when active item changes
+  // Sync active item with selected lesson - FIXED
   useEffect(() => {
-    if (activeItem) {
-      setTitle(activeItem.title)
-      setContent(activeItem.content || "")
-      contentRef.current = activeItem.content || ""
-      setIsEditorInitialized(false) // Reset initialization flag when item changes
-    }
-  }, [activeItem])
-
-  // Initialize editor content when content state changes or active item changes
-  useEffect(() => {
-    if (editorRef.current && editorMode === "editor" && !isEditorInitialized) {
-      try {
-        // Try to parse the content if it's JSON
-        const parsedContent = JSON.parse(content);
-        if (parsedContent && typeof parsedContent === 'object') {
-          // If it's a ProseMirror JSON structure (like Tiptap uses)
-          if (parsedContent.type === 'doc') {
-            editorRef.current.innerHTML = '<p>Rich text content (not directly editable in this mode)</p>';
-          } else {
-            // Just display the JSON for now
-            editorRef.current.innerHTML = content;
-          }
-        }
-      } catch (e) {
-        // If it's not JSON or can't be parsed, just set the HTML directly
-        editorRef.current.innerHTML = content;
+    if (!selectedLessonId || !selectedModuleId) {
+      // Clear content if no lesson selected
+      setContent("")
+      setTitle("")
+      contentRef.current = ""
+      if (editorRef.current) {
+        editorRef.current.innerHTML = ""
       }
-      setIsEditorInitialized(true);
+      setIsEditorInitialized(false)
+      return
     }
-  }, [content, editorMode, isEditorInitialized]);
 
-  // Initialize MutationObserver to handle content changes
+    // Set active IDs
+    setActiveModuleId(selectedModuleId)
+    setActiveItemId(selectedLessonId)
+
+  }, [selectedLessonId, selectedModuleId]) // Removed circular dependencies
+
+  // Memoize active module and item with proper dependencies
+  const { activeModule, activeItem } = useMemo(() => {
+    const module = modules?.find((m) => m.id === selectedModuleId)
+    return {
+      activeModule: module,
+      activeItem: module?.items?.find((i) => i.id === selectedLessonId)
+    }
+  }, [modules, selectedModuleId, selectedLessonId]) // Changed to use selected IDs directly
+
+  // Load content when active item changes
   useEffect(() => {
-    if (!editorRef.current) return;
+    if (!activeItem) return
+
+    const lessonContent = activeItem.content_json?.content || activeItem.content || ""
+    
+    setIsContentLoading(true)
+    setTitle(activeItem.title)
+    
+    // Update content and editor
+    setContent(lessonContent)
+    contentRef.current = lessonContent
+    if (editorRef.current) {
+      editorRef.current.innerHTML = lessonContent
+    }
+
+    // Update context
+    setCurrentContent(lessonContent)
+    
+    setIsContentLoading(false)
+    setIsEditorInitialized(true)
+
+  }, [activeItem, setCurrentContent])
+
+  // Initialize debounced save function
+  const debouncedSave = useRef(
+    debounce(async (content: string) => {
+      if (!selectedLessonId) return
+      try {
+        await saveContent(content)
+      } catch (error) {
+        console.error("Failed to save content:", error)
+        setSavedState("unsaved")
+        toast({
+          title: "Error saving content",
+          description: error instanceof Error ? error.message : "Your changes could not be saved. Please try again.",
+          variant: "destructive",
+        })
+      }
+    }, 1000)
+  ).current
+
+  // Save content to modules
+  const saveContent = useCallback(async (newContent: string) => {
+    if (!activeItem?.id) return
+
+    try {
+      setIsSaving(true)
+      setSavedState("saving")
+      
+      debouncedSave.cancel()
+
+      await updateLesson(activeItem.id, {
+        content_json: {
+          content: newContent,
+          type: "html",
+          version: 1
+        },
+        title
+      })
+
+      contentRef.current = newContent
+      setSavedState("saved")
+      
+      toast({
+        title: "Changes saved",
+        description: "Your changes have been saved successfully.",
+      })
+    } catch (error) {
+      console.error("Failed to save changes:", error)
+      setSavedState("unsaved")
+      toast({
+        title: "Error saving changes",
+        description: error instanceof Error ? error.message : "Your changes could not be saved. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }, [activeItem, title, updateLesson, setSavedState, toast, debouncedSave])
+
+  // Handle content changes
+  const handleContentChange = useCallback((newContent: string) => {
+    if (newContent === contentRef.current) return
+    
+    contentRef.current = newContent
+    setContent(newContent)
+    setCurrentContent(newContent)
+    setSavedState("unsaved")
+    
+    debouncedSave(newContent)
+  }, [setCurrentContent, setSavedState, debouncedSave])
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      debouncedSave.cancel()
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
+  }, [debouncedSave])
+
+  // Initialize MutationObserver
+  useEffect(() => {
+    if (!editorRef.current || !isEditorInitialized) return
 
     const observer = new MutationObserver(() => {
-      // Restore selection after mutation
-      if (selectionStateRef.current) {
-        requestAnimationFrame(() => {
-          const selection = window.getSelection();
-          if (!selection || !selectionStateRef.current) return;
-
-          try {
-            const range = document.createRange();
-            const { startContainer, startOffset, endContainer, endOffset } = selectionStateRef.current;
-            
-            range.setStart(startContainer, startOffset);
-            range.setEnd(endContainer, endOffset);
-            
-            selection.removeAllRanges();
-            selection.addRange(range);
-          } catch (error) {
-            console.error('Failed to restore selection:', error);
-          }
-        });
-      }
-    });
+      if (!editorRef.current) return
+      handleContentChange(editorRef.current.innerHTML)
+    })
 
     observer.observe(editorRef.current, {
       childList: true,
       subtree: true,
       characterData: true
-    });
+    })
 
-    return () => observer.disconnect();
-  }, []);
+    return () => observer.disconnect()
+  }, [isEditorInitialized, handleContentChange])
 
-  // Save selection state before any content changes
-  const saveSelection = () => {
-    const selection = window.getSelection();
-    if (!selection?.rangeCount) return;
+  // Save selection state
+  const saveSelection = useCallback(() => {
+    const selection = window.getSelection()
+    if (!selection?.rangeCount) return
 
-    const range = selection.getRangeAt(0);
+    const range = selection.getRangeAt(0)
     selectionStateRef.current = {
       startContainer: range.startContainer,
       startOffset: range.startOffset,
       endContainer: range.endContainer,
       endOffset: range.endOffset
-    };
-  };
-
-  // Handle editor input without resetting cursor position
-  const handleEditorInput = () => {
-    if (!editorRef.current) return;
-
-    saveSelection();
-    const newContent = editorRef.current.innerHTML;
-    
-    // Only update if content actually changed
-    if (newContent !== contentRef.current) {
-      contentRef.current = newContent;
-      setContent(newContent);
-      
-      // Only trigger the debounced save without updating the entire modules tree
-      if (activeItemId) {
-        debouncedSave(newContent, title, activeItemId);
-      }
-
-      setSavedState("unsaved");
-    }
-  };
-
-  // Consolidated debounced save function
-  const debouncedSave = useRef(
-    debounce(async (content: string, title: string, itemId: string) => {
-      if (!itemId) return
-
-      try {
-        setSavedState("saving")
-        await useCourseStore.getState().updateLesson(itemId, {
-          content_json: {
-            content,
-            type: "html",
-            version: 1
-          },
-          title
-        })
-        setSavedState("saved")
-      } catch (error) {
-        console.error("Failed to save:", error)
-        setSavedState("unsaved")
-        toast({
-          title: "Error saving changes",
-          description: "Your changes could not be saved. Please try again.",
-          variant: "destructive",
-        })
-      }
-    }, 2000)
-  ).current
-
-  // Clean up debounced function on unmount
-  useEffect(() => {
-    return () => {
-      debouncedSave.cancel()
-    }
-  }, [debouncedSave])
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault()
-    const newTitle = e.target.value
-    setTitle(newTitle)
-    setSavedState("unsaved")
-
-    // Only trigger the debounced save without updating the entire modules tree
-    if (activeItemId) {
-      debouncedSave(content, newTitle, activeItemId)
-    }
-  }
-
-  // Handle content changes and trigger save
-  const handleContentChange = (newContent: string) => {
-    setContent(newContent)
-    setSavedState("unsaved")
-    
-    // Only trigger the debounced save without updating the entire modules tree
-    if (activeItemId) {
-      debouncedSave(newContent, title, activeItemId)
-    }
-  }
-
-  // Save content to modules
-  const saveContent = async () => {
-    if (!activeModule || !activeItem || !activeItemId) return;
-
-    saveSelection();
-    const currentContent = editorRef.current?.innerHTML || content;
-
-    try {
-      setSavedState("saving");
-      
-      // Cancel any pending debounced saves
-      debouncedSave.cancel();
-
-      // Single update with both title and content
-      await useCourseStore.getState().updateLesson(activeItemId, {
-        content_json: {
-          content: currentContent,
-          type: "html",
-          version: 1
-        },
-        title
-      });
-
-      contentRef.current = currentContent;
-      setSavedState("saved");
-    } catch (error) {
-      console.error("Failed to save changes:", error);
-      setSavedState("unsaved");
-      toast({
-        title: "Error saving changes",
-        description: "Your changes could not be saved. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Add this useEffect to connect the onSave prop to the saveContent function
-  useEffect(() => {
-    const handleSave = () => {
-      saveContent()
-    }
-
-    window.addEventListener("editor-save", handleSave)
-
-    return () => {
-      window.removeEventListener("editor-save", handleSave)
     }
   }, [])
+
+  // Handle title changes
+  const handleTitleChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTitle = e.target.value
+    if (!activeItem?.id || newTitle === title) return
+    
+    setTitle(newTitle)
+    setSavedState("unsaved")
+    
+    try {
+      setIsSaving(true)
+      await updateLesson(activeItem.id, { title: newTitle })
+      setSavedState("saved")
+    } catch (error) {
+      console.error("Failed to update title:", error)
+      setSavedState("unsaved")
+      toast({
+        title: "Error updating title",
+        description: error instanceof Error ? error.message : "Title could not be updated. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }, [activeItem, title, updateLesson, setSavedState, toast])
+
+  // Handle editor input
+  const handleEditorInput = useCallback(() => {
+    if (!editorRef.current) return
+    handleContentChange(editorRef.current.innerHTML)
+  }, [handleContentChange])
+
+  // Render loading state
+  if (isContentLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading lesson content...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Render empty state
+  if (!activeModule || !activeItem) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">No content selected</h2>
+          <p className="text-muted-foreground">Select a module item from the sidebar to edit its content.</p>
+        </div>
+      </div>
+    )
+  }
 
   // Handle formatting without losing cursor position
   const applyFormatting = (command: string, value = "") => {
@@ -445,17 +465,6 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
     const newContent = e.target.value
     handleContentChange(newContent)
     setIsEditorInitialized(false) // Reset so editor will update when switching back
-  }
-
-  if (!activeModule || !activeItem) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">No content selected</h2>
-          <p className="text-muted-foreground">Select a module item from the sidebar to edit its content.</p>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -811,6 +820,13 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {isSaving && (
+        <div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-2 rounded-md shadow-lg flex items-center space-x-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span>Saving changes...</span>
+        </div>
+      )}
     </div>
   )
 }

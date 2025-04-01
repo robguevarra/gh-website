@@ -5,11 +5,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Save, Eye, Share2, MoreHorizontal, ArrowLeft, ArrowLeftRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
+import { useCourseStore } from "@/lib/stores/course"
+import { useCourseContext } from "./course-editor"
 
 interface EditorHeaderProps {
   title: string
   savedState: string
-  onSave: () => void
   onPublish: () => void
   onPreview: () => void
   onShare: () => void
@@ -20,7 +21,6 @@ interface EditorHeaderProps {
 export default function EditorHeader({ 
   title, 
   savedState, 
-  onSave, 
   onPublish, 
   onPreview, 
   onShare,
@@ -28,11 +28,70 @@ export default function EditorHeader({
   onToggleViewMode
 }: EditorHeaderProps) {
   const { toast } = useToast()
+  const { 
+    course, 
+    updateCourse, 
+    updateLesson,
+    selectedModuleId,
+    selectedLessonId,
+    setSavedState 
+  } = useCourseStore()
+
+  const { currentContent } = useCourseContext()
+
+  const handleSave = async () => {
+    if (savedState === "saving" || !course) {
+      return;
+    }
+
+    try {
+      setSavedState("saving");
+
+      // Find the active module and lesson
+      const activeModule = course.modules?.find(m => m.id === selectedModuleId);
+      const activeLesson = activeModule?.lessons?.find(l => l.id === selectedLessonId);
+
+      // Save lesson content if a lesson is selected
+      if (activeLesson && currentContent !== null) {
+        // Save lesson first
+        await updateLesson(activeLesson.id, {
+          content_json: {
+            content: currentContent,
+            type: "html",
+            version: 1
+          },
+          title: activeLesson.title,
+          updated_at: new Date().toISOString()
+        });
+
+        // Then update course metadata
+        await updateCourse(course.id, {
+          title: course.title,
+          description: course.description,
+          status: course.status || 'draft',
+          updated_at: new Date().toISOString()
+        });
+
+        setSavedState("saved");
+        toast({
+          title: "Changes saved",
+          description: "All your changes have been saved successfully.",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to save:", error);
+      setSavedState("unsaved");
+      toast({
+        title: "Error saving changes",
+        description: error instanceof Error ? error.message : "Your changes could not be saved. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleBack = () => {
     if (savedState === "unsaved") {
       if (confirm("You have unsaved changes. Are you sure you want to leave?")) {
-        // Navigate back (in a real app, this would use router)
         window.history.back();
         toast({
           title: "Navigating back",
@@ -40,7 +99,6 @@ export default function EditorHeader({
         })
       }
     } else {
-      // Navigate back
       window.history.back();
       toast({
         title: "Navigating back",
@@ -124,7 +182,7 @@ export default function EditorHeader({
           <Button 
             size="sm" 
             className="h-9 gap-1.5 bg-primary hover:bg-primary/90" 
-            onClick={onSave}
+            onClick={handleSave}
             disabled={savedState === "saving"}
           >
             <Save className="h-4 w-4" />

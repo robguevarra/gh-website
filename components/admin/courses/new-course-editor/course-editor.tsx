@@ -13,9 +13,11 @@ import SettingsPanel from "./settings-panel"
 import CoursePreview from "./course-preview"
 import StudentView from "./student-view"
 import EditorHeader from "./editor-header"
-import { useCourseStore, type Course, type Module, type Lesson } from "@/lib/stores/course-store"
+import { useCourseStore } from "@/lib/stores/course"
+import type { Course, Module, Lesson } from "@/lib/stores/course/types"
 import { Loader2 } from "lucide-react"
 import { debounce } from "lodash"
+import { ErrorBoundary } from "./error-boundary"
 
 // Define module and item types
 export interface ModuleItem {
@@ -50,6 +52,8 @@ type CourseContextType = {
   savedState: string
   setSavedState: (state: string) => void
   courseId: string
+  currentContent: string | null
+  setCurrentContent: (content: string) => void
 }
 
 export const CourseContext = createContext<CourseContextType | undefined>(undefined)
@@ -70,6 +74,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
   const [activeTab, setActiveTab] = useState("content")
   const [savedState, setSavedState] = useState("saved") // 'saved', 'saving', 'unsaved'
   const [viewMode, setViewMode] = useState<"editor" | "student">("editor")
+  const [currentContent, setCurrentContent] = useState<string | null>(null)
   const { toast } = useToast()
   
   // Load data from the course store
@@ -83,9 +88,52 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     selectedLessonId: activeItemId,
     selectModule: setActiveModuleId,
     selectLesson: setActiveItemId,
-    expandedModules
+    expandedModules,
+    fetchCourse
   } = useCourseStore()
   
+  // Fetch course data on mount and handle course ID changes
+  useEffect(() => {
+    if (!courseId) return;
+
+    const controller = new AbortController();
+    let isSubscribed = true;
+
+    const initializeCourse = async () => {
+      try {
+        // Only fetch if we don't have the course or if it's a different course
+        if (!course || course.id !== courseId) {
+          console.log('🔄 [CourseEditor] Initializing course:', courseId);
+          await fetchCourse(courseId, controller.signal);
+        }
+      } catch (error: unknown) {
+        // Only handle non-abort errors when still subscribed
+        if (error instanceof Error && error.name !== 'AbortError' && isSubscribed) {
+          console.error('❌ [CourseEditor] Failed to fetch course:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load course data. Please try refreshing the page.",
+            variant: "destructive",
+          });
+        }
+      }
+    };
+
+    // Start initialization
+    initializeCourse();
+
+    // Cleanup function
+    return () => {
+      isSubscribed = false;
+      // Only abort if we're unmounting permanently
+      setTimeout(() => {
+        if (!isSubscribed) {
+          controller.abort();
+        }
+      }, 100);
+    };
+  }, [courseId, course?.id, fetchCourse, toast]);
+
   // Set initial selection if none exists
   useEffect(() => {
     if (!activeModuleId && modules.length > 0) {
@@ -99,16 +147,78 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     }
   }, [modules, activeModuleId, activeItemId, setActiveModuleId, setActiveItemId])
 
+  // Update content in context when lesson changes
+  useEffect(() => {
+    if (!course || !activeModuleId || !activeItemId) return;
+
+    const module = course.modules?.find(m => m.id === activeModuleId);
+    const lesson = module?.lessons?.find(l => l.id === activeItemId);
+    
+    if (lesson?.content_json?.content) {
+      setCurrentContent(lesson.content_json.content);
+    }
+  }, [course, activeModuleId, activeItemId]);
+
   // Transform modules to EditorModule type
   const editorModules: EditorModule[] = useMemo(() => {
+    // Ensure expandedModules is a Set
+    const expandedModulesSet = expandedModules instanceof Set ? expandedModules : new Set(expandedModules || []);
+    
     return modules.map(module => ({
       id: module.id,
       title: module.title,
       description: module.description || "",
-      expanded: expandedModules.has(module.id),
+      expanded: expandedModulesSet.has(module.id),
       items: module.items || []
     }))
   }, [modules, expandedModules])
+
+  // Type guard for viewMode
+  const isValidViewMode = (mode: string): mode is "editor" | "student" => {
+    return mode === "editor" || mode === "student"
+  }
+
+  const handleViewModeChange = (mode: string) => {
+    if (isValidViewMode(mode)) {
+      setViewMode(mode)
+    }
+  }
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Loading course...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-sm text-destructive">Error loading course: {error}</p>
+          <Button onClick={() => fetchCourse(courseId)}>Try Again</Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Show not found state
+  if (!course) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="p-6 max-w-md mx-auto bg-muted rounded-lg text-center">
+          <h2 className="text-lg font-semibold mb-2">Course Not Found</h2>
+          <p>The requested course could not be found or you don't have permission to view it.</p>
+        </div>
+      </div>
+    )
+  }
 
   // Handle save functionality
   const handleSave = async () => {
@@ -234,30 +344,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
           : "You are now back in editor mode.",
     })
   }
-  
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="w-8 h-8 animate-spin mr-2" />
-        <p>Loading course...</p>
-      </div>
-    )
-  }
-  
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="p-6 max-w-md mx-auto bg-destructive/10 rounded-lg text-center">
-          <h2 className="text-lg font-semibold mb-2">Error Loading Course</h2>
-          <p>{error}</p>
-          <Button onClick={() => useCourseStore.getState().fetchCourse(courseId)} className="mt-4">
-            Try Again
-          </Button>
-        </div>
-      </div>
-    )
-  }
-  
+
   if (!course) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -270,106 +357,109 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
   }
 
   return (
-    <CourseContext.Provider
-      value={{
-        modules: editorModules,
-        setModules: () => {},
-        activeModuleId,
-        setActiveModuleId: (id: string | null) => id && setActiveModuleId(id),
-        activeItemId,
-        setActiveItemId: (id: string | null) => id && setActiveItemId(id),
-        savedState,
-        setSavedState,
-        courseId,
-      }}
-    >
-      <div className="flex flex-col h-screen overflow-hidden bg-background">
-        <EditorHeader
-          title={course?.title || "Untitled Course"}
-          onSave={handleSave}
-          onPublish={handlePublish}
-          onPreview={handlePreview}
-          onShare={handleShare}
-          savedState={savedState}
-          viewMode={viewMode}
-          onToggleViewMode={toggleViewMode}
-        />
+    <ErrorBoundary>
+      <CourseContext.Provider
+        value={{
+          modules: editorModules,
+          setModules: () => {},
+          activeModuleId,
+          setActiveModuleId: (id: string | null) => id && setActiveModuleId(id),
+          activeItemId,
+          setActiveItemId: (id: string | null) => id && setActiveItemId(id),
+          savedState,
+          setSavedState,
+          courseId,
+          currentContent,
+          setCurrentContent
+        }}
+      >
+        <div className="flex flex-col h-screen overflow-hidden bg-background">
+          <EditorHeader
+            title={course?.title || "Untitled Course"}
+            savedState={savedState}
+            onPublish={handlePublish}
+            onPreview={handlePreview}
+            onShare={handleShare}
+            viewMode={viewMode}
+            onToggleViewMode={toggleViewMode}
+          />
 
-        {viewMode === "student" ? (
-          <StudentView courseId={courseId} />
-        ) : (
-          <div className="flex flex-1 overflow-hidden">
-            <div className="w-72 border-r overflow-y-auto h-full bg-muted/10">
-              <div className="p-4">
-                <h2 className="font-semibold text-lg mb-3 flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                  Course Structure
-                </h2>
-              </div>
-              <EditorSidebar />
-            </div>
-            <div className="flex-1 overflow-hidden flex flex-col bg-white">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-                <div className="border-b sticky top-0 bg-background z-10">
-                  <TabsList className="mx-4 my-1">
-                    <TabsTrigger value="content" className="data-[state=active]:bg-primary/10">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      Content
-                    </TabsTrigger>
-                    <TabsTrigger value="modules" className="data-[state=active]:bg-primary/10">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-                      </svg>
-                      Modules
-                    </TabsTrigger>
-                    <TabsTrigger value="settings" className="data-[state=active]:bg-primary/10">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-                      </svg>
-                      Settings
-                    </TabsTrigger>
-                    <TabsTrigger value="preview" className="data-[state=active]:bg-primary/10">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                      Preview
-                    </TabsTrigger>
-                  </TabsList>
+          {viewMode === "student" ? (
+            <StudentView courseId={courseId} />
+          ) : (
+            <div className="flex flex-1 overflow-hidden">
+              <div className="w-72 border-r overflow-y-auto h-full bg-muted/10">
+                <div className="p-4">
+                  <h2 className="font-semibold text-lg mb-3 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    Course Structure
+                  </h2>
                 </div>
-                <ScrollArea className="flex-1 p-6 bg-white">
-                  <div className="max-w-5xl mx-auto pb-10">
-                    <TabsContent value="content" className="mt-0 h-full">
-                      <ContentEditor onSave={handleSave} />
-                    </TabsContent>
-                    <TabsContent value="modules" className="mt-0">
-                      <ModuleManager />
-                    </TabsContent>
-                    <TabsContent value="settings" className="mt-0">
-                      <SettingsPanel 
-                        courseId={courseId}
-                        initialData={{
-                          title: course.title,
-                          description: course.description || "",
-                          isPublished: course.is_published,
-                        }}
-                      />
-                    </TabsContent>
-                    <TabsContent value="preview" className="mt-0">
-                      <CoursePreview />
-                    </TabsContent>
+                <EditorSidebar />
+              </div>
+              <div className="flex-1 overflow-hidden flex flex-col bg-white">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+                  <div className="border-b sticky top-0 bg-background z-10">
+                    <TabsList className="mx-4 my-1">
+                      <TabsTrigger value="content" className="data-[state=active]:bg-primary/10">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        Content
+                      </TabsTrigger>
+                      <TabsTrigger value="modules" className="data-[state=active]:bg-primary/10">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                        </svg>
+                        Modules
+                      </TabsTrigger>
+                      <TabsTrigger value="settings" className="data-[state=active]:bg-primary/10">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                        </svg>
+                        Settings
+                      </TabsTrigger>
+                      <TabsTrigger value="preview" className="data-[state=active]:bg-primary/10">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        Preview
+                      </TabsTrigger>
+                    </TabsList>
                   </div>
-                </ScrollArea>
-              </Tabs>
+                  <ScrollArea className="flex-1 p-6 bg-white">
+                    <div className="max-w-5xl mx-auto pb-10">
+                      <TabsContent value="content" className="mt-0 h-full">
+                        <ContentEditor onSave={handleSave} />
+                      </TabsContent>
+                      <TabsContent value="modules" className="mt-0">
+                        <ModuleManager />
+                      </TabsContent>
+                      <TabsContent value="settings" className="mt-0">
+                        <SettingsPanel 
+                          courseId={courseId}
+                          initialData={{
+                            title: course.title,
+                            description: course.description || "",
+                            isPublished: course.is_published || false,
+                          }}
+                        />
+                      </TabsContent>
+                      <TabsContent value="preview" className="mt-0">
+                        <CoursePreview />
+                      </TabsContent>
+                    </div>
+                  </ScrollArea>
+                </Tabs>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </CourseContext.Provider>
+          )}
+        </div>
+      </CourseContext.Provider>
+    </ErrorBoundary>
   )
 }
 
