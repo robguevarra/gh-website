@@ -11,6 +11,7 @@ import { Loader2, Plus, Edit2, Eye, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
+import { useCourseStore } from '@/lib/stores/course';
 
 interface Course {
   id: string;
@@ -29,6 +30,13 @@ export default function CoursesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const supabase = createBrowserSupabaseClient();
+  const clearCourseStore = useCourseStore(state => state.clearCache);
+
+  // Clear course store on mount
+  useEffect(() => {
+    console.log('🧹 [Courses] Clearing course store');
+    clearCourseStore();
+  }, []);
 
   useEffect(() => {
     // Check authentication and admin status
@@ -68,6 +76,13 @@ export default function CoursesPage() {
       loadCourses();
     }
   }, [supabase, user, isAdmin, isAuthLoading]);
+
+  const handleEditCourse = (courseId: string) => {
+    // Clear any existing course data
+    clearCourseStore();
+    // Navigate to course editor
+    router.push(`/admin/courses/${courseId}`);
+  };
 
   if (isAuthLoading || isLoading) {
     return (
@@ -155,7 +170,7 @@ export default function CoursesPage() {
                   </Link>
                 </Button>
               )}
-              <Button onClick={() => router.push(`/admin/courses/${course.id}`)}>
+              <Button onClick={() => handleEditCourse(course.id)}>
                 <Edit2 className="h-4 w-4 mr-2" />
                 Edit
               </Button>
@@ -166,7 +181,10 @@ export default function CoursesPage() {
         {courses.length === 0 && (
           <div className="col-span-full flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg">
             <p className="text-muted-foreground mb-4">No courses found</p>
-            <Button onClick={() => router.push('/admin/courses/new')}>
+            <Button onClick={() => {
+              clearCourseStore();
+              router.push('/admin/courses/new');
+            }}>
               <Plus className="h-4 w-4 mr-2" />
               Create your first course
             </Button>

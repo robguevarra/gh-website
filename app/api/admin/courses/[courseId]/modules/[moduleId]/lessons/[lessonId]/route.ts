@@ -82,7 +82,8 @@ export async function PATCH(
   { params }: { params: { courseId: string; moduleId: string; lessonId: string } }
 ) {
   try {
-    const lessonId = params.lessonId;
+    // Await params before accessing them
+    const { lessonId, courseId, moduleId } = await params;
     const body = await request.json();
     
     // Find the lesson to update

@@ -13,7 +13,7 @@ import {
   GripVertical,
   Loader2,
 } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useToast } from "@/hooks/use-toast"
 import type { ModuleItem } from "./course-editor"
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd"
@@ -29,7 +29,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { useCourseStore, type ExtendedModule } from "@/lib/stores/course-store"
+import { useCourseStore } from "@/lib/stores/course"
+import type { ExtendedModule } from "@/lib/stores/course/types"
 import { useParams } from "next/navigation"
 
 export default function EditorSidebar() {
@@ -53,6 +54,11 @@ export default function EditorSidebar() {
     error,
     fetchCourse
   } = useCourseStore()
+
+  // Ensure expandedModules is a Set
+  const expandedModulesSet = useMemo(() => {
+    return expandedModules instanceof Set ? expandedModules : new Set(expandedModules || []);
+  }, [expandedModules]);
 
   // Fetch course data only if not already loaded
   useEffect(() => {
@@ -110,7 +116,7 @@ export default function EditorSidebar() {
       description: "New module description",
       status: "draft",
       position: modules.length,
-      course_id: courseId,
+      metadata: { courseId },
       items: []
     };
 
@@ -239,7 +245,6 @@ export default function EditorSidebar() {
     <div className="w-80 border-r bg-muted/10">
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold">Course Content</h2>
           <Dialog open={newContentDialogOpen} onOpenChange={setNewContentDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="flex items-center gap-1">
@@ -319,7 +324,7 @@ export default function EditorSidebar() {
                 >
                   <div className="flex items-center gap-2 flex-1 truncate">
                     <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    {expandedModules.has(module.id) ? (
+                    {expandedModulesSet.has(module.id) ? (
                       <ChevronDown className="h-4 w-4 shrink-0" />
                     ) : (
                       <ChevronRight className="h-4 w-4 shrink-0" />
@@ -328,7 +333,7 @@ export default function EditorSidebar() {
                     <span className="truncate">{module.title}</span>
                   </div>
                 </div>
-                {expandedModules.has(module.id) && (
+                {expandedModulesSet.has(module.id) && (
                   <Droppable droppableId={module.id}>
                     {(provided) => (
                       <div
