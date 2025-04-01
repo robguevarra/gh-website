@@ -52,17 +52,24 @@ export const createCourseActions = (
       // Transform modules to maintain consistent structure
       const transformedModules = courseData.modules?.map((module: Module) => {
         const lessons = module.lessons || [];
+        const items = lessons.map((lesson: Lesson) => ({
+          id: lesson.id,
+          title: lesson.title,
+          type: lesson.metadata?.type || 'lesson',
+          duration: lesson.metadata?.duration || 0,
+          content: lesson.content_json?.content || '',
+          content_json: lesson.content_json
+        }));
+
         return {
-          ...module,
-          lessons,
-          items: lessons.map((lesson: Lesson) => ({
-            id: lesson.id,
-            title: lesson.title,
-            type: lesson.metadata?.type || 'lesson',
-            duration: lesson.metadata?.duration || 0,
-            content: lesson.content_json?.content || '',
-            content_json: lesson.content_json
-          }))
+          id: module.id,
+          title: module.title,
+          description: module.description || '',
+          position: module.position,
+          metadata: module.metadata,
+          updated_at: module.updated_at,
+          lessons: lessons,
+          items: items
         };
       }) || [];
 
@@ -91,6 +98,7 @@ export const createCourseActions = (
         id: courseData.id,
         modulesCount: transformedModules.length,
         selectedModule: transformedModules[0]?.id || null,
+        itemsCount: transformedModules[0]?.items?.length || 0
       });
     } catch (error) {
       // Don't update error state for aborted requests

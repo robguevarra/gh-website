@@ -1,18 +1,17 @@
 import { Lesson } from './lesson';
-import { ModuleItem } from './store';
 
+// Base module type from the API
 export interface Module {
   id: string;
   title: string;
   description?: string;
   position: number;
   lessons?: Lesson[];
-  items?: ModuleItem[];
   metadata?: Record<string, unknown>;
   updated_at?: string;
 }
 
+// Extended module type used in the UI with guaranteed items array
 export interface ExtendedModule extends Module {
-  items: ModuleItem[];
-  lessons: Lesson[];
+  lessons: Lesson[]; // Required in UI
 } 
