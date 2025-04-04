@@ -158,39 +158,100 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
    * @returns Promise that resolves when the reordering is complete
    */
   reorderLesson: async (lessonId: string, newPosition: number) => {
-    const course = get().course;
-    if (!course) return;
+    console.log('🔄 [Lesson] Reordering lesson:', { lessonId, newPosition });
 
-    const module = course.modules?.find(m => m.lessons?.some(l => l.id === lessonId));
-    if (!module?.lessons) return;
+    const { course } = get();
+    if (!course?.modules) {
+      console.error('❌ [Lesson] No course loaded');
+      throw new Error('No course loaded');
+    }
 
-    const lessons = [...module.lessons];
-    const movedLesson = lessons.find(l => l.id === lessonId);
-    if (!movedLesson) return;
+    // Find module containing the lesson
+    const module = course.modules.find(m =>
+      m.lessons?.some(l => l.id === lessonId)
+    );
 
-    // Update the lesson's position
-    movedLesson.position = newPosition;
+    if (!module) {
+      console.error('❌ [Lesson] Lesson not found in any module:', { lessonId });
+      throw new Error('Lesson not found in any module');
+    }
+
+    // Get the lessons from the module
+    const lessons = [...(module.lessons || [])];
+    const lessonIndex = lessons.findIndex(l => l.id === lessonId);
+
+    if (lessonIndex === -1) {
+      console.error('❌ [Lesson] Lesson not found in module:', { lessonId, moduleId: module.id });
+      throw new Error('Lesson not found in module');
+    }
+
+    // Move the lesson to the new position
+    const [movedLesson] = lessons.splice(lessonIndex, 1);
+    lessons.splice(newPosition, 0, movedLesson);
+
+    // Update positions for all lessons
+    lessons.forEach((lesson, index) => {
+      lesson.position = index;
+    });
 
     try {
-      set({ isLoading: true, error: null });
-      await Promise.all(
-        lessons.map((lesson) =>
-          fetch(`/api/courses/${course.id}/modules/${module.id}/lessons/${lesson.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({
-              position: lesson.position,
-              updated_at: new Date().toISOString()
-            }),
-          })
-        )
-      );
+      // Apply optimistic update
+      set((state) => {
+        if (!state.course?.modules) return state;
 
-      await get().fetchCourse(course.id);
+        const updatedModules = state.course.modules.map((m) =>
+          m.id === module.id
+            ? { ...m, lessons: lessons }
+            : m
+        ) as ExtendedModule[];
+
+        return {
+          ...state,
+          course: {
+            ...state.course,
+            modules: updatedModules
+          },
+          modules: updatedModules,
+          savedState: 'saving'
+        };
+      });
+
+      // Make API call to reorder lessons
+      const response = await fetch(`/api/courses/${course.id}/modules/${module.id}/lessons/reorder`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          lessonOrder: lessons.map((lesson, index) => ({
+            id: lesson.id,
+            position: index,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reorder lessons');
+      }
+
+      // Update state with success
+      set({
+        savedState: 'saved',
+        lastSaveTime: new Date().toISOString()
+      });
+
+      console.log('✅ [Lesson] Reordering successful');
     } catch (error) {
-      const message = (error as Error).message;
-      set({ error: message, isLoading: false });
+      console.error('❌ [Lesson] Reordering failed:', error);
+
+      // Revert to original state
+      set((state) => ({
+        ...state,
+        savedState: 'unsaved',
+        error: error instanceof Error ? error.message : 'Failed to reorder lesson'
+      }));
+
       throw error;
     }
   },
