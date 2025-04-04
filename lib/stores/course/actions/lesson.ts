@@ -74,10 +74,28 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
         };
       });
 
+      // Check if we're moving the lesson to a different module
+      const targetModuleId = data.module_id || module.id;
+      const isMovingModule = targetModuleId !== module.id;
+
+      // If moving to a different module, verify the target module exists
+      if (isMovingModule) {
+        const targetModule = course.modules.find(m => m.id === targetModuleId);
+        if (!targetModule) {
+          console.error('❌ [Lesson] Target module not found:', { targetModuleId });
+          throw new Error('Target module not found');
+        }
+        console.log('📤 [Lesson] Moving lesson to different module:', {
+          lessonId,
+          fromModuleId: module.id,
+          toModuleId: targetModuleId
+        });
+      }
+
       // Prepare update data
       const updatePayload = {
         ...data,
-        module_id: module.id,
+        module_id: targetModuleId,
         updated_at: new Date().toISOString(),
         content_json: {
           content: data.content_json?.content || '',
@@ -89,12 +107,15 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
       // Log the update request
       console.log('📤 [Lesson] Sending update request:', {
         lessonId,
-        moduleId: module.id,
+        sourceModuleId: module.id,
+        targetModuleId,
+        isMovingModule,
         version: updatePayload.content_json.version
       });
 
       // Make API call with proper endpoint following Next.js 13+ conventions
-      const response = await fetch(`/api/courses/${course.id}/modules/${module.id}/lessons/${lessonId}`, {
+      // When moving to a different module, we need to use the target module's ID in the URL
+      const response = await fetch(`/api/courses/${course.id}/modules/${isMovingModule ? targetModuleId : module.id}/lessons/${lessonId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -115,29 +136,84 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
       set(state => {
         if (!state.course?.modules) return state;
 
-        const updatedModules = state.course.modules.map(m =>
-          m.id === module.id
-            ? {
-                ...m,
-                lessons: (m.lessons || []).map(l =>
-                  l.id === lessonId
-                    ? { ...l, ...updatedLesson }
-                    : l
-                )
-              }
-            : m
-        ) as ExtendedModule[];
+        // Handle moving a lesson between modules
+        if (isMovingModule) {
+          console.log('💾 [Lesson] Updating state for moved lesson:', {
+            lessonId,
+            fromModuleId: module.id,
+            toModuleId: targetModuleId
+          });
 
-        return {
-          ...state,
-          course: {
-            ...state.course,
-            modules: updatedModules
-          },
-          modules: updatedModules,
-          savedState: 'saved',
-          lastSaveTime: new Date().toISOString()
-        };
+          // Get the lesson to move
+          const lessonToMove = module.lessons?.find(l => l.id === lessonId);
+          if (!lessonToMove) {
+            console.error('❌ [Lesson] Lesson not found for moving:', { lessonId });
+            return state;
+          }
+
+          // Create updated modules array
+          const updatedModules = state.course.modules.map(m => {
+            // Remove from source module
+            if (m.id === module.id) {
+              return {
+                ...m,
+                lessons: (m.lessons || []).filter(l => l.id !== lessonId)
+              };
+            }
+
+            // Add to target module
+            if (m.id === targetModuleId) {
+              return {
+                ...m,
+                lessons: [
+                  ...(m.lessons || []),
+                  { ...lessonToMove, ...updatedLesson, module_id: targetModuleId }
+                ]
+              };
+            }
+
+            return m;
+          }) as ExtendedModule[];
+
+          return {
+            ...state,
+            course: {
+              ...state.course,
+              modules: updatedModules
+            },
+            modules: updatedModules,
+            savedState: 'saved',
+            lastSaveTime: new Date().toISOString(),
+            // Select the lesson in its new module
+            selectedModuleId: targetModuleId,
+            selectedLessonId: lessonId
+          };
+        } else {
+          // Regular update within the same module
+          const updatedModules = state.course.modules.map(m =>
+            m.id === module.id
+              ? {
+                  ...m,
+                  lessons: (m.lessons || []).map(l =>
+                    l.id === lessonId
+                      ? { ...l, ...updatedLesson }
+                      : l
+                  )
+                }
+              : m
+          ) as ExtendedModule[];
+
+          return {
+            ...state,
+            course: {
+              ...state.course,
+              modules: updatedModules
+            },
+            modules: updatedModules,
+            savedState: 'saved',
+            lastSaveTime: new Date().toISOString()
+          };
+        }
       });
     } catch (error) {
       console.error('❌ [Lesson] Update failed:', error);

@@ -12,8 +12,14 @@ import {
   PlusCircle,
   GripVertical,
   Loader2,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
+  Save,
+  X,
+  Plus,
 } from "lucide-react"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { toast } from "sonner"
 import type { ModuleItem } from "./course-editor"
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd"
@@ -31,8 +37,32 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { useCourseStore } from "@/lib/stores/course"
-import type { ExtendedModule } from "@/lib/stores/course/types"
+import type { ExtendedModule, ExtendedLesson } from "@/lib/stores/course/types"
 import { useParams } from "next/navigation"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 export default function EditorSidebar() {
   const params = useParams()
@@ -80,6 +110,21 @@ export default function EditorSidebar() {
   const [newModuleTitle, setNewModuleTitle] = useState("")
   const [newContentType, setNewContentType] = useState("")
   const [targetModuleId, setTargetModuleId] = useState<string | null>(null)
+
+  // Inline editing states
+  const [editingModuleId, setEditingModuleId] = useState<string | null>(null)
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState<string>("")
+  const editInputRef = useRef<HTMLInputElement>(null)
+
+  // Deletion states
+  const [moduleToDelete, setModuleToDelete] = useState<ExtendedModule | null>(null)
+  const [lessonToDelete, setLessonToDelete] = useState<ExtendedLesson | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteType, setDeleteType] = useState<"module" | "lesson" | null>(null)
+
+  // Track when context menus close
+  const [contextMenuCloseTime, setContextMenuCloseTime] = useState<number>(0)
 
   // Step 1: Select content type
   const handleSelectContentType = (type: string, e?: React.MouseEvent) => {
@@ -317,24 +362,88 @@ export default function EditorSidebar() {
 
         // If the lesson was moved to a different module, we need to update its module_id
         if (sourceModule.id !== destModule.id) {
-          // First update the lesson's module_id
-          await updateLesson(movedLesson.id, {
-            module_id: destModule.id,
-            position: result.destination.index
+          console.log('💾 [EditorSidebar] Moving lesson to different module:', {
+            lessonId: movedLesson.id,
+            fromModuleId: sourceModule.id,
+            toModuleId: destModule.id,
+            newPosition: result.destination.index
           });
 
-          toast.dismiss(loadingToastId);
-          toast.success("Lesson moved", {
-            description: `Moved to ${destModule.title}`
-          });
+          try {
+            console.log('💾 [EditorSidebar] Using dedicated move endpoint');
+
+            // Use the dedicated move endpoint instead of updateLesson
+            const response = await fetch(`/api/courses/${courseId}/lessons/move`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                lessonId: movedLesson.id,
+                sourceModuleId: sourceModule.id,
+                targetModuleId: destModule.id,
+                position: result.destination.index
+              }),
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || 'Failed to move lesson between modules');
+            }
+
+            // The move endpoint handles all the reordering for us
+
+            // Get the response data
+            const moveData = await response.json();
+            console.log('💾 [EditorSidebar] Move successful:', moveData);
+
+            // Force a complete refresh of the course data to ensure UI is in sync with server
+            if (courseId) {
+              console.log('🔄 [EditorSidebar] Refreshing course data after move');
+              await fetchCourse(courseId, true); // Pass true to force a complete refresh
+            }
+
+            toast.dismiss(loadingToastId);
+            toast.success("Lesson moved", {
+              description: `Moved to ${destModule.title}`
+            });
+
+            // Select the moved lesson in its new module
+            selectModule(destModule.id);
+            selectLesson(movedLesson.id);
+          } catch (error) {
+            console.error('Error moving lesson between modules:', error);
+            toast.dismiss(loadingToastId);
+            toast.error("Error", {
+              description: "Failed to move lesson between modules. Please try again."
+            });
+
+            // Refresh the course data to ensure UI is in sync with server
+            if (courseId) {
+              await fetchCourse(courseId);
+            }
+          }
         } else {
-          // Just update the position
-          await reorderLesson(movedLesson.id, result.destination.index);
+          // Just update the position within the same module
+          try {
+            await reorderLesson(movedLesson.id, result.destination.index);
 
-          toast.dismiss(loadingToastId);
-          toast.success("Order updated", {
-            description: "Lesson order has been updated"
-          });
+            toast.dismiss(loadingToastId);
+            toast.success("Order updated", {
+              description: "Lesson order has been updated"
+            });
+          } catch (error) {
+            console.error('Error reordering lessons:', error);
+            toast.dismiss(loadingToastId);
+            toast.error("Error", {
+              description: "Failed to update lesson order. Please try again."
+            });
+
+            // Refresh the course data to ensure UI is in sync with server
+            if (courseId) {
+              await fetchCourse(courseId);
+            }
+          }
         }
       }
     } catch (error) {
@@ -358,6 +467,189 @@ export default function EditorSidebar() {
     }
   };
 
+  // Handle starting inline editing for a module
+  const handleEditModule = (module: ExtendedModule, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    setEditingModuleId(module.id);
+    setEditingTitle(module.title);
+    // Focus the input after it renders with a slight delay to avoid blur issues
+    setTimeout(() => {
+      if (editInputRef.current) {
+        editInputRef.current.focus();
+        editInputRef.current.select();
+      }
+    }, 50);
+  };
+
+  // Handle starting inline editing for a lesson
+  const handleEditLesson = (lesson: ExtendedLesson, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    setEditingLessonId(lesson.id);
+    setEditingTitle(lesson.title);
+    // Focus the input after it renders with a slight delay to avoid blur issues
+    setTimeout(() => {
+      if (editInputRef.current) {
+        editInputRef.current.focus();
+        editInputRef.current.select();
+      }
+    }, 50);
+  };
+
+  // Handle saving the edited title
+  const handleSaveTitle = async (e?: React.FocusEvent) => {
+    // If this is a blur event from the context menu selection, ignore it
+    if (e && Date.now() - contextMenuCloseTime < 300) {
+      return;
+    }
+
+    if (editingTitle.trim() === "") {
+      toast.error("Title cannot be empty");
+      return;
+    }
+
+    try {
+      if (editingModuleId) {
+        // Update module title
+        const module = modules.find(m => m.id === editingModuleId);
+        if (!module) return;
+
+        // Call API to update module title
+        const response = await fetch(`/api/courses/${courseId}/modules/${editingModuleId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: editingTitle,
+            updated_at: new Date().toISOString()
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update module title');
+        }
+
+        // Refresh course data
+        await fetchCourse(courseId, true);
+        toast.success("Module title updated");
+      } else if (editingLessonId) {
+        // Update lesson title
+        const module = modules.find(m => m.lessons?.some(l => l.id === editingLessonId));
+        if (!module) return;
+
+        // Call updateLesson from the store
+        await updateLesson(editingLessonId, {
+          title: editingTitle
+        });
+
+        toast.success("Lesson title updated");
+      }
+    } catch (error) {
+      console.error('Error updating title:', error);
+      toast.error("Failed to update title");
+    } finally {
+      // Reset editing state
+      setEditingModuleId(null);
+      setEditingLessonId(null);
+      setEditingTitle("");
+    }
+  };
+
+  // Handle canceling the edit
+  const handleCancelEdit = () => {
+    setEditingModuleId(null);
+    setEditingLessonId(null);
+    setEditingTitle("");
+  };
+
+  // Handle keydown events in the edit input
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSaveTitle();
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
+  };
+
+  // Handle opening the delete confirmation dialog
+  const handleDeleteModule = (module: ExtendedModule, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    setModuleToDelete(module);
+    setDeleteType("module");
+    setDeleteDialogOpen(true);
+  };
+
+  // Handle opening the delete confirmation dialog for a lesson
+  const handleDeleteLesson = (lesson: ExtendedLesson, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    setLessonToDelete(lesson);
+    setDeleteType("lesson");
+    setDeleteDialogOpen(true);
+  };
+
+  // Handle confirming deletion
+  const handleConfirmDelete = async () => {
+    try {
+      if (deleteType === "module" && moduleToDelete) {
+        // Delete module
+        const response = await fetch(`/api/courses/${courseId}/modules/${moduleToDelete.id}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to delete module');
+        }
+
+        // Refresh course data
+        await fetchCourse(courseId, true);
+        toast.success("Module deleted");
+      } else if (deleteType === "lesson" && lessonToDelete) {
+        // Find the module containing the lesson
+        const module = modules.find(m => m.lessons?.some(l => l.id === lessonToDelete.id));
+        if (!module) return;
+
+        // Delete lesson
+        const response = await fetch(`/api/courses/${courseId}/modules/${module.id}/lessons/${lessonToDelete.id}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to delete lesson');
+        }
+
+        // Refresh course data
+        await fetchCourse(courseId, true);
+        toast.success("Lesson deleted");
+      }
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      toast.error("Failed to delete item");
+    } finally {
+      // Reset deletion state
+      setDeleteDialogOpen(false);
+      setModuleToDelete(null);
+      setLessonToDelete(null);
+      setDeleteType(null);
+    }
+  };
+
+  // Get the appropriate icon for a content type
   const getItemIcon = (type: string) => {
     switch (type) {
       case "lesson":
@@ -544,28 +836,142 @@ export default function EditorSidebar() {
                           {...provided.draggableProps}
                           className="mb-4"
                         >
-                          <div
-                            className={cn(
-                              "flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-pointer",
-                              selectedModuleId === module.id && "bg-primary/10 text-primary font-medium",
-                              snapshot.isDragging && "border-2 border-primary/50 bg-muted/20 shadow-md"
-                            )}
-                          >
-                            <div className="flex items-center gap-2 flex-1 truncate">
-                              <div {...provided.dragHandleProps}>
-                                <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-                              </div>
-                              <div onClick={() => toggleExpandedModule(module.id)}>
-                                {expandedModulesSet.has(module.id) ? (
-                                  <ChevronDown className="h-4 w-4 shrink-0" />
-                                ) : (
-                                  <ChevronRight className="h-4 w-4 shrink-0" />
+                          <ContextMenu modal={true} onOpenChange={(open) => {
+                            if (!open) setContextMenuCloseTime(Date.now());
+                          }}>
+                            <ContextMenuTrigger>
+                              <div
+                                className={cn(
+                                  "flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-pointer group relative",
+                                  selectedModuleId === module.id && "bg-primary/10 text-primary font-medium",
+                                  snapshot.isDragging && "border-2 border-primary/50 bg-muted/20 shadow-md"
+                                )}
+                              >
+                                <div className="flex items-center gap-2 flex-1 truncate pr-6">
+                                  <div {...provided.dragHandleProps}>
+                                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                                  </div>
+                                  <div onClick={() => toggleExpandedModule(module.id)}>
+                                    {expandedModulesSet.has(module.id) ? (
+                                      <ChevronDown className="h-4 w-4 shrink-0" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4 shrink-0" />
+                                    )}
+                                  </div>
+                                  <FolderClosed className="h-4 w-4 shrink-0 text-muted-foreground" />
+
+                                  {/* Inline editing for module title */}
+                                  {editingModuleId === module.id ? (
+                                    <div className="flex items-center gap-1 flex-1">
+                                      <Input
+                                        ref={editInputRef}
+                                        value={editingTitle}
+                                        onChange={(e) => setEditingTitle(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        onBlur={handleSaveTitle}
+                                        className="h-6 py-1 text-sm"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleSaveTitle();
+                                        }}
+                                      >
+                                        <Save className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-6 w-6"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleCancelEdit();
+                                        }}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <span
+                                      className="truncate flex-1"
+                                      onClick={() => toggleExpandedModule(module.id)}
+                                    >
+                                      {module.title}
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Module actions dropdown */}
+                                {!editingModuleId && (
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center bg-background/80 rounded-sm shadow-sm">
+                                    <DropdownMenu onOpenChange={(open) => {
+                                      if (!open) setContextMenuCloseTime(Date.now());
+                                    }}>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-6 w-6"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <MoreHorizontal className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-40">
+                                        <DropdownMenuItem onSelect={() => handleEditModule(module)}>
+                                          <Pencil className="mr-2 h-4 w-4" />
+                                          Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={() => {
+                                          setTargetModuleId(module.id);
+                                          setNewContentTypeDialogOpen(true);
+                                        }}>
+                                          <Plus className="mr-2 h-4 w-4" />
+                                          Add Content
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          className="text-destructive focus:text-destructive"
+                                          onSelect={() => handleDeleteModule(module)}
+                                        >
+                                          <Trash2 className="mr-2 h-4 w-4" />
+                                          Delete
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
                                 )}
                               </div>
-                              <FolderClosed className="h-4 w-4 shrink-0 text-muted-foreground" />
-                              <span className="truncate" onClick={() => toggleExpandedModule(module.id)}>{module.title}</span>
-                            </div>
-                          </div>
+                            </ContextMenuTrigger>
+                            <ContextMenuContent className="w-40">
+                              <ContextMenuItem onSelect={() => toggleExpandedModule(module.id)}>
+                                {expandedModulesSet.has(module.id) ? "Collapse" : "Expand"}
+                              </ContextMenuItem>
+                              <ContextMenuItem onSelect={() => handleEditModule(module)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Edit
+                              </ContextMenuItem>
+                              <ContextMenuItem onSelect={() => {
+                                setTargetModuleId(module.id);
+                                setNewContentTypeDialogOpen(true);
+                              }}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Content
+                              </ContextMenuItem>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onSelect={() => handleDeleteModule(module)}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
                 {expandedModulesSet.has(module.id) && (
                   <Droppable droppableId={module.id}>
                     {(provided, snapshot) => (
@@ -591,17 +997,123 @@ export default function EditorSidebar() {
                               <div
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={cn(
-                                  "flex items-center gap-2 py-1.5 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-pointer text-sm",
-                                  selectedLessonId === lesson.id && "bg-primary/10 text-primary font-medium",
-                                  snapshot.isDragging && "border border-primary/50 bg-muted/20 shadow-sm"
-                                )}
-                                onClick={() => handleSelectItem(module.id, lesson.id)}
+                                className="mb-1"
                               >
-                                <GripVertical className="h-3 w-3 text-muted-foreground" />
-                                {getItemIcon(lesson.metadata?.type || 'lesson')}
-                                <span className="truncate">{lesson.title}</span>
+                                <ContextMenu modal={true} onOpenChange={(open) => {
+                                  if (!open) setContextMenuCloseTime(Date.now());
+                                }}>
+                                  <ContextMenuTrigger>
+                                    <div
+                                      className={cn(
+                                        "flex items-center justify-between gap-2 py-1.5 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-pointer text-sm group relative",
+                                        selectedLessonId === lesson.id && "bg-primary/10 text-primary font-medium",
+                                        snapshot.isDragging && "border border-primary/50 bg-muted/20 shadow-sm"
+                                      )}
+                                      onClick={() => {
+                                        if (!editingLessonId) {
+                                          handleSelectItem(module.id, lesson.id);
+                                        }
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-2 flex-1 truncate pr-6">
+                                        <div {...provided.dragHandleProps}>
+                                          <GripVertical className="h-3 w-3 text-muted-foreground cursor-grab" />
+                                        </div>
+                                        {getItemIcon(lesson.metadata?.type || 'lesson')}
+
+                                        {/* Inline editing for lesson title */}
+                                        {editingLessonId === lesson.id ? (
+                                          <div className="flex items-center gap-1 flex-1">
+                                            <Input
+                                              ref={editInputRef}
+                                              value={editingTitle}
+                                              onChange={(e) => setEditingTitle(e.target.value)}
+                                              onKeyDown={handleEditKeyDown}
+                                              onBlur={handleSaveTitle}
+                                              className="h-5 py-0.5 text-xs"
+                                              onClick={(e) => e.stopPropagation()}
+                                            />
+                                            <Button
+                                              size="icon"
+                                              variant="ghost"
+                                              className="h-5 w-5"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleSaveTitle();
+                                              }}
+                                            >
+                                              <Save className="h-2.5 w-2.5" />
+                                            </Button>
+                                            <Button
+                                              size="icon"
+                                              variant="ghost"
+                                              className="h-5 w-5"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleCancelEdit();
+                                              }}
+                                            >
+                                              <X className="h-2.5 w-2.5" />
+                                            </Button>
+                                          </div>
+                                        ) : (
+                                          <span className="truncate flex-1">{lesson.title}</span>
+                                        )}
+                                      </div>
+
+                                      {/* Lesson actions dropdown */}
+                                      {!editingLessonId && (
+                                        <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 top-1/2 -translate-y-1/2 z-10 flex items-center bg-background/80 rounded-sm shadow-sm">
+                                          <DropdownMenu onOpenChange={(open) => {
+                                            if (!open) setContextMenuCloseTime(Date.now());
+                                          }}>
+                                            <DropdownMenuTrigger asChild>
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-5 w-5"
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <MoreHorizontal className="h-3 w-3" />
+                                              </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="w-40">
+                                              <DropdownMenuItem onSelect={() => handleEditLesson(lesson)}>
+                                                <Pencil className="mr-2 h-4 w-4" />
+                                                Edit Title
+                                              </DropdownMenuItem>
+                                              <DropdownMenuSeparator />
+                                              <DropdownMenuItem
+                                                className="text-destructive focus:text-destructive"
+                                                onSelect={() => handleDeleteLesson(lesson)}
+                                              >
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Delete
+                                              </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                          </DropdownMenu>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </ContextMenuTrigger>
+                                  <ContextMenuContent className="w-40">
+                                    <ContextMenuItem onSelect={() => handleSelectItem(module.id, lesson.id)}>
+                                      Open
+                                    </ContextMenuItem>
+                                    <ContextMenuItem onSelect={() => handleEditLesson(lesson)}>
+                                      <Pencil className="mr-2 h-4 w-4" />
+                                      Edit Title
+                                    </ContextMenuItem>
+                                    <ContextMenuSeparator />
+                                    <ContextMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onSelect={() => handleDeleteLesson(lesson)}
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </ContextMenuItem>
+                                  </ContextMenuContent>
+                                </ContextMenu>
                               </div>
                             )}
                           </Draggable>
@@ -651,7 +1163,33 @@ export default function EditorSidebar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deleteType === "module" ? "Delete Module" : "Delete Lesson"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteType === "module" ? (
+                <>Are you sure you want to delete the module <strong>{moduleToDelete?.title}</strong>? This will also delete all lessons within this module.</>
+              ) : (
+                <>Are you sure you want to delete the lesson <strong>{lessonToDelete?.title}</strong>? This action cannot be undone.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
