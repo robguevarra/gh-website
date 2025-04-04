@@ -8,7 +8,7 @@ import Image from "@tiptap/extension-image"
 import Placeholder from "@tiptap/extension-placeholder"
 import { useCourseContext } from "../../course-editor"
 import { useCourseStore } from "@/lib/stores/course"
-import { EditorToolbar } from "../toolbar"
+import { Toolbar } from "../toolbar"
 import debounce from "lodash/debounce"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -20,7 +20,7 @@ export function VisualEditor({ onSave }: VisualEditorProps) {
   const { currentContent, setCurrentContent, setSavedState } = useCourseContext()
   const { toast } = useToast()
   const {
-    selectedModuleId,
+    // selectedModuleId not used but kept for reference
     selectedLessonId,
     updateLesson,
     course
@@ -82,6 +82,11 @@ export function VisualEditor({ onSave }: VisualEditorProps) {
           heading: {
             levels: [1, 2, 3]
           },
+          bulletList: {},
+          orderedList: {},
+          blockquote: {},
+          code: {},
+          codeBlock: {},
           history: {
             depth: 10,
             newGroupDelay: 500
@@ -123,6 +128,17 @@ export function VisualEditor({ onSave }: VisualEditorProps) {
   )
 
   const editor = useEditor(editorConfig)
+
+  // Debug editor initialization
+  useEffect(() => {
+    if (editor) {
+      console.log('🔍 [VisualEditor] Editor initialized:', {
+        isEditable: editor.isEditable,
+        commands: Object.keys(editor.commands),
+        extensions: editor.extensionManager.extensions.map(ext => ext.name)
+      })
+    }
+  }, [editor])
 
   // Update editor content when currentContent changes or lesson changes
   useEffect(() => {
@@ -197,8 +213,14 @@ export function VisualEditor({ onSave }: VisualEditorProps) {
 
   return (
     <div className="relative min-h-[500px] rounded-md border border-input bg-background">
-      <EditorToolbar editor={editor} onSave={handleSave} />
-      <EditorContent editor={editor} />
+      <Toolbar editor={editor} onSave={handleSave} />
+      {editor ? (
+        <EditorContent editor={editor} />
+      ) : (
+        <div className="flex items-center justify-center h-[500px]">
+          <p className="text-muted-foreground">Loading editor...</p>
+        </div>
+      )}
     </div>
   )
 }
