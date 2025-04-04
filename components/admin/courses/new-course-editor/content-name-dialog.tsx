@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -45,6 +46,10 @@ export default function ContentNameDialog({
       setTitle("");
     } catch (error) {
       console.error("Error submitting content:", error);
+      // Show error toast
+      toast.error("Failed to create content", {
+        description: "Please try again",
+      });
       // Reopen the dialog if there was an error
       onOpenChange(true);
     } finally {

@@ -1,4 +1,4 @@
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import type { ExtendedModule, ModuleItem, TransformedModule } from '../types';
 import { validateModuleUpdate } from '../utils/validation';
 import { cacheManager } from '../utils/cache';
@@ -33,7 +33,7 @@ export const createModuleActions = (set: SetState, get: () => CourseStore) => ({
     }
 
     set({ pendingSave: true, error: null });
-    
+
     try {
       // Validate data before sending
       const validatedData = await validateModuleUpdate(data);
@@ -54,7 +54,7 @@ export const createModuleActions = (set: SetState, get: () => CourseStore) => ({
       }
 
       const updatedModule = await response.json();
-      
+
       // Update local state only - no need to refetch
       set((state: CourseStore) => ({
         course: state.course ? {
@@ -67,7 +67,7 @@ export const createModuleActions = (set: SetState, get: () => CourseStore) => ({
         lastSaveTime: new Date().toISOString(),
         error: null
       }));
-      
+
       toast({
         title: 'Success',
         description: 'Module updated successfully',
@@ -97,54 +97,81 @@ export const createModuleActions = (set: SetState, get: () => CourseStore) => ({
     if (!movedModule) return;
 
     const oldPosition = movedModule.position;
-    movedModule.position = newPosition;
+
+    // Update positions for all modules
+    const updatedModules = [...modules];
+    // Remove the module from its current position
+    const moduleIndex = updatedModules.findIndex(m => m.id === moduleId);
+    if (moduleIndex === -1) return;
+
+    const [removedModule] = updatedModules.splice(moduleIndex, 1);
+    // Insert it at the new position
+    updatedModules.splice(newPosition, 0, removedModule);
+
+    // Update positions for all modules
+    updatedModules.forEach((module, index) => {
+      module.position = index;
+    });
 
     try {
       set({ isLoading: true, error: null });
-      await Promise.all(
-        modules.map((module) =>
-          fetch(`/api/admin/courses/${course.id}/modules/${module.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ 
-              position: module.position,
-              updated_at: new Date().toISOString()
-            }),
-          })
-        )
-      );
 
-      await get().fetchCourse(course.id);
-      toast({
-        title: 'Success',
-        description: `Module moved from position ${oldPosition} to ${newPosition}`,
+      // Make a single API call to reorder all modules
+      const response = await fetch(`/api/courses/${course.id}/modules/reorder`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          moduleOrder: updatedModules.map(module => ({
+            id: module.id,
+            position: module.position
+          }))
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reorder modules');
+      }
+
+      // Update the local state with the new module order
+      set(state => ({
+        ...state,
+        modules: updatedModules,
+        course: state.course ? {
+          ...state.course,
+          modules: updatedModules
+        } : null,
+        isLoading: false,
+        error: null
+      }));
+
+      toast.success('Success', {
+        description: `Module moved from position ${oldPosition} to ${newPosition}`
       });
     } catch (error) {
       const message = (error as Error).message;
       set({ error: message, isLoading: false });
-      toast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive',
+      toast.error('Error', {
+        description: message
       });
     }
   },
 
   fetchModuleTree: async (courseId: string, moduleId: string) => {
     console.log('🔍 [Store] Fetching module tree:', { courseId, moduleId });
-    
+
     set({ isLoading: true, error: null });
-    
+
     try {
       const response = await fetch(`/api/admin/courses/${courseId}/modules/${moduleId}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch module data');
       }
 
       const module = await response.json();
-      
+
       set((state: CourseStore) => ({
         course: state.course ? {
           ...state.course,
@@ -199,4 +226,4 @@ export const createModuleActions = (set: SetState, get: () => CourseStore) => ({
       return { expandedModules: newExpandedModules };
     });
   }
-}); 
+});

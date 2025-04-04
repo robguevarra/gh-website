@@ -14,7 +14,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { useState, useEffect, useMemo } from "react"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 import type { ModuleItem } from "./course-editor"
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd"
 import ContentNameDialog from "./content-name-dialog"
@@ -35,7 +35,6 @@ import type { ExtendedModule } from "@/lib/stores/course/types"
 import { useParams } from "next/navigation"
 
 export default function EditorSidebar() {
-  const { toast } = useToast()
   const params = useParams()
   const courseId = params.courseId as string
   const [isCreatingLesson, setIsCreatingLesson] = useState(false)
@@ -54,7 +53,10 @@ export default function EditorSidebar() {
     setSavedState,
     isLoading,
     error,
-    fetchCourse
+    fetchCourse,
+    updateLesson,
+    reorderLesson,
+    reorderModule
   } = useCourseStore()
 
   // Ensure expandedModules is a Set
@@ -89,10 +91,8 @@ export default function EditorSidebar() {
     // Find the first module to add content to
     const targetModule = modules[0];
     if (!targetModule || !courseId) {
-      toast({
-        title: "No modules available",
-        description: "Please create a module first before adding content",
-        variant: "destructive",
+      toast.error("No modules available", {
+        description: "Please create a module first before adding content"
       });
       setNewContentTypeDialogOpen(false);
       return;
@@ -110,102 +110,99 @@ export default function EditorSidebar() {
   // Step 2: Create content with name
   const handleCreateContent = async (title: string) => {
     if (!courseId || !targetModuleId || !newContentType) {
-      toast({
-        title: "Error",
+      toast.error("Error", {
         description: "Missing required information to create content",
-        variant: "destructive",
       });
       return;
     }
 
-    try {
-      // First close the dialog to improve perceived performance
-      setNewContentNameDialogOpen(false);
-      // Show loading state
-      setIsCreatingLesson(true);
+    // First close the dialog to improve perceived performance
+    setNewContentNameDialogOpen(false);
 
-      // Show a loading toast
-      toast({
-        title: "Creating content",
-        description: `Creating new ${newContentType}...`,
-        variant: "default",
-      });
+    // Show loading state - force a state update
+    setIsCreatingLesson(true);
 
-      // Critical fix: Create a completely separate asynchronous execution flow
-      // to prevent state updates from causing unwanted re-renders
-      const createContentAsync = async () => {
-        try {
-          console.log('🔄 [EditorSidebar] Creating new content:', { moduleId: targetModuleId, type: newContentType, title });
-          
-          // 1. First silently expand the module if it's not already expanded
-          if (!expandedModulesSet.has(targetModuleId)) {
-            toggleExpandedModule(targetModuleId);
-            // Give a moment for this state update to settle
-            await new Promise(resolve => setTimeout(resolve, 50));
-          }
-          
-          // 2. Select the module first to establish context - this is a crucial ordering
-          selectModule(targetModuleId);
-          
-          // 3. Set saved state to prevent any "unsaved" indicators
-          setSavedState("saved");
-          
-          // 4. Allow the module selection to settle before proceeding
-          await new Promise(resolve => setTimeout(resolve, 50));
-          
-          // 5. Only now call the API to create content - after UI is prepared
-          const newContent = await addContent(courseId, targetModuleId, newContentType, title);
-          console.log('✅ [EditorSidebar] Content created successfully:', newContent.id);
-          
-          // 6. Add significant delay before selecting the lesson
-          // This ensures all state updates have fully processed
-          setTimeout(() => {
-            // Now it's safe to select the lesson
-            console.log('💾 [EditorSidebar] Selecting new lesson:', newContent.id);
-            selectLesson(newContent.id);
-            
-            // Hide loading state
-            setIsCreatingLesson(false);
-            
-            // Show success toast at the very end of the process
-            toast({
-              title: "Success",
-              description: `New ${newContentType} added successfully`
-            });
-          }, 500); // Increased timeout for better state settlement
-        } catch (error) {
-          console.error('Failed to add content:', error);
-          setIsCreatingLesson(false);
-          toast({
-            title: "Error",
-            description: "Failed to add content. Please try again.",
-            variant: "destructive",
-          });
+    // Ensure the state update is applied immediately
+    // This is a React trick to force a re-render
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Show a loading toast that will persist
+    // Store the ID so we can dismiss it later
+    const loadingToastId = toast.loading(`Creating new ${newContentType}...`, {
+      duration: 60000, // Keep it visible for a long time in case the operation takes a while
+    });
+
+    // Execute the async function after a small delay to
+    // ensure the dialog close operation has completed
+    // Capture the loadingToastId in the closure
+    const loadingToastIdCaptured = loadingToastId;
+    setTimeout(async () => {
+      // Use the captured toast ID to ensure it's available in this scope
+      const loadingToastId = loadingToastIdCaptured;
+      try {
+        console.log('🔄 [EditorSidebar] Creating new content:', { moduleId: targetModuleId, type: newContentType, title });
+
+        // 1. First silently expand the module if it's not already expanded
+        if (!expandedModulesSet.has(targetModuleId)) {
+          toggleExpandedModule(targetModuleId);
+          // Give a moment for this state update to settle
+          await new Promise(resolve => setTimeout(resolve, 100)); // Increased timeout
         }
-      };
-      
-      // Execute the async function after a small delay to
-      // ensure the dialog close operation has completed
-      setTimeout(() => {
-        createContentAsync();
-      }, 100);
-    } catch (error) {
-      console.error('Failed to process content creation:', error);
-      setIsCreatingLesson(false);
-      toast({
-        title: "Error",
-        description: "Failed to process content creation. Please try again.",
-        variant: "destructive",
-      });
-    }
+
+        // 2. Select the module first to establish context - this is a crucial ordering
+        selectModule(targetModuleId);
+
+        // 3. Set saved state to prevent any "unsaved" indicators
+        setSavedState("saved");
+
+        // 4. Allow the module selection to settle before proceeding
+        await new Promise(resolve => setTimeout(resolve, 100)); // Increased timeout
+
+        // 5. Only now call the API to create content - after UI is prepared
+        const newContent = await addContent(courseId, targetModuleId, newContentType, title);
+        console.log('✅ [EditorSidebar] Content created successfully:', newContent.id);
+
+        // 6. Add significant delay before selecting the lesson
+        // This ensures all state updates have fully processed
+        setTimeout(() => {
+          // Now it's safe to select the lesson
+          console.log('💾 [EditorSidebar] Selecting new lesson:', newContent.id);
+          selectLesson(newContent.id);
+
+          // Hide loading state
+          setIsCreatingLesson(false);
+
+          // Dismiss the loading toast
+          toast.dismiss(loadingToastId);
+
+          // Show success toast at the very end of the process
+          toast.success("Success", {
+            description: `New ${newContentType} added successfully`
+          });
+        }, 1000); // Increased timeout for better state settlement
+      } catch (error) {
+        console.error('Failed to add content:', error);
+
+        // Ensure loading state is reset
+        setIsCreatingLesson(false);
+
+        // Force a re-render to update the UI
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        // Dismiss the loading toast
+        toast.dismiss(loadingToastId);
+
+        toast.error("Error", {
+          description: "Failed to add content. Please try again."
+        });
+      }
+    }, 100);
   };
 
   const handleAddModule = () => {
     if (!newModuleTitle.trim() || !courseId) {
-      toast({
-        title: "Module title required",
-        description: "Please enter a title for the new module",
-        variant: "destructive",
+      toast.error("Module title required", {
+        description: "Please enter a title for the new module"
       });
       return;
     }
@@ -221,9 +218,8 @@ export default function EditorSidebar() {
 
     setSavedState("unsaved");
 
-    toast({
-      title: "Module added",
-      description: `"${newModuleTitle}" has been added to your course`,
+    toast.success("Module added", {
+      description: `"${newModuleTitle}" has been added to your course`
     });
   };
 
@@ -232,31 +228,134 @@ export default function EditorSidebar() {
     selectLesson(itemId);
   };
 
-  const handleDragEnd = (result: DropResult) => {
+  const handleDragEnd = async (result: DropResult) => {
+    // If there's no destination, the item was dropped outside a valid drop area
     if (!result.destination) return;
 
-    const sourceModule = modules.find(m => m.id === result.source.droppableId);
-    const destModule = modules.find(m => m.id === result.destination?.droppableId);
+    // If the item was dropped in the same position, do nothing
+    if (
+      result.destination.droppableId === result.source.droppableId &&
+      result.destination.index === result.source.index
+    ) {
+      return;
+    }
 
-    if (!sourceModule?.lessons || !destModule?.lessons) return;
+    // Show loading toast
+    const loadingToastId = toast.loading("Updating order...");
 
-    const sourceLessons = [...sourceModule.lessons];
-    const destLessons = sourceModule === destModule ? sourceLessons : [...destModule.lessons];
+    try {
+      // Check if we're dealing with modules or lessons
+      if (result.type === "MODULE") {
+        // Handle module reordering
+        const modulesCopy = [...modules];
+        const [movedModule] = modulesCopy.splice(result.source.index, 1);
+        modulesCopy.splice(result.destination.index, 0, movedModule);
 
-    const [movedLesson] = sourceLessons.splice(result.source.index, 1);
-    destLessons.splice(result.destination.index, 0, movedLesson);
+        // Update positions
+        modulesCopy.forEach((module, index) => {
+          module.position = index;
+        });
 
-    const newModules = modules.map(m => {
-      if (m.id === sourceModule.id) {
-        return { ...m, lessons: sourceLessons };
+        // Update UI optimistically
+        setSavedState("unsaved");
+
+        // Call the reorderModule function from the store
+        try {
+          // Get the course ID
+          if (!courseId) {
+            throw new Error("Course ID not found");
+          }
+
+          // Call the reorderModule function
+          await reorderModule(movedModule.id, result.destination.index);
+
+          // Dismiss loading toast and show success
+          toast.dismiss(loadingToastId);
+          toast.success("Modules reordered", {
+            description: "The module order has been updated"
+          });
+        } catch (error) {
+          console.error('Error reordering modules:', error);
+          toast.dismiss(loadingToastId);
+          toast.error("Error", {
+            description: "Failed to reorder modules. Please try again."
+          });
+        }
+      } else {
+        // Handle lesson reordering
+        // Get the source and destination modules
+        const sourceModule = modules.find(m => m.id === result.source.droppableId);
+        const destModule = modules.find(m => m.id === result.destination?.droppableId);
+
+        if (!sourceModule?.lessons || !destModule?.lessons) {
+          toast.dismiss(loadingToastId);
+          toast.error("Error", { description: "Module not found" });
+          return;
+        }
+
+        // Create copies of the lesson arrays
+        const sourceLessons = [...sourceModule.lessons];
+        const destLessons = sourceModule === destModule ? sourceLessons : [...destModule.lessons];
+
+        // Move the lesson from source to destination
+        const [movedLesson] = sourceLessons.splice(result.source.index, 1);
+        destLessons.splice(result.destination.index, 0, movedLesson);
+
+        // Update the position property of each lesson
+        sourceLessons.forEach((lesson, index) => {
+          lesson.position = index;
+        });
+
+        if (sourceModule.id !== destModule.id) {
+          destLessons.forEach((lesson, index) => {
+            lesson.position = index;
+          });
+        }
+
+        // Update the UI optimistically
+        setSavedState("unsaved");
+
+        // If the lesson was moved to a different module, we need to update its module_id
+        if (sourceModule.id !== destModule.id) {
+          // First update the lesson's module_id
+          await updateLesson(movedLesson.id, {
+            module_id: destModule.id,
+            position: result.destination.index
+          });
+
+          toast.dismiss(loadingToastId);
+          toast.success("Lesson moved", {
+            description: `Moved to ${destModule.title}`
+          });
+        } else {
+          // Just update the position
+          await reorderLesson(movedLesson.id, result.destination.index);
+
+          toast.dismiss(loadingToastId);
+          toast.success("Order updated", {
+            description: "Lesson order has been updated"
+          });
+        }
       }
-      if (m.id === destModule.id) {
-        return { ...m, lessons: destLessons };
-      }
-      return m;
-    });
+    } catch (error) {
+      console.error('Error updating order:', error);
+      toast.dismiss(loadingToastId);
 
-    setSavedState("unsaved");
+      // Provide more detailed error message
+      let errorMessage = "Failed to update order. Please try again.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
+      toast.error("Error", {
+        description: errorMessage
+      });
+
+      // Refresh the course data to ensure UI is in sync with server
+      if (courseId) {
+        await fetchCourse(courseId);
+      }
+    }
   };
 
   const getItemIcon = (type: string) => {
@@ -345,7 +444,7 @@ export default function EditorSidebar() {
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
           {isCreatingLesson ? (
-            <div className="bg-background border rounded-md px-2 py-1 text-xs flex items-center gap-1">
+            <div className="bg-background border rounded-md px-2 py-1 text-xs flex items-center gap-1 animate-pulse">
               <Loader2 className="h-3 w-3 animate-spin" />
               <span>Creating lesson...</span>
             </div>
@@ -427,44 +526,76 @@ export default function EditorSidebar() {
       <ScrollArea className="h-[calc(100vh-10rem)]">
         <div className="p-4">
           <DragDropContext onDragEnd={handleDragEnd}>
-            {modules.map((module) => (
-              <div key={module.id} className="mb-4">
+            <Droppable droppableId="modules" type="MODULE">
+              {(provided, snapshot) => (
                 <div
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
                   className={cn(
-                    "flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-pointer",
-                    selectedModuleId === module.id && "bg-primary/10 text-primary font-medium"
+                    "space-y-4",
+                    snapshot.isDraggingOver && "bg-muted/30 rounded-md p-2"
                   )}
-                  onClick={() => toggleExpandedModule(module.id)}
                 >
-                  <div className="flex items-center gap-2 flex-1 truncate">
-                    <GripVertical className="h-4 w-4 text-muted-foreground" />
-                    {expandedModulesSet.has(module.id) ? (
-                      <ChevronDown className="h-4 w-4 shrink-0" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 shrink-0" />
-                    )}
-                    <FolderClosed className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="truncate">{module.title}</span>
-                  </div>
-                </div>
+                  {modules.map((module, moduleIndex) => (
+                    <Draggable key={module.id} draggableId={`module-${module.id}`} index={moduleIndex}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          className="mb-4"
+                        >
+                          <div
+                            className={cn(
+                              "flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-pointer",
+                              selectedModuleId === module.id && "bg-primary/10 text-primary font-medium",
+                              snapshot.isDragging && "border-2 border-primary/50 bg-muted/20 shadow-md"
+                            )}
+                          >
+                            <div className="flex items-center gap-2 flex-1 truncate">
+                              <div {...provided.dragHandleProps}>
+                                <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                              </div>
+                              <div onClick={() => toggleExpandedModule(module.id)}>
+                                {expandedModulesSet.has(module.id) ? (
+                                  <ChevronDown className="h-4 w-4 shrink-0" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4 shrink-0" />
+                                )}
+                              </div>
+                              <FolderClosed className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              <span className="truncate" onClick={() => toggleExpandedModule(module.id)}>{module.title}</span>
+                            </div>
+                          </div>
                 {expandedModulesSet.has(module.id) && (
                   <Droppable droppableId={module.id}>
-                    {(provided) => (
+                    {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
                         {...provided.droppableProps}
-                        className="pl-9 mt-1"
+                        className={cn(
+                          "pl-9 mt-1",
+                          snapshot.isDraggingOver && "bg-muted/20 rounded-md py-1"
+                        )}
                       >
+                        {/* Show loading indicator in the module where content is being added */}
+                        {isCreatingLesson && targetModuleId === module.id && (
+                          <div className="flex items-center gap-2 py-1.5 px-3 rounded-md bg-muted/30 text-sm animate-pulse my-1">
+                            <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                            <span className="truncate">Creating new {newContentType}...</span>
+                          </div>
+                        )}
+
                         {(module.lessons || []).map((lesson, index) => (
                           <Draggable key={lesson.id} draggableId={lesson.id} index={index}>
-                            {(provided) => (
+                            {(provided, snapshot) => (
                               <div
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 {...provided.dragHandleProps}
                                 className={cn(
                                   "flex items-center gap-2 py-1.5 px-3 rounded-md hover:bg-muted/50 transition-colors cursor-pointer text-sm",
-                                  selectedLessonId === lesson.id && "bg-primary/10 text-primary font-medium"
+                                  selectedLessonId === lesson.id && "bg-primary/10 text-primary font-medium",
+                                  snapshot.isDragging && "border border-primary/50 bg-muted/20 shadow-sm"
                                 )}
                                 onClick={() => handleSelectItem(module.id, lesson.id)}
                               >
@@ -480,8 +611,14 @@ export default function EditorSidebar() {
                     )}
                   </Droppable>
                 )}
-              </div>
-            ))}
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
           </DragDropContext>
           <Button
             variant="outline"
