@@ -1,54 +1,51 @@
-import type { Course, ExtendedModule, Lesson, ModuleItem, TransformedLesson, TransformedModule } from '../types';
+import type { Course, ExtendedModule, Lesson } from '../types';
 
-// Helper function to transform a ModuleItem to a TransformedLesson
-export function transformModuleItem(item: ModuleItem): TransformedLesson {
+/**
+ * Helper function to ensure lesson has all required fields
+ *
+ * @param lesson - The lesson to normalize
+ * @returns A normalized lesson with all required fields
+ */
+export function normalizeLesson(lesson: Lesson): Lesson {
   return {
-    id: item.id,
-    title: item.title,
-    type: item.type || 'lesson',
-    duration: item.duration || 0,
-    content: item.content || '',
-    content_json: item.content_json
+    ...lesson,
+    content: lesson.content || lesson.content_json?.content || '',
+    content_json: lesson.content_json || {
+      content: lesson.content || '',
+      type: 'html',
+      version: 1
+    },
+    metadata: lesson.metadata || {
+      type: 'lesson'
+    }
   };
 }
 
-// Helper function to ensure module has items
-export function ensureModuleItems(module: ExtendedModule): TransformedModule {
-  return {
-    ...module,
-    items: (module.items || []).map(transformModuleItem)
-  };
-}
-
-// Helper function to transform modules
+/**
+ * Helper function to transform modules
+ *
+ * @param modules - The modules to transform
+ * @returns Transformed modules with normalized lessons
+ */
 export function transformModules(modules: ExtendedModule[]): ExtendedModule[] {
   return (modules || []).map((module: ExtendedModule) => ({
     ...module,
-    items: (module.lessons || []).map((lesson: Lesson) => ({
-      id: lesson.id,
-      title: lesson.title,
-      type: (lesson.metadata?.type as ModuleItem['type']) || 'lesson',
-      duration: 0,
-      content: lesson.content_json?.content || '',
-      content_json: lesson.content_json
-    }))
+    lessons: (module.lessons || []).map(normalizeLesson)
   }));
 }
 
-// Helper function to transform course data
+/**
+ * Helper function to transform course data
+ *
+ * @param course - The course to transform
+ * @returns Transformed course with normalized modules and lessons
+ */
 export function transformCourse(course: Course): Course {
   return {
     ...course,
     modules: course.modules?.map(module => ({
       ...module,
-      items: module.lessons?.map(lesson => ({
-        id: lesson.id,
-        title: lesson.title,
-        type: lesson.metadata?.type || 'lesson',
-        content: lesson.content_json?.content || '',
-        content_json: lesson.content_json,
-        duration: 0
-      }))
+      lessons: (module.lessons || []).map(normalizeLesson)
     }))
   };
-} 
+}

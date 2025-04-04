@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useEditor, EditorContent, Editor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Link from "@tiptap/extension-link"
@@ -19,22 +19,36 @@ interface VisualEditorProps {
 export function VisualEditor({ onSave }: VisualEditorProps) {
   const { currentContent, setCurrentContent, setSavedState } = useCourseContext()
   const { toast } = useToast()
-  const { 
-    selectedModuleId, 
-    selectedLessonId, 
+  const {
+    selectedModuleId,
+    selectedLessonId,
     updateLesson,
     course
   } = useCourseStore()
+
+  // Keep track of whether we're currently updating the editor content
+  const isUpdatingContent = useRef(false)
+
+  // Keep track of the last selected lesson ID to detect changes
+  const lastLessonIdRef = useRef<string | null>(null)
 
   // Debounce content updates
   const debouncedContentUpdate = useMemo(
     () =>
       debounce(async (html: string) => {
-        if (!selectedLessonId || !course) return;
-        
+        // Skip if we're updating the editor content programmatically
+        if (isUpdatingContent.current) {
+          return
+        }
+
+        if (!selectedLessonId || !course) {
+          console.warn('⚠️ [VisualEditor] Cannot save: No lesson selected or course loaded')
+          return
+        }
+
         setCurrentContent(html)
         setSavedState("saving")
-        
+
         try {
           await updateLesson(selectedLessonId, {
             content_json: {
@@ -88,8 +102,14 @@ export function VisualEditor({ onSave }: VisualEditorProps) {
           placeholder: "Start writing your content..."
         })
       ],
-      content: currentContent || "",
+      // Only set initial content, updates will be handled by the useEffect
+      content: "<p>Start writing your content...</p>",
       onUpdate: ({ editor }: { editor: Editor }) => {
+        // Skip if we're updating the editor content programmatically
+        if (isUpdatingContent.current) {
+          return
+        }
+
         const html = editor.getHTML()
         debouncedContentUpdate(html)
       },
@@ -99,26 +119,51 @@ export function VisualEditor({ onSave }: VisualEditorProps) {
         }
       }
     }),
-    [currentContent, debouncedContentUpdate]
+    [debouncedContentUpdate] // Remove currentContent dependency
   )
 
   const editor = useEditor(editorConfig)
 
-  // Update editor content when lesson changes
+  // Update editor content when currentContent changes or lesson changes
   useEffect(() => {
-    if (editor && currentContent !== editor.getHTML()) {
-      editor.commands.setContent(currentContent || "")
+    if (!editor) return
+
+    // Check if the lesson ID has changed
+    const lessonChanged = lastLessonIdRef.current !== selectedLessonId
+    lastLessonIdRef.current = selectedLessonId
+
+    // Get current editor content
+    const editorContent = editor.getHTML()
+
+    // Only update if content has changed or lesson has changed
+    if (currentContent !== editorContent || lessonChanged) {
+      console.log('📝 [VisualEditor] Setting editor content:', {
+        content: currentContent?.substring(0, 50) + (currentContent && currentContent.length > 50 ? '...' : '') || 'empty',
+        lessonChanged,
+        lessonId: selectedLessonId
+      })
+
+      // Set flag to prevent triggering onUpdate while we're updating content
+      isUpdatingContent.current = true
+
+      // Set content with fallback - use "New lesson content goes here" for new lessons
+      editor.commands.setContent(currentContent || "<p>New lesson content goes here</p>")
+
+      // Reset flag after a short delay to ensure the update has completed
+      setTimeout(() => {
+        isUpdatingContent.current = false
+      }, 50)
     }
-  }, [editor, currentContent, selectedModuleId, selectedLessonId])
+  }, [editor, currentContent, selectedLessonId])
 
   // Handle manual save
   const handleSave = useCallback(async () => {
     if (!editor || !selectedLessonId || !course) return;
-    
+
     const content = editor.getHTML()
     setCurrentContent(content)
     setSavedState("saving")
-    
+
     try {
       await updateLesson(selectedLessonId, {
         content_json: {
@@ -156,4 +201,4 @@ export function VisualEditor({ onSave }: VisualEditorProps) {
       <EditorContent editor={editor} />
     </div>
   )
-} 
+}

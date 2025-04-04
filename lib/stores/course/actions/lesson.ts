@@ -1,29 +1,17 @@
-import { Course } from '@/types/course';
 import { ExtendedModule } from '../types/module';
-import { CourseStore, ModuleItem } from '../types/store';
 import { StoreApi } from 'zustand';
 import type { CourseStore as CourseStoreType } from '../types/store';
-import { validateLessonUpdate } from '../utils/validation';
-import { cacheManager } from '../utils/cache';
-import { ExtendedModule as ExtendedModuleType } from '../types/module';
-
-// Define Lesson type
-interface Lesson {
-  id: string;
-  title: string;
-  description?: string;
-  content?: string;
-  content_json?: {
-    content: string;
-    type?: string;
-    version?: number;
-  };
-  module_id: string;
-  updated_at: string;
-}
+import { Lesson } from '../types/lesson';
 
 export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], get: () => CourseStoreType) => ({
-  updateLesson: async (lessonId: string, data: Partial<ModuleItem>) => {
+  /**
+   * Update a lesson with new data
+   *
+   * @param lessonId - The ID of the lesson to update
+   * @param data - The data to update the lesson with
+   * @returns Promise that resolves when the update is complete
+   */
+  updateLesson: async (lessonId: string, data: Partial<Lesson>) => {
     console.log('🔄 [Lesson] Starting update:', { lessonId, data });
 
     const { course } = get();
@@ -33,21 +21,27 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
     }
 
     // Find module containing the lesson
-    const module = course.modules.find(m => 
-      m.lessons?.some(l => l.id === lessonId) || 
-      m.items?.some(item => item.id === lessonId)
+    const module = course.modules.find(m =>
+      m.lessons?.some(l => l.id === lessonId)
     );
 
     if (!module) {
-      console.error('❌ [Lesson] Lesson not found in any module');
+      console.error('❌ [Lesson] Lesson not found in any module:', { lessonId, moduleIds: course.modules.map(m => m.id) });
       throw new Error('Lesson not found in any module');
     }
+
+    // Log more detailed information for debugging
+    console.log('🔍 [Lesson] Found lesson in module:', {
+      moduleId: module.id,
+      lessonId,
+      inLessonsArray: module.lessons?.some(l => l.id === lessonId)
+    });
 
     try {
       // Apply optimistic update first
       set((state) => {
         if (!state.course?.modules) return state;
-        
+
         const updatedModules = state.course.modules.map((m) =>
           m.id === module.id
             ? {
@@ -56,26 +50,14 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
                   lesson.id === lessonId
                     ? {
                         ...lesson,
+                        ...data,
                         content_json: {
                           content: data.content_json?.content || lesson.content_json?.content || '',
-                          type: 'lesson',
+                          type: data.content_json?.type || lesson.content_json?.type || 'html',
                           version: (lesson.content_json?.version || 0) + 1
                         }
                       }
                     : lesson
-                ),
-                items: (m.items || []).map((item) =>
-                  item.id === lessonId
-                    ? {
-                        ...item,
-                        content: data.content_json?.content || item.content,
-                        content_json: {
-                          content: data.content_json?.content || item.content_json?.content || '',
-                          type: 'lesson',
-                          version: (item.content_json?.version || 0) + 1
-                        }
-                      }
-                    : item
                 )
               }
             : m
@@ -112,7 +94,7 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
       });
 
       // Make API call with proper endpoint following Next.js 13+ conventions
-      const response = await fetch(`/api/admin/courses/${course.id}/lessons/${lessonId}`, {
+      const response = await fetch(`/api/courses/${course.id}/modules/${module.id}/lessons/${lessonId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -132,7 +114,7 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
       // Update state with server response
       set(state => {
         if (!state.course?.modules) return state;
-        
+
         const updatedModules = state.course.modules.map(m =>
           m.id === module.id
             ? {
@@ -141,15 +123,6 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
                   l.id === lessonId
                     ? { ...l, ...updatedLesson }
                     : l
-                ),
-                items: (m.items || []).map(item =>
-                  item.id === lessonId
-                    ? {
-                        ...item,
-                        content: updatedLesson.content_json?.content || item.content,
-                        content_json: updatedLesson.content_json
-                      }
-                    : item
                 )
               }
             : m
@@ -177,6 +150,13 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
     }
   },
 
+  /**
+   * Reorder a lesson within its module
+   *
+   * @param lessonId - The ID of the lesson to reorder
+   * @param newPosition - The new position for the lesson
+   * @returns Promise that resolves when the reordering is complete
+   */
   reorderLesson: async (lessonId: string, newPosition: number) => {
     const course = get().course;
     if (!course) return;
@@ -188,7 +168,7 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
     const movedLesson = lessons.find(l => l.id === lessonId);
     if (!movedLesson) return;
 
-    const oldPosition = movedLesson.position;
+    // Update the lesson's position
     movedLesson.position = newPosition;
 
     try {
@@ -199,7 +179,7 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               position: lesson.position,
               updated_at: new Date().toISOString()
             }),
@@ -215,64 +195,42 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
     }
   },
 
-  addContent: async (courseId: string, moduleId: string, type: string) => {
-    const { modules } = get();
-    console.log('➕ [Store] Adding new content:', { courseId, moduleId, type });
-    
+  /**
+   * Add a new content item (lesson, quiz, video, etc.) to a module
+   *
+   * @param courseId - The ID of the course
+   * @param moduleId - The ID of the module to add content to
+   * @param type - The type of content to add ('lesson', 'quiz', 'video', 'assignment')
+   * @param title - The title for the new content
+   * @returns Promise with the newly created content
+   */
+  addContent: async (courseId: string, moduleId: string, type: string, title: string) => {
+    console.log('➕ [Store] Adding new content:', { courseId, moduleId, type, title });
+
     set({ isLoading: true, error: null, savedState: 'saving' });
-    
+
     try {
-      // Create optimistic update with a proper temporary ID format
-      const tempId = `temp_${type}_${Date.now()}`;
-      const optimisticContent = {
-        id: tempId,
-        title: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-        type: type as ModuleItem['type'],
-        duration: 0,
-        content: `<p>New ${type} content goes here</p>`,
-        content_json: {
-          content: `<p>New ${type} content goes here</p>`,
-          type: 'html',
-          version: 1
-        },
-        status: 'draft',
-        is_preview: false,
-        description: null,
-        metadata: {
-          type: type
-        }
-      };
+      // Make API call to create the lesson with the provided title
+      console.log('📤 [Store] Creating new lesson:', { courseId, moduleId, type, title });
 
-      // Apply optimistic update
-      set(state => ({
-        modules: state.modules.map(m => 
-          m.id === moduleId 
-            ? { ...m, items: [...(m.items || []), optimisticContent] }
-            : m
-        ),
-        selectedLessonId: tempId // Select the new content immediately
-      }));
-
-      console.log('📤 [Store] Creating new lesson:', {
-        courseId,
-        moduleId,
-        type,
-        tempId
-      });
-
-      // Make API call to create the lesson
-      const response = await fetch(`/api/admin/courses/${courseId}/modules/${moduleId}/lessons`, {
+      const response = await fetch(`/api/courses/${courseId}/modules/${moduleId}/lessons`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          title: optimisticContent.title,
-          content_json: optimisticContent.content_json,
-          status: optimisticContent.status,
-          description: optimisticContent.description,
-          is_preview: optimisticContent.is_preview,
-          metadata: optimisticContent.metadata
+          title: title,
+          content_json: {
+            content: `<p>New ${type} content goes here</p>`,
+            type: 'html',
+            version: 1
+          },
+          status: 'draft',
+          description: '',
+          is_preview: false,
+          metadata: {
+            type: type
+          }
         }),
       });
 
@@ -282,43 +240,66 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
       }
 
       const newContent = await response.json();
-      console.log('✅ [Store] Lesson created successfully:', newContent);
+      console.log('✅ [Store] Lesson created successfully:', { newContent });
 
-      // Validate the response
-      if (!newContent.id) {
-        throw new Error('Invalid response: Missing lesson ID');
-      }
-      
-      // Update with real data
+      // Update the UI with the new lesson
+      // Create the new lesson object with all required fields
+      const newLesson = {
+        ...newContent,
+        content: newContent.content_json?.content || '',
+        module_id: moduleId,
+        metadata: {
+          ...newContent.metadata,
+          type: type as 'video' | 'lesson' | 'quiz' | 'assignment'
+        }
+      };
+
+      // Update the UI with the new lesson - use a simpler update that won't trigger a full reload
       set(state => {
-        // Find the module again to ensure we have latest state
-        const targetModule = state.modules.find(m => m.id === moduleId);
-        if (!targetModule) {
-          console.error('Module not found after lesson creation');
+        // Find the module to update
+        const moduleToUpdate = state.modules.find(m => m.id === moduleId);
+        if (!moduleToUpdate) {
+          console.warn('⚠️ [Store] Module not found for adding lesson:', moduleId);
           return state;
         }
 
-        const updatedModules = state.modules.map(m => 
-          m.id === moduleId 
+        // Create updated modules array
+        const updatedModules = state.modules.map(m =>
+          m.id === moduleId
             ? {
                 ...m,
-                items: (m.items || []).map(item => 
-                  item.id === tempId 
-                    ? {
-                        ...newContent,
-                        content: newContent.content_json?.content || '',
-                        content_json: newContent.content_json,
-                        type: type as ModuleItem['type']
-                      }
-                    : item
-                )
+                lessons: [...m.lessons, newLesson]
               }
             : m
         );
 
+        // Create updated course object if it exists
+        const updatedCourse = state.course
+          ? {
+              ...state.course,
+              modules: state.course.modules?.map(m =>
+                m.id === moduleId
+                  ? {
+                      ...m,
+                      lessons: [...(m.lessons || []), newLesson]
+                    }
+                  : m
+              )
+            }
+          : null;
+
+        // Log the update for debugging
+        console.log('💾 [Store] Updated state with new lesson:', {
+          lessonId: newContent.id,
+          moduleId,
+          lessonCount: moduleToUpdate.lessons.length + 1
+        });
+
+        // Return the updated state
         return {
           ...state,
           modules: updatedModules,
+          course: updatedCourse,
           selectedLessonId: newContent.id,
           isLoading: false,
           error: null,
@@ -327,23 +308,19 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
         };
       });
 
+      // No need to refresh the course - we've already updated the state properly
+
       return newContent;
     } catch (error) {
       console.error('❌ [Store] Failed to create lesson:', error);
-      
-      // Rollback optimistic update
-      set(state => ({
-        modules: state.modules.map(m => 
-          m.id === moduleId 
-            ? { ...m, items: m.items?.filter(item => !item.id.startsWith('temp_')) || [] }
-            : m
-        ),
+
+      set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to add content',
         savedState: 'unsaved'
-      }));
+      });
 
       throw error;
     }
   }
-}); 
+});

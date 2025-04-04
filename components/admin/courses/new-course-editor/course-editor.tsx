@@ -76,13 +76,13 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
   const [viewMode, setViewMode] = useState<"editor" | "student">("editor")
   const [currentContent, setCurrentContent] = useState<string | null>(null)
   const { toast } = useToast()
-  
+
   // Load data from the course store
-  const { 
-    course, 
+  const {
+    course,
     modules,
-    updateCourse, 
-    isLoading, 
+    updateCourse,
+    isLoading,
     error,
     selectedModuleId: activeModuleId,
     selectedLessonId: activeItemId,
@@ -91,7 +91,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     expandedModules,
     fetchCourse
   } = useCourseStore()
-  
+
   // Fetch course data on mount and handle course ID changes
   useEffect(() => {
     if (!courseId) return;
@@ -134,7 +134,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     if (!activeModuleId && modules.length > 0) {
       const firstModule = modules[0]
       setActiveModuleId(firstModule.id)
-      
+
       const items = firstModule.items || []
       if (items.length > 0) {
         setActiveItemId(items[0].id)
@@ -144,27 +144,61 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
 
   // Update content in context when lesson changes
   useEffect(() => {
-    if (!course || !activeModuleId || !activeItemId) return;
-
-    const module = course.modules?.find(m => m.id === activeModuleId);
-    const lesson = module?.lessons?.find(l => l.id === activeItemId);
-    
-    if (lesson?.content_json?.content) {
-      setCurrentContent(lesson.content_json.content);
+    if (!activeModuleId || !activeItemId) {
+      // Reset content if no lesson is selected
+      setCurrentContent('');
+      return;
     }
-  }, [course, activeModuleId, activeItemId]);
+
+    // Find the lesson in the modules array first (more reliable)
+    let foundLesson = null;
+    for (const module of modules) {
+      if (module.id === activeModuleId) {
+        foundLesson = module.lessons?.find(l => l.id === activeItemId);
+        break;
+      }
+    }
+
+    // If not found in modules, try the course object as fallback
+    if (!foundLesson && course) {
+      const module = course.modules?.find(m => m.id === activeModuleId);
+      foundLesson = module?.lessons?.find(l => l.id === activeItemId);
+    }
+
+    if (foundLesson) {
+      // Set content with fallbacks to ensure we always have something to display
+      const content = foundLesson.content_json?.content || foundLesson.content || '<p>New content</p>';
+      console.log('📝 [CourseEditor] Setting content for lesson:', {
+        lessonId: activeItemId,
+        content: content.substring(0, 50) + (content.length > 50 ? '...' : '')
+      });
+      setCurrentContent(content);
+    } else {
+      console.warn('⚠️ [CourseEditor] No lesson found for ID:', activeItemId);
+      // Set default content even if lesson not found
+      setCurrentContent('<p>Start writing your content...</p>');
+    }
+  }, [course, modules, activeModuleId, activeItemId]);
 
   // Transform modules to EditorModule type
   const editorModules: EditorModule[] = useMemo(() => {
     // Ensure expandedModules is a Set
     const expandedModulesSet = expandedModules instanceof Set ? expandedModules : new Set(expandedModules || []);
-    
+
     return modules.map(module => ({
       id: module.id,
       title: module.title,
       description: module.description || "",
       expanded: expandedModulesSet.has(module.id),
-      items: module.items || []
+      // Convert lessons to items for backward compatibility
+      items: module.lessons?.map(lesson => ({
+        id: lesson.id,
+        title: lesson.title,
+        type: (lesson.metadata?.type as "lesson" | "video" | "quiz" | "assignment") || "lesson",
+        content: lesson.content || lesson.content_json?.content || "",
+        content_json: lesson.content_json,
+        duration: lesson.duration || 0
+      })) || []
     }))
   }, [modules, expandedModules])
 
@@ -220,7 +254,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     if (savedState === "saving" || !course) return
 
     setSavedState("saving")
-    
+
     try {
       // Find the active module and lesson
       const activeModule = course.modules?.find(m => m.id === activeModuleId)
@@ -248,10 +282,10 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
         description: course.description,
         status: course.status || 'draft',
       }
-      
+
       // Single update call
       await updateCourse(courseId, updatedCourse)
-      
+
       setSavedState("saved")
       toast({
         title: "Changes saved",
@@ -302,10 +336,10 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
 
   const handleShare = () => {
     // Construct a share link using the course slug if available
-    const shareUrl = course?.metadata?.slug 
+    const shareUrl = course?.metadata?.slug
       ? `${window.location.origin}/courses/${course.metadata.slug}`
       : `${window.location.origin}/courses/${courseId}`
-      
+
     // Simulate copying a share link
     navigator.clipboard
       .writeText(shareUrl)
@@ -434,7 +468,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
                         <ModuleManager />
                       </TabsContent>
                       <TabsContent value="settings" className="mt-0">
-                        <SettingsPanel 
+                        <SettingsPanel
                           courseId={courseId}
                           initialData={{
                             title: course.title,

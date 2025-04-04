@@ -17,6 +17,7 @@ import { useState, useEffect, useMemo } from "react"
 import { useToast } from "@/hooks/use-toast"
 import type { ModuleItem } from "./course-editor"
 import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd"
+import ContentNameDialog from "./content-name-dialog"
 import {
   Dialog,
   DialogContent,
@@ -37,9 +38,9 @@ export default function EditorSidebar() {
   const { toast } = useToast()
   const params = useParams()
   const courseId = params.courseId as string
-  
+
   // Use Zustand store
-  const { 
+  const {
     course,
     modules,
     selectedModuleId,
@@ -63,25 +64,26 @@ export default function EditorSidebar() {
   // Fetch course data only if not already loaded
   useEffect(() => {
     if (!courseId) return;
-    
+
     // Only fetch if we don't have the course or if it's a different course
     if (!course || course.id !== courseId) {
       fetchCourse(courseId);
     }
   }, [courseId, course?.id, fetchCourse]);
 
-  const [newContentDialogOpen, setNewContentDialogOpen] = useState(false)
+  const [newContentTypeDialogOpen, setNewContentTypeDialogOpen] = useState(false)
+  const [newContentNameDialogOpen, setNewContentNameDialogOpen] = useState(false)
   const [newModuleDialogOpen, setNewModuleDialogOpen] = useState(false)
   const [newModuleTitle, setNewModuleTitle] = useState("")
   const [newContentType, setNewContentType] = useState("")
+  const [targetModuleId, setTargetModuleId] = useState<string | null>(null)
 
-  const handleAddContent = async (type: string, e?: React.MouseEvent) => {
+  // Step 1: Select content type
+  const handleSelectContentType = (type: string, e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    
-    setNewContentType(type);
 
     // Find the first module to add content to
     const targetModule = modules[0];
@@ -91,22 +93,53 @@ export default function EditorSidebar() {
         description: "Please create a module first before adding content",
         variant: "destructive",
       });
-      setNewContentDialogOpen(false);
+      setNewContentTypeDialogOpen(false);
+      return;
+    }
+
+    // Store the content type and target module for the next step
+    setNewContentType(type);
+    setTargetModuleId(targetModule.id);
+
+    // Close the type selection dialog and open the naming dialog
+    setNewContentTypeDialogOpen(false);
+    setNewContentNameDialogOpen(true);
+  };
+
+  // Step 2: Create content with name
+  const handleCreateContent = async (title: string) => {
+    if (!courseId || !targetModuleId || !newContentType) {
+      toast({
+        title: "Error",
+        description: "Missing required information to create content",
+        variant: "destructive",
+      });
       return;
     }
 
     try {
-      setNewContentDialogOpen(false);
-      const newContent = await addContent(courseId, targetModule.id, type);
-      
-      // Select the new content immediately
-      selectModule(targetModule.id);
-      selectLesson(newContent.id);
-      setSavedState("unsaved");
+      // First close the dialog to improve perceived performance
+      setNewContentNameDialogOpen(false);
 
+      // Show a loading toast
+      toast({
+        title: "Creating content",
+        description: `Creating new ${newContentType}...`,
+        variant: "default",
+      });
+
+      // Call the API directly without optimistic updates
+      const newContent = await addContent(courseId, targetModuleId, newContentType, title);
+
+      // Select the new content immediately
+      selectModule(targetModuleId);
+      selectLesson(newContent.id);
+      setSavedState("saved"); // Start with saved state
+
+      // Show success toast
       toast({
         title: "Success",
-        description: `New ${type} added successfully`
+        description: `New ${newContentType} added successfully`
       });
     } catch (error) {
       console.error('Failed to add content:', error);
@@ -204,8 +237,8 @@ export default function EditorSidebar() {
     return (
       <div className="w-80 border-r bg-muted/10 p-4">
         <div className="text-destructive">Error: {error}</div>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           className="mt-4"
           onClick={() => fetchCourse(courseId)}
         >
@@ -262,7 +295,7 @@ export default function EditorSidebar() {
     <div className="w-80 border-r bg-muted/10">
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
-          <Dialog open={newContentDialogOpen} onOpenChange={setNewContentDialogOpen}>
+          <Dialog open={newContentTypeDialogOpen} onOpenChange={setNewContentTypeDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" className="flex items-center gap-1">
                 <PlusCircle className="h-4 w-4" />
@@ -275,9 +308,9 @@ export default function EditorSidebar() {
                 <DialogDescription>Choose the type of content to add to your course.</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <Button 
-                  onClick={() => handleAddContent("lesson")} 
-                  variant="outline" 
+                <Button
+                  onClick={() => handleSelectContentType("lesson")}
+                  variant="outline"
                   className="flex items-center justify-start gap-2 h-auto py-3"
                 >
                   <FileText className="h-5 w-5" />
@@ -286,9 +319,9 @@ export default function EditorSidebar() {
                     <div className="text-sm text-muted-foreground">Add a text-based lesson with rich content</div>
                   </div>
                 </Button>
-                
-                <Button 
-                  onClick={() => handleAddContent("quiz")} 
+
+                <Button
+                  onClick={() => handleSelectContentType("quiz")}
                   variant="outline"
                   className="flex items-center justify-start gap-2 h-auto py-3"
                 >
@@ -298,9 +331,9 @@ export default function EditorSidebar() {
                     <div className="text-sm text-muted-foreground">Create an interactive quiz or assessment</div>
                   </div>
                 </Button>
-                
-                <Button 
-                  onClick={() => handleAddContent("video")} 
+
+                <Button
+                  onClick={() => handleSelectContentType("video")}
                   variant="outline"
                   className="flex items-center justify-start gap-2 h-auto py-3"
                 >
@@ -310,9 +343,9 @@ export default function EditorSidebar() {
                     <div className="text-sm text-muted-foreground">Upload or embed a video lesson</div>
                   </div>
                 </Button>
-                
-                <Button 
-                  onClick={() => handleAddContent("assignment")} 
+
+                <Button
+                  onClick={() => handleSelectContentType("assignment")}
                   variant="outline"
                   className="flex items-center justify-start gap-2 h-auto py-3"
                 >
@@ -325,6 +358,14 @@ export default function EditorSidebar() {
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Content Naming Dialog */}
+          <ContentNameDialog
+            isOpen={newContentNameDialogOpen}
+            onOpenChange={setNewContentNameDialogOpen}
+            contentType={newContentType}
+            onSubmit={handleCreateContent}
+          />
         </div>
       </div>
       <ScrollArea className="h-[calc(100vh-10rem)]">

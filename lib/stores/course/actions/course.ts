@@ -16,7 +16,7 @@ export const createCourseActions = (
 ) => ({
   fetchCourse: async (courseId: string, signal?: AbortSignal) => {
     console.log('📥 [Course] Fetching course:', courseId);
-    
+
     // Check if we're already loading this course
     const state = get();
     if (state.isLoading && state.course?.id === courseId) {
@@ -48,19 +48,13 @@ export const createCourseActions = (
       }
 
       const courseData = await response.json();
-      
+
       // Transform modules to maintain consistent structure
       const transformedModules = courseData.modules?.map((module: Module) => {
+        // Ensure lessons array is properly initialized
         const lessons = module.lessons || [];
-        const items = lessons.map((lesson: Lesson) => ({
-          id: lesson.id,
-          title: lesson.title,
-          type: lesson.metadata?.type || 'lesson',
-          duration: lesson.metadata?.duration || 0,
-          content: lesson.content_json?.content || '',
-          content_json: lesson.content_json
-        }));
 
+        // Create a properly structured module with only the lessons array
         return {
           id: module.id,
           title: module.title,
@@ -68,8 +62,19 @@ export const createCourseActions = (
           position: module.position,
           metadata: module.metadata,
           updated_at: module.updated_at,
-          lessons: lessons,
-          items: items
+          lessons: lessons.map(lesson => ({
+            ...lesson,
+            // Ensure all required fields are present
+            content: lesson.content || lesson.content_json?.content || '',
+            content_json: lesson.content_json || {
+              content: lesson.content || '',
+              type: 'html',
+              version: 1
+            },
+            metadata: lesson.metadata || {
+              type: 'lesson'
+            }
+          }))
         };
       }) || [];
 
@@ -106,11 +111,11 @@ export const createCourseActions = (
         console.log('🚫 [Course] Fetch aborted');
         return;
       }
-      
+
       console.error('❌ [Course] Failed to fetch course:', error);
-      set({ 
+      set({
         error: error instanceof Error ? error.message : 'Failed to fetch course',
-        isLoading: false 
+        isLoading: false
       });
       throw error;
     } finally {
@@ -128,7 +133,7 @@ export const createCourseActions = (
     console.log('🔄 [Store] Starting course update:');
 
     set({ pendingSave: true, error: null });
-    
+
     try {
       // Validate data before sending
       const validatedData = await validateCourseUpdate(data);
@@ -146,14 +151,14 @@ export const createCourseActions = (
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error?.message || 'Failed to update course');
       }
-      
+
       const updatedCourse = await response.json();
-      
+
       // Update local state only - no need to refetch
       set((state: CourseStore) => ({
         course: state.course ? { ...state.course, ...updatedCourse } : null,
@@ -161,7 +166,7 @@ export const createCourseActions = (
         lastSaveTime: new Date().toISOString(),
         error: null
       }));
-      
+
       toast({
         title: 'Success',
         description: 'Course updated successfully',
@@ -177,4 +182,4 @@ export const createCourseActions = (
       throw error;
     }
   }
-}); 
+});
