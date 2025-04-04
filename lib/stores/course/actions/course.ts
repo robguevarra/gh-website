@@ -1,4 +1,4 @@
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import type { Course, Module } from '../types';
 import type { Lesson } from '../types/lesson';
 import { validateCourseUpdate } from '../utils/validation';
@@ -14,19 +14,20 @@ export const createCourseActions = (
   set: SetState<CourseStore>,
   get: GetState<CourseStore>
 ) => ({
-  fetchCourse: async (courseId: string, signal?: AbortSignal) => {
-    console.log('📥 [Course] Fetching course:', courseId);
+  fetchCourse: async (courseId: string, forceRefresh: boolean = false, signal?: AbortSignal) => {
+    console.log('📥 [Course] Fetching course:', courseId, forceRefresh ? '(forced refresh)' : '');
 
     // Check if we're already loading this course
     const state = get();
-    if (state.isLoading && state.course?.id === courseId) {
+    if (state.isLoading && state.course?.id === courseId && !forceRefresh) {
       console.log('⏳ [Course] Already loading course:', courseId);
       return;
     }
 
     // Don't set loading state if we already have this course and it's not stale
+    // Unless forceRefresh is true
     const currentCourse = state.course;
-    if (currentCourse?.id === courseId) {
+    if (currentCourse?.id === courseId && !forceRefresh) {
       console.log('✅ [Course] Course already loaded:', courseId);
       return;
     }
@@ -34,7 +35,12 @@ export const createCourseActions = (
     set({ isLoading: true, error: null });
 
     try {
-      const response = await fetch(`/api/admin/courses/${courseId}`, {
+      // Add a cache-busting parameter when force refreshing
+      const url = forceRefresh
+        ? `/api/admin/courses/${courseId}?_=${Date.now()}`
+        : `/api/admin/courses/${courseId}`;
+
+      const response = await fetch(url, {
         credentials: 'include',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -167,17 +173,14 @@ export const createCourseActions = (
         error: null
       }));
 
-      toast({
-        title: 'Success',
-        description: 'Course updated successfully',
+      toast.success('Success', {
+        description: 'Course updated successfully'
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update course';
       set({ error: message, isLoading: false, pendingSave: false });
-      toast({
-        title: 'Error saving changes',
-        description: message,
-        variant: 'destructive',
+      toast.error('Error saving changes', {
+        description: message
       });
       throw error;
     }

@@ -129,10 +129,40 @@ export async function POST(
         }, { status: 400 });
       }
 
-      // Update each module one by one to avoid conflicts
-      // This is slower but more reliable than parallel updates
+      // Use a two-phase approach to avoid unique constraint violations
+      // Phase 1: Move all modules to negative positions (temporary)
+      console.log('🔄 [API] Phase 1: Moving modules to temporary positions');
+
+      // First, move all modules to temporary negative positions
+      // This avoids conflicts with the unique constraint on (course_id, position)
+      for (let i = 0; i < moduleOrder.length; i++) {
+        const { id } = moduleOrder[i];
+        const tempPosition = -(i + 1000); // Use a large negative number to avoid conflicts
+
+        const { error: tempUpdateError } = await serviceClient
+          .from('modules')
+          .update({
+            position: tempPosition,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id);
+
+        if (tempUpdateError) {
+          console.error('❌ [API] Error updating module to temporary position:', {
+            moduleId: id,
+            tempPosition,
+            error: tempUpdateError,
+            timestamp: new Date().toISOString()
+          });
+          throw new Error(`Failed to update module ${id} to temporary position: ${tempUpdateError.message}`);
+        }
+      }
+
+      // Phase 2: Move all modules to their final positions
+      console.log('🔄 [API] Phase 2: Moving modules to final positions');
+
       for (const { id, position } of moduleOrder) {
-        const { error: updateError } = await serviceClient
+        const { error: finalUpdateError } = await serviceClient
           .from('modules')
           .update({
             position,
@@ -140,14 +170,14 @@ export async function POST(
           })
           .eq('id', id);
 
-        if (updateError) {
-          console.error('❌ [API] Error updating module position:', {
+        if (finalUpdateError) {
+          console.error('❌ [API] Error updating module to final position:', {
             moduleId: id,
             position,
-            error: updateError,
+            error: finalUpdateError,
             timestamp: new Date().toISOString()
           });
-          throw new Error(`Failed to update module ${id}: ${updateError.message}`);
+          throw new Error(`Failed to update module ${id} to final position: ${finalUpdateError.message}`);
         }
       }
 

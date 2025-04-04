@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
 import { createServiceRoleClient } from '@/lib/supabase/service-role';
@@ -40,7 +41,7 @@ export async function GET(
         }
       }
     );
-    
+
     const { data: lesson, error } = await supabase
       .from('lessons')
       .select('*')
@@ -210,39 +211,98 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  request: Request,
-  { params }: { params: { courseId: string; moduleId: string; lessonId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ courseId: string; moduleId: string; lessonId: string }> }
 ) {
   try {
-    const cookieStore = await cookies();
-    const { courseId, moduleId, lessonId } = params;
+    console.log('🔵 [API] DELETE request received:', {
+      endpoint: '/api/courses/[courseId]/modules/[moduleId]/lessons/[lessonId]',
+      timestamp: new Date().toISOString()
+    });
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          persistSession: false
-        },
-        global: {
-          headers: {
-            cookie: await cookieStore.toString()
-          }
-        }
-      }
-    );
-    
-    const { error } = await supabase
+    // Get authenticated user
+    const supabase = await createRouteHandlerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error('🔒 [API] Authentication error:', {
+        error: authError,
+        userId: user?.id,
+        timestamp: new Date().toISOString()
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    console.log('👤 [API] User authenticated:', {
+      userId: user.id,
+      timestamp: new Date().toISOString()
+    });
+
+    // Await dynamic params
+    const resolvedParams = await params;
+    const { courseId, moduleId, lessonId } = resolvedParams;
+
+    console.log('🔍 [API] Resolved params:', {
+      courseId,
+      moduleId,
+      lessonId,
+      timestamp: new Date().toISOString()
+    });
+
+    // Use service role client to bypass RLS
+    const serviceClient = createServiceRoleClient();
+
+    // Verify the lesson exists and belongs to the module
+    const { data: lesson, error: lessonError } = await serviceClient
+      .from('lessons')
+      .select('id, title')
+      .eq('id', lessonId)
+      .eq('module_id', moduleId)
+      .single();
+
+    if (lessonError || !lesson) {
+      console.error('❌ [API] Lesson not found:', {
+        lessonId,
+        moduleId,
+        error: lessonError,
+        timestamp: new Date().toISOString()
+      });
+      return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
+    }
+
+    // Delete the lesson
+    const { error: deleteError } = await serviceClient
       .from('lessons')
       .delete()
       .eq('id', lessonId)
       .eq('module_id', moduleId);
 
-    if (error) throw error;
+    if (deleteError) {
+      console.error('❌ [API] Error deleting lesson:', {
+        lessonId,
+        error: deleteError,
+        timestamp: new Date().toISOString()
+      });
+      return NextResponse.json({ error: 'Failed to delete lesson' }, { status: 500 });
+    }
 
-    return new NextResponse(null, { status: 204 });
+    // Revalidate the course page
+    revalidatePath(`/admin/courses/${courseId}`);
+    revalidatePath(`/courses/${courseId}`);
+
+    console.log('✅ [API] Lesson deleted successfully:', {
+      lessonId,
+      lessonTitle: lesson.title,
+      timestamp: new Date().toISOString()
+    });
+
+    return NextResponse.json({
+      message: 'Lesson deleted successfully',
+      lessonId,
+      lessonTitle: lesson.title
+    });
   } catch (error) {
-    console.error('Error deleting lesson:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('❌ [API] Error in lesson delete endpoint:', error);
+    return NextResponse.json({ error: 'Failed to delete lesson' }, { status: 500 });
   }
-} 
+}

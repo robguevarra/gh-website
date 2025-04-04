@@ -132,10 +132,40 @@ export async function POST(
         }, { status: 400 });
       }
 
-      // Update each lesson one by one to avoid conflicts
-      // This is slower but more reliable than parallel updates
+      // Use a two-phase approach to avoid unique constraint violations
+      // Phase 1: Move all lessons to negative positions (temporary)
+      console.log('🔄 [API] Phase 1: Moving lessons to temporary positions');
+
+      // First, move all lessons to temporary negative positions
+      // This avoids conflicts with the unique constraint on (module_id, position)
+      for (let i = 0; i < lessonOrder.length; i++) {
+        const { id } = lessonOrder[i];
+        const tempPosition = -(i + 1000); // Use a large negative number to avoid conflicts
+
+        const { error: tempUpdateError } = await serviceClient
+          .from('lessons')
+          .update({
+            position: tempPosition,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id);
+
+        if (tempUpdateError) {
+          console.error('❌ [API] Error updating lesson to temporary position:', {
+            lessonId: id,
+            tempPosition,
+            error: tempUpdateError,
+            timestamp: new Date().toISOString()
+          });
+          throw new Error(`Failed to update lesson ${id} to temporary position: ${tempUpdateError.message}`);
+        }
+      }
+
+      // Phase 2: Move all lessons to their final positions
+      console.log('🔄 [API] Phase 2: Moving lessons to final positions');
+
       for (const { id, position } of lessonOrder) {
-        const { error: updateError } = await serviceClient
+        const { error: finalUpdateError } = await serviceClient
           .from('lessons')
           .update({
             position,
@@ -143,14 +173,14 @@ export async function POST(
           })
           .eq('id', id);
 
-        if (updateError) {
-          console.error('❌ [API] Error updating lesson position:', {
+        if (finalUpdateError) {
+          console.error('❌ [API] Error updating lesson to final position:', {
             lessonId: id,
             position,
-            error: updateError,
+            error: finalUpdateError,
             timestamp: new Date().toISOString()
           });
-          throw new Error(`Failed to update lesson ${id}: ${updateError.message}`);
+          throw new Error(`Failed to update lesson ${id} to final position: ${finalUpdateError.message}`);
         }
       }
 

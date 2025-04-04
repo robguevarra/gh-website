@@ -120,12 +120,12 @@ export async function PATCH(
   try {
     // Await dynamic params
     const { courseId, moduleId } = await params;
-    
+
     // Get cookies and convert to string properly
     const cookieStore = await cookies();
     const cookieList = cookieStore.getAll();
     const cookieString = cookieList.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
-    
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -140,7 +140,7 @@ export async function PATCH(
         }
       }
     );
-    
+
     // First verify the module exists and belongs to the course
     const { data: existingModule, error: existingError } = await supabase
       .from('modules')
@@ -148,15 +148,15 @@ export async function PATCH(
       .eq('id', moduleId)
       .eq('course_id', courseId)
       .single();
-      
+
     if (existingError || !existingModule) {
       console.error('Module not found:', { moduleId, courseId });
       return NextResponse.json({ error: 'Module not found' }, { status: 404 });
     }
-    
+
     const body = await request.json();
     const validatedData = moduleSchema.parse(body);
-    
+
     const { data: module, error } = await supabase
       .from('modules')
       .update(validatedData)
@@ -169,7 +169,7 @@ export async function PATCH(
       console.error('Error updating module:', error);
       return NextResponse.json({ error: 'Failed to update module' }, { status: 500 });
     }
-    
+
     if (!module) {
       return NextResponse.json({ error: 'Module not found' }, { status: 404 });
     }
@@ -189,56 +189,120 @@ export async function DELETE(
   { params }: { params: Promise<{ courseId: string; moduleId: string }> }
 ) {
   try {
+    console.log('🔵 [API] DELETE request received:', {
+      endpoint: '/api/courses/[courseId]/modules/[moduleId]',
+      timestamp: new Date().toISOString()
+    });
+
+    // Get authenticated user
+    const supabase = await createRouteHandlerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      console.error('🔒 [API] Authentication error:', {
+        error: authError,
+        userId: user?.id,
+        timestamp: new Date().toISOString()
+      });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    console.log('👤 [API] User authenticated:', {
+      userId: user.id,
+      timestamp: new Date().toISOString()
+    });
+
     // Await dynamic params
-    const { courseId, moduleId } = await params;
-    
-    // Get cookies and convert to string properly
-    const cookieStore = await cookies();
-    const cookieList = cookieStore.getAll();
-    const cookieString = cookieList.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
-    
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          persistSession: false
-        },
-        global: {
-          headers: {
-            cookie: cookieString
-          }
-        }
-      }
-    );
-    
-    // First verify the module exists and belongs to the course
-    const { data: existingModule, error: existingError } = await supabase
-      .from('modules')
+    const resolvedParams = await params;
+    const { courseId, moduleId } = resolvedParams;
+
+    console.log('🔍 [API] Resolved params:', {
+      courseId,
+      moduleId,
+      timestamp: new Date().toISOString()
+    });
+
+    // Use service role client to bypass RLS
+    const serviceClient = createServiceRoleClient();
+
+    // Verify the course exists and user has access
+    const { data: course, error: courseError } = await serviceClient
+      .from('courses')
       .select('id')
+      .eq('id', courseId)
+      .single();
+
+    if (courseError || !course) {
+      console.error('❌ [API] Course not found:', {
+        courseId,
+        error: courseError,
+        timestamp: new Date().toISOString()
+      });
+      return NextResponse.json({ error: 'Course not found' }, { status: 404 });
+    }
+
+    // Verify the module exists and belongs to the course
+    const { data: module, error: moduleError } = await serviceClient
+      .from('modules')
+      .select('id, title')
       .eq('id', moduleId)
       .eq('course_id', courseId)
       .single();
-      
-    if (existingError || !existingModule) {
-      console.error('Module not found:', { moduleId, courseId });
+
+    if (moduleError || !module) {
+      console.error('❌ [API] Module not found:', {
+        moduleId,
+        courseId,
+        error: moduleError,
+        timestamp: new Date().toISOString()
+      });
       return NextResponse.json({ error: 'Module not found' }, { status: 404 });
     }
-    
-    const { error } = await supabase
+
+    // First, delete all lessons in the module
+    const { error: lessonsDeleteError } = await serviceClient
+      .from('lessons')
+      .delete()
+      .eq('module_id', moduleId);
+
+    if (lessonsDeleteError) {
+      console.error('❌ [API] Error deleting module lessons:', {
+        moduleId,
+        error: lessonsDeleteError,
+        timestamp: new Date().toISOString()
+      });
+      return NextResponse.json({ error: 'Failed to delete module lessons' }, { status: 500 });
+    }
+
+    // Then, delete the module
+    const { error: moduleDeleteError } = await serviceClient
       .from('modules')
       .delete()
-      .eq('id', moduleId)
-      .eq('course_id', courseId);
+      .eq('id', moduleId);
 
-    if (error) {
-      console.error('Error deleting module:', error);
+    if (moduleDeleteError) {
+      console.error('❌ [API] Error deleting module:', {
+        moduleId,
+        error: moduleDeleteError,
+        timestamp: new Date().toISOString()
+      });
       return NextResponse.json({ error: 'Failed to delete module' }, { status: 500 });
     }
 
-    return new NextResponse(null, { status: 204 });
+    // Return success response
+    console.log('✅ [API] Module deleted successfully:', {
+      moduleId,
+      moduleTitle: module.title,
+      timestamp: new Date().toISOString()
+    });
+
+    return NextResponse.json({
+      message: 'Module deleted successfully',
+      moduleId,
+      moduleTitle: module.title
+    });
   } catch (error) {
-    console.error('Error deleting module:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('❌ [API] Error in module delete endpoint:', error);
+    return NextResponse.json({ error: 'Failed to delete module' }, { status: 500 });
   }
-} 
+}
