@@ -180,6 +180,16 @@ A stable, efficient course editor that:
   - [x] Improve dependency management in React effects
   - [x] Implement robust editor content synchronization
   - [x] Add proper handling of lesson changes in editor
+  - [x] Fix course reloading when selecting lessons
+  - [x] Optimize React dependency arrays to prevent unnecessary fetches
+  - [x] Remove course dependency from content update effect
+  - [x] Fix all remaining causes of editor reloads
+  - [x] Remove course?.id dependency from EditorSidebar
+  - [x] Remove modules dependency from ContentEditor
+  - [x] Fix content update logic in ContentEditor
+  - [x] Use course.modules instead of modules array for stability
+  - [x] Add delay to lesson selection to prevent editor reload
+  - [x] Implement proper state settlement for smooth transitions
 
 ## Technical Dependencies
 - Next.js 15+
@@ -243,6 +253,16 @@ A stable, efficient course editor that:
    - Implemented robust editor content synchronization
    - Added proper handling of lesson changes in editor
    - Fixed content display for newly created lessons
+   - Fixed course reloading when selecting lessons
+   - Optimized React dependency arrays to prevent unnecessary fetches
+   - Removed course dependency from content update effect
+   - Fixed all remaining causes of editor reloads
+   - Removed course?.id dependency from EditorSidebar
+   - Removed modules dependency from ContentEditor
+   - Fixed content update logic in ContentEditor
+   - Used course.modules instead of modules array for stability
+   - Added delay to lesson selection to prevent editor reload
+   - Implemented proper state settlement for smooth transitions
 
 ### State Management Enhancements
 1. **Single Source of Truth**

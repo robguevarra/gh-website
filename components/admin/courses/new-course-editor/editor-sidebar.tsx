@@ -69,7 +69,7 @@ export default function EditorSidebar() {
     if (!course || course.id !== courseId) {
       fetchCourse(courseId);
     }
-  }, [courseId, course?.id, fetchCourse]);
+  }, [courseId, fetchCourse]); // Removed course?.id dependency to prevent reloads
 
   const [newContentTypeDialogOpen, setNewContentTypeDialogOpen] = useState(false)
   const [newContentNameDialogOpen, setNewContentNameDialogOpen] = useState(false)
@@ -131,10 +131,15 @@ export default function EditorSidebar() {
       // Call the API directly without optimistic updates
       const newContent = await addContent(courseId, targetModuleId, newContentType, title);
 
-      // Select the new content immediately
+      // Select the new content immediately, but with a slight delay to allow state to settle
       selectModule(targetModuleId);
-      selectLesson(newContent.id);
-      setSavedState("saved"); // Start with saved state
+
+      // Add a small delay before selecting the lesson to prevent editor reload
+      setTimeout(() => {
+        console.log('💾 [EditorSidebar] Selecting new lesson:', newContent.id);
+        selectLesson(newContent.id);
+        setSavedState("saved"); // Start with saved state
+      }, 50);
 
       // Show success toast
       toast({
