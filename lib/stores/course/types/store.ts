@@ -1,18 +1,16 @@
-import { Course, TransformedModule } from './course';
+import { Course } from './course';
 import { ExtendedModule } from './module';
 import { Lesson } from './lesson';
 
-export interface ModuleItem {
-  id: string;
-  title: string;
+/**
+ * @deprecated Use Lesson type instead
+ * This interface is kept for backward compatibility but should not be used in new code
+ *
+ * Note: This interface has been fully replaced by the Lesson type and should not be used in new code.
+ * The type property is now part of the metadata object in the Lesson type.
+ */
+export interface ModuleItem extends Omit<Lesson, 'metadata'> {
   type: 'video' | 'lesson' | 'quiz' | 'assignment';
-  duration: number;
-  content: string;
-  content_json?: {
-    content: string;
-    type: string;
-    version: number;
-  };
 }
 
 export interface CourseStore {
@@ -29,7 +27,7 @@ export interface CourseStore {
   lastSaveTime: string | null;
   pendingOperations: Map<string, Promise<any>>;
   requestCache: Map<string, { data: any; timestamp: number }>;
-  
+
   // Actions
   fetchCourse: (courseId: string, signal?: AbortSignal) => Promise<void>;
   updateCourse: (courseId: string, data: Partial<Course>) => Promise<void>;
@@ -59,4 +57,4 @@ export interface RequestCache {
   data: any;
   timestamp: number;
   expiresAt: number;
-} 
+}
