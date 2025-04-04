@@ -44,9 +44,9 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
       activeModule: module,
       activeLesson: lesson
     }
-  }, [selectedModuleId, selectedLessonId, course?.id]) // Only depend on course.id, not the entire course object
+  }, [selectedModuleId, selectedLessonId, course?.modules]) // Only depend on course.modules, not course.id or entire object
 
-  // Update content in context when lesson changes
+  // Update content in context when lesson changes - optimized to reduce re-renders
   useEffect(() => {
     if (!activeLesson) {
       // Don't clear content if there's no active lesson - this prevents flickering
@@ -66,6 +66,34 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
     }
   }, [activeLesson, contextContent, selectedLessonId, setCurrentContent])
 
+  // Use memo to prevent re-renders of the tabs component
+  const editorTabs = useMemo(() => (
+    <TabsList>
+      <TabsTrigger value="editor">Visual Editor</TabsTrigger>
+      <TabsTrigger value="html">HTML</TabsTrigger>
+      <TabsTrigger value="json">JSON</TabsTrigger>
+    </TabsList>
+  ), []);
+
+  // Use memo for each tab content to prevent unnecessary re-renders
+  const visualEditorContent = useMemo(() => (
+    <TabsContent value="editor" className="mt-0">
+      <VisualEditor onSave={onSave} />
+    </TabsContent>
+  ), [onSave]);
+
+  const htmlEditorContent = useMemo(() => (
+    <TabsContent value="html" className="mt-0">
+      <HtmlEditor onSave={onSave} />
+    </TabsContent>
+  ), [onSave]);
+
+  const jsonEditorContent = useMemo(() => (
+    <TabsContent value="json" className="mt-0">
+      <JsonEditor onSave={onSave} />
+    </TabsContent>
+  ), [onSave]);
+
   return (
     <Tabs
       defaultValue="editor"
@@ -73,23 +101,10 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
       value={editorMode}
       onValueChange={setEditorMode}
     >
-      <TabsList>
-        <TabsTrigger value="editor">Visual Editor</TabsTrigger>
-        <TabsTrigger value="html">HTML</TabsTrigger>
-        <TabsTrigger value="json">JSON</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="editor" className="mt-0">
-        <VisualEditor onSave={onSave} />
-      </TabsContent>
-
-      <TabsContent value="html" className="mt-0">
-        <HtmlEditor onSave={onSave} />
-      </TabsContent>
-
-      <TabsContent value="json" className="mt-0">
-        <JsonEditor onSave={onSave} />
-      </TabsContent>
+      {editorTabs}
+      {visualEditorContent}
+      {htmlEditorContent}
+      {jsonEditorContent}
     </Tabs>
   )
 }

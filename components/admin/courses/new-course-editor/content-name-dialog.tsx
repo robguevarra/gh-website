@@ -56,8 +56,21 @@ export default function ContentNameDialog({
   const formattedType = contentType.charAt(0).toUpperCase() + contentType.slice(1)
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      // If we're closing the dialog, handle it specially
+      if (!open) {
+        // First set the state locally
+        onOpenChange(false);
+        // Then reset the form
+        setTitle("");
+      } else {
+        onOpenChange(true);
+      }
+    }}>
+      <DialogContent onClick={(e) => {
+        // Prevent clicks inside the dialog from bubbling up
+        e.stopPropagation();
+      }}>
         <DialogHeader>
           <DialogTitle>Name Your New {formattedType}</DialogTitle>
           <DialogDescription>
