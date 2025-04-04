@@ -127,7 +127,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
       isSubscribed = false;
       controller.abort();
     };
-  }, [courseId, course?.id, fetchCourse, toast]);
+  }, [courseId, fetchCourse, toast]); // Removed course?.id dependency to prevent reloads when selecting lessons
 
   // Set initial selection if none exists
   useEffect(() => {
@@ -178,7 +178,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
       // Set default content even if lesson not found
       setCurrentContent('<p>Start writing your content...</p>');
     }
-  }, [course, modules, activeModuleId, activeItemId]);
+  }, [modules, activeModuleId, activeItemId]); // Removed course dependency to prevent reloads
 
   // Transform modules to EditorModule type
   const editorModules: EditorModule[] = useMemo(() => {

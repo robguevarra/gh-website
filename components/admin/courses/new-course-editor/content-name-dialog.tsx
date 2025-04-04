@@ -30,17 +30,12 @@ export default function ContentNameDialog({
   const [title, setTitle] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = async (e?: React.MouseEvent | React.FormEvent) => {
-    // Prevent default if it's a form event
-    if (e && 'preventDefault' in e) {
-      e.preventDefault();
-    }
-
+  const handleSubmit = async () => {
     if (!title.trim()) return;
 
     setIsSubmitting(true);
     try {
-      // Close the dialog before submitting to prevent any navigation issues
+      // Close the dialog immediately to improve perceived performance
       onOpenChange(false);
 
       // Submit the title
@@ -69,45 +64,50 @@ export default function ContentNameDialog({
             Enter a name for your new {contentType}. You can change this later.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="content-title">Title</Label>
-              <Input
-                id="content-title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={`Enter ${contentType} title`}
-                disabled={isSubmitting}
-                autoFocus
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="content-title">Title</Label>
+            <Input
+              id="content-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={`Enter ${contentType} title`}
               disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button" // Changed from submit to button to prevent form submission
-              onClick={handleSubmit} // Handle click manually
-              disabled={isSubmitting || !title.trim()}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                `Create ${formattedType}`
-              )}
-            </Button>
-          </DialogFooter>
-        </form>
+              autoFocus
+              onKeyDown={(e) => {
+                // Handle Enter key press
+                if (e.key === 'Enter' && !isSubmitting && title.trim()) {
+                  e.preventDefault();
+                  handleSubmit();
+                }
+              }}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => handleSubmit()}
+            disabled={isSubmitting || !title.trim()}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              `Create ${formattedType}`
+            )}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
