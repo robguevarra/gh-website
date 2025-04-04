@@ -1,22 +1,16 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useEffect, useMemo } from "react"
 import { useCourseContext } from "../course-editor"
 import { useCourseStore } from "@/lib/stores/course"
-import { VisualEditor } from "./tabs/visual-editor"
-import { HtmlEditor } from "./tabs/html-editor"
-import { JsonEditor } from "./tabs/json-editor"
+import { RichTextEditor } from "./rich-text-editor"
 
 interface ContentEditorProps {
   onSave: () => void
 }
 
 export default function ContentEditor({ onSave }: ContentEditorProps) {
-  const [editorMode, setEditorMode] = useState("editor")
-
   const {
-    setSavedState,
     currentContent: contextContent,
     setCurrentContent,
   } = useCourseContext()
@@ -25,12 +19,11 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
     selectedModuleId,
     selectedLessonId,
     course,
-    modules
   } = useCourseStore()
 
-  // Memoize active module and lesson - don't depend on the entire modules array
+  // Memoize active module and lesson
   const { activeModule, activeLesson } = useMemo(() => {
-    // Find the module directly from the course object to avoid depending on the modules array
+    // Find the module directly from the course object
     const module = selectedModuleId && course?.modules
       ? course.modules.find(m => m.id === selectedModuleId)
       : null;
@@ -44,9 +37,9 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
       activeModule: module,
       activeLesson: lesson
     }
-  }, [selectedModuleId, selectedLessonId, course?.modules]) // Only depend on course.modules, not course.id or entire object
+  }, [selectedModuleId, selectedLessonId, course?.modules])
 
-  // Update content in context when lesson changes - optimized to reduce re-renders
+  // Update content in context when lesson changes
   useEffect(() => {
     if (!activeLesson) {
       // Don't clear content if there's no active lesson - this prevents flickering
@@ -66,45 +59,12 @@ export default function ContentEditor({ onSave }: ContentEditorProps) {
     }
   }, [activeLesson, contextContent, selectedLessonId, setCurrentContent])
 
-  // Use memo to prevent re-renders of the tabs component
-  const editorTabs = useMemo(() => (
-    <TabsList>
-      <TabsTrigger value="editor">Visual Editor</TabsTrigger>
-      <TabsTrigger value="html">HTML</TabsTrigger>
-      <TabsTrigger value="json">JSON</TabsTrigger>
-    </TabsList>
-  ), []);
-
-  // Use memo for each tab content to prevent unnecessary re-renders
-  const visualEditorContent = useMemo(() => (
-    <TabsContent value="editor" className="mt-0">
-      <VisualEditor onSave={onSave} />
-    </TabsContent>
-  ), [onSave]);
-
-  const htmlEditorContent = useMemo(() => (
-    <TabsContent value="html" className="mt-0">
-      <HtmlEditor onSave={onSave} />
-    </TabsContent>
-  ), [onSave]);
-
-  const jsonEditorContent = useMemo(() => (
-    <TabsContent value="json" className="mt-0">
-      <JsonEditor onSave={onSave} />
-    </TabsContent>
-  ), [onSave]);
-
   return (
-    <Tabs
-      defaultValue="editor"
-      className="w-full"
-      value={editorMode}
-      onValueChange={setEditorMode}
-    >
-      {editorTabs}
-      {visualEditorContent}
-      {htmlEditorContent}
-      {jsonEditorContent}
-    </Tabs>
+    <div className="w-full">
+      <RichTextEditor
+        initialContent={contextContent || ""}
+        onSave={onSave}
+      />
+    </div>
   )
 }
