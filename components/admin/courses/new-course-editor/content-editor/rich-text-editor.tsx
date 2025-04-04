@@ -76,6 +76,30 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
             class: 'editor-paragraph',
           },
         },
+        bulletList: {
+          HTMLAttributes: {
+            class: 'editor-bullet-list',
+          },
+          keepMarks: true,
+          keepAttributes: true, // Keep all marks and attributes when toggling lists
+        },
+        orderedList: {
+          HTMLAttributes: {
+            class: 'editor-ordered-list',
+          },
+          keepMarks: true,
+          keepAttributes: true, // Keep all marks and attributes when toggling lists
+        },
+        listItem: {
+          HTMLAttributes: {
+            class: 'editor-list-item',
+          },
+        },
+        blockquote: {
+          HTMLAttributes: {
+            class: 'editor-blockquote',
+          },
+        },
       }),
       Link.configure({
         openOnClick: false,
@@ -92,7 +116,7 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
         placeholder: "Start writing your content..."
       }),
       TextAlign.configure({
-        types: ['heading', 'paragraph'],
+        types: ['heading', 'paragraph', 'bulletList', 'orderedList', 'blockquote'],
         defaultAlignment: 'left',
       }),
       Underline,
@@ -110,6 +134,48 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
     editorProps: {
       attributes: {
         class: 'prose prose-sm sm:prose lg:prose-lg focus:outline-none min-h-[400px] px-4 py-2 max-w-none',
+      },
+      // Handle keyboard shortcuts
+      handleKeyDown: (view, event) => {
+        // Tab for nested lists
+        if (event.key === 'Tab') {
+          if (editor?.isActive('listItem')) {
+            // Prevent default tab behavior
+            event.preventDefault()
+            
+            // If Shift is pressed, outdent
+            if (event.shiftKey) {
+              editor.chain().focus().liftListItem('listItem').run()
+            } else {
+              // Otherwise, indent
+              editor.chain().focus().sinkListItem('listItem').run()
+            }
+            return true
+          }
+        }
+        
+        // Keyboard shortcuts for lists and quotes
+        if (event.ctrlKey || event.metaKey) {
+          switch (event.key) {
+            case '.':
+              // Ctrl+. for bullet list
+              event.preventDefault()
+              editor?.chain().focus().toggleBulletList().run()
+              return true
+            case '/':
+              // Ctrl+/ for ordered list
+              event.preventDefault()
+              editor?.chain().focus().toggleOrderedList().run()
+              return true
+            case '\'':
+              // Ctrl+' for blockquote
+              event.preventDefault()
+              editor?.chain().focus().toggleBlockquote().run()
+              return true
+          }
+        }
+        
+        return false
       }
     }
   })
@@ -182,6 +248,50 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
         }
         .rich-text-content .editor-paragraph {
           margin-bottom: 1em;
+        }
+        /* Bullet list styling */
+        .rich-text-content .editor-bullet-list {
+          list-style-type: disc;
+          padding-left: 1.5em;
+          margin: 1em 0;
+        }
+        /* Nested bullet lists */
+        .rich-text-content .editor-bullet-list .editor-bullet-list {
+          list-style-type: circle;
+          margin: 0.5em 0 0.5em 1em;
+        }
+        /* Deeply nested bullet lists */
+        .rich-text-content .editor-bullet-list .editor-bullet-list .editor-bullet-list {
+          list-style-type: square;
+        }
+        /* Ordered list styling */
+        .rich-text-content .editor-ordered-list {
+          list-style-type: decimal;
+          padding-left: 1.5em;
+          margin: 1em 0;
+        }
+        /* Nested ordered lists */
+        .rich-text-content .editor-ordered-list .editor-ordered-list {
+          list-style-type: lower-alpha;
+          margin: 0.5em 0 0.5em 1em;
+        }
+        /* Deeply nested ordered lists */
+        .rich-text-content .editor-ordered-list .editor-ordered-list .editor-ordered-list {
+          list-style-type: lower-roman;
+        }
+        /* List item styling */
+        .rich-text-content .editor-list-item {
+          margin-bottom: 0.5em;
+        }
+        /* Blockquote styling */
+        .rich-text-content .editor-blockquote {
+          border-left: 4px solid #e2e8f0;
+          padding: 0.5em 1em;
+          margin: 1em 0;
+          font-style: italic;
+          color: #4a5568;
+          background-color: rgba(226, 232, 240, 0.2);
+          border-radius: 0.25em;
         }
         .rich-text-content [data-text-align="center"] {
           text-align: center;

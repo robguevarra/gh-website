@@ -12,7 +12,6 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
    * @returns Promise that resolves when the update is complete
    */
   updateLesson: async (lessonId: string, data: Partial<Lesson>) => {
-    console.log('🔄 [Lesson] Starting update:', { lessonId, data });
 
     const { course } = get();
     if (!course?.modules) {
@@ -29,13 +28,6 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
       console.error('❌ [Lesson] Lesson not found in any module:', { lessonId, moduleIds: course.modules.map(m => m.id) });
       throw new Error('Lesson not found in any module');
     }
-
-    // Log more detailed information for debugging
-    console.log('🔍 [Lesson] Found lesson in module:', {
-      moduleId: module.id,
-      lessonId,
-      inLessonsArray: module.lessons?.some(l => l.id === lessonId)
-    });
 
     try {
       // Apply optimistic update first
@@ -85,11 +77,6 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
           console.error('❌ [Lesson] Target module not found:', { targetModuleId });
           throw new Error('Target module not found');
         }
-        console.log('📤 [Lesson] Moving lesson to different module:', {
-          lessonId,
-          fromModuleId: module.id,
-          toModuleId: targetModuleId
-        });
       }
 
       // Prepare update data
@@ -103,15 +90,6 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
           version: ((module.lessons?.find(l => l.id === lessonId)?.content_json?.version || 0) + 1)
         }
       };
-
-      // Log the update request
-      console.log('📤 [Lesson] Sending update request:', {
-        lessonId,
-        sourceModuleId: module.id,
-        targetModuleId,
-        isMovingModule,
-        version: updatePayload.content_json.version
-      });
 
       // Make API call with proper endpoint following Next.js 13+ conventions
       // When moving to a different module, we need to use the target module's ID in the URL
@@ -130,7 +108,7 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
       }
 
       const updatedLesson = await response.json();
-      console.log('✅ [Lesson] Update successful:', updatedLesson);
+      console.log('✅ [Lesson] Update successful:');
 
       // Update state with server response
       set(state => {
