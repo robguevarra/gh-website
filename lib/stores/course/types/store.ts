@@ -38,7 +38,7 @@ export interface CourseStore {
   selectModule: (moduleId: string | null) => void;
   selectLesson: (lessonId: string | null) => void;
   fetchModuleTree: (courseId: string, moduleId: string) => Promise<void>;
-  addContent: (courseId: string, moduleId: string, type: string) => Promise<{
+  addContent: (courseId: string, moduleId: string, type: string, title: string) => Promise<{
     id: string;
     title: string;
     content_json?: {

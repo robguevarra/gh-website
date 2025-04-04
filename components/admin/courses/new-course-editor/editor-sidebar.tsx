@@ -38,6 +38,7 @@ export default function EditorSidebar() {
   const { toast } = useToast()
   const params = useParams()
   const courseId = params.courseId as string
+  const [isCreatingLesson, setIsCreatingLesson] = useState(false)
 
   // Use Zustand store
   const {
@@ -120,6 +121,8 @@ export default function EditorSidebar() {
     try {
       // First close the dialog to improve perceived performance
       setNewContentNameDialogOpen(false);
+      // Show loading state
+      setIsCreatingLesson(true);
 
       // Show a loading toast
       toast({
@@ -128,29 +131,70 @@ export default function EditorSidebar() {
         variant: "default",
       });
 
-      // Call the API directly without optimistic updates
-      const newContent = await addContent(courseId, targetModuleId, newContentType, title);
-
-      // Select the new content immediately, but with a slight delay to allow state to settle
-      selectModule(targetModuleId);
-
-      // Add a small delay before selecting the lesson to prevent editor reload
+      // Critical fix: Create a completely separate asynchronous execution flow
+      // to prevent state updates from causing unwanted re-renders
+      const createContentAsync = async () => {
+        try {
+          console.log('🔄 [EditorSidebar] Creating new content:', { moduleId: targetModuleId, type: newContentType, title });
+          
+          // 1. First silently expand the module if it's not already expanded
+          if (!expandedModulesSet.has(targetModuleId)) {
+            toggleExpandedModule(targetModuleId);
+            // Give a moment for this state update to settle
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+          
+          // 2. Select the module first to establish context - this is a crucial ordering
+          selectModule(targetModuleId);
+          
+          // 3. Set saved state to prevent any "unsaved" indicators
+          setSavedState("saved");
+          
+          // 4. Allow the module selection to settle before proceeding
+          await new Promise(resolve => setTimeout(resolve, 50));
+          
+          // 5. Only now call the API to create content - after UI is prepared
+          const newContent = await addContent(courseId, targetModuleId, newContentType, title);
+          console.log('✅ [EditorSidebar] Content created successfully:', newContent.id);
+          
+          // 6. Add significant delay before selecting the lesson
+          // This ensures all state updates have fully processed
+          setTimeout(() => {
+            // Now it's safe to select the lesson
+            console.log('💾 [EditorSidebar] Selecting new lesson:', newContent.id);
+            selectLesson(newContent.id);
+            
+            // Hide loading state
+            setIsCreatingLesson(false);
+            
+            // Show success toast at the very end of the process
+            toast({
+              title: "Success",
+              description: `New ${newContentType} added successfully`
+            });
+          }, 500); // Increased timeout for better state settlement
+        } catch (error) {
+          console.error('Failed to add content:', error);
+          setIsCreatingLesson(false);
+          toast({
+            title: "Error",
+            description: "Failed to add content. Please try again.",
+            variant: "destructive",
+          });
+        }
+      };
+      
+      // Execute the async function after a small delay to
+      // ensure the dialog close operation has completed
       setTimeout(() => {
-        console.log('💾 [EditorSidebar] Selecting new lesson:', newContent.id);
-        selectLesson(newContent.id);
-        setSavedState("saved"); // Start with saved state
-      }, 50);
-
-      // Show success toast
-      toast({
-        title: "Success",
-        description: `New ${newContentType} added successfully`
-      });
+        createContentAsync();
+      }, 100);
     } catch (error) {
-      console.error('Failed to add content:', error);
+      console.error('Failed to process content creation:', error);
+      setIsCreatingLesson(false);
       toast({
         title: "Error",
-        description: "Failed to add content. Please try again.",
+        description: "Failed to process content creation. Please try again.",
         variant: "destructive",
       });
     }
@@ -300,69 +344,76 @@ export default function EditorSidebar() {
     <div className="w-80 border-r bg-muted/10">
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
-          <Dialog open={newContentTypeDialogOpen} onOpenChange={setNewContentTypeDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm" className="flex items-center gap-1">
-                <PlusCircle className="h-4 w-4" />
-                <span>Add Content</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Content</DialogTitle>
-                <DialogDescription>Choose the type of content to add to your course.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <Button
-                  onClick={() => handleSelectContentType("lesson")}
-                  variant="outline"
-                  className="flex items-center justify-start gap-2 h-auto py-3"
-                >
-                  <FileText className="h-5 w-5" />
-                  <div className="text-left">
-                    <div className="font-medium">Lesson</div>
-                    <div className="text-sm text-muted-foreground">Add a text-based lesson with rich content</div>
-                  </div>
+          {isCreatingLesson ? (
+            <div className="bg-background border rounded-md px-2 py-1 text-xs flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              <span>Creating lesson...</span>
+            </div>
+          ) : (
+            <Dialog open={newContentTypeDialogOpen} onOpenChange={setNewContentTypeDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="flex items-center gap-1">
+                  <PlusCircle className="h-4 w-4" />
+                  <span>Add Content</span>
                 </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Content</DialogTitle>
+                  <DialogDescription>Choose the type of content to add to your course.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <Button
+                    onClick={() => handleSelectContentType("lesson")}
+                    variant="outline"
+                    className="flex items-center justify-start gap-2 h-auto py-3"
+                  >
+                    <FileText className="h-5 w-5" />
+                    <div className="text-left">
+                      <div className="font-medium">Lesson</div>
+                      <div className="text-sm text-muted-foreground">Add a text-based lesson with rich content</div>
+                    </div>
+                  </Button>
 
-                <Button
-                  onClick={() => handleSelectContentType("quiz")}
-                  variant="outline"
-                  className="flex items-center justify-start gap-2 h-auto py-3"
-                >
-                  <File className="h-5 w-5" />
-                  <div className="text-left">
-                    <div className="font-medium">Quiz</div>
-                    <div className="text-sm text-muted-foreground">Create an interactive quiz or assessment</div>
-                  </div>
-                </Button>
+                  <Button
+                    onClick={() => handleSelectContentType("quiz")}
+                    variant="outline"
+                    className="flex items-center justify-start gap-2 h-auto py-3"
+                  >
+                    <File className="h-5 w-5" />
+                    <div className="text-left">
+                      <div className="font-medium">Quiz</div>
+                      <div className="text-sm text-muted-foreground">Create an interactive quiz or assessment</div>
+                    </div>
+                  </Button>
 
-                <Button
-                  onClick={() => handleSelectContentType("video")}
-                  variant="outline"
-                  className="flex items-center justify-start gap-2 h-auto py-3"
-                >
-                  <Video className="h-5 w-5" />
-                  <div className="text-left">
-                    <div className="font-medium">Video</div>
-                    <div className="text-sm text-muted-foreground">Upload or embed a video lesson</div>
-                  </div>
-                </Button>
+                  <Button
+                    onClick={() => handleSelectContentType("video")}
+                    variant="outline"
+                    className="flex items-center justify-start gap-2 h-auto py-3"
+                  >
+                    <Video className="h-5 w-5" />
+                    <div className="text-left">
+                      <div className="font-medium">Video</div>
+                      <div className="text-sm text-muted-foreground">Upload or embed a video lesson</div>
+                    </div>
+                  </Button>
 
-                <Button
-                  onClick={() => handleSelectContentType("assignment")}
-                  variant="outline"
-                  className="flex items-center justify-start gap-2 h-auto py-3"
-                >
-                  <File className="h-5 w-5" />
-                  <div className="text-left">
-                    <div className="font-medium">Assignment</div>
-                    <div className="text-sm text-muted-foreground">Create a practical assignment or project</div>
-                  </div>
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+                  <Button
+                    onClick={() => handleSelectContentType("assignment")}
+                    variant="outline"
+                    className="flex items-center justify-start gap-2 h-auto py-3"
+                  >
+                    <File className="h-5 w-5" />
+                    <div className="text-left">
+                      <div className="font-medium">Assignment</div>
+                      <div className="text-sm text-muted-foreground">Create a practical assignment or project</div>
+                    </div>
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
 
           {/* Content Naming Dialog */}
           <ContentNameDialog

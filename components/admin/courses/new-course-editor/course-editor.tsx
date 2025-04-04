@@ -135,15 +135,18 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
       const firstModule = modules[0]
       setActiveModuleId(firstModule.id)
 
-      const items = firstModule.items || []
-      if (items.length > 0) {
-        setActiveItemId(items[0].id)
+      const lessons = firstModule.lessons || []
+      if (lessons.length > 0) {
+        setActiveItemId(lessons[0].id)
       }
     }
   }, [modules, activeModuleId, activeItemId, setActiveModuleId, setActiveItemId])
 
   // Update content in context when lesson changes
   useEffect(() => {
+    // Skip content updates during the loading state to prevent flicker
+    if (isLoading) return;
+    
     if (!activeModuleId || !activeItemId) {
       // Reset content if no lesson is selected
       setCurrentContent('');
@@ -168,17 +171,23 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     if (foundLesson) {
       // Set content with fallbacks to ensure we always have something to display
       const content = foundLesson.content_json?.content || foundLesson.content || '<p>New content</p>';
-      console.log('📝 [CourseEditor] Setting content for lesson:', {
-        lessonId: activeItemId,
-        content: content.substring(0, 50) + (content.length > 50 ? '...' : '')
-      });
-      setCurrentContent(content);
+      
+      // Only update if content has actually changed - this prevents unnecessary re-renders
+      if (content !== currentContent) {
+        console.log('📝 [CourseEditor] Setting content for lesson:', {
+          lessonId: activeItemId,
+          content: content.substring(0, 50) + (content.length > 50 ? '...' : '')
+        });
+        setCurrentContent(content);
+      }
     } else {
       console.warn('⚠️ [CourseEditor] No lesson found for ID:', activeItemId);
-      // Set default content even if lesson not found
-      setCurrentContent('<p>Start writing your content...</p>');
+      // Only set default content if currentContent is empty
+      if (!currentContent) {
+        setCurrentContent('<p>Start writing your content...</p>');
+      }
     }
-  }, [modules, activeModuleId, activeItemId]); // Removed course dependency to prevent reloads
+  }, [modules, activeModuleId, activeItemId, isLoading, course, currentContent, setCurrentContent]); // Include all dependencies
 
   // Transform modules to EditorModule type
   const editorModules: EditorModule[] = useMemo(() => {

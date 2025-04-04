@@ -207,7 +207,9 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
   addContent: async (courseId: string, moduleId: string, type: string, title: string) => {
     console.log('➕ [Store] Adding new content:', { courseId, moduleId, type, title });
 
-    set({ isLoading: true, error: null, savedState: 'saving' });
+    // Create a separate loading flag specifically for content creation
+    // Don't set isLoading: true as that will trigger the main loading screen
+    set({ error: null, savedState: 'saving' });
 
     try {
       // Make API call to create the lesson with the provided title
@@ -295,13 +297,12 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
           lessonCount: moduleToUpdate.lessons.length + 1
         });
 
-        // Return the updated state
+        // Return the updated state - preserve isLoading value
         return {
           ...state,
           modules: updatedModules,
           course: updatedCourse,
           selectedLessonId: newContent.id,
-          isLoading: false,
           error: null,
           savedState: 'saved',
           expandedModules: new Set([...state.expandedModules, moduleId])
@@ -315,7 +316,6 @@ export const createLessonActions = (set: StoreApi<CourseStoreType>['setState'], 
       console.error('❌ [Store] Failed to create lesson:', error);
 
       set({
-        isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to add content',
         savedState: 'unsaved'
       });
