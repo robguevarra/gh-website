@@ -6,6 +6,8 @@ import StarterKit from "@tiptap/starter-kit"
 import Link from "@tiptap/extension-link"
 import Image from "@tiptap/extension-image"
 import Placeholder from "@tiptap/extension-placeholder"
+import { Iframe } from "../extensions/iframe"
+import { VimeoEmbed } from "../extensions/vimeo-embed"
 import { useCourseContext } from "../../course-editor"
 import { useCourseStore } from "@/lib/stores/course"
 import { Toolbar } from "../toolbar"
@@ -105,6 +107,17 @@ export function VisualEditor({ onSave }: VisualEditorProps) {
         }),
         Placeholder.configure({
           placeholder: "Start writing your content..."
+        }),
+        Iframe.configure({
+          allowFullscreen: true,
+          HTMLAttributes: {
+            class: "iframe-wrapper"
+          }
+        }),
+        VimeoEmbed.configure({
+          HTMLAttributes: {
+            class: "vimeo-embed"
+          }
         })
       ],
       // Only set initial content, updates will be handled by the useEffect
@@ -121,6 +134,15 @@ export function VisualEditor({ onSave }: VisualEditorProps) {
       editorProps: {
         attributes: {
           class: 'prose prose-sm max-w-none focus:outline-none min-h-[400px] px-4 py-2'
+        },
+        // Allow pasting of HTML content with iframes
+        handlePaste: (view, event, slice) => {
+          // Let TipTap handle the paste normally
+          return false
+        },
+        // Allow all HTML content including iframes
+        transformPastedHTML: (html) => {
+          return html
         }
       }
     }),
