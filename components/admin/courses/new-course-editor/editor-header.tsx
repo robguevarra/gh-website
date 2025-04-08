@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Save, Eye, Share2, MoreHorizontal, ArrowLeft, ArrowLeftRight } from "lucide-react"
+import { Save, Share2, MoreHorizontal, ArrowLeft, ArrowLeftRight, CheckCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { useCourseStore } from "@/lib/stores/course"
@@ -12,29 +12,27 @@ interface EditorHeaderProps {
   title: string
   savedState: string
   onPublish: () => void
-  onPreview: () => void
   onShare: () => void
   viewMode: "editor" | "student"
   onToggleViewMode: () => void
 }
 
-export default function EditorHeader({ 
-  title, 
-  savedState, 
-  onPublish, 
-  onPreview, 
+export default function EditorHeader({
+  title,
+  savedState,
+  onPublish,
   onShare,
   viewMode,
   onToggleViewMode
 }: EditorHeaderProps) {
   const { toast } = useToast()
-  const { 
-    course, 
-    updateCourse, 
+  const {
+    course,
+    updateCourse,
     updateLesson,
     selectedModuleId,
     selectedLessonId,
-    setSavedState 
+    setSavedState
   } = useCourseStore()
 
   const { currentContent } = useCourseContext()
@@ -179,9 +177,9 @@ export default function EditorHeader({
             <Share2 className="h-4 w-4" />
             <span>Share</span>
           </Button>
-          <Button 
-            size="sm" 
-            className="h-9 gap-1.5 bg-primary hover:bg-primary/90" 
+          <Button
+            size="sm"
+            className="h-9 gap-1.5 bg-primary hover:bg-primary/90"
             onClick={handleSave}
             disabled={savedState === "saving"}
           >
@@ -189,13 +187,13 @@ export default function EditorHeader({
             <span>Save</span>
           </Button>
           <Button
-            variant="outline"
+            variant={course?.is_published ? "default" : "outline"}
             size="sm"
-            className="h-9 gap-1.5"
+            className={`h-9 gap-1.5 ${course?.is_published ? "bg-green-600 hover:bg-green-700" : ""}`}
             onClick={onPublish}
           >
-            <Eye className="h-4 w-4" />
-            <span>Publish</span>
+            <CheckCircle className="h-4 w-4" />
+            <span>{course?.is_published ? "Published" : "Publish"}</span>
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

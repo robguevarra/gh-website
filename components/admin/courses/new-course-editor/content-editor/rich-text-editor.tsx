@@ -8,6 +8,7 @@ import Image from "@tiptap/extension-image"
 import Placeholder from "@tiptap/extension-placeholder"
 import TextAlign from "@tiptap/extension-text-align"
 import Underline from "@tiptap/extension-underline"
+import { Vimeo } from "./extensions/vimeo"
 import { useCourseContext } from "../course-editor"
 import { useCourseStore } from "@/lib/stores/course"
 import { Toolbar } from "./toolbar"
@@ -65,7 +66,7 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: { 
+        heading: {
           levels: [1, 2, 3],
           HTMLAttributes: {
             class: 'editor-heading',
@@ -115,6 +116,11 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
       Placeholder.configure({
         placeholder: "Start writing your content..."
       }),
+      Vimeo.configure({
+        HTMLAttributes: {
+          class: "vimeo-embed"
+        }
+      }),
       TextAlign.configure({
         types: ['heading', 'paragraph', 'bulletList', 'orderedList', 'blockquote'],
         defaultAlignment: 'left',
@@ -127,8 +133,8 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
       setContent(html)
       debouncedSave(html)
       // Log current selection state for debugging
-      console.log('Selection:', editor.isActive('heading', { level: 1 }), 
-                            editor.isActive('heading', { level: 2 }), 
+      console.log('Selection:', editor.isActive('heading', { level: 1 }),
+                            editor.isActive('heading', { level: 2 }),
                             editor.isActive('heading', { level: 3 }))
     },
     editorProps: {
@@ -142,7 +148,7 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
           if (editor?.isActive('listItem')) {
             // Prevent default tab behavior
             event.preventDefault()
-            
+
             // If Shift is pressed, outdent
             if (event.shiftKey) {
               editor.chain().focus().liftListItem('listItem').run()
@@ -153,7 +159,7 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
             return true
           }
         }
-        
+
         // Keyboard shortcuts for lists and quotes
         if (event.ctrlKey || event.metaKey) {
           switch (event.key) {
@@ -174,7 +180,16 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
               return true
           }
         }
-        
+
+        return false
+      },
+      // Allow all HTML content including iframes
+      transformPastedHTML: (html) => {
+        return html
+      },
+      // Allow pasting of HTML content with iframes
+      handlePaste: (view, event, slice) => {
+        // Let TipTap handle the paste normally
         return false
       }
     }
@@ -232,6 +247,12 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
       <Toolbar editor={editor} onSave={handleSave} />
       <EditorContent editor={editor} className="p-4 rich-text-content" />
       <style jsx global>{`
+        /* Vimeo embed styling */
+        .rich-text-content .vimeo-embed {
+          margin: 1.5em 0;
+          border-radius: 0.5rem;
+          overflow: hidden;
+        }
         .rich-text-content .editor-heading {
           margin-top: 1em;
           margin-bottom: 0.5em;

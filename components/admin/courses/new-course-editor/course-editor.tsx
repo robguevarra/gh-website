@@ -8,9 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
 import EditorSidebar from "./editor-sidebar"
 import ContentEditor from "./content-editor"
-import ModuleManager from "./module-manager"
 import SettingsPanel from "./settings-panel"
-import CoursePreview from "./course-preview"
 import StudentView from "./student-view"
 import EditorHeader from "./editor-header"
 import { useCourseStore } from "@/lib/stores/course"
@@ -146,7 +144,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
   useEffect(() => {
     // Skip content updates during the loading state to prevent flicker
     if (isLoading) return;
-    
+
     if (!activeModuleId || !activeItemId) {
       // Reset content if no lesson is selected
       setCurrentContent('');
@@ -171,7 +169,7 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     if (foundLesson) {
       // Set content with fallbacks to ensure we always have something to display
       const content = foundLesson.content_json?.content || foundLesson.content || '<p>New content</p>';
-      
+
       // Only update if content has actually changed - this prevents unnecessary re-renders
       if (content !== currentContent) {
         console.log('📝 [CourseEditor] Setting content for lesson:', {
@@ -311,37 +309,46 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     }
   }
 
-  const handlePublish = () => {
-    // First save any pending changes
-    handleSave()
-      .then(() => {
-        // Only update publish state if save was successful
-        return updateCourse(courseId, { is_published: true })
+  const handlePublish = async () => {
+    if (!course) return
+
+    // Set the new publish state (toggle current state)
+    const newPublishState = !(course.is_published || false)
+    const newStatus = newPublishState ? 'published' : 'draft'
+
+    setSavedState("saving")
+
+    try {
+      // First save any pending changes
+      await handleSave()
+
+      // Update the publish state and status
+      await updateCourse(courseId, {
+        is_published: newPublishState,
+        status: newStatus
       })
-      .then(() => {
-        setSavedState("saved")
-        toast({
-          title: "Course published",
-          description: "Your course has been published successfully.",
-        })
+
+      setSavedState("saved")
+      toast({
+        title: newPublishState ? "Course published" : "Course unpublished",
+        description: newPublishState
+          ? "Your course has been published successfully."
+          : "Your course has been unpublished and is now in draft mode.",
       })
-      .catch((error) => {
-        setSavedState("unsaved")
-        toast({
-          title: "Error publishing course",
-          description: error.message || "Failed to publish course. Please try again.",
-          variant: "destructive",
-        })
+    } catch (error) {
+      console.error("Failed to publish/unpublish course:", error)
+      setSavedState("unsaved")
+      toast({
+        title: "Error updating publish state",
+        description: error instanceof Error
+          ? error.message
+          : "Failed to update course publish state. Please try again.",
+        variant: "destructive",
       })
+    }
   }
 
-  const handlePreview = () => {
-    setActiveTab("preview")
-    toast({
-      title: "Preview mode",
-      description: "You are now viewing the course as students will see it.",
-    })
-  }
+  // Preview functionality removed
 
   const handleShare = () => {
     // Construct a share link using the course slug if available
@@ -416,7 +423,6 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
             title={course?.title || "Untitled Course"}
             savedState={savedState}
             onPublish={handlePublish}
-            onPreview={handlePreview}
             onShare={handleShare}
             viewMode={viewMode}
             onToggleViewMode={toggleViewMode}
@@ -447,24 +453,11 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
                         </svg>
                         Content
                       </TabsTrigger>
-                      <TabsTrigger value="modules" className="data-[state=active]:bg-primary/10">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-                        </svg>
-                        Modules
-                      </TabsTrigger>
                       <TabsTrigger value="settings" className="data-[state=active]:bg-primary/10">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                         </svg>
                         Settings
-                      </TabsTrigger>
-                      <TabsTrigger value="preview" className="data-[state=active]:bg-primary/10">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        Preview
                       </TabsTrigger>
                     </TabsList>
                   </div>
@@ -472,9 +465,6 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
                     <div className="max-w-5xl mx-auto pb-10">
                       <TabsContent value="content" className="mt-0 h-full">
                         <ContentEditor onSave={handleSave} />
-                      </TabsContent>
-                      <TabsContent value="modules" className="mt-0">
-                        <ModuleManager />
                       </TabsContent>
                       <TabsContent value="settings" className="mt-0">
                         <SettingsPanel
@@ -485,9 +475,6 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
                             isPublished: course.is_published || false,
                           }}
                         />
-                      </TabsContent>
-                      <TabsContent value="preview" className="mt-0">
-                        <CoursePreview />
                       </TabsContent>
                     </div>
                   </ScrollArea>

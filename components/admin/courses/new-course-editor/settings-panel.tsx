@@ -13,10 +13,11 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useCourseContext } from "./course-editor"
+import { useCourseStore } from "@/lib/stores/course"
 
 interface SettingsPanelProps {
   courseId: string
@@ -30,26 +31,79 @@ interface SettingsPanelProps {
 export default function SettingsPanel({ courseId, initialData }: SettingsPanelProps) {
   const { toast } = useToast()
   const { setSavedState } = useCourseContext()
-  const [date, setDate] = useState<Date>()
+  const { course, updateCourse } = useCourseStore()
+  const [publishDate, setPublishDate] = useState<Date | undefined>()
+
+  // Define type for metadata to avoid TypeScript errors
+  type CourseMetadata = {
+    code?: string;
+    category?: string;
+    level?: string;
+    featured?: boolean;
+    access?: string;
+    prerequisites?: string;
+    requirements?: {
+      completeAll?: boolean;
+      passQuizzes?: boolean;
+      submitAssignments?: boolean;
+    };
+    enableCertificate?: boolean;
+    discussion?: string;
+    progress?: string;
+    analytics?: boolean;
+    publishDate?: string;
+  }
+
+  // Initialize form state from course data
   const [formState, setFormState] = useState({
-    title: "Introduction to Digital Marketing",
-    code: "MKT-101",
-    description:
-      "A comprehensive introduction to digital marketing concepts, strategies, and implementation. Learn how to create effective campaigns across various digital channels.",
-    category: "marketing",
-    level: "beginner",
-    published: true,
-    featured: false,
-    access: "enrolled",
-    prerequisites: "Basic computer skills and familiarity with social media platforms.",
-    completeAll: true,
-    passQuizzes: true,
-    submitAssignments: true,
-    enableCertificate: true,
-    discussion: "module",
-    progress: "automatic",
-    analytics: true,
+    title: initialData.title,
+    code: ((course?.metadata as CourseMetadata)?.code) || "",
+    description: initialData.description || "",
+    category: ((course?.metadata as CourseMetadata)?.category) || "general",
+    level: ((course?.metadata as CourseMetadata)?.level) || "beginner",
+    published: initialData.isPublished,
+    featured: ((course?.metadata as CourseMetadata)?.featured) || false,
+    access: ((course?.metadata as CourseMetadata)?.access) || "enrolled",
+    prerequisites: ((course?.metadata as CourseMetadata)?.prerequisites) || "",
+    completeAll: ((course?.metadata as CourseMetadata)?.requirements?.completeAll) || true,
+    passQuizzes: ((course?.metadata as CourseMetadata)?.requirements?.passQuizzes) || false,
+    submitAssignments: ((course?.metadata as CourseMetadata)?.requirements?.submitAssignments) || false,
+    enableCertificate: ((course?.metadata as CourseMetadata)?.enableCertificate) || false,
+    discussion: ((course?.metadata as CourseMetadata)?.discussion) || "module",
+    progress: ((course?.metadata as CourseMetadata)?.progress) || "automatic",
+    analytics: ((course?.metadata as CourseMetadata)?.analytics) || true,
   })
+
+  // Update form state when course data changes
+  useEffect(() => {
+    if (course) {
+      const metadata = course.metadata as CourseMetadata || {}
+
+      setFormState({
+        title: course.title,
+        code: metadata.code || "",
+        description: course.description || "",
+        category: metadata.category || "general",
+        level: metadata.level || "beginner",
+        published: course.is_published || false,
+        featured: metadata.featured || false,
+        access: metadata.access || "enrolled",
+        prerequisites: metadata.prerequisites || "",
+        completeAll: metadata.requirements?.completeAll || true,
+        passQuizzes: metadata.requirements?.passQuizzes || false,
+        submitAssignments: metadata.requirements?.submitAssignments || false,
+        enableCertificate: metadata.enableCertificate || false,
+        discussion: metadata.discussion || "module",
+        progress: metadata.progress || "automatic",
+        analytics: metadata.analytics || true,
+      })
+
+      // Set publish date if available
+      if (metadata.publishDate) {
+        setPublishDate(new Date(metadata.publishDate))
+      }
+    }
+  }, [course])
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormState({
@@ -59,17 +113,60 @@ export default function SettingsPanel({ courseId, initialData }: SettingsPanelPr
     setSavedState("unsaved")
   }
 
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
+    if (!course) return
+
     setSavedState("saving")
 
-    // Simulate saving process
-    setTimeout(() => {
+    try {
+      // Prepare metadata object
+      const currentMetadata = course.metadata as CourseMetadata || {}
+
+      const metadata: CourseMetadata = {
+        ...currentMetadata,
+        code: formState.code,
+        category: formState.category,
+        level: formState.level,
+        featured: formState.featured,
+        access: formState.access,
+        prerequisites: formState.prerequisites,
+        requirements: {
+          completeAll: formState.completeAll,
+          passQuizzes: formState.passQuizzes,
+          submitAssignments: formState.submitAssignments
+        },
+        enableCertificate: formState.enableCertificate,
+        discussion: formState.discussion,
+        progress: formState.progress,
+        analytics: formState.analytics
+      }
+
+      // Add publish date if set
+      if (publishDate) {
+        metadata.publishDate = publishDate.toISOString()
+      }
+
+      // Update course with new data
+      await updateCourse(courseId, {
+        title: formState.title,
+        description: formState.description,
+        is_published: formState.published,
+        metadata: metadata as Record<string, unknown>
+      })
+
       setSavedState("saved")
       toast({
         title: "Settings saved",
         description: "Your course settings have been updated successfully.",
       })
-    }, 1500)
+    } catch (error) {
+      setSavedState("unsaved")
+      toast({
+        title: "Error saving settings",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive"
+      })
+    }
   }
 
   const handleImageChange = () => {
@@ -200,6 +297,7 @@ export default function SettingsPanel({ courseId, initialData }: SettingsPanelPr
                   id="published"
                   checked={formState.published}
                   onCheckedChange={(checked) => handleInputChange("published", checked)}
+                  aria-label="Published status"
                 />
               </div>
 
@@ -241,19 +339,19 @@ export default function SettingsPanel({ courseId, initialData }: SettingsPanelPr
                     <PopoverTrigger asChild>
                       <Button
                         variant={"outline"}
-                        className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}
+                        className={cn("w-full justify-start text-left font-normal", !publishDate && "text-muted-foreground")}
                         onClick={() => setSavedState("unsaved")}
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date ? format(date, "PPP") : "Select date"}
+                        {publishDate ? format(publishDate, "PPP") : "Select date"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0">
                       <Calendar
                         mode="single"
-                        selected={date}
+                        selected={publishDate}
                         onSelect={(newDate) => {
-                          setDate(newDate)
+                          setPublishDate(newDate)
                           setSavedState("unsaved")
                         }}
                         initialFocus

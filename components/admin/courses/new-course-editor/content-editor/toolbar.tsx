@@ -19,8 +19,11 @@ import {
   AlignCenter,
   AlignRight,
   Undo,
-  Redo
+  Redo,
+  Video
 } from "lucide-react"
+import { useState } from "react"
+import { AddVimeoDialog } from "./dialogs/add-vimeo"
 
 interface ToolbarProps {
   editor: Editor | null
@@ -28,6 +31,8 @@ interface ToolbarProps {
 }
 
 export function Toolbar({ editor, onSave }: ToolbarProps) {
+  const [vimeoDialogOpen, setVimeoDialogOpen] = useState(false)
+
   if (!editor) {
     return (
       <div className="flex items-center gap-1 p-2 border-b">
@@ -187,20 +192,20 @@ export function Toolbar({ editor, onSave }: ToolbarProps) {
         onClick={() => {
           const previousUrl = editor.isActive('link') ? editor.getAttributes('link').href : ''
           const url = window.prompt('Enter URL', previousUrl)
-          
+
           // If url is empty, remove the link
           if (url === '') {
             editor.chain().focus().unsetLink().run()
             return
           }
-          
+
           // Set link if url is provided
           if (url) {
             // Ensure http:// or https:// is included
-            const fullUrl = url.startsWith('http://') || url.startsWith('https://') 
-              ? url 
+            const fullUrl = url.startsWith('http://') || url.startsWith('https://')
+              ? url
               : `https://${url}`
-              
+
             editor.chain().focus().setLink({ href: fullUrl }).run()
           }
         }}
@@ -216,7 +221,7 @@ export function Toolbar({ editor, onSave }: ToolbarProps) {
         onClick={() => {
           const previousSrc = editor.isActive('image') ? editor.getAttributes('image').src : ''
           const url = window.prompt('Enter image URL', previousSrc)
-          
+
           if (url) {
             editor.chain().focus().setImage({ src: url, alt: 'Image' }).run()
           }
@@ -225,6 +230,16 @@ export function Toolbar({ editor, onSave }: ToolbarProps) {
         title="Insert Image"
       >
         <ImageIcon className="h-4 w-4" />
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => setVimeoDialogOpen(true)}
+        className="h-8 w-8"
+        title="Insert Vimeo Video"
+      >
+        <Video className="h-4 w-4" />
       </Button>
 
       <div className="w-px h-6 bg-border mx-1" />
@@ -251,6 +266,13 @@ export function Toolbar({ editor, onSave }: ToolbarProps) {
       >
         <Redo className="h-4 w-4" />
       </Button>
+
+      {/* Vimeo Dialog */}
+      <AddVimeoDialog
+        open={vimeoDialogOpen}
+        onOpenChange={setVimeoDialogOpen}
+        editor={editor}
+      />
     </div>
   )
 }

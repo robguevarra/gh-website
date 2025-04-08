@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -18,33 +18,77 @@ import {
   BarChart,
   Settings,
   MessageSquare,
+  Loader2
 } from "lucide-react"
 import { useCourseContext } from "./course-editor"
+import { useCourseStore } from "@/lib/stores/course"
 import { useToast } from "@/hooks/use-toast"
+// Import removed as we're using dangerouslySetInnerHTML directly
 
 interface StudentViewProps {
   courseId: string
 }
 
+// Define a type for lesson items in student view
+interface LessonItem {
+  id: string
+  title: string
+  type: string
+  content: string
+}
+
+// Define a type for modules in student view
+interface StudentModule {
+  id: string
+  title: string
+  items: LessonItem[]
+}
+
 export default function StudentView({ courseId }: StudentViewProps) {
-  const { modules, activeModuleId, setActiveModuleId, activeItemId, setActiveItemId, setSavedState } =
+  const { activeModuleId, setActiveModuleId, activeItemId, setActiveItemId, setSavedState, currentContent } =
     useCourseContext()
+  const { course, selectedModuleId, selectedLessonId, isLoading } = useCourseStore()
   const { toast } = useToast()
   const [completedItems, setCompletedItems] = useState<string[]>([])
 
+  // Transform course modules and lessons into the format expected by the student view
+  const studentModules = useMemo(() => {
+    if (!course?.modules) return []
+
+    return course.modules.map(module => ({
+      id: module.id,
+      title: module.title,
+      items: module.lessons?.map(lesson => ({
+        id: lesson.id,
+        title: lesson.title,
+        type: lesson.metadata?.type as string || "lesson",
+        content: lesson.content_json?.content as string || lesson.content || ""
+      })) || []
+    }))
+  }, [course])
+
   // Find active module and item
-  const activeModule = modules.find((m) => m.id === activeModuleId)
-  const activeItem = activeModule?.items.find((i) => i.id === activeItemId)
+  const activeModule = studentModules.find((m) => m.id === (activeModuleId || selectedModuleId))
+  const activeItem = activeModule?.items.find((i) => i.id === (activeItemId || selectedLessonId))
 
   // Calculate course progress
-  const totalItems = modules.reduce((total, module) => total + module.items.length, 0)
-  const progressPercentage = Math.round((completedItems.length / totalItems) * 100)
+  const totalItems = studentModules.reduce((total, module) => total + module.items.length, 0)
+  const progressPercentage = totalItems > 0 ? Math.round((completedItems.length / totalItems) * 100) : 0
 
   // Force a save before entering student view to ensure latest content is shown
   useEffect(() => {
     // Dispatch a custom event to trigger save in the content editor
     window.dispatchEvent(new Event("editor-save"))
-  }, [])
+
+    // Set active module and item if not already set
+    if (!activeModuleId && selectedModuleId) {
+      setActiveModuleId(selectedModuleId)
+    }
+
+    if (!activeItemId && selectedLessonId) {
+      setActiveItemId(selectedLessonId)
+    }
+  }, [activeModuleId, activeItemId, selectedModuleId, selectedLessonId, setActiveModuleId, setActiveItemId])
 
   const markAsComplete = () => {
     if (activeItemId && !completedItems.includes(activeItemId)) {
@@ -68,9 +112,9 @@ export default function StudentView({ courseId }: StudentViewProps) {
     }
 
     // If we need to go to the next module
-    const currentModuleIndex = modules.findIndex((module) => module.id === activeModuleId)
-    if (currentModuleIndex < modules.length - 1) {
-      const nextModule = modules[currentModuleIndex + 1]
+    const currentModuleIndex = studentModules.findIndex((module) => module.id === activeModuleId)
+    if (currentModuleIndex < studentModules.length - 1) {
+      const nextModule = studentModules[currentModuleIndex + 1]
       if (nextModule.items.length > 0) {
         setActiveModuleId(nextModule.id)
         setActiveItemId(nextModule.items[0].id)
@@ -90,9 +134,9 @@ export default function StudentView({ courseId }: StudentViewProps) {
     }
 
     // If we need to go to the previous module
-    const currentModuleIndex = modules.findIndex((module) => module.id === activeModuleId)
+    const currentModuleIndex = studentModules.findIndex((module) => module.id === activeModuleId)
     if (currentModuleIndex > 0) {
-      const prevModule = modules[currentModuleIndex - 1]
+      const prevModule = studentModules[currentModuleIndex - 1]
       if (prevModule.items.length > 0) {
         setActiveModuleId(prevModule.id)
         setActiveItemId(prevModule.items[prevModule.items.length - 1].id)
@@ -141,15 +185,26 @@ export default function StudentView({ courseId }: StudentViewProps) {
           <div className="p-4">
             <h3 className="font-medium mb-2">Course Content</h3>
             <div className="space-y-4">
-              {modules.map((module) => (
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <span className="ml-2">Loading course content...</span>
+                </div>
+              ) : studentModules.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>No course content available.</p>
+                </div>
+              ) : studentModules.map((module) => (
                 <div key={module.id} className="space-y-1">
                   <h4 className="font-medium text-sm">{module.title}</h4>
                   <ul className="space-y-1 pl-2 border-l">
-                    {module.items.map((item) => (
+                    {module.items.length === 0 ? (
+                      <li className="text-xs text-muted-foreground pl-2">No lessons in this module</li>
+                    ) : module.items.map((item) => (
                       <li key={item.id}>
                         <button
                           className={`flex items-center gap-2 w-full text-left p-1.5 rounded-md text-sm hover:bg-accent ${
-                            activeItemId === item.id ? "bg-accent" : ""
+                            (activeItemId === item.id || selectedLessonId === item.id) ? "bg-accent" : ""
                           }`}
                           onClick={() => {
                             setActiveModuleId(module.id)
@@ -203,7 +258,15 @@ export default function StudentView({ courseId }: StudentViewProps) {
 
       {/* Content Area */}
       <div className="flex-1 flex flex-col">
-        {activeItem ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <Loader2 className="h-12 w-12 mx-auto mb-4 animate-spin text-primary" />
+              <h2 className="text-xl font-semibold mb-2">Loading course content</h2>
+              <p className="text-muted-foreground">Please wait while we load your course content.</p>
+            </div>
+          </div>
+        ) : activeItem ? (
           <>
             <div className="border-b p-4 bg-muted/20">
               <div className="flex items-center justify-between">
@@ -226,9 +289,84 @@ export default function StudentView({ courseId }: StudentViewProps) {
 
             <ScrollArea className="flex-1 p-6">
               <div className="max-w-3xl mx-auto">
-                <Card>
-                  <CardContent className="p-6">
-                    <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: activeItem.content || "" }} />
+                <Card className="shadow-md border-muted">
+                  <CardContent className="p-6 md:p-8">
+                    <div
+                      className="prose prose-sm sm:prose lg:prose-lg xl:prose-2xl max-w-none rich-text-content"
+                      dangerouslySetInnerHTML={{ __html: activeItem.content || "" }}
+                    />
+                    <script src="https://player.vimeo.com/api/player.js"></script>
+                    <style jsx global>{`
+                      .rich-text-content h1 {
+                        font-size: 1.8em;
+                        font-weight: bold;
+                        margin-top: 1em;
+                        margin-bottom: 0.5em;
+                      }
+                      .rich-text-content h2 {
+                        font-size: 1.5em;
+                        font-weight: bold;
+                        margin-top: 1em;
+                        margin-bottom: 0.5em;
+                      }
+                      .rich-text-content h3 {
+                        font-size: 1.3em;
+                        font-weight: bold;
+                        margin-top: 1em;
+                        margin-bottom: 0.5em;
+                      }
+                      .rich-text-content p {
+                        margin-bottom: 1em;
+                      }
+                      .rich-text-content ul {
+                        list-style-type: disc;
+                        padding-left: 1.5em;
+                        margin: 1em 0;
+                      }
+                      .rich-text-content ol {
+                        list-style-type: decimal;
+                        padding-left: 1.5em;
+                        margin: 1em 0;
+                      }
+                      .rich-text-content li {
+                        margin-bottom: 0.5em;
+                      }
+                      .rich-text-content blockquote {
+                        border-left: 4px solid #e2e8f0;
+                        padding-left: 1em;
+                        margin: 1em 0;
+                        font-style: italic;
+                      }
+                      .rich-text-content a {
+                        color: #3182ce;
+                        text-decoration: underline;
+                      }
+                      .rich-text-content img {
+                        max-width: 100%;
+                        height: auto;
+                        border-radius: 0.5rem;
+                      }
+                      .rich-text-content pre {
+                        background-color: #f7fafc;
+                        padding: 1em;
+                        border-radius: 0.5rem;
+                        overflow-x: auto;
+                        margin: 1em 0;
+                      }
+                      .rich-text-content code {
+                        background-color: #f7fafc;
+                        padding: 0.2em 0.4em;
+                        border-radius: 0.25rem;
+                        font-family: monospace;
+                      }
+
+                      /* Vimeo embed styling */
+                      .rich-text-content .vimeo-embed {
+                        margin: 1.5em 0;
+                        border-radius: 0.5rem;
+                        overflow: hidden;
+                      }
+                    `}</style>
 
                     {activeItem.type === "quiz" && (
                       <div className="mt-6 space-y-4 border-t pt-4">
