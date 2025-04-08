@@ -1,7 +1,7 @@
-# Platform Integration - Phase 2-2: Enrollment System
+# Platform Integration - Phase 2-2: Student Experience System
 
 ## Task Objective
-Develop a comprehensive, industry-standard enrollment system that seamlessly manages student registration, access control, and progress tracking while integrating with our existing codebase patterns and components.
+Develop a premium, exclusive student experience system that seamlessly manages access to our Papers to Profits course (and future offerings), tracks student progress, and provides an award-winning dashboard interface while integrating with our existing codebase patterns and components.
 
 ## Current State Assessment
 Our current enrollment implementation includes:
@@ -139,34 +139,36 @@ Our current codebase already includes relevant functionality we can leverage:
 - **State Management**: Uses `useCourseStore` from Zustand for global course state
 
 ## Future State Goal
-A full-featured enrollment system following LMS industry standards:
+A premium student experience system tailored to our exclusive course offerings:
 
-1. **Student Experience**
-   - Consistent enrollment flow across marketing pages and course catalog
-   - Clear enrollment status and expiration information
-   - Seamless access to purchased courses
-   - Visual progress tracking
+1. **Student Dashboard Experience**
+   - Award-winning, intuitive student dashboard interface
+   - Clear, immediate access to Papers to Profits (and future courses)
+   - Integration with Shopify purchases history
+   - Visual progress tracking with elegant data visualization
+   - No course expiration handling required (lifetime access model)
 
 2. **Access Control**
-   - JWT-based validation middleware for course content
+   - JWT-based validation middleware for secure course content access
    - Fine-grained permissions at module/lesson level
-   - Expiration handling with grace period options
+   - Authentication flow that ensures only enrolled students can access content
 
 3. **Progress Tracking**
-   - Industry-standard SCORM-like completion tracking
+   - High-quality progress tracking for both student feedback and admin analytics
    - Module-level and lesson-level progress recording
-   - Aggregated statistics and reporting
+   - Aggregated statistics and reporting for business insights
 
 4. **Administration**
-   - Enhanced enrollment management
-   - Bulk operations for enrollment administration
-   - Revenue and engagement analytics
+   - Enhanced enrollment management connected to user database
+   - Enrollment confirmation interface
+   - Student engagement analytics dashboard
+   - Integration with Xendit/Shopify payment confirmation
 
 ## Implementation Plan
 
-### 1. Enhanced Student Enrollment Flow
-- [ ] Leverage and extend existing course preview functionality from `app/admin/courses/page.tsx`
-- [ ] Implement `CourseEnrollmentFlow` component in `/components/courses/`
+### 1. Premium Student Dashboard
+- [ ] Enhance the existing student dashboard at `/app/dashboard/page.tsx`
+- [ ] Implement `StudentCourseAccess` component in `/components/courses/`
   ```tsx
   // Structure follows our existing pattern:
   'use client';
@@ -176,27 +178,37 @@ A full-featured enrollment system following LMS industry standards:
   import { useRouter } from 'next/navigation';
   import { Badge } from '@/components/ui/badge';
 
-  export function CourseEnrollmentFlow({
+  export function StudentCourseAccess({
     courseId,
     courseName,
-    price,
-    description,
-    status
-  }: CourseEnrollmentFlowProps) {
+    thumbnail,
+    progress,
+    lastAccessed
+  }: StudentCourseAccessProps) {
     // State management using our existing patterns
-    const [isEnrolling, setIsEnrolling] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const router = useRouter();
 
-    // Implement enrollment logic following xendit-payment.tsx pattern
-    // ...
+    // Handle continue course logic
+    const handleContinueCourse = () => {
+      setIsLoading(true);
+      // Navigate to the last accessed lesson or first lesson if none
+      router.push(`/courses/${courseId}/lessons/${lastAccessedLesson || firstLesson}`);
+    };
+
+    return (
+      <Card className="w-full max-w-md hover:shadow-md transition-all duration-300">
+        {/* Premium course display with progress metrics */}
+      </Card>
+    );
   }
   ```
-- [ ] Enhance course preview with more detailed information and enrollment options
-- [ ] Implement course catalog in `/app/(authenticated)/courses/page.tsx`
-  - Use our existing Card, Badge, and Button components from admin interface
-  - Create ServerComponent for initial data loading with SWR for dynamic updates
+- [ ] Integrate with existing course viewer from course editor enhancement phase
+- [ ] Display Papers to Profits course with premium styling and progress metrics
+- [ ] Implement Shopify purchase history integration in `/components/dashboard/purchase-history.tsx`
 
 ### 2. Access Control Implementation
-- [ ] Create centralized middleware in `/lib/middleware/enrollment-validation.ts`:
+- [ ] Create centralized middleware in `/lib/middleware/course-access-validation.ts`:
   ```typescript
   // Following our existing middleware pattern:
   import { NextRequest, NextResponse } from 'next/server';
@@ -663,6 +675,27 @@ A full-featured enrollment system following LMS industry standards:
   }
   ```
 
+### 4. Premium Progress Tracking
+- [ ] Enhance existing progress tracking system in `/db/migrations/04_progress_tracking_enhancement.sql`:
+  ```sql
+  -- Enhance existing course_progress table for premium tracking
+  CREATE TABLE IF NOT EXISTS public.course_progress (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    course_id UUID NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
+    percent_complete NUMERIC NOT NULL DEFAULT 0,
+    completed_modules INTEGER DEFAULT 0,
+    total_modules INTEGER DEFAULT 0,
+    completed_lessons INTEGER DEFAULT 0,
+    total_lessons INTEGER DEFAULT 0,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    last_activity_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE (user_id, course_id)
+  );
+  ```
+
 ### 4. Enrollment Lifecycle Management
 - [ ] Extend enrollment model with `renewal_at`, `notification_sent_at` fields
 - [ ] Create automated expiration check function in `/lib/cron/check-enrollments.ts`
@@ -680,134 +713,30 @@ A full-featured enrollment system following LMS industry standards:
   ```
 - [ ] Add renewal API endpoints in `/app/api/courses/[courseId]/enrollments/renew`
 
-### 5. Payment Integration Enhancement
-- [ ] Update Xendit integration to handle enrollment creation in `components/checkout/xendit-payment.tsx`:
+### 5. Student Engagement Automation
+- [ ] Create engagement tracking function in `/lib/analytics/student-engagement.ts`
+- [ ] Implement notifications using our existing pattern:
   ```typescript
-  // Extending our existing payment completion handler in xendit-payment.tsx
-  import { enrollUserInCourse } from '@/lib/supabase/data-access';
-  import { addDays, format } from 'date-fns';
-  import { toast } from '@/components/ui/use-toast';
-
-  async function handlePaymentCompletion(paymentData) {
-    try {
-      // Get course duration from course settings or use default
-      const { data: courseSettings } = await supabaseClient
-        .from('courses')
-        .select('access_duration_days, title')
-        .eq('id', courseId)
-        .single();
-
-      const courseDurationDays = courseSettings?.access_duration_days || 365; // Default to 1 year
-      const expiryDate = addDays(new Date(), courseDurationDays);
-
-      // Use our existing data access function to create enrollment
-      const enrollment = await enrollUserInCourse(user.id, courseId, paymentData.id);
-
-      // Update enrollment with expiration date
-      const { error: updateError } = await supabaseClient
-        .from('user_enrollments')
-        .update({
-          expires_at: expiryDate.toISOString(),
-        })
-        .eq('id', enrollment.id);
-
-      if (updateError) throw updateError;
-
-      // Show success message
-      toast({
-        title: 'Enrollment Successful!',
-        description: `You now have access to ${courseSettings?.title} until ${format(expiryDate, 'PPP')}.`,
-        variant: 'default',
-      });
-
-      // Redirect to course or dashboard
-      router.push(`/courses/${courseSlug}/learn`);
-    } catch (error) {
-      console.error('Error creating enrollment:', error);
-      toast({
-        title: 'Enrollment Error',
-        description: 'There was a problem creating your enrollment. Please contact support.',
-        variant: 'destructive',
-      });
-    }
-  }
-  ```
-- [ ] Create API route for enrollment creation after payment in `/app/api/payments/webhook/route.ts`:
-  ```typescript
-  // Handle payment webhooks from Xendit
-  import { NextRequest, NextResponse } from 'next/server';
-  import { createServiceRoleClient } from '@/lib/supabase/client';
-  import { addDays } from 'date-fns';
-
-  export async function POST(request: NextRequest) {
-    try {
-      // Verify webhook signature (implementation depends on payment provider)
-      const body = await request.json();
-
-      // Process successful payments only
-      if (body.status === 'SUCCEEDED') {
-        const supabase = createServiceRoleClient();
-
-        // Extract metadata from payment
-        const { userId, courseId, courseDurationDays = 365 } = body.metadata || {};
-
-        if (!userId || !courseId) {
-          return NextResponse.json({ error: 'Missing user or course information' }, { status: 400 });
-        }
-
-        // Calculate expiration date
-        const expiryDate = addDays(new Date(), courseDurationDays);
-
-        // Create enrollment
-        const { data, error } = await supabase
-          .from('user_enrollments')
-          .insert({
-            user_id: userId,
-            course_id: courseId,
-            status: 'active',
-            payment_id: body.id,
-            expires_at: expiryDate.toISOString(),
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        return NextResponse.json({ success: true, enrollment: data });
-      }
-
-      return NextResponse.json({ success: true, status: 'ignored' });
-    } catch (error) {
-      console.error('Payment webhook error:', error);
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-    }
-  }
-  ```
-- [ ] Implement discount code system following our form validation patterns
-- [ ] Create pricing tier support in course settings
-
-### 6. Student Dashboard
-- [ ] Build dashboard in `/app/(authenticated)/dashboard/`
-- [ ] Create `EnrolledCourseCard` component in `/components/dashboard/`
-  ```tsx
-  // Following our existing card pattern
-  export function EnrolledCourseCard({
-    enrollment,
-    progress
-  }: EnrolledCourseCardProps) {
-    // Implementation using our Card component and progress visualization
+  // Following our toast notification pattern
+  export async function sendEnrollmentNotification({
+    userId,
+    courseId,
+    type
+  }: EnrollmentNotificationProps) {
+    // Implementation using our existing notification system
     // ...
   }
   ```
 - [ ] Implement `CourseProgressOverview` component
 - [ ] Add enrollment management interface for students
 
-### 7. Admin Enhancement
-- [ ] Expand existing `CourseEnrollmentManagement` component:
-  - Add bulk operations (CSV import/export)
-  - Enhance filtering with date ranges
-  - Add advanced search capabilities
-- [ ] Create enrollment analytics dashboard
+### 6. Enhanced Admin Interface
+- [ ] Expand existing admin interface at `/app/admin/courses/` to include enrollment management
+- [ ] Create dedicated enrollment dashboard component:
+  - Connect to users database to verify and manage enrollments
+  - Add student search and filtering capabilities
+  - Display enrollment status with verification options
+- [ ] Create student engagement analytics dashboard
 - [ ] Implement reports generation system
 
 ### 8. Database Optimization
@@ -837,210 +766,59 @@ A full-featured enrollment system following LMS industry standards:
   CREATE INDEX IF NOT EXISTS idx_course_progress_course_id ON public.course_progress(course_id);
   CREATE INDEX IF NOT EXISTS idx_course_progress_user_course ON public.course_progress(user_id, course_id);
   ```
-- [ ] Create database migration script in `/db/migrations/05_enrollment_indexes.sql`
-- [ ] Add function to check and optimize slow queries:
-  ```typescript
-  // In lib/supabase/admin.ts
-  export async function analyzeEnrollmentQueries() {
-    const adminClient = createServiceRoleClient();
-
-    // Run EXPLAIN ANALYZE on common enrollment queries
-    const { data, error } = await adminClient.rpc('analyze_enrollment_queries');
-
-    if (error) {
-      console.error('Error analyzing queries:', error);
-      return null;
-    }
-
-    return data;
-  }
-  ```
-
-## Technical Considerations
-
-### Database Optimization
-- Use proper indexing on enrollment-related tables
-- Consider adding indexes for common query patterns
-- Implement efficient query patterns for enrollment status checks
-- Optimize enrollment-course-user joins for performance
-
-### Security Implementation
-- Follow our existing Row Level Security pattern for all new tables
-- Implement JWT validation middleware for all protected content
-- Add comprehensive audit logging for enrollment operations
-
-### Performance Optimization
-- Use our existing SWR pattern for enrollment data:
-  ```tsx
-  // Following our data fetching pattern
-  const { data: enrollments, error, isLoading, mutate } = useSWR(
-    userId ? `/api/users/${userId}/enrollments` : null,
-    fetcher
-  );
-  ```
 - Implement proper caching for enrollment status checks
 - Use optimistic UI updates for enrollment operations
 
 ### State Management
-- Implement a comprehensive Zustand store for enrollment state in `/lib/stores/enrollment/index.ts`:
+- Implement a comprehensive Zustand store for student dashboard state in `/lib/stores/student-dashboard/index.ts`:
   ```typescript
   // Based on our existing course store pattern in lib/stores/course.ts
   import { create } from 'zustand';
   import { persist } from 'zustand/middleware';
-  import { Enrollment, EnrollmentStatus } from './types';
-  import { fetchUserEnrollments, fetchEnrollmentByCourse, updateEnrollmentStatus } from './api';
+  import { createDashboardSelectors } from './selectors';
+  import type { StudentCourse, ShopifyPurchase, DashboardState } from './types';
+  import {
+    fetchEnrolledCourses,
+    fetchShopifyPurchases,
+    fetchCourseProgress,
+    updateLastAccessed,
+  } from './api';
 
-  interface EnrollmentState {
-    // State
-    enrollments: Enrollment[];
-    isLoading: boolean;
-    error: Error | null;
-    lastFetched: number | null;
-
-    // Cached data for quick access
-    enrollmentsByCourseId: Record<string, Enrollment>;
-
-    // Actions
-    fetchEnrollments: (userId: string, force?: boolean) => Promise<Enrollment[]>;
-    fetchEnrollmentByCourse: (userId: string, courseId: string) => Promise<Enrollment | null>;
-    updateEnrollment: (enrollmentId: string, data: Partial<Enrollment>) => Promise<void>;
-    checkEnrollmentAccess: (courseId: string) => boolean;
-    clearCache: () => void;
-  }
-
-  export const useEnrollmentStore = create<EnrollmentState>()(
+  export const useStudentDashboardStore = create<DashboardState>()((
     persist(
       (set, get) => ({
         // Initial state
-        enrollments: [],
-        isLoading: false,
-        error: null,
-        lastFetched: null,
-        enrollmentsByCourseId: {},
+        enrolledCourses: [],
+        isLoading: boolean;
+        error: Error | null;
+        lastFetched: number | null;
+
+        // Cached data for quick access
+        enrolledCoursesByCourseId: Record<string, StudentCourse>;
 
         // Actions
-        fetchEnrollments: async (userId: string, force = false) => {
-          // Check if we need to fetch or can use cached data
-          const { lastFetched, enrollments } = get();
-          const now = Date.now();
-          const cacheAge = lastFetched ? now - lastFetched : Infinity;
-
-          // Use cache if available and less than 5 minutes old, unless force refresh
-          if (!force && lastFetched && cacheAge < 5 * 60 * 1000 && enrollments.length > 0) {
-            return enrollments;
-          }
-
-          set({ isLoading: true, error: null });
-
-          try {
-            // Use our API function to fetch enrollments
-            const data = await fetchUserEnrollments(userId);
-
-            // Create lookup map for quick access by course ID
-            const enrollmentsByCourseId = data.reduce((acc, enrollment) => {
-              acc[enrollment.course_id] = enrollment;
-              return acc;
-            }, {} as Record<string, Enrollment>);
-
-            set({
-              enrollments: data,
-              enrollmentsByCourseId,
-              isLoading: false,
-              lastFetched: now
-            });
-
-            return data;
-          } catch (error) {
-            set({ error: error as Error, isLoading: false });
-            throw error;
-          }
-        },
-
-        fetchEnrollmentByCourse: async (userId: string, courseId: string) => {
-          // Check if we have it in cache first
-          const { enrollmentsByCourseId } = get();
-          if (enrollmentsByCourseId[courseId]) {
-            return enrollmentsByCourseId[courseId];
-          }
-
-          try {
-            // Fetch specific enrollment
-            const enrollment = await fetchEnrollmentByCourse(userId, courseId);
-
-            // Update cache if found
-            if (enrollment) {
-              set(state => ({
-                enrollmentsByCourseId: {
-                  ...state.enrollmentsByCourseId,
-                  [courseId]: enrollment
-                }
-              }));
-            }
-
-            return enrollment;
-          } catch (error) {
-            console.error('Error fetching enrollment by course:', error);
-            return null;
-          }
-        },
-
-        updateEnrollment: async (enrollmentId: string, data: Partial<Enrollment>) => {
-          try {
-            // Update enrollment via API
-            const updatedEnrollment = await updateEnrollmentStatus(enrollmentId, data);
-
-            // Update local state
-            set(state => ({
-              enrollments: state.enrollments.map(e =>
-                e.id === enrollmentId ? { ...e, ...updatedEnrollment } : e
-              ),
-              enrollmentsByCourseId: {
-                ...state.enrollmentsByCourseId,
-                [updatedEnrollment.course_id]: updatedEnrollment
-              }
-            }));
-          } catch (error) {
-            console.error('Error updating enrollment:', error);
-            throw error;
-          }
-        },
-
-        checkEnrollmentAccess: (courseId: string) => {
-          const { enrollmentsByCourseId } = get();
-          const enrollment = enrollmentsByCourseId[courseId];
-
-          if (!enrollment) return false;
-
-          // Check if enrollment is active and not expired
-          const isActive = enrollment.status === 'active';
-          const isExpired = enrollment.expires_at ?
-            new Date(enrollment.expires_at) < new Date() : false;
-
-          return isActive && !isExpired;
-        },
-
-        clearCache: () => set({
-          enrollmentsByCourseId: {},
-          lastFetched: null
-        })
+        fetchEnrolledCourses: (userId: string, force?: boolean) => Promise<StudentCourse[]>;
+        fetchShopifyPurchases: (userId: string) => Promise<ShopifyPurchase[]>;
+        fetchCourseProgress: (courseId: string) => Promise<CourseProgress>;
+        updateLastAccessed: (courseId: string) => Promise<void>;
+        clearCache: () => void;
       }),
       {
-        name: 'enrollment-store',
+        name: 'student-dashboard-store',
         partialize: (state) => ({
           // Only persist the cache, not loading states or errors
-          enrollmentsByCourseId: state.enrollmentsByCourseId,
+          enrolledCoursesByCourseId: state.enrolledCoursesByCourseId,
           lastFetched: state.lastFetched
         })
       }
     )
   );
   ```
-
-- Create API functions for the store in `/lib/stores/enrollment/api.ts`:
+- Create API functions for the store in `/lib/stores/student-dashboard/api.ts`:
   ```typescript
-  import { Enrollment } from './types';
+  import { StudentCourse, ShopifyPurchase } from './types';
 
-  export async function fetchUserEnrollments(userId: string): Promise<Enrollment[]> {
+  export async function fetchEnrolledCourses(userId: string): Promise<StudentCourse[]> {
     const response = await fetch(`/api/users/${userId}/enrollments`);
 
     if (!response.ok) {
@@ -1052,64 +830,77 @@ A full-featured enrollment system following LMS industry standards:
     return data.enrollments || [];
   }
 
-  export async function fetchEnrollmentByCourse(
-    userId: string,
-    courseId: string
-  ): Promise<Enrollment | null> {
-    const response = await fetch(`/api/users/${userId}/enrollments?courseId=${courseId}`);
+  export async function fetchShopifyPurchases(userId: string): Promise<ShopifyPurchase[]> {
+    const response = await fetch(`/api/users/${userId}/purchases`);
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch enrollment');
+      throw new Error(error.message || 'Failed to fetch purchases');
     }
 
     const data = await response.json();
-    return data.enrollments?.[0] || null;
+    return data.purchases || [];
   }
 
-  export async function updateEnrollmentStatus(
-    enrollmentId: string,
-    data: Partial<Enrollment>
-  ): Promise<Enrollment> {
-    const response = await fetch(`/api/enrollments/${enrollmentId}`, {
+  export async function fetchCourseProgress(courseId: string): Promise<CourseProgress> {
+    const response = await fetch(`/api/courses/${courseId}/progress`);
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch course progress');
+    }
+
+    const data = await response.json();
+    return data.progress || {};
+  }
+
+  export async function updateLastAccessed(courseId: string): Promise<void> {
+    const response = await fetch(`/api/courses/${courseId}/last-accessed`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.message || 'Failed to update enrollment');
+      throw new Error(error.message || 'Failed to update last accessed');
     }
-
-    const updatedEnrollment = await response.json();
-    return updatedEnrollment;
   }
   ```
-
-- Define types in `/lib/stores/enrollment/types.ts`:
+- Define types in `/lib/stores/student-dashboard/types.ts`:
   ```typescript
-  export type EnrollmentStatus = 'active' | 'suspended' | 'cancelled' | 'expired';
-
-  export interface Enrollment {
+  export type StudentCourse = {
     id: string;
-    user_id: string;
+    title: string;
+    slug: string;
+    thumbnail_url?: string;
+    progress: CourseProgress;
+  };
+
+  export type ShopifyPurchase = {
+    id: string;
     course_id: string;
-    enrolled_at: string;
-    expires_at: string | null;
-    status: EnrollmentStatus;
-    payment_id: string | null;
+    user_id: string;
     created_at: string;
-    updated_at: string;
-    course?: {
-      id: string;
-      title: string;
-      slug: string;
-      thumbnail_url?: string;
-    };
-  }
+  };
+
+  export type CourseProgress = {
+    percent_complete: number;
+    completed_modules: number;
+    total_modules: number;
+    completed_lessons: number;
+    total_lessons: number;
+    last_activity_at: string;
+  };
+
+  export type DashboardState = {
+    enrolledCourses: StudentCourse[];
+    enrolledCoursesByCourseId: Record<string, StudentCourse>;
+    isLoading: boolean;
+    error: Error | null;
+    lastFetched: number | null;
+  };
   ```
 
 ## Completion Status
