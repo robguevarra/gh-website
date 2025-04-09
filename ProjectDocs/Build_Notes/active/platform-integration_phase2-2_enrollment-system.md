@@ -1,7 +1,7 @@
 # Platform Integration - Phase 2-2: Student Experience System
 
 ## Task Objective
-Develop a premium, exclusive student experience system that seamlessly manages access to our Papers to Profits course (and future offerings), tracks student progress, and provides an award-winning dashboard interface while integrating with our existing codebase patterns and components.
+Develop a premium, exclusive student experience system that seamlessly manages access to our Papers to Profits course, Templates Library, and Shopify purchases. The system will create an informative, comprehensive dashboard for students who are new to the paper products business, guiding them through their learning journey and providing easy access to all resources.
 
 ## Current State Assessment
 Our current enrollment implementation includes:
@@ -93,12 +93,12 @@ Our current enrollment implementation includes:
   - `useUserLessonProgress(userId, lessonId)` - Client-side hook for lesson progress
 
 ### Missing Components
-- ❌ Student-facing enrollment flow with post-payment integration
+- ❌ Post-payment integration with automatic account creation and welcome email
 - ❌ Enhanced `useEnrollment` hook with SWR pattern and additional functionality
 - ❌ Course-level progress tracking (vs. current lesson-level only)
-- ❌ Student dashboard for enrolled courses
-- ❌ Centralized access control middleware for protected content
-- ❌ Enrollment lifecycle automation (expiration, renewal)
+- ✅ Student dashboard for enrolled courses (implemented in `app/dashboard2/page.tsx`)
+- ❌ Enrollment-specific access control middleware for protected course content
+- ❌ Enrollment lifecycle support (including unlimited/lifetime access option)
 - ❌ Recommended database indexes for optimization
 - ❌ Integration between payment completion and enrollment creation
 - ❌ Comprehensive reporting and analytics
@@ -138,74 +138,81 @@ Our current codebase already includes relevant functionality we can leverage:
 - **Card-Based UI**: Course cards with badges for status, clean typography, and consistent spacing
 - **State Management**: Uses `useCourseStore` from Zustand for global course state
 
+## Current Context
+When students enroll in our Papers to Profits program:
+1. They receive a Google Drive link for their templates library
+2. They gain access to the Papers to Profits course
+3. They can purchase commercial license templates from our shop
+4. After enrollment, they receive an email with login credentials to access our dashboard
+
+The dashboard must serve as a comprehensive hub for all these resources and provide clear guidance for students who are new to paper products business.
+
 ## Future State Goal
-A premium student experience system tailored to our exclusive course offerings:
+A premium student experience system tailored to our exclusive offering:
 
-1. **Student Dashboard Experience**
-   - Award-winning, intuitive student dashboard interface
-   - Clear, immediate access to Papers to Profits (and future courses)
-   - Integration with Shopify purchases history
-   - Visual progress tracking with elegant data visualization
-   - No course expiration handling required (lifetime access model)
+1. **Comprehensive Student Dashboard**
+   - Award-winning, intuitive student dashboard based on our `dashboard2` implementation
+   - Clear access to Papers to Profits course with progress tracking
+   - Integrated Google Drive templates library viewer
+   - Shopify purchase history integration
+   - Live class schedule and Zoom integration
+   - Informative onboarding for new students
 
-2. **Access Control**
-   - JWT-based validation middleware for secure course content access
-   - Fine-grained permissions at module/lesson level
-   - Authentication flow that ensures only enrolled students can access content
+2. **Access Control & Enrollment**
+   - JWT-based validation middleware for secure content access
+   - Seamless connection between landing page payments (Xendit) and account creation
+   - Email notification system with login credentials
 
 3. **Progress Tracking**
-   - High-quality progress tracking for both student feedback and admin analytics
-   - Module-level and lesson-level progress recording
-   - Aggregated statistics and reporting for business insights
+   - High-quality progress tracking visualization
+   - Module-level and lesson-level completion recording
+   - Time spent metrics and analytics
 
 4. **Administration**
    - Enhanced enrollment management connected to user database
-   - Enrollment confirmation interface
-   - Student engagement analytics dashboard
+   - Student engagement analytics
    - Integration with Xendit/Shopify payment confirmation
 
-## Implementation Plan
+## Breaking Down the Build
 
-### 1. Premium Student Dashboard
-- [ ] Enhance the existing student dashboard at `/app/dashboard/page.tsx`
-- [ ] Implement `StudentCourseAccess` component in `/components/courses/`
-  ```tsx
-  // Structure follows our existing pattern:
-  'use client';
-  import { useState } from 'react';
-  import { Button } from '@/components/ui/button';
-  import { Card } from '@/components/ui/card';
-  import { useRouter } from 'next/navigation';
-  import { Badge } from '@/components/ui/badge';
+Due to the complexity of this project, we'll divide it into three separate build notes:
 
-  export function StudentCourseAccess({
-    courseId,
-    courseName,
-    thumbnail,
-    progress,
-    lastAccessed
-  }: StudentCourseAccessProps) {
-    // State management using our existing patterns
-    const [isLoading, setIsLoading] = useState(false);
-    const router = useRouter();
+1. **Student Dashboard Implementation** (This document)
+2. **[Enrollment & Access Control](./platform-integration_phase2-3_enrollment-access-control.md)**
+3. **[Admin Experience & Analytics](./platform-integration_phase2-4_admin-experience.md)**
 
-    // Handle continue course logic
-    const handleContinueCourse = () => {
-      setIsLoading(true);
-      // Navigate to the last accessed lesson or first lesson if none
-      router.push(`/courses/${courseId}/lessons/${lastAccessedLesson || firstLesson}`);
-    };
+---
 
-    return (
-      <Card className="w-full max-w-md hover:shadow-md transition-all duration-300">
-        {/* Premium course display with progress metrics */}
-      </Card>
-    );
-  }
-  ```
-- [ ] Integrate with existing course viewer from course editor enhancement phase
-- [ ] Display Papers to Profits course with premium styling and progress metrics
-- [ ] Implement Shopify purchase history integration in `/components/dashboard/purchase-history.tsx`
+# Implementation Plan
+
+### 1. Premium Student Dashboard Implementation
+
+- [x] Create prototype dashboard at `/app/dashboard2/page.tsx` with the following features:
+  - Welcome modal and onboarding tour for new users
+  - Course progress visualization with continue learning section
+  - Templates library with Google Drive integration
+  - Recent purchases display from Shopify
+  - Live class schedule with Zoom integration
+  - Announcement system
+  - Mobile-responsive design with collapsible sections
+
+- [ ] Implement required components based on `dashboard2` prototype:
+  - [ ] `StudentHeader` in `/components/dashboard/student-header.tsx`
+  - [ ] `GoogleDriveViewer` in `/components/dashboard/google-drive-viewer.tsx`
+  - [ ] `OnboardingTour` in `/components/dashboard/onboarding-tour.tsx`
+  - [ ] `WelcomeModal` in `/components/dashboard/welcome-modal.tsx`
+
+- [ ] Connect dashboard to real data sources:
+  - [ ] Replace mock student data with authenticated user data
+  - [ ] Replace mock course progress with actual progress from database
+  - [ ] Connect templates library to actual Google Drive API
+  - [ ] Connect purchases history to Shopify API
+  - [ ] Connect live classes to actual calendar/events
+  
+- [ ] Finalize styles and animations
+  - [ ] Ensure consistent branding and color scheme
+  - [ ] Optimize animations for performance
+  - [ ] Ensure proper responsive behavior on all devices
 
 ### 2. Access Control Implementation
 - [ ] Create centralized middleware in `/lib/middleware/course-access-validation.ts`:
@@ -916,24 +923,193 @@ This phase is in the early stages of implementation. The following has been acco
 - ✅ Simple client-side hook for enrollments exists in `lib/supabase/hooks.ts`
 - ✅ Basic access control checks in course pages
 
-Key challenges to address:
-- Enhancing the existing enrollment hooks with SWR pattern and additional functionality
-- Connecting payment processing with enrollment creation
-- Implementing comprehensive progress tracking beyond lesson level
-- Building student-facing enrollment flow and dashboard
-- Creating centralized middleware for access validation based on enrollment status
-- Implementing Zustand store for enrollment state management
+### 2. Google Drive Templates Integration
+
+- [ ] Implement GoogleDriveViewer component:
+  ```tsx
+  // In components/dashboard/google-drive-viewer.tsx
+  'use client';
+  import { useState, useEffect } from 'react';
+  import { Card } from '@/components/ui/card';
+  import { Button } from '@/components/ui/button';
+  import { Download, FileText, ExternalLink } from 'lucide-react';
+  
+  interface GoogleDriveViewerProps {
+    fileId: string;
+    fileName: string;
+    fileType: string;
+  }
+  
+  export function GoogleDriveViewer({ fileId, fileName, fileType }: GoogleDriveViewerProps) {
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    
+    // Generate Google Drive preview URL
+    const previewUrl = `https://drive.google.com/file/d/${fileId}/preview`;
+    const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    
+    return (
+      <div className="w-full h-full flex flex-col">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-gray-500" />
+            <h3 className="font-medium text-gray-800">{fileName}</h3>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" asChild>
+              <a href={downloadUrl} download>
+                <Download className="h-4 w-4 mr-1" /> Download
+              </a>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <a href={`https://drive.google.com/file/d/${fileId}/view`} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-1" /> Open in Drive
+              </a>
+            </Button>
+          </div>
+        </div>
+        
+        <div className="flex-1 border rounded-lg overflow-hidden bg-gray-50 min-h-[500px]">
+          {isLoading && <div className="w-full h-full flex items-center justify-center">Loading preview...</div>}
+          {error && <div className="w-full h-full flex items-center justify-center text-red-500">{error}</div>}
+          <iframe 
+            src={previewUrl}
+            className="w-full h-full"
+            onLoad={() => setIsLoading(false)}
+            onError={() => {
+              setIsLoading(false);
+              setError('Failed to load preview');
+            }}
+            allow="autoplay"
+          ></iframe>
+        </div>
+      </div>
+    );
+  }
+  ```
+
+- [ ] Create Templates API endpoints:
+  - [ ] `/api/templates` - List all templates available to the user
+  - [ ] `/api/templates/[templateId]` - Get specific template details including Google Drive ID
+
+- [ ] Implement Template Database Schema:
+  ```sql
+  CREATE TABLE public.templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    description TEXT,
+    google_drive_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    thumbnail_url TEXT,
+    file_size INTEGER,
+    file_type TEXT NOT NULL,
+    is_free BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+  
+  CREATE TABLE public.user_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    template_id UUID NOT NULL REFERENCES public.templates(id) ON DELETE CASCADE,
+    last_accessed TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, template_id)
+  );
+  ```
+
+### 3. Shopify Integration
+
+- [ ] Create Shopify API client in `/lib/shopify/client.ts`
+- [ ] Implement purchase history fetching:
+  ```typescript
+  // In lib/shopify/orders.ts
+  import { shopifyClient } from './client';
+  
+  export async function getUserOrders(email: string) {
+    try {
+      // Fetch orders for the customer with the given email
+      const response = await shopifyClient.get(`/customers/search.json?query=email:${encodeURIComponent(email)}`);
+      const customer = response.data.customers[0];
+      
+      if (!customer) {
+        return [];
+      }
+      
+      const ordersResponse = await shopifyClient.get(`/customers/${customer.id}/orders.json?status=any`);
+      return ordersResponse.data.orders;
+    } catch (error) {
+      console.error('Error fetching Shopify orders:', error);
+      throw new Error('Failed to fetch purchase history');
+    }
+  }
+  ```
+
+## Data Model
+
+We'll need to enhance our database with the following tables and changes:
+
+```sql
+-- Add last_accessed tracking to lessons table
+ALTER TABLE public.lessons ADD COLUMN IF NOT EXISTS last_accessed_count INTEGER DEFAULT 0;
+
+-- Add time_spent tracking
+CREATE TABLE IF NOT EXISTS public.user_time_spent (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  lesson_id UUID NOT NULL REFERENCES public.lessons(id) ON DELETE CASCADE,
+  duration_seconds INTEGER NOT NULL DEFAULT 0,
+  session_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id, lesson_id, session_date)
+);
+
+-- Create live classes table
+CREATE TABLE IF NOT EXISTS public.live_classes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  zoom_link TEXT,
+  instructor TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create announcements table
+CREATE TABLE IF NOT EXISTS public.announcements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  is_featured BOOLEAN DEFAULT false,
+  publish_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+## Completion Status
+
+Current progress status:
+
+- [x] Created prototype dashboard at `/app/dashboard2/page.tsx` with mock data
+- [ ] Implementing required components based on the prototype
+- [ ] Connecting to real data sources (user data, course progress, templates, purchases)
+- [ ] Finalizing styles and animations
 
 Next immediate priorities:
-1. Enhance the existing `useUserEnrollments` hook with SWR pattern in `lib/hooks/use-enrollment.ts`
-2. Update payment completion handler to create enrollment records
-3. Add recommended database indexes for query optimization
-4. Create the enrollment validation middleware
-5. Implement the Zustand store for enrollment state management
+1. Complete the implementation of all dashboard components
+2. Connect to actual data sources replacing mock data
+3. Implement Google Drive integration for templates library
+4. Integrate with Shopify for purchase history
 
-## Next Steps After Completion
+## Next Steps
 
-After establishing this enrollment system, we will proceed to Phase 2-3: Payment Integration Enhancement, which will build upon this foundation to implement subscription models, recurring payments, and financial reporting capabilities.
+After completing the Student Dashboard implementation, we will proceed to:
+
+1. **Enrollment & Access Control** (Phase 2-3) - Focus on the connection between Xendit payments, account creation, and course access.
+2. **Admin Experience & Analytics** (Phase 2-4) - Develop the administrative interface for monitoring student progress and managing enrollments.
 
 ---
 
