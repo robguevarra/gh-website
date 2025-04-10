@@ -1,63 +1,60 @@
-'use client';
+"use client"
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/auth-context';
-import { Loader2 } from 'lucide-react';
-import DashboardHeader from '@/components/dashboard-header';
+import type React from "react"
 
-interface DashboardLayoutProps {
-  children: React.ReactNode;
-}
+import { useState, useEffect } from "react"
+import { motion } from "framer-motion"
+import { WelcomeModal } from "@/components/dashboard/welcome-modal"
+import { OnboardingTour } from "@/components/dashboard/onboarding-tour"
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { user, isLoading, isAuthReady } = useAuth();
-  const router = useRouter();
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const [isFirstVisit, setIsFirstVisit] = useState(true)
+  const [showWelcomeModal, setShowWelcomeModal] = useState(true)
+  const [showTour, setShowTour] = useState(false)
+  const [isLoaded, setIsLoaded] = useState(false)
 
   useEffect(() => {
-    // Only redirect if auth is ready and user is not authenticated
-    if (isAuthReady && !user) {
-      router.push('/auth/signin');
+    // Check if this is the user's first visit
+    const hasVisitedBefore = localStorage.getItem("hasVisitedDashboard")
+    if (hasVisitedBefore) {
+      setIsFirstVisit(false)
+      setShowWelcomeModal(false)
+    } else {
+      // Mark as visited for future
+      localStorage.setItem("hasVisitedDashboard", "true")
     }
-  }, [user, isAuthReady, router]);
 
-  // Show initial loading state while auth is being initialized
-  if (!isAuthReady) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Initializing...</p>
-        </div>
-      </div>
-    );
+    // Simulate loading
+    const timer = setTimeout(() => {
+      setIsLoaded(true)
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [])
+
+  const handleWelcomeClose = () => {
+    setShowWelcomeModal(false)
+    // Start the tour after welcome modal closes
+    setShowTour(true)
   }
 
-  // Show loading state while checking authentication
-  if (isLoading) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
-        </div>
-      </div>
-    );
+  const handleTourComplete = () => {
+    setShowTour(false)
   }
 
-  // If user is authenticated, render the children
-  if (user) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <DashboardHeader />
-        <main className="flex-1">
-          {children}
-        </main>
-      </div>
-    );
-  }
+  return (
+    <div className="min-h-screen bg-[#f9f6f2]">
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: isLoaded ? 1 : 0 }} transition={{ duration: 0.5 }}>
+        {children}
 
-  // This return shouldn't be reached because of the redirect,
-  // but we need a return value to satisfy TypeScript
-  return null;
-} 
+        {isFirstVisit && showWelcomeModal && <WelcomeModal onClose={handleWelcomeClose} />}
+
+        {isFirstVisit && showTour && <OnboardingTour onComplete={handleTourComplete} />}
+      </motion.div>
+    </div>
+  )
+}
