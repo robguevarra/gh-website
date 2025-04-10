@@ -48,8 +48,8 @@ interface StudentHeaderProps {}
 export function StudentHeader({}: StudentHeaderProps) {
   const router = useRouter()
   
-  // Use the auth context to get the authenticated user
-  const { user, profile, isLoading: isLoadingAuth } = useAuth()
+  // Use the auth context to get the authenticated user and logout function
+  const { user, profile, logout, isLoading: isLoadingAuth } = useAuth()
   
   // Get course progress data from our store
   const { 
@@ -73,7 +73,7 @@ export function StudentHeader({}: StudentHeaderProps) {
   useEffect(() => {
     // Only redirect if auth is done loading and no user is found
     if (!user && !isLoadingAuth) {
-      router.push('/login')
+      router.push('/auth/signin')
     }
   }, [user, isLoadingAuth, router])
   
@@ -115,23 +115,30 @@ export function StudentHeader({}: StudentHeaderProps) {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Handle logout using the auth context
-  const { logout } = useAuth()
+  // State for logout loading
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   
   const handleLogout = async () => {
     try {
+      // Set loading state
+      setIsLoggingOut(true)
+      
       // Use the auth context logout method
       const { error } = await logout();
       
       if (error) {
         console.error('Error signing out:', error);
+        setIsLoggingOut(false);
         return;
       }
       
-      // Redirect to login page
-      router.push('/signin');
+      // Redirect to login page after a short delay to allow for UI feedback
+      setTimeout(() => {
+        router.push('/auth/signin');
+      }, 500);
     } catch (err) {
       console.error('Unexpected error during logout:', err);
+      setIsLoggingOut(false);
     }
   }
 
@@ -392,13 +399,21 @@ export function StudentHeader({}: StudentHeaderProps) {
               <DropdownMenuItem>Purchase History</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Button
-                  onClick={handleLogout}
-                  variant="ghost"
-                  className="flex items-center w-full justify-start cursor-pointer"
-                >
-                  <LogOut className="mr-2 h-4 w-4" /> Log Out
-                </Button>
+                {isLoggingOut ? (
+                  <div className="flex items-center w-full px-2 py-1.5">
+                    <Skeleton className="h-4 w-4 mr-2 rounded-full" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                ) : (
+                  <Button
+                    onClick={handleLogout}
+                    variant="ghost"
+                    className="flex items-center w-full justify-start cursor-pointer"
+                    disabled={isLoggingOut}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" /> Log Out
+                  </Button>
+                )}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
