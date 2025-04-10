@@ -13,8 +13,9 @@
 
 import { type StoreApi } from 'zustand';
 import { type StudentDashboardStore } from './index';
-import * as enrollmentAccess from '@/lib/supabase/enrollment-access';
+import { getBrowserClient } from '@/lib/supabase/client';
 import * as auth from '@/lib/supabase/auth';
+import { CourseProgress, ModuleProgress, LessonProgress } from './types';
 
 // Define properly typed set and get functions for Zustand
 type SetState = {
@@ -47,8 +48,13 @@ export const createActions = (
       // Set the user ID in the store
       set({ userId: user.id });
       
-      // Get user profile data from the profiles table
-      const { data: profile, error: profileError } = await enrollmentAccess.getUserProfile(user.id);
+      // Get user profile data from the profiles table using browser client
+      const supabase = getBrowserClient();
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
       
       if (profileError || !profile) {
         console.error('Error getting user profile:', profileError);
@@ -126,7 +132,7 @@ export const createActions = (
   },
   
   /**
-   * Load user enrollments from Supabase
+   * Load user enrollments
    */
   loadUserEnrollments: async (userId: string) => {
     if (!userId) return;
@@ -134,35 +140,43 @@ export const createActions = (
     set({ isLoadingEnrollments: true, hasEnrollmentError: false });
     
     try {
-      const enrollmentsWithCourses = await enrollmentAccess.getUserEnrollmentsWithCourses(userId);
+      // Use browser client for client-side data fetching
+      const supabase = getBrowserClient();
       
-      if (enrollmentsWithCourses) {
-        // Extract enrollments and ensure all required properties are included
-        const enrollments = enrollmentsWithCourses.map(item => ({
-          id: item.id,
-          userId: item.user_id,
-          courseId: item.course_id,
-          enrolledAt: item.enrolled_at,
-          expiresAt: item.expires_at,
-          status: item.status,
-          paymentId: item.payment_id,
-          createdAt: item.created_at,
-          updatedAt: item.updated_at,
-          course: item.course
-        }));
-        
-        set({ enrollments });
-      }
+      // Get enrollments with course data
+      const { data: enrollments, error } = await supabase
+        .from('user_enrollments')
+        .select(`
+          *,
+          course: courses (
+            *,
+            modules (
+              *,
+              lessons (*)
+            )
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('status', 'active');
+      
+      if (error) throw error;
+      
+      // Format and set enrollments
+      set({ 
+        enrollments: enrollments || [],
+        isLoadingEnrollments: false 
+      });
     } catch (error) {
       console.error('Error loading enrollments:', error);
-      set({ hasEnrollmentError: true });
-    } finally {
-      set({ isLoadingEnrollments: false });
+      set({ 
+        hasEnrollmentError: true,
+        isLoadingEnrollments: false 
+      });
     }
   },
   
   /**
-   * Load user progress for all enrolled courses
+   * Load user progress
    */
   loadUserProgress: async (userId: string) => {
     if (!userId) return;
@@ -170,54 +184,227 @@ export const createActions = (
     set({ isLoadingProgress: true, hasProgressError: false });
     
     try {
-      const progressData = await enrollmentAccess.getUserCourseProgress(userId);
+      // Use browser client for client-side data fetching
+      const supabase = getBrowserClient();
       
-      if (progressData) {
-        // Create course progress mapping
-        const courseProgress = progressData.reduce((acc, course) => {
-          acc[course.courseId] = {
-            courseId: course.courseId,
+      // Get progress data for lessons
+      const { data: lessonProgressData, error: lessonError } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', userId);
+      
+      if (lessonError) throw lessonError;
+      
+      // Process the data to create course and module progress
+      const courseProgressMap: Record<string, CourseProgress> = {};
+      const moduleProgressMap: Record<string, ModuleProgress[]> = {};
+      const lessonProgressMap: Record<string, LessonProgress> = {};
+      
+      // Convert lesson progress to a map for easy access
+      lessonProgressData?.forEach(item => {
+        lessonProgressMap[item.lesson_id] = {
+          lessonId: item.lesson_id,
+          status: item.status,
+          progress: item.progress_percentage,
+          lastPosition: item.last_position,
+          completedAt: item.completed_at,
+          lastAccessedAt: item.updated_at
+        };
+      });
+      
+      // Get course and module structure to calculate progress
+      const { data: courses, error: coursesError } = await supabase
+        .from('courses')
+        .select(`
+          id, title,
+          modules (id, title, lessons (id, title))
+        `);
+      
+      if (coursesError) throw coursesError;
+      
+      // Calculate progress for each course and module
+      courses?.forEach(course => {
+        let totalLessons = 0;
+        let completedLessons = 0;
+        const moduleProgressList: ModuleProgress[] = [];
+        
+        course.modules?.forEach(module => {
+          const moduleTotalLessons = module.lessons?.length || 0;
+          let moduleCompletedLessons = 0;
+          
+          module.lessons?.forEach(lesson => {
+            if (lessonProgressMap[lesson.id]?.status === 'completed') {
+              completedLessons++;
+              moduleCompletedLessons++;
+            }
+          });
+          
+          totalLessons += moduleTotalLessons;
+          
+          // Create module progress object
+          moduleProgressList.push({
+            moduleId: module.id,
+            progress: moduleTotalLessons > 0 ? Math.round((moduleCompletedLessons / moduleTotalLessons) * 100) : 0,
+            completedLessonsCount: moduleCompletedLessons,
+            totalLessonsCount: moduleTotalLessons
+          });
+        });
+        
+        // Add module progress to map
+        moduleProgressMap[course.id] = moduleProgressList;
+        
+        // Create course progress object
+        courseProgressMap[course.id] = {
+          courseId: course.id,
+          course: {
+            id: course.id,
             title: course.title,
-            percentComplete: course.percentComplete,
-            totalLessons: course.totalLessons,
-            completedLessons: course.completedLessons
-          };
-          return acc;
-        }, {} as Record<string, any>);
-        
-        // Create module progress mapping
-        const moduleProgress = progressData.reduce((acc, course) => {
-          course.moduleProgress.forEach(module => {
-            acc[module.moduleId] = module.lessonsProgress.map(lesson => ({
-              lessonId: lesson.lessonId,
-              status: lesson.status,
-              percentComplete: lesson.percentComplete
-            }));
-          });
-          return acc;
-        }, {} as Record<string, any>);
-        
-        // Create lesson progress mapping
-        const lessonProgress = progressData.reduce((acc, course) => {
-          course.moduleProgress.forEach(module => {
-            module.lessonsProgress.forEach(lesson => {
-              acc[lesson.lessonId] = {
-                status: lesson.status,
-                progress: lesson.percentComplete,
-                lastPosition: lesson.lastPosition
-              };
-            });
-          });
-          return acc;
-        }, {} as Record<string, any>);
-        
-        set({ courseProgress, moduleProgress, lessonProgress });
-      }
+            description: '',  // Default empty string as it's required by the Course type
+            slug: course.id,  // Using ID as slug since it's required
+            modules: course.modules?.map(module => ({
+              id: module.id,
+              courseId: course.id,
+              title: module.title,
+              order: 0, // Default value as required by Module type
+              lessons: module.lessons?.map(lesson => ({
+                id: lesson.id,
+                moduleId: module.id,
+                title: lesson.title,
+                order: 0, // Default value as required by Lesson type
+                duration: 0 // Default value as required by Lesson type
+              })) || []
+            })) || []
+          },
+          progress: totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0,
+          completedLessonsCount: completedLessons,
+          totalLessonsCount: totalLessons,
+          startedAt: lessonProgressData?.[0]?.created_at,
+          lastAccessedAt: lessonProgressData?.[0]?.updated_at
+        };
+      });
+      
+      // Set progress data
+      set({
+        courseProgress: courseProgressMap,
+        moduleProgress: moduleProgressMap,
+        lessonProgress: lessonProgressMap,
+        isLoadingProgress: false
+      });
+      
+      // Load continue learning lesson
+      const store = get() as StudentDashboardStore;
+      await store.loadContinueLearningLesson(userId);
+      
     } catch (error) {
       console.error('Error loading progress:', error);
-      set({ hasProgressError: true });
-    } finally {
-      set({ isLoadingProgress: false });
+      set({ 
+        hasProgressError: true,
+        isLoadingProgress: false 
+      });
+    }
+  },
+  
+  /**
+   * Load user templates
+   */
+  loadUserTemplates: async (userId: string) => {
+    if (!userId) return;
+    
+    set({ isLoadingTemplates: true, hasTemplatesError: false });
+    
+    try {
+      // Use browser client for client-side data fetching
+      const supabase = getBrowserClient();
+      
+      // Get templates the user has access to based on enrollments
+      const { data: enrollments, error: enrollmentsError } = await supabase
+        .from('user_enrollments')
+        .select('course_id')
+        .eq('user_id', userId)
+        .eq('status', 'active');
+      
+      if (enrollmentsError) throw enrollmentsError;
+      
+      // Get course IDs from enrollments
+      const courseIds = enrollments?.map(e => e.course_id) || [];
+      
+      if (courseIds.length === 0) {
+        set({ templates: [], isLoadingTemplates: false });
+        return;
+      }
+      
+      // Get templates for these courses
+      const { data: templates, error: templatesError } = await supabase
+        .from('templates')
+        .select('*')
+        .in('course_id', courseIds);
+      
+      if (templatesError) throw templatesError;
+      
+      // Set templates
+      set({ 
+        templates: templates || [],
+        isLoadingTemplates: false 
+      });
+    } catch (error) {
+      console.error('Error loading templates:', error);
+      set({ 
+        hasTemplatesError: true,
+        isLoadingTemplates: false 
+      });
+    }
+  },
+  
+  /**
+   * Load continue learning lesson
+   */
+  loadContinueLearningLesson: async (userId: string) => {
+    if (!userId) return;
+    
+    try {
+      // Use browser client for client-side data fetching
+      const supabase = getBrowserClient();
+      
+      // Get the most recent lesson the user was working on
+      const { data: recentLesson, error } = await supabase
+        .from('user_progress')
+        .select(`
+          *,
+          lesson:lessons (id, title, module_id, course_id)
+        `)
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (error) {
+        // Handle 'No rows found' error gracefully
+        if (error.code === 'PGRST116') {
+          set({ continueLearningLesson: null });
+          return;
+        }
+        throw error;
+      }
+      
+      if (recentLesson && recentLesson.lesson) {
+        set({
+          continueLearningLesson: {
+            courseId: recentLesson.lesson.course_id,
+            courseTitle: '',  // Will be populated later
+            moduleId: recentLesson.lesson.module_id,
+            moduleTitle: '',  // Will be populated later
+            lessonId: recentLesson.lesson.id,
+            lessonTitle: recentLesson.lesson.title,
+            progress: recentLesson.progress_percentage,
+            lastPosition: recentLesson.last_position || 0
+          }
+        });
+      } else {
+        set({ continueLearningLesson: null });
+      }
+    } catch (error) {
+      console.error('Error loading continue learning lesson:', error);
+      set({ continueLearningLesson: null });
     }
   },
   
@@ -254,77 +441,28 @@ export const createActions = (
         }
       });
       
-      // Sync with Supabase
-      await enrollmentAccess.updateLessonProgress(userId, lessonId, {
-        status: progressData.status,
-        progress_percentage: progressData.progress,
-        last_position: progressData.lastPosition
-      });
+      // Sync with Supabase using browser client
+      const supabase = getBrowserClient();
+      await supabase
+        .from('user_progress')
+        .upsert({
+          user_id: userId,
+          lesson_id: lessonId,
+          status: progressData.status,
+          progress_percentage: progressData.progress,
+          last_position: progressData.lastPosition,
+          updated_at: new Date().toISOString()
+        })
+        .select();
       
       // After successful sync, refresh course progress data
       await get().loadUserProgress(userId);
       
     } catch (error) {
       console.error('Error updating lesson progress:', error);
-      // Revert to previous state on error?
-    }
-  },
-  
-  /**
-   * Load templates the user has access to
-   */
-  loadUserTemplates: async (userId: string) => {
-    if (!userId) return;
-    
-    set({ isLoadingTemplates: true, hasTemplatesError: false });
-    
-    try {
-      const templates = await enrollmentAccess.getUserAccessibleTemplates(userId);
-      
-      if (templates) {
-        set({ templates });
-      }
-    } catch (error) {
-      console.error('Error loading templates:', error);
-      set({ hasTemplatesError: true });
-    } finally {
-      set({ isLoadingTemplates: false });
-    }
-  },
-  
-  /**
-   * Get the "continue learning" lesson for the user
-   */
-  loadContinueLearningLesson: async (userId: string) => {
-    if (!userId) return;
-    
-    try {
-      const continueLearningData = await enrollmentAccess.getContinueLearningLesson(userId);
-      
-      if (continueLearningData) {
-        // Extract the needed data
-        const lessonData = continueLearningData.lesson;
-        const moduleData = lessonData.module;
-        const courseData = moduleData.course;
-        
-        const continueLearningLesson = {
-          lessonId: lessonData.id,
-          lessonTitle: lessonData.title,
-          moduleId: moduleData.id,
-          moduleTitle: moduleData.title,
-          courseId: courseData.id,
-          courseTitle: courseData.title,
-          progress: continueLearningData.progress_percentage,
-          lastPosition: continueLearningData.last_position
-        };
-        
-        set({ continueLearningLesson });
-      } else {
-        set({ continueLearningLesson: null });
-      }
-    } catch (error) {
-      console.error('Error loading continue learning lesson:', error);
-      set({ continueLearningLesson: null });
+      // No need to revert state as we don't have the previous state stored
+      // Just set error flag
+      set({ hasProgressError: true });
     }
   }
 });

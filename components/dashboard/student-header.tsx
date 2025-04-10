@@ -129,7 +129,7 @@ export function StudentHeader({}: StudentHeaderProps) {
       }
       
       // Redirect to login page
-      router.push('/login');
+      router.push('/signin');
     } catch (err) {
       console.error('Unexpected error during logout:', err);
     }
@@ -403,37 +403,7 @@ export function StudentHeader({}: StudentHeaderProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div className="hidden lg:block border-l ml-4 pl-4">
-            {isLoadingProgress || !continueLearningLesson ? (
-              <div className="flex items-center gap-2">
-                <div>
-                  <Skeleton className="h-4 w-32 mb-1" />
-                  <Skeleton className="h-3 w-48 mb-1" />
-                  <Skeleton className="h-1.5 w-full" />
-                </div>
-                <Skeleton className="h-8 w-20" />
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <div>
-                  <div className="text-sm font-medium mb-0.5">Currently learning</div>
-                  <div className="text-xs text-muted-foreground mb-1">
-                    {continueLearningLesson?.lessonTitle || "No current lesson"}
-                  </div>
-                  <Progress value={continueLearningLesson?.progress || 0} className="h-1.5 w-[180px]" />
-                </div>
-                {continueLearningLesson && (
-                  <Link 
-                    href={`/courses/${continueLearningLesson.courseId}/modules/${continueLearningLesson.moduleId}/lessons/${continueLearningLesson.lessonId}`}
-                  >
-                    <Button variant="outline" size="sm">
-                      Continue
-                    </Button>
-                  </Link>
-                )}
-              </div>
-            )}
-          </div>
+          
         </div>
       </div>
     </header>
