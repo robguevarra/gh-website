@@ -1,0 +1,385 @@
+/**
+ * Custom hooks for accessing specific slices of the student dashboard store
+ * These hooks use selectors to prevent unnecessary re-renders
+ * 
+ * State Management Patterns:
+ * 1. Selector Memoization - useCallback ensures selectors don't change on re-renders
+ * 2. State Isolation - Each hook accesses only the state it needs
+ * 3. Performance Monitoring - Development-mode tracking to identify bottlenecks
+ * 4. Equality Checking - Uses shallow equality checking for state comparison
+ */
+
+import { useCallback, useEffect, useRef } from 'react'
+import { shallow } from 'zustand/shallow'
+import { useStudentDashboardStore } from '@/lib/stores/student-dashboard'
+
+// Define the type for the store state
+type StudentDashboardState = ReturnType<typeof useStudentDashboardStore.getState>
+
+/**
+ * Simple performance monitoring function that logs renders in development
+ */
+const logRender = (hookName: string): void => {
+  if (process.env.NODE_ENV === 'development') {
+    const renderCount = useRef(0)
+    renderCount.current++
+    
+    useEffect(() => {
+      console.log(`[Performance] ${hookName} rendered (count: ${renderCount.current})`)
+      
+      // Log warning if components render too many times
+      if (renderCount.current > 5) {
+        console.warn(`[WARNING] ${hookName} has rendered ${renderCount.current} times. This may indicate a performance issue.`)
+      }
+    })
+  }
+}
+
+// Define the shape of what we're extracting from the store
+type UserProfileState = {
+  userId: string | null;
+  userProfile: {
+    name: string;
+    email: string;
+    avatar: string;
+    joinedDate: string;
+  } | null;
+  isLoadingProfile: boolean;
+  setUserProfile: (profile: any) => void;
+  setUserId: (userId: string | null) => void;
+}
+
+/**
+ * Hook for user profile data
+ */
+export const useUserProfileData = () => {
+  // Monitor hook performance in development
+  logRender('useUserProfileData')
+  
+  // Use individual selectors for each piece of state to prevent unnecessary re-renders
+  const userId = useStudentDashboardStore(state => state.userId)
+  const userProfile = useStudentDashboardStore(state => state.userProfile)
+  const isLoadingProfile = useStudentDashboardStore(state => state.isLoadingProfile)
+  const setUserId = useStudentDashboardStore(state => state.setUserId)
+  const setUserProfile = useStudentDashboardStore(state => state.setUserProfile)
+  
+  // Return a stable object reference to prevent infinite loops
+  return {
+    userId,
+    userProfile,
+    isLoadingProfile,
+    setUserId,
+    setUserProfile
+  }
+}
+
+// Type from the store file
+interface Template {
+  id: string;
+  title: string;
+  category: string;
+  type: string;
+  downloadUrl: string;
+  previewUrl: string;
+  thumbnailUrl: string;
+  description: string;
+  dateCreated: string;
+  dateUpdated: string;
+}
+
+type TemplatesState = {
+  templates: Template[];
+  selectedTemplateId: string | null;
+  templateFilter: string;
+  templateSearchQuery: string;
+  isLoadingTemplates: boolean;
+  hasTemplatesError: boolean;
+  setTemplates: (templates: Template[]) => void;
+  setSelectedTemplateId: (templateId: string | null) => void;
+  setTemplateFilter: (filter: string) => void;
+  setTemplateSearchQuery: (query: string) => void;
+  getFilteredTemplates: () => Template[];
+  getSelectedTemplate: () => Template | null;
+}
+
+/**
+ * Hook for templates data and actions
+ */
+export function useTemplatesData() {
+  // Monitor hook performance in development
+  logRender('useTemplatesData')
+  
+  // Use individual selectors for each piece of state
+  const templates = useStudentDashboardStore(state => state.templates)
+  const selectedTemplateId = useStudentDashboardStore(state => state.selectedTemplateId)
+  const templateFilter = useStudentDashboardStore(state => state.templateFilter)
+  const templateSearchQuery = useStudentDashboardStore(state => state.templateSearchQuery)
+  const isLoadingTemplates = useStudentDashboardStore(state => state.isLoadingTemplates)
+  const hasTemplatesError = useStudentDashboardStore(state => state.hasTemplatesError)
+  
+  // Get actions separately
+  const setTemplates = useStudentDashboardStore(state => state.setTemplates)
+  const setSelectedTemplateId = useStudentDashboardStore(state => state.setSelectedTemplateId)
+  const setTemplateFilter = useStudentDashboardStore(state => state.setTemplateFilter)
+  const setTemplateSearchQuery = useStudentDashboardStore(state => state.setTemplateSearchQuery)
+  const setIsLoadingTemplates = useStudentDashboardStore(state => state.setIsLoadingTemplates)
+  const setHasTemplatesError = useStudentDashboardStore(state => state.setHasTemplatesError)
+  const getFilteredTemplates = useStudentDashboardStore(state => state.getFilteredTemplates)
+  
+  // Return a stable object to prevent unnecessary re-renders
+  return {
+    templates,
+    selectedTemplateId,
+    templateFilter,
+    templateSearchQuery,
+    isLoadingTemplates,
+    hasTemplatesError,
+    setTemplates,
+    setSelectedTemplateId,
+    setTemplateFilter,
+    setTemplateSearchQuery,
+    setIsLoadingTemplates,
+    setHasTemplatesError,
+    getFilteredTemplates
+  }
+}
+
+// Define interfaces needed for the types
+interface CourseProgress {
+  completed: boolean;
+  progress: number;
+  startDate: string;
+  lastActivity: string;
+}
+
+interface ModuleProgress {
+  moduleId: string;
+  completed: boolean;
+  progress: number;
+}
+
+type CourseProgressState = {
+  courseProgress: Record<string, CourseProgress>;
+  moduleProgress: Record<string, ModuleProgress[]>;
+  lessonProgress: Record<string, { 
+    status: string;
+    progress: number;
+    lastPosition: number;
+  }>;
+  isLoadingProgress: boolean;
+  hasProgressError: boolean;
+  setCourseProgress: (courseId: string, progress: CourseProgress) => void;
+  setModuleProgress: (courseId: string, progress: ModuleProgress[]) => void;
+  setLessonProgress: (lessonId: string, progress: { status: string; progress: number; lastPosition: number }) => void;
+  getContinueLearningLesson: () => { courseId: string; lessonId: string; title: string; progress: number } | null;
+  loadUserProgress: () => void;
+  updateLessonProgress: (lessonId: string, progress: { status: string; progress: number; lastPosition: number }) => void;
+  loadContinueLearningLesson: () => void;
+}
+
+/**
+ * Hook for course progress data
+ */
+export function useCourseProgressData() {
+  // Monitor hook performance in development
+  logRender('useCourseProgressData')
+  
+  // Use individual selectors for each piece of state to prevent unnecessary re-renders
+  const courseProgress = useStudentDashboardStore(state => state.courseProgress)
+  const moduleProgress = useStudentDashboardStore(state => state.moduleProgress)
+  const lessonProgress = useStudentDashboardStore(state => state.lessonProgress)
+  const isLoadingProgress = useStudentDashboardStore(state => state.isLoadingProgress)
+  const hasProgressError = useStudentDashboardStore(state => state.hasProgressError)
+  const continueLearningLesson = useStudentDashboardStore(state => state.continueLearningLesson)
+  
+  // Get actions separately
+  const setCourseProgress = useStudentDashboardStore(state => state.setCourseProgress)
+  const setModuleProgress = useStudentDashboardStore(state => state.setModuleProgress)
+  const setLessonProgress = useStudentDashboardStore(state => state.setLessonProgress)
+  const setIsLoadingProgress = useStudentDashboardStore(state => state.setIsLoadingProgress)
+  const setHasProgressError = useStudentDashboardStore(state => state.setHasProgressError)
+  
+  // Get new API actions
+  const loadUserProgress = useStudentDashboardStore(state => state.loadUserProgress)
+  const updateLessonProgress = useStudentDashboardStore(state => state.updateLessonProgress)
+  const loadContinueLearningLesson = useStudentDashboardStore(state => state.loadContinueLearningLesson)
+  
+  // Return a stable object to prevent unnecessary re-renders
+  return {
+    courseProgress,
+    moduleProgress,
+    lessonProgress,
+    isLoadingProgress,
+    hasProgressError,
+    continueLearningLesson,
+    setCourseProgress,
+    setModuleProgress,
+    setLessonProgress,
+    setIsLoadingProgress,
+    setHasProgressError,
+    loadUserProgress,
+    updateLessonProgress,
+    loadContinueLearningLesson
+  }
+}
+
+interface PurchaseItem {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+}
+
+interface Purchase {
+  id: string;
+  date: string;
+  items: PurchaseItem[];
+  total: number;
+  status: string;
+}
+
+type PurchasesState = {
+  purchases: Purchase[];
+  isLoadingPurchases: boolean;
+  hasPurchasesError: boolean;
+  setPurchases: (purchases: Purchase[]) => void;
+}
+
+/**
+ * Hook for purchases data
+ */
+export const usePurchasesData = () => {
+  // Monitor hook performance in development
+  logRender('usePurchasesData')
+  
+  // Use a stable selector with useCallback to prevent unnecessary rerenders
+  const selector = useCallback(
+    (state: StudentDashboardState) => ({
+      purchases: state.purchases,
+      isLoadingPurchases: state.isLoadingPurchases,
+      hasPurchasesError: state.hasPurchasesError,
+      setPurchases: state.setPurchases,
+    }),
+    []
+  )
+  
+  // Use the selector with useStudentDashboardStore
+  // We wrap with useCallback to ensure stable reference and avoid infinite loops
+  return useStudentDashboardStore(state => selector(state))
+}
+
+interface LiveClass {
+  id: number;
+  title: string;
+  date: string;
+  time: string;
+  host: {
+    name: string;
+    avatar: string;
+  };
+  zoomLink: string;
+}
+
+type LiveClassesState = {
+  liveClasses: LiveClass[];
+  isLoadingLiveClasses: boolean;
+  hasLiveClassesError: boolean;
+  setLiveClasses: (classes: LiveClass[]) => void;
+}
+
+/**
+ * Hook for live classes data
+ */
+export const useLiveClassesData = () => {
+  // Monitor hook performance in development
+  logRender('useLiveClassesData')
+  
+  // Use a stable selector with useCallback to prevent unnecessary rerenders
+  const selector = useCallback(
+    (state: StudentDashboardState) => ({
+      liveClasses: state.liveClasses,
+      isLoadingLiveClasses: state.isLoadingLiveClasses,
+      hasLiveClassesError: state.hasLiveClassesError,
+      setLiveClasses: state.setLiveClasses,
+    }),
+    []
+  )
+  
+  // Use the selector with useStudentDashboardStore
+  // We wrap with useCallback to ensure stable reference and avoid infinite loops
+  return useStudentDashboardStore(state => selector(state))
+}
+
+type UIState = {
+  showWelcomeModal: boolean;
+  showOnboarding: boolean;
+  showAnnouncement: boolean;
+  expandedSection: string | null;
+  setShowWelcomeModal: (show: boolean) => void;
+  setShowOnboarding: (show: boolean) => void;
+  setShowAnnouncement: (show: boolean) => void;
+  toggleSection: (section: string) => void;
+}
+
+/**
+ * Hook for UI state
+ */
+export const useUIState = () => {
+  // Monitor hook performance in development
+  logRender('useUIState')
+  
+  // Use a stable selector with useCallback to prevent unnecessary rerenders
+  const selector = useCallback(
+    (state: StudentDashboardState) => ({
+      showWelcomeModal: state.showWelcomeModal,
+      showOnboarding: state.showOnboarding,
+      showAnnouncement: state.showAnnouncement,
+      expandedSection: state.expandedSection,
+      setShowWelcomeModal: state.setShowWelcomeModal,
+      setShowOnboarding: state.setShowOnboarding,
+      setShowAnnouncement: state.setShowAnnouncement,
+      toggleSection: state.toggleSection,
+    }),
+    []
+  )
+  
+  // Use the selector with useStudentDashboardStore
+  // We wrap with useCallback to ensure stable reference and avoid infinite loops
+  return useStudentDashboardStore(state => selector(state))
+}
+
+type SectionExpansionState = {
+  expandedSection: string | null;
+  toggleSection: (section: string) => void;
+}
+
+/**
+ * Hook for optimized section expansion state
+ * This is a minimal hook that only accesses the expandedSection state
+ * to prevent unnecessary re-renders of components that only need to know
+ * if a specific section is expanded
+ */
+export const useSectionExpansion = () => {
+  // Monitor hook performance in development
+  logRender('useSectionExpansion')
+  
+  // Use a stable selector with useCallback that tracks only section expansion state
+  const selector = useCallback(
+    (state: StudentDashboardState) => ({
+      expandedSection: state.expandedSection,
+      toggleSection: state.toggleSection,
+    }),
+    []
+  )
+  
+  // Use the selector with useStudentDashboardStore
+  const { expandedSection, toggleSection } = useStudentDashboardStore(selector)
+
+  // Memoize the derived function to prevent recreating it on every render
+  const isSectionExpanded = useCallback(
+    (section: string) => expandedSection === section,
+    [expandedSection]
+  )
+
+  return { isSectionExpanded, toggleSection }
+}

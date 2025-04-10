@@ -175,17 +175,19 @@ A premium student experience system tailored to our exclusive offering:
 
 ## Breaking Down the Build
 
-Due to the complexity of this project, we'll divide it into three separate build notes:
+Due to the complexity of this project, we'll divide it into five separate build notes:
 
 1. **Student Dashboard Implementation** (This document)
-2. **[Enrollment & Access Control](./platform-integration_phase2-3_enrollment-access-control.md)**
-3. **[Admin Experience & Analytics](./platform-integration_phase2-4_admin-experience.md)**
+2. **[Dashboard Refactoring](./platform-integration_phase2-2-1_dashboard-refactoring.md)**
+3. **[Enrollment & Access Control](./platform-integration_phase2-3_enrollment-access-control.md)**
+4. **[Admin Experience & Analytics](./platform-integration_phase2-4_admin-experience.md)**
+5. **[Shopify Purchase Integration](./platform-integration_phase2-5_shopify-purchase-integration.md)**
 
 ---
 
 # Implementation Plan
 
-### 1. Premium Student Dashboard Implementation
+### 1. Data Layer Implementation
 
 - [x] Create prototype dashboard at `/app/dashboard2/page.tsx` with the following features:
   - Welcome modal and onboarding tour for new users
@@ -196,18 +198,69 @@ Due to the complexity of this project, we'll divide it into three separate build
   - Announcement system
   - Mobile-responsive design with collapsible sections
 
-- [ ] Implement required components based on `dashboard2` prototype:
-  - [ ] `StudentHeader` in `/components/dashboard/student-header.tsx`
-  - [ ] `GoogleDriveViewer` in `/components/dashboard/google-drive-viewer.tsx`
-  - [ ] `OnboardingTour` in `/components/dashboard/onboarding-tour.tsx`
-  - [ ] `WelcomeModal` in `/components/dashboard/welcome-modal.tsx`
+- [x] Create Zustand store for enrollment and dashboard state: 
+  - [x] Create `lib/stores/student-dashboard/index.ts` with proper state management
+  - [x] Implement user enrollment state management
+  - [x] Implement course progress tracking
+  - [x] Implement template library state management
+  - [ ] Implement purchase history integration
 
-- [ ] Connect dashboard to real data sources:
-  - [ ] Replace mock student data with authenticated user data
-  - [ ] Replace mock course progress with actual progress from database
-  - [ ] Connect templates library to actual Google Drive API
-  - [ ] Connect purchases history to Shopify API
-  - [ ] Connect live classes to actual calendar/events
+- [x] Implement data access hooks and functions:
+  - [x] Create enhanced `useUserEnrollments` hook with SWR pattern
+  - [x] Create `useUserProgress` hook for course and lesson progress
+  - [x] Standardize Supabase client implementation for proper type-safety:
+    - Refactored all data access functions to use `createServerSupabaseClient`
+    - Updated client-side hooks to use `getBrowserClient` for consistent implementation
+    - Fixed dependency arrays in useEffect hooks for proper cleanup
+  - [x] Create utility functions for calculating progress percentages:
+    - Created `lib/utils/progress-utils.ts` with comprehensive progress calculation functions
+    - Implemented course/module progress calculation, time remaining calculation, and UI formatting
+  - [x] Create data access functions for Google Drive templates:
+    - Implemented `lib/supabase/data-access/templates.ts` with template fetching functions
+    - Added `lib/hooks/use-templates.ts` with SWR integration for data fetching and caching
+  - [ ] Create data access functions for purchase history
+
+- [x] Extract components from the large dashboard page:
+  - [x] `StudentHeader` in `/components/dashboard/student-header.tsx`
+  - [x] `GoogleDriveViewer` in `/components/dashboard/google-drive-viewer.tsx`
+  - [ ] `CourseProgressSection` in `/components/dashboard/course-progress-section.tsx`
+  - [x] `TemplatesSection` in `/components/dashboard/templates-section.tsx` (implemented as `TemplateBrowser` and `TemplatePreviewModal`)
+  - [ ] `PurchasesSection` in `/components/dashboard/purchases-section.tsx`
+  - [ ] `LiveClassesSection` in `/components/dashboard/live-classes-section.tsx`
+  - [ ] `SupportSection` in `/components/dashboard/support-section.tsx`
+  - [ ] `CommunitySection` in `/components/dashboard/community-section.tsx`
+  - [x] `OnboardingTour` in `/components/dashboard/onboarding-tour.tsx`
+  - [x] `WelcomeModal` in `/components/dashboard/welcome-modal.tsx`
+
+### 2. Connect Dashboard to Real Data Sources
+
+- [ ] Replace mock student data with authenticated user data:
+  - [ ] Add authentication context to dashboard page
+  - [ ] Fetch and display real user profile data
+  - [ ] Handle loading and error states for user data
+
+- [x] Replace mock course progress with actual progress from database:
+  - [x] Fetch enrollments data for the authenticated user
+  - [x] Implement progress tracking utilities in `lib/utils/progress-utils.ts`
+  - [x] Integrate progress calculations and formatting into the dashboard display
+
+- [x] Connect templates library to actual Google Drive API:
+  - [x] Implement template library integration for Templates section:
+  - [x] Create data access layer for Google Drive files
+  - [x] Create hooks for template browsing with search and filtering
+  - [x] Create template browser component:
+    - Implemented `components/dashboard/template-browser.tsx` with grid layout display
+    - Added search functionality, filtering by category, and pagination support
+  - [x] Add search and filtering UI functionality
+  - [x] Implement template preview modal:
+    - Created `components/dashboard/template-preview-modal.tsx` with preview iframe
+    - Added download functionality and Google Drive integration
+  - [x] Integrate template browser and preview modal into the dashboard page
+
+- [ ] Connect purchases history to Shopify API:
+  - [ ] **Moved to separate build note**: [Shopify Purchase Integration](./platform-integration_phase2-5_shopify-purchase-integration.md)
+
+- [ ] Connect live classes to actual calendar/events
   
 - [ ] Finalize styles and animations
   - [ ] Ensure consistent branding and color scheme
@@ -328,11 +381,8 @@ Due to the complexity of this project, we'll divide it into three separate build
 
       // User is authenticated and enrolled, render the component
       return <Component {...props} />;
-    };
-  }
-  ```
-
 ### 3. Progress Tracking System
+
 - [ ] Create new tables for comprehensive tracking in `/db/migrations/04_progress_tracking_tables.sql`:
   ```sql
   -- Create new course_progress table for course-level tracking
@@ -390,6 +440,7 @@ Due to the complexity of this project, we'll divide it into three separate build
       EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
     );
   ```
+
 - [ ] Create database functions to calculate and update progress:
   ```sql
   -- Function to update module progress based on lesson completions
@@ -523,6 +574,7 @@ Due to the complexity of this project, we'll divide it into three separate build
   FOR EACH ROW
   EXECUTE FUNCTION public.update_course_progress();
   ```
+
 - [ ] Implement progress API routes in `/app/api/courses/[courseId]/progress/route.ts`
 - [ ] Create progress recording components using our existing patterns:
   ```tsx
@@ -657,6 +709,7 @@ Due to the complexity of this project, we'll divide it into three separate build
     };
   }
   ```
+
 - [ ] Build progress visualization components in `/components/courses/progress/`:
   ```tsx
   // CourseProgressBar.tsx
@@ -683,6 +736,7 @@ Due to the complexity of this project, we'll divide it into three separate build
   ```
 
 ### 4. Premium Progress Tracking
+
 - [ ] Enhance existing progress tracking system in `/db/migrations/04_progress_tracking_enhancement.sql`:
   ```sql
   -- Enhance existing course_progress table for premium tracking
@@ -704,6 +758,7 @@ Due to the complexity of this project, we'll divide it into three separate build
   ```
 
 ### 4. Enrollment Lifecycle Management
+
 - [ ] Extend enrollment model with `renewal_at`, `notification_sent_at` fields
 - [ ] Create automated expiration check function in `/lib/cron/check-enrollments.ts`
 - [ ] Implement notifications using our existing pattern:
@@ -721,6 +776,7 @@ Due to the complexity of this project, we'll divide it into three separate build
 - [ ] Add renewal API endpoints in `/app/api/courses/[courseId]/enrollments/renew`
 
 ### 5. Student Engagement Automation
+
 - [ ] Create engagement tracking function in `/lib/analytics/student-engagement.ts`
 - [ ] Implement notifications using our existing pattern:
   ```typescript
@@ -738,6 +794,7 @@ Due to the complexity of this project, we'll divide it into three separate build
 - [ ] Add enrollment management interface for students
 
 ### 6. Enhanced Admin Interface
+
 - [ ] Expand existing admin interface at `/app/admin/courses/` to include enrollment management
 - [ ] Create dedicated enrollment dashboard component:
   - Connect to users database to verify and manage enrollments
@@ -747,6 +804,7 @@ Due to the complexity of this project, we'll divide it into three separate build
 - [ ] Implement reports generation system
 
 ### 8. Database Optimization
+
 - [ ] Add recommended indexes to improve query performance:
   ```sql
   -- Indexes for user_enrollments table
@@ -777,6 +835,7 @@ Due to the complexity of this project, we'll divide it into three separate build
 - Use optimistic UI updates for enrollment operations
 
 ### State Management
+
 - Implement a comprehensive Zustand store for student dashboard state in `/lib/stores/student-dashboard/index.ts`:
   ```typescript
   // Based on our existing course store pattern in lib/stores/course.ts
