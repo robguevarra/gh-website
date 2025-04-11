@@ -1,9 +1,10 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +15,10 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Skeleton } from "@/components/ui/skeleton"
+
+// Auth context
+import { useAuth } from "@/context/auth-context"
 
 // Dashboard UI components
 import { StudentHeader } from "@/components/dashboard/student-header"
@@ -21,6 +26,28 @@ import { GoogleDriveViewer } from "@/components/dashboard/google-drive-viewer"
 import { OnboardingTour } from "@/components/dashboard/onboarding-tour"
 import { WelcomeModal } from "@/components/dashboard/welcome-modal"
 import { TemplatePreviewModal } from "@/components/dashboard/template-preview-modal"
+
+// Dashboard store hooks
+import { 
+  useUserProfileData,
+  useEnrollmentsData, 
+  useCourseProgressData,
+  useTemplatesData,
+  useLiveClassesData,
+  usePurchasesData,
+  useUIState,
+  useSectionExpansion
+} from "@/lib/hooks/use-dashboard-store"
+
+// Import types
+import type { CourseProgress } from "@/lib/stores/student-dashboard/types"
+
+// Define extended CourseProgress interface to include the properties we need
+interface ExtendedCourseProgress extends CourseProgress {
+  progress: number;
+  completedLessonsCount: number;
+  totalLessonsCount: number;
+}
 
 // Dashboard Section components
 import { CourseProgressSection } from "@/components/dashboard/course-progress-section"
@@ -56,19 +83,67 @@ import {
 } from "lucide-react"
 
 export default function StudentDashboard() {
-  // State hooks
-  const [showWelcomeModal, setShowWelcomeModal] = useState(true)
-  const [showOnboarding, setShowOnboarding] = useState(false)
-  const [showAnnouncement, setShowAnnouncement] = useState(true)
+  const router = useRouter()
+  const { user, isLoading: isAuthLoading } = useAuth()
+  
+  // Dashboard store hooks
+  const { userId, userProfile, isLoadingProfile, setUserId, setUserProfile } = useUserProfileData()
+  const { enrollments = [], isLoadingEnrollments = false, loadUserEnrollments } = useEnrollmentsData() || {}
+  const { courseProgress = {}, isLoadingProgress = false, loadUserProgress } = useCourseProgressData() || {}
+  const { templates = [], isLoadingTemplates = false, loadUserTemplates } = useTemplatesData() || {}
+  const { liveClasses = [], isLoadingLiveClasses = false } = useLiveClassesData() || {}
+  const { purchases = [], isLoadingPurchases = false } = usePurchasesData() || {}
+  
+  // UI state from store
+  const { 
+    showWelcomeModal = false, 
+    showOnboarding = false, 
+    showAnnouncement = false,
+    expandedSection = null,
+    setShowWelcomeModal = () => {},
+    setShowOnboarding = () => {},
+    setShowAnnouncement = () => {},
+    toggleSection = () => {} 
+  } = useUIState() || {}
+  
+  // Local state
   const [activeTemplateTab, setActiveTemplateTab] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState<any>(null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
-  const [expandedSection, setExpandedSection] = useState<string | null>("course")
 
   // References for animations
   const containerRef = useRef(null)
+  
+  // Load user data when authenticated
+  useEffect(() => {
+    if (!isAuthLoading && !user) {
+      // Redirect to login if not authenticated
+      router.push('/auth/signin')
+      return
+    }
+    
+    if (user?.id) {
+      // Set user ID in store
+      setUserId(user.id)
+      
+      // Load user profile if available
+      if (user.email) {
+        setUserProfile({
+          name: user.user_metadata?.full_name || 'Student',
+          email: user.email,
+          avatar: user.user_metadata?.avatar_url || `/placeholder.svg?height=40&width=40&text=${user.email.substring(0, 2).toUpperCase()}`,
+          joinedDate: new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+        })
+      }
+      
+      // Load user data
+      loadUserEnrollments(user.id)
+      loadUserProgress(user.id)
+      loadUserTemplates(user.id)
+    }
+  }, [user, isAuthLoading, router, setUserId, setUserProfile, loadUserEnrollments, loadUserProgress, loadUserTemplates])
 
   // Helper Functions
   function getRandomInt(min: number, max: number) {
@@ -78,15 +153,6 @@ export default function StudentDashboard() {
   // Format progress percentage
   function formatProgress(value: number): string {
     return `${Math.round(value)}%`
-  }
-
-  // Toggle section expansion (for mobile)
-  const toggleSection = (section: string) => {
-    if (expandedSection === section) {
-      setExpandedSection(null)
-    } else {
-      setExpandedSection(section)
-    }
   }
 
   // Check if section is expanded
@@ -116,7 +182,7 @@ export default function StudentDashboard() {
   // Handle template selection
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplate(templateId)
-    const template = freeTemplates.find(t => t.id === templateId)
+    const template = templates.find(t => t.id === templateId)
     if (template) {
       setPreviewTemplate(template)
       setIsPreviewOpen(true)
@@ -125,30 +191,75 @@ export default function StudentDashboard() {
 
   // Get selected template
   const getSelectedTemplate = () => {
-    return freeTemplates.find((template) => template.id === selectedTemplate) || freeTemplates[0]
+    return templates.find((template) => template.id === selectedTemplate) || templates[0]
   }
+  
+  // Mock data for upcoming classes
+  const upcomingClasses = [
+    {
+      id: 1,
+      title: "Designing Digital Planners that Sell",
+      date: "July 20, 2023",
+      time: "2:00 PM - 3:30 PM EDT",
+      host: {
+        name: "Grace Guevarra",
+        avatar: "/placeholder.svg?height=40&width=40&text=GG",
+      },
+      zoomLink: "https://example.com/zoom1",
+    },
+    {
+      id: 2,
+      title: "Marketing Your Digital Products in 2023",
+      date: "July 27, 2023",
+      time: "2:00 PM - 3:30 PM EDT",
+      host: {
+        name: "Rob Guevarra",
+        avatar: "/placeholder.svg?height=40&width=40&text=RG",
+      },
+      zoomLink: "https://example.com/zoom2",
+    },
+  ]
 
-  // Mock data for the student
-  const student = {
-    name: "Sarah Johnson",
-    email: "sarah@example.com",
-    avatar: "/placeholder.svg?height=40&width=40&text=SJ",
-    joinedDate: "January 15, 2023",
-  }
-
-  // Mock data for course progress
-  const courseProgress = {
-    title: "Papers to Profits",
-    progress: 42,
-    completedLessons: 8,
-    totalLessons: 19,
-    nextLesson: "Creating Your First Digital Planner",
-    timeSpent: "12h 45m",
-    nextLiveClass: "July 20, 2023 - 2:00 PM",
+  // Format the course progress data for the component using real data from the store
+  const courseId = enrollments?.[0]?.course?.id || '';
+  
+  // Get the course progress from the store
+  // Use a safer approach to handle the type conversion
+  const rawCourseProgress = courseProgress[courseId] || null;
+  const currentCourseProgress: ExtendedCourseProgress | null = rawCourseProgress ? {
+    ...rawCourseProgress,
+    progress: 0, // Default values that will be overridden if they exist in the actual data
+    completedLessonsCount: 0,
+    totalLessonsCount: 0,
+    // Use any actual values from the raw data if they exist
+    ...(rawCourseProgress as any)
+  } : null;
+  
+  // Create a formatted version for the UI components with real data
+  // This avoids TypeScript errors by not directly accessing properties that might not exist
+  const formattedCourseProgress = {
+    title: enrollments?.[0]?.course?.title || "Papers to Profits",
+    progress: currentCourseProgress ? currentCourseProgress.progress : 0,
+    completedLessons: currentCourseProgress ? currentCourseProgress.completedLessonsCount : 0,
+    totalLessons: currentCourseProgress ? currentCourseProgress.totalLessonsCount : 0,
+    nextLesson: "Continue Learning", // Will be updated with real data in future
+    timeSpent: calculateTimeSpent(currentCourseProgress),
+    nextLiveClass: upcomingClasses?.[0] ? `${upcomingClasses[0].date} - ${upcomingClasses[0].time}` : "No upcoming classes",
     instructor: {
       name: "Grace Guevarra",
       avatar: "/placeholder.svg?height=40&width=40&text=GG",
     },
+  }
+  
+  // Helper function to calculate time spent
+  function calculateTimeSpent(progress: ExtendedCourseProgress | null): string {
+    if (!progress) return "0h 0m";
+    // In a real implementation, this would calculate based on actual time tracking data
+    // For now, we'll estimate based on completed lessons (15 min per lesson)
+    const minutes = (progress.completedLessonsCount || 0) * 15;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours}h ${remainingMinutes}m`;
   }
 
   // Mock data for announcements
@@ -295,31 +406,8 @@ export default function StudentDashboard() {
     }
   ]
 
-  // Mock data for live classes
-  const upcomingClasses = [
-    {
-      id: 1,
-      title: "Designing Digital Planners that Sell",
-      date: "July 20, 2023",
-      time: "2:00 PM - 3:30 PM EDT",
-      host: {
-        name: "Grace Guevarra",
-        avatar: "/placeholder.svg?height=40&width=40&text=GG",
-      },
-      zoomLink: "https://example.com/zoom1",
-    },
-    {
-      id: 2,
-      title: "Marketing Your Digital Products in 2023",
-      date: "July 27, 2023",
-      time: "2:00 PM - 3:30 PM EDT",
-      host: {
-        name: "Rob Guevarra",
-        avatar: "/placeholder.svg?height=40&width=40&text=RG",
-      },
-      zoomLink: "https://example.com/zoom2",
-    },
-  ]
+  // This section is now using the upcomingClasses defined above
+  /* Removed duplicate upcomingClasses declaration */
 
   // Mock data for community posts
   const communityPosts = [
@@ -430,7 +518,7 @@ export default function StudentDashboard() {
                 </div>
                 <div>
                   <div className="text-xs text-[#6d4c41]">Course Progress</div>
-                  <div className="text-lg font-bold text-[#5d4037]">{formatProgress(courseProgress.progress)}</div>
+                  <div className="text-lg font-bold text-[#5d4037]">{formatProgress(formattedCourseProgress.progress)}</div>
                 </div>
               </div>
             </motion.div>
@@ -442,7 +530,7 @@ export default function StudentDashboard() {
                 </div>
                 <div>
                   <div className="text-xs text-[#6d4c41]">Time Spent</div>
-                  <div className="text-lg font-bold text-[#5d4037]">{courseProgress.timeSpent}</div>
+                  <div className="text-lg font-bold text-[#5d4037]">{formattedCourseProgress.timeSpent}</div>
                 </div>
               </div>
             </motion.div>
@@ -467,91 +555,118 @@ export default function StudentDashboard() {
                 <div>
                   <div className="text-xs text-[#6d4c41]">Completed Lessons</div>
                   <div className="text-lg font-bold text-[#5d4037]">
-                    {courseProgress.completedLessons}/{courseProgress.totalLessons}
+                    {formattedCourseProgress.completedLessons}/{formattedCourseProgress.totalLessons}
                   </div>
                 </div>
               </div>
             </motion.div>
           </motion.div>
 
-          {/* Main Dashboard Sections */}
-          <div className="space-y-6">
-            {/* Course Progress Section */}
-            <ErrorBoundary componentName="Course Progress Section">
-              <CourseProgressSection 
-                courseProgress={courseProgress}
-                recentLessons={recentLessons}
-                upcomingClasses={upcomingClasses}
-                isMobile={false}
-                isSectionExpanded={isSectionExpanded}
-                toggleSection={toggleSection}
-              />
-            </ErrorBoundary>
-
-            {/* Templates Library Section */}
-            <ErrorBoundary componentName="Templates Library Section">
-              <TemplatesLibrarySection
-                isSectionExpanded={isSectionExpanded}
-                toggleSection={toggleSection}
-                onTemplateSelect={(template) => {
-                  setPreviewTemplate(template);
-                  setIsPreviewOpen(true);
-                }}
-                isPreviewOpen={isPreviewOpen}
-                setIsPreviewOpen={setIsPreviewOpen}
-              />
-            </ErrorBoundary>
-
-            {/* Two-column layout for Recent Purchases and Live Classes */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Recent Purchases from Shopify */}
-              <ErrorBoundary componentName="Purchases Section">
-                <PurchasesSection
-                  recentPurchases={recentPurchases}
-                  isSectionExpanded={isSectionExpanded}
-                  toggleSection={toggleSection}
-                />
-              </ErrorBoundary>
-
-              {/* Live Classes */}
-              <ErrorBoundary componentName="Live Classes Section">
-                <LiveClassesSection
-                  upcomingClasses={upcomingClasses}
-                  isSectionExpanded={isSectionExpanded}
-                  toggleSection={toggleSection}
-                />
-              </ErrorBoundary>
-            </div>
-
-            {/* Support and Community Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Support Section */}
-              <ErrorBoundary componentName="Support Section">
-                <SupportSection
-                  faqs={[
-                    {
-                      id: "faq-1",
-                      question: "How do I access the course materials?",
-                      content: "You can access all course materials by clicking on the course modules in the 'Course Progress' section."
-                    }
-                  ]}
-                  isSectionExpanded={isSectionExpanded}
-                  toggleSection={toggleSection}
-                />
-              </ErrorBoundary>
-
-              {/* Community Section */}
-              <ErrorBoundary componentName="Community Section">
-                <CommunitySection
-                  communityPosts={communityPosts}
-                  isSectionExpanded={isSectionExpanded}
-                  toggleSection={toggleSection}
-                />
-              </ErrorBoundary>
-            </div>
-          </div>
+      {/* Course Progress Section */}
+      <ErrorBoundary componentName="Course Progress Section">
+        <div className="mt-8">
+          <CourseProgressSection
+          courseProgress={formattedCourseProgress}
+          recentLessons={[
+            {
+              id: 1,
+              title: "Introduction to Business Fundamentals",
+              module: "Module 1: Getting Started",
+              duration: "15 min",
+              thumbnail: "/placeholder.svg?height=100&width=160",
+              progress: 100,
+              current: false
+            },
+            {
+              id: 2,
+              title: "Setting Up Your Business Plan",
+              module: "Module 1: Getting Started",
+              duration: "20 min",
+              thumbnail: "/placeholder.svg?height=100&width=160",
+              progress: 75,
+              current: true
+            }
+          ]}
+          upcomingClasses={upcomingClasses}
+          isSectionExpanded={isSectionExpanded}
+          toggleSection={toggleSection}
+        />
         </div>
-      </main>
+      </ErrorBoundary>
+
+      {/* Templates Library Section */}
+      <ErrorBoundary componentName="Templates Library Section">
+        <div className="mt-8">
+          <TemplatesLibrarySection
+          isSectionExpanded={isSectionExpanded}
+          toggleSection={toggleSection}
+          onTemplateSelect={(template) => {
+            setPreviewTemplate(template);
+            setIsPreviewOpen(true);
+          }}
+          isPreviewOpen={isPreviewOpen}
+          setIsPreviewOpen={setIsPreviewOpen}
+        />
+        </div>
+      </ErrorBoundary>
+
+      {/* Two-column layout for Recent Purchases and Live Classes */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+        {/* Recent Purchases from Shopify */}
+        <ErrorBoundary componentName="Purchases Section">
+          <div>
+            <PurchasesSection
+              recentPurchases={recentPurchases}
+              isSectionExpanded={isSectionExpanded}
+              toggleSection={toggleSection}
+            />
+          </div>
+        </ErrorBoundary>
+
+        {/* Live Classes */}
+        <ErrorBoundary componentName="Live Classes Section">
+          <div>
+            <LiveClassesSection
+              upcomingClasses={upcomingClasses}
+              isSectionExpanded={isSectionExpanded}
+              toggleSection={toggleSection}
+            />
+          </div>
+        </ErrorBoundary>
+      </div>
+
+      {/* Support and Community */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+        {/* Support Section */}
+        <ErrorBoundary componentName="Support Section">
+          <div>
+            <SupportSection
+              faqs={[
+                {
+                  id: "faq-1",
+                  question: "How do I access the course materials?",
+                  content: "You can access all course materials by clicking on the course modules in the 'Course Progress' section."
+                }
+              ]}
+              isSectionExpanded={isSectionExpanded}
+              toggleSection={toggleSection}
+            />
+          </div>
+        </ErrorBoundary>
+
+        {/* Community Section */}
+        <ErrorBoundary componentName="Community Section">
+          <div>
+            <CommunitySection
+              communityPosts={communityPosts}
+              isSectionExpanded={isSectionExpanded}
+              toggleSection={toggleSection}
+            />
+          </div>
+        </ErrorBoundary>
+      </div>
     </div>
+  </main>
+</div>
   )
 }
