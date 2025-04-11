@@ -11,7 +11,10 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { shallow } from 'zustand/shallow'
+
+// Import the student dashboard store and types
 import { useStudentDashboardStore } from '@/lib/stores/student-dashboard'
+import { Purchase, UserEnrollment } from '@/lib/stores/student-dashboard/types'
 
 // Define the type for the store state
 type StudentDashboardState = ReturnType<typeof useStudentDashboardStore.getState>
@@ -103,6 +106,47 @@ type TemplatesState = {
 }
 
 /**
+ * Interface for enrollments state slice
+ */
+interface EnrollmentsState {
+  enrollments: UserEnrollment[];
+  isLoadingEnrollments: boolean;
+  hasEnrollmentError: boolean;
+  setEnrollments: (enrollments: UserEnrollment[]) => void;
+  loadUserEnrollments: (userId: string) => Promise<void>;
+}
+
+/**
+ * Hook for user enrollments data and actions
+ */
+export function useEnrollmentsData() {
+  // Monitor hook performance in development
+  logRender('useEnrollmentsData')
+  
+  // Get enrollments from store
+  const enrollments = useStudentDashboardStore(state => state.enrollments)
+  
+  // Get loading state
+  const isLoadingEnrollments = useStudentDashboardStore(state => state.isLoadingEnrollments)
+  
+  // Get error state
+  const hasEnrollmentError = useStudentDashboardStore(state => state.hasEnrollmentError)
+  
+  // Get actions
+  const setEnrollments = useStudentDashboardStore(state => state.setEnrollments)
+  const loadUserEnrollments = useStudentDashboardStore(state => state.loadUserEnrollments)
+  
+  // Return a stable object
+  return {
+    enrollments,
+    isLoadingEnrollments,
+    hasEnrollmentError,
+    setEnrollments,
+    loadUserEnrollments
+  }
+}
+
+/**
  * Hook for templates data and actions
  */
 export function useTemplatesData() {
@@ -140,7 +184,8 @@ export function useTemplatesData() {
     setTemplateSearchQuery,
     setIsLoadingTemplates,
     setHasTemplatesError,
-    getFilteredTemplates
+    getFilteredTemplates,
+    loadUserTemplates: useStudentDashboardStore(state => state.loadUserTemplates)
   }
 }
 
@@ -223,49 +268,32 @@ export function useCourseProgressData() {
   }
 }
 
-interface PurchaseItem {
-  id: string;
-  name: string;
-  price: number;
-  image: string;
-}
-
-interface Purchase {
-  id: string;
-  date: string;
-  items: PurchaseItem[];
-  total: number;
-  status: string;
-}
-
-type PurchasesState = {
-  purchases: Purchase[];
-  isLoadingPurchases: boolean;
-  hasPurchasesError: boolean;
-  setPurchases: (purchases: Purchase[]) => void;
-}
-
 /**
  * Hook for purchases data
  */
-export const usePurchasesData = () => {
+export function usePurchasesData() {
   // Monitor hook performance in development
   logRender('usePurchasesData')
   
-  // Use a stable selector with useCallback to prevent unnecessary rerenders
-  const selector = useCallback(
-    (state: StudentDashboardState) => ({
-      purchases: state.purchases,
-      isLoadingPurchases: state.isLoadingPurchases,
-      hasPurchasesError: state.hasPurchasesError,
-      setPurchases: state.setPurchases,
-    }),
-    []
-  )
+  // Get purchases from store
+  const purchases = useStudentDashboardStore(state => state.purchases)
   
-  // Use the selector with useStudentDashboardStore
-  // We wrap with useCallback to ensure stable reference and avoid infinite loops
-  return useStudentDashboardStore(state => selector(state))
+  // Get loading state
+  const isLoadingPurchases = useStudentDashboardStore(state => state.isLoadingPurchases)
+  
+  // Get error state
+  const hasPurchasesError = useStudentDashboardStore(state => state.hasPurchasesError)
+  
+  // Get actions
+  const setPurchases = useStudentDashboardStore(state => state.setPurchases)
+  
+  // Return a stable object
+  return {
+    purchases,
+    isLoadingPurchases,
+    hasPurchasesError,
+    setPurchases
+  }
 }
 
 interface LiveClass {
@@ -289,25 +317,27 @@ type LiveClassesState = {
 
 /**
  * Hook for live classes data
+ * 
+ * Uses the same pattern as other hooks in this file for consistency
+ * and to prevent unnecessary re-renders
  */
 export const useLiveClassesData = () => {
   // Monitor hook performance in development
   logRender('useLiveClassesData')
   
-  // Use a stable selector with useCallback to prevent unnecessary rerenders
-  const selector = useCallback(
-    (state: StudentDashboardState) => ({
-      liveClasses: state.liveClasses,
-      isLoadingLiveClasses: state.isLoadingLiveClasses,
-      hasLiveClassesError: state.hasLiveClassesError,
-      setLiveClasses: state.setLiveClasses,
-    }),
-    []
-  )
+  // Use individual selectors for each piece of state to prevent unnecessary re-renders
+  const liveClasses = useStudentDashboardStore(state => state.liveClasses)
+  const isLoadingLiveClasses = useStudentDashboardStore(state => state.isLoadingLiveClasses)
+  const hasLiveClassesError = useStudentDashboardStore(state => state.hasLiveClassesError)
+  const setLiveClasses = useStudentDashboardStore(state => state.setLiveClasses)
   
-  // Use the selector with useStudentDashboardStore
-  // We wrap with useCallback to ensure stable reference and avoid infinite loops
-  return useStudentDashboardStore(state => selector(state))
+  // Return a stable object reference to prevent infinite loops
+  return {
+    liveClasses,
+    isLoadingLiveClasses,
+    hasLiveClassesError,
+    setLiveClasses
+  }
 }
 
 type UIState = {
@@ -328,24 +358,29 @@ export const useUIState = () => {
   // Monitor hook performance in development
   logRender('useUIState')
   
-  // Use a stable selector with useCallback to prevent unnecessary rerenders
-  const selector = useCallback(
-    (state: StudentDashboardState) => ({
-      showWelcomeModal: state.showWelcomeModal,
-      showOnboarding: state.showOnboarding,
-      showAnnouncement: state.showAnnouncement,
-      expandedSection: state.expandedSection,
-      setShowWelcomeModal: state.setShowWelcomeModal,
-      setShowOnboarding: state.setShowOnboarding,
-      setShowAnnouncement: state.setShowAnnouncement,
-      toggleSection: state.toggleSection,
-    }),
-    []
-  )
+  // Get UI state directly from the store
+  const showWelcomeModal = useStudentDashboardStore(state => state.showWelcomeModal)
+  const showOnboarding = useStudentDashboardStore(state => state.showOnboarding)
+  const showAnnouncement = useStudentDashboardStore(state => state.showAnnouncement)
+  const expandedSection = useStudentDashboardStore(state => state.expandedSection)
   
-  // Use the selector with useStudentDashboardStore
-  // We wrap with useCallback to ensure stable reference and avoid infinite loops
-  return useStudentDashboardStore(state => selector(state))
+  // Get UI actions directly from the store
+  const setShowWelcomeModal = useStudentDashboardStore(state => state.setShowWelcomeModal)
+  const setShowOnboarding = useStudentDashboardStore(state => state.setShowOnboarding)
+  const setShowAnnouncement = useStudentDashboardStore(state => state.setShowAnnouncement)
+  const toggleSection = useStudentDashboardStore(state => state.toggleSection)
+  
+  // Return a stable object
+  return {
+    showWelcomeModal,
+    showOnboarding,
+    showAnnouncement,
+    expandedSection,
+    setShowWelcomeModal,
+    setShowOnboarding,
+    setShowAnnouncement,
+    toggleSection
+  }
 }
 
 type SectionExpansionState = {
@@ -363,18 +398,10 @@ export const useSectionExpansion = () => {
   // Monitor hook performance in development
   logRender('useSectionExpansion')
   
-  // Use a stable selector with useCallback that tracks only section expansion state
-  const selector = useCallback(
-    (state: StudentDashboardState) => ({
-      expandedSection: state.expandedSection,
-      toggleSection: state.toggleSection,
-    }),
-    []
-  )
+  // Get section state directly from the store
+  const expandedSection = useStudentDashboardStore(state => state.expandedSection)
+  const toggleSection = useStudentDashboardStore(state => state.toggleSection)
   
-  // Use the selector with useStudentDashboardStore
-  const { expandedSection, toggleSection } = useStudentDashboardStore(selector)
-
   // Memoize the derived function to prevent recreating it on every render
   const isSectionExpanded = useCallback(
     (section: string) => expandedSection === section,

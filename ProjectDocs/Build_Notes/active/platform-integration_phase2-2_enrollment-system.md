@@ -223,26 +223,29 @@ Due to the complexity of this project, we'll divide it into five separate build 
 - [x] Extract components from the large dashboard page:
   - [x] `StudentHeader` in `/components/dashboard/student-header.tsx`
   - [x] `GoogleDriveViewer` in `/components/dashboard/google-drive-viewer.tsx`
-  - [ ] `CourseProgressSection` in `/components/dashboard/course-progress-section.tsx`
+  - [x] `CourseProgressSection` in `/components/dashboard/course-progress-section.tsx`
   - [x] `TemplatesSection` in `/components/dashboard/templates-section.tsx` (implemented as `TemplateBrowser` and `TemplatePreviewModal`)
-  - [ ] `PurchasesSection` in `/components/dashboard/purchases-section.tsx`
-  - [ ] `LiveClassesSection` in `/components/dashboard/live-classes-section.tsx`
-  - [ ] `SupportSection` in `/components/dashboard/support-section.tsx`
-  - [ ] `CommunitySection` in `/components/dashboard/community-section.tsx`
+  - [x] `PurchasesSection` in `/components/dashboard/purchases-section.tsx`
+  - [x] `LiveClassesSection` in `/components/dashboard/live-classes-section.tsx`
+  - [x] `SupportSection` in `/components/dashboard/support-section.tsx`
+  - [x] `CommunitySection` in `/components/dashboard/community-section.tsx`
   - [x] `OnboardingTour` in `/components/dashboard/onboarding-tour.tsx`
   - [x] `WelcomeModal` in `/components/dashboard/welcome-modal.tsx`
 
 ### 2. Connect Dashboard to Real Data Sources
 
-- [ ] Replace mock student data with authenticated user data:
-  - [ ] Add authentication context to dashboard page
-  - [ ] Fetch and display real user profile data
-  - [ ] Handle loading and error states for user data
+- [x] Replace mock student data with authenticated user data:
+  - [x] Add authentication context to dashboard page
+  - [x] Fetch and display real user profile data
+  - [x] Handle loading and error states for user data
 
 - [x] Replace mock course progress with actual progress from database:
-  - [x] Fetch enrollments data for the authenticated user
+  - [x] Create functions to fetch enrollments data for the authenticated user
   - [x] Implement progress tracking utilities in `lib/utils/progress-utils.ts`
-  - [x] Integrate progress calculations and formatting into the dashboard display
+  - [x] Integrate real enrollment data into dashboard components
+  - [x] Fix TypeScript errors related to CourseProgress type
+  - [x] Implement helper functions for calculating time spent based on completed lessons
+  - [x] Add fallback values to handle potential undefined values in the data
 
 - [x] Connect templates library to actual Google Drive API:
   - [x] Implement template library integration for Templates section:

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
@@ -58,8 +58,9 @@ export function StudentHeader({}: StudentHeaderProps) {
     continueLearningLesson
   } = useCourseProgressData()
   
-  // Get the initialize function from the store
-  const { loadUserDashboardData } = useStudentDashboardStore()
+  // Get the initialize function from the store using a direct selector
+  // This approach prevents unnecessary re-renders
+  const loadUserDashboardData = useStudentDashboardStore(state => state.loadUserDashboardData)
   
   // Initialize dashboard data when user is authenticated
   useEffect(() => {
