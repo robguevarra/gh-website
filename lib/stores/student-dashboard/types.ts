@@ -106,6 +106,7 @@ export interface ContinueLearningLesson {
   moduleId: string;
   courseId: string;
   lessonTitle: string;
+  moduleTitle: string; // Added to match usage in the store
   courseTitle: string;
   progress: number;
   lastPosition: number;

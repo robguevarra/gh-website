@@ -1,6 +1,40 @@
-// Student Dashboard Types
+/**
+ * Student Dashboard Types
+ * 
+ * This file contains type definitions for the student dashboard.
+ * We maintain a clear separation between database types (prefixed with 'DB')
+ * and UI types (prefixed with 'UI') to ensure type safety and maintainability.
+ */
 
-// Enrollment Types
+// ==============================
+// Database Types (from Supabase)
+// ==============================
+
+/**
+ * Database User Enrollment
+ */
+export interface DBUserEnrollment {
+  id: string;
+  userId: string;
+  courseId: string;
+  enrolledAt: string;
+  expiresAt: string | null;
+  status: 'active' | 'suspended' | 'cancelled';
+  paymentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  course?: {
+    id: string;
+    title: string;
+    description: string;
+    slug: string;
+    coverImage: string;
+  };
+}
+
+/**
+ * UI User Enrollment (used in the dashboard)
+ */
 export interface UserEnrollment {
   id: string;
   userId: string;
@@ -20,8 +54,14 @@ export interface UserEnrollment {
   };
 }
 
-// Progress Types
-export interface CourseProgress {
+// ==============================
+// Database Progress Types
+// ==============================
+
+/**
+ * Database Course Progress
+ */
+export interface DBCourseProgress {
   id: string;
   userId: string;
   courseId: string;
@@ -33,7 +73,10 @@ export interface CourseProgress {
   updatedAt: string;
 }
 
-export interface ModuleProgress {
+/**
+ * Database Module Progress
+ */
+export interface DBModuleProgress {
   id: string;
   userId: string;
   moduleId: string;
@@ -50,7 +93,10 @@ export interface ModuleProgress {
   };
 }
 
-export interface LessonProgress {
+/**
+ * Database Lesson Progress
+ */
+export interface DBLessonProgress {
   id: string;
   userId: string;
   lessonId: string;
@@ -69,7 +115,54 @@ export interface LessonProgress {
   };
 }
 
-export interface UserTimeSpent {
+// ==============================
+// UI Progress Types (for Dashboard)
+// ==============================
+
+/**
+ * UI Course Progress
+ * Used for displaying course progress in the dashboard
+ */
+export interface UICourseProgress {
+  courseId: string;
+  course: {
+    id: string;
+    title: string;
+    description: string;
+    slug: string;
+    modules?: any[];
+  };
+  progress: number;
+  completedLessonsCount: number;
+  totalLessonsCount: number;
+}
+
+/**
+ * UI Module Progress
+ * Used for displaying module progress in the dashboard
+ */
+export interface UIModuleProgress {
+  moduleId: string;
+  progress: number;
+  completedLessonsCount: number;
+  totalLessonsCount: number;
+}
+
+/**
+ * UI Lesson Progress
+ * Used for displaying lesson progress in the dashboard
+ */
+export interface UILessonProgress {
+  status: string;
+  progress: number;
+  lastPosition: number;
+  lastAccessedAt?: string;
+}
+
+/**
+ * Database User Time Spent
+ */
+export interface DBUserTimeSpent {
   id: string;
   userId: string;
   lessonId: string;
@@ -77,6 +170,28 @@ export interface UserTimeSpent {
   lastActivity: string;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * UI User Time Spent
+ */
+export interface UserTimeSpent extends DBUserTimeSpent {}
+
+/**
+ * Continue Learning Lesson
+ * Used for displaying the most recent lesson in the dashboard
+ */
+export interface ContinueLearningLesson {
+  lessonId: string;
+  moduleId: string;
+  courseId: string;
+  lessonTitle: string;
+  moduleTitle: string;
+  courseTitle: string;
+  progress: number;
+  lastPosition: number;
+  status: string;
+  lastAccessedAt?: string;
 }
 
 // Template Types
@@ -90,6 +205,8 @@ export interface Template {
   downloads: number;
   googleDriveId: string;
   description?: string;
+  courseId?: string;
+  course?: UICourseProgress;
   createdAt?: string;
   updatedAt?: string;
 }

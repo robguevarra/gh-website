@@ -81,6 +81,9 @@ export function CourseProgressSection({
       transition: { duration: 0.6 },
     },
   }
+  
+  // Ensure we have valid data with fallbacks
+  const safeRecentLessons = recentLessons || []
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeInUp}>
@@ -151,7 +154,7 @@ export function CourseProgressSection({
               </div>
 
               {/* Current Lesson */}
-              {recentLessons.length > 0 && (
+              {safeRecentLessons.length > 0 && (
                 <div className="bg-gradient-to-r from-brand-purple/5 to-brand-pink/5 rounded-xl p-5 border border-brand-purple/10">
                   <div className="flex items-center gap-2 mb-1">
                     <Sparkles className="h-4 w-4 text-brand-purple" />
@@ -161,8 +164,8 @@ export function CourseProgressSection({
                   <div className="flex gap-4 mt-3">
                     <div className="relative w-24 h-16 rounded-lg overflow-hidden flex-shrink-0">
                       <Image
-                        src={recentLessons[0].thumbnail || "/placeholder.svg"}
-                        alt={recentLessons[0].title}
+                        src={safeRecentLessons[0]?.thumbnail || "/placeholder.svg"}
+                        alt={safeRecentLessons[0]?.title || "Lesson"}
                         fill
                         className="object-cover"
                       />
@@ -171,24 +174,24 @@ export function CourseProgressSection({
                       </div>
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-medium text-[#5d4037] line-clamp-1">{recentLessons[0].title}</h4>
+                      <h4 className="font-medium text-[#5d4037] line-clamp-1">{safeRecentLessons[0]?.title || "Continue your lesson"}</h4>
                       <div className="flex items-center text-xs text-[#6d4c41] mt-1">
                         <span className="bg-brand-purple/10 text-brand-purple px-2 py-0.5 rounded-full">
-                          {recentLessons[0].module}
+                          {safeRecentLessons[0]?.module || "Current Module"}
                         </span>
                         <span className="mx-2">•</span>
                         <Clock className="h-3 w-3 mr-1" />
-                        {recentLessons[0].duration}
+                        {safeRecentLessons[0]?.duration || "--:--"}
                       </div>
                       <div className="mt-2">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs text-[#6d4c41]">Progress</span>
-                          <span className="text-xs font-medium">{recentLessons[0].progress}%</span>
+                          <span className="text-xs font-medium">{safeRecentLessons[0]?.progress || 0}%</span>
                         </div>
                         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-brand-purple rounded-full"
-                            style={{ width: `${recentLessons[0].progress}%` }}
+                            style={{ width: `${safeRecentLessons[0]?.progress || 0}%` }}
                           ></div>
                         </div>
                       </div>
