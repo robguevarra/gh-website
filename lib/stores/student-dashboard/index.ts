@@ -15,7 +15,16 @@ import { createActions } from './actions';
  * 3. Persistence - Critical state is persisted in localStorage
  * 4. Performance Monitoring - Development mode includes performance tracking
  */
-import { type UserEnrollment, type CourseProgress, type ModuleProgress, type Template, type Purchase, type LiveClass } from './types';
+import { 
+  type UserEnrollment, 
+  type UICourseProgress, 
+  type UIModuleProgress, 
+  type UILessonProgress,
+  type Template, 
+  type Purchase, 
+  type LiveClass, 
+  type ContinueLearningLesson 
+} from './types/index';
 
 export interface StudentDashboardStore {
   // Dashboard Data Loading Actions
@@ -45,25 +54,12 @@ export interface StudentDashboardStore {
   hasEnrollmentError: boolean;
   
   // Progress data
-  courseProgress: Record<string, CourseProgress>;
-  moduleProgress: Record<string, ModuleProgress[]>;
-  lessonProgress: Record<string, { 
-    status: string;
-    progress: number;
-    lastPosition: number;
-  }>;
+  courseProgress: Record<string, UICourseProgress>;
+  moduleProgress: Record<string, UIModuleProgress[]>;
+  lessonProgress: Record<string, UILessonProgress>;
   isLoadingProgress: boolean;
   hasProgressError: boolean;
-  continueLearningLesson: {
-    lessonId: string;
-    lessonTitle: string;
-    moduleId: string;
-    moduleTitle: string;
-    courseId: string;
-    courseTitle: string;
-    progress: number;
-    lastPosition: number;
-  } | null;
+  continueLearningLesson: ContinueLearningLesson | null;
   
   // Templates data
   templates: Template[];
@@ -103,9 +99,9 @@ export interface StudentDashboardStore {
   setHasEnrollmentError: (hasError: boolean) => void;
   
   // Progress actions
-  setCourseProgress: (courseId: string, progress: CourseProgress) => void;
-  setModuleProgress: (courseId: string, progress: ModuleProgress[]) => void;
-  setLessonProgress: (lessonId: string, progress: { status: string; progress: number; lastPosition: number }) => void;
+  setCourseProgress: (courseId: string, progress: UICourseProgress) => void;
+  setModuleProgress: (courseId: string, progress: UIModuleProgress[]) => void;
+  setLessonProgress: (lessonId: string, progress: UILessonProgress) => void;
   setIsLoadingProgress: (isLoading: boolean) => void;
   setHasProgressError: (hasError: boolean) => void;
   

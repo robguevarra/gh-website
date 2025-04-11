@@ -15,7 +15,12 @@ import { type StoreApi } from 'zustand';
 import { type StudentDashboardStore } from './index';
 import { getBrowserClient } from '@/lib/supabase/client';
 import * as auth from '@/lib/supabase/auth';
-import { CourseProgress, ModuleProgress, LessonProgress } from './types';
+import type { 
+  UICourseProgress, 
+  UIModuleProgress, 
+  UILessonProgress, 
+  ContinueLearningLesson 
+} from './types/index';
 
 // Define properly typed set and get functions for Zustand
 type SetState = {
@@ -187,71 +192,86 @@ export const createActions = (
       // Use browser client for client-side data fetching
       const supabase = getBrowserClient();
       
-      // Get progress data for lessons
-      const { data: lessonProgressData, error: lessonError } = await supabase
+      // Process lesson progress with proper types
+      const lessonProgressMap: Record<string, UILessonProgress> = {};
+      
+      // Fetch lesson progress data from Supabase
+      const { data: lessonProgressData, error: lessonProgressError } = await supabase
         .from('user_progress')
         .select('*')
         .eq('user_id', userId);
       
-      if (lessonError) throw lessonError;
+      if (lessonProgressError) {
+        console.error('Error loading lesson progress:', lessonProgressError);
+        set({ hasProgressError: true, isLoadingProgress: false });
+        return;
+      }
       
-      // Process the data to create course and module progress
-      const courseProgressMap: Record<string, CourseProgress> = {};
-      const moduleProgressMap: Record<string, ModuleProgress[]> = {};
-      const lessonProgressMap: Record<string, LessonProgress> = {};
-      
-      // Convert lesson progress to a map for easy access
-      lessonProgressData?.forEach(item => {
-        lessonProgressMap[item.lesson_id] = {
-          lessonId: item.lesson_id,
-          status: item.status,
-          progress: item.progress_percentage,
-          lastPosition: item.last_position,
-          completedAt: item.completed_at,
-          lastAccessedAt: item.updated_at
-        };
-      });
+      // Process lesson progress data
+      if (lessonProgressData) {
+        lessonProgressData.forEach(progress => {
+          lessonProgressMap[progress.lesson_id] = {
+            status: progress.status || 'not-started',
+            progress: progress.progress_percentage || 0,
+            lastPosition: progress.last_position || 0,
+            lastAccessedAt: progress.updated_at
+          };
+        });
+      }
       
       // Get course and module structure to calculate progress
       const { data: courses, error: coursesError } = await supabase
         .from('courses')
         .select(`
-          id, title,
-          modules (id, title, lessons (id, title))
+          id, title, description, slug,
+          modules:modules (id, title, course_id, lessons:lessons (id, title, module_id))
         `);
       
       if (coursesError) throw coursesError;
       
+      // Initialize progress maps with proper types
+      const courseProgressMap: Record<string, UICourseProgress> = {};
+      const moduleProgressMap: Record<string, UIModuleProgress[]> = {};
+      
       // Calculate progress for each course and module
       courses?.forEach(course => {
+        // Initialize module progress array for this course
+        moduleProgressMap[course.id] = [];
+        
         let totalLessons = 0;
         let completedLessons = 0;
-        const moduleProgressList: ModuleProgress[] = [];
         
-        course.modules?.forEach(module => {
-          const moduleTotalLessons = module.lessons?.length || 0;
-          let moduleCompletedLessons = 0;
-          
-          module.lessons?.forEach(lesson => {
-            if (lessonProgressMap[lesson.id]?.status === 'completed') {
-              completedLessons++;
-              moduleCompletedLessons++;
-            }
+        // Group lessons by module and calculate module progress
+        if (course.modules) {
+          course.modules.forEach(module => {
+            const moduleId = module.id;
+            const moduleLessons = module.lessons || [];
+            
+            // Skip modules with no lessons
+            if (moduleLessons.length === 0) return;
+            
+            totalLessons += moduleLessons.length;
+            
+            // Calculate completed lessons for this module
+            const moduleCompletedLessons = moduleLessons.reduce((count, lesson) => {
+              const lessonProgress = lessonProgressMap[lesson.id];
+              return count + (lessonProgress?.status === 'completed' ? 1 : 0);
+            }, 0);
+            
+            completedLessons += moduleCompletedLessons;
+            
+            // Calculate overall module progress
+            const moduleProgress: UIModuleProgress = {
+              moduleId,
+              progress: moduleLessons.length > 0 ? (moduleCompletedLessons / moduleLessons.length) * 100 : 0,
+              completedLessonsCount: moduleCompletedLessons,
+              totalLessonsCount: moduleLessons.length
+            };
+            
+            // Add to module progress map
+            moduleProgressMap[course.id].push(moduleProgress);
           });
-          
-          totalLessons += moduleTotalLessons;
-          
-          // Create module progress object
-          moduleProgressList.push({
-            moduleId: module.id,
-            progress: moduleTotalLessons > 0 ? Math.round((moduleCompletedLessons / moduleTotalLessons) * 100) : 0,
-            completedLessonsCount: moduleCompletedLessons,
-            totalLessonsCount: moduleTotalLessons
-          });
-        });
-        
-        // Add module progress to map
-        moduleProgressMap[course.id] = moduleProgressList;
+        }
         
         // Create course progress object
         courseProgressMap[course.id] = {
@@ -259,8 +279,8 @@ export const createActions = (
           course: {
             id: course.id,
             title: course.title,
-            description: '',  // Default empty string as it's required by the Course type
-            slug: course.id,  // Using ID as slug since it's required
+            description: course.description || '',
+            slug: course.slug || course.id,
             modules: course.modules?.map(module => ({
               id: module.id,
               courseId: course.id,
@@ -277,9 +297,7 @@ export const createActions = (
           },
           progress: totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0,
           completedLessonsCount: completedLessons,
-          totalLessonsCount: totalLessons,
-          startedAt: lessonProgressData?.[0]?.created_at,
-          lastAccessedAt: lessonProgressData?.[0]?.updated_at
+          totalLessonsCount: totalLessons
         };
       });
       
@@ -357,51 +375,92 @@ export const createActions = (
   
   /**
    * Load continue learning lesson
+   * 
+   * This function retrieves the most recent lesson a user was working on,
+   * following the database schema where lessons are linked to courses via modules.
    */
   loadContinueLearningLesson: async (userId: string) => {
-    if (!userId) return;
+    if (!userId) {
+      set({ continueLearningLesson: null });
+      return;
+    }
     
     try {
       // Use browser client for client-side data fetching
       const supabase = getBrowserClient();
       
-      // Get the most recent lesson the user was working on
-      const { data: recentLesson, error } = await supabase
+      // Get the most recent lesson the user was working on with proper joins
+      // Note: We need to join lessons → modules → courses to get the course_id
+      const { data, error } = await supabase
         .from('user_progress')
         .select(`
           *,
-          lesson:lessons (id, title, module_id, course_id)
+          lesson:lessons (
+            id, 
+            title, 
+            module_id,
+            module:modules (
+              id,
+              title,
+              course_id,
+              course:courses (
+                id,
+                title
+              )
+            )
+          )
         `)
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(1);
+      
+      // Log detailed query information for debugging (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Continue learning query results:', { 
+          hasData: !!data, 
+          dataLength: data?.length || 0,
+          hasError: !!error
+        });
+      }
       
       if (error) {
-        // Handle 'No rows found' error gracefully
-        if (error.code === 'PGRST116') {
-          set({ continueLearningLesson: null });
-          return;
-        }
-        throw error;
+        console.error('Error in continue learning query:', JSON.stringify(error));
+        set({ continueLearningLesson: null });
+        return;
       }
       
-      if (recentLesson && recentLesson.lesson) {
-        set({
-          continueLearningLesson: {
-            courseId: recentLesson.lesson.course_id,
-            courseTitle: '',  // Will be populated later
-            moduleId: recentLesson.lesson.module_id,
-            moduleTitle: '',  // Will be populated later
-            lessonId: recentLesson.lesson.id,
-            lessonTitle: recentLesson.lesson.title,
-            progress: recentLesson.progress_percentage,
-            lastPosition: recentLesson.last_position || 0
-          }
-        });
+      // Check if we have any results
+      const recentLesson = data && data.length > 0 ? data[0] : null;
+      
+      // Add defensive checks for the data structure
+      if (recentLesson?.lesson?.module?.course_id && 
+          recentLesson.lesson.id && 
+          recentLesson.lesson.title) {
+        
+        // Create continue learning data with proper type safety
+        const continueLearningData: ContinueLearningLesson = {
+          courseId: recentLesson.lesson.module.course_id,
+          courseTitle: recentLesson.lesson.module.course?.title || '',
+          moduleId: recentLesson.lesson.module_id,
+          moduleTitle: recentLesson.lesson.module?.title || '',
+          lessonId: recentLesson.lesson.id,
+          lessonTitle: recentLesson.lesson.title,
+          progress: recentLesson.progress_percentage || 0,
+          lastPosition: recentLesson.last_position || 0,
+          status: recentLesson.status || 'not_started'
+        };
+        
+        // Set the continue learning lesson in the store
+        set({ continueLearningLesson: continueLearningData });
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Found continue learning lesson:', continueLearningData);
+        }
       } else {
+        // No recent lesson found or data structure is incomplete
         set({ continueLearningLesson: null });
       }
+      
     } catch (error) {
       console.error('Error loading continue learning lesson:', error);
       set({ continueLearningLesson: null });
