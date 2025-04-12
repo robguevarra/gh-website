@@ -1,27 +1,18 @@
 'use client';
 
-import { useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import { useRef, useEffect } from 'react';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { Download, FileText, ExternalLink } from 'lucide-react';
-import { GoogleDriveFile } from '@/lib/hooks/use-google-drive';
-import { GoogleDriveViewer } from '@/components/dashboard/google-drive-viewer';
+import { Download, ExternalLink, X as CloseIcon } from 'lucide-react';
+import type { DriveItem } from '@/lib/google-drive/driveApiUtils';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 
 interface TemplatePreviewModalProps {
-  file: GoogleDriveFile | null;
+  file: DriveItem | null;
   isOpen: boolean;
   onOpenChange?: (open: boolean) => void;
   onClose?: () => void;
-  onDownload?: (file: GoogleDriveFile) => void;
+  onDownload?: (file: DriveItem) => void;
 }
 
 export function TemplatePreviewModal({
@@ -31,23 +22,21 @@ export function TemplatePreviewModal({
   onClose,
   onDownload,
 }: TemplatePreviewModalProps) {
-  const [activeTab, setActiveTab] = useState('preview');
-  
   if (!file) return null;
   
-  // Get file type from MIME type
-  const getFileType = (mimeType: string | undefined): string => {
-    if (!mimeType) return 'FILE';
-    if (mimeType.includes('pdf')) return 'PDF';
-    if (mimeType.includes('document')) return 'DOC';
-    if (mimeType.includes('spreadsheet')) return 'XLS';
-    if (mimeType.includes('presentation')) return 'PPT';
-    if (mimeType.includes('image')) return 'IMG';
-    return 'FILE';
+  // Create the direct Google Drive preview URL
+  const getPreviewUrl = (fileId: string): string => {
+    // For mock files in development, return a placeholder
+    if (fileId.startsWith('mock-')) {
+      return 'https://docs.google.com/viewer?embedded=true&url=https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
+    }
+    
+    // Direct Google Drive preview URL
+    return `https://drive.google.com/file/d/${fileId}/preview?usp=sharing`;
   };
   
-  // Generate Google Drive direct view URL
-  const viewUrl = file ? `https://drive.google.com/file/d/${file.id}/view` : '';
+  // URL for opening in a new tab
+  const viewUrl = file.id ? `https://drive.google.com/file/d/${file.id}/view` : '';
   
   const handleDownload = () => {
     if (file && onDownload) {
@@ -56,10 +45,6 @@ export function TemplatePreviewModal({
   };
   
   const handleOpenInDrive = () => {
-    if (file.id.startsWith('mock-')) {
-      console.log('Mock open in Drive triggered for:', file.name);
-      return;
-    }
     window.open(viewUrl, '_blank');
   };
   
@@ -71,118 +56,57 @@ export function TemplatePreviewModal({
         if (!open && onClose) onClose();
       }}
     >
-      <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
-        <DialogHeader>
-          <div className="flex justify-between items-start">
-            <div>
-              <DialogTitle className="text-xl">{file.name}</DialogTitle>
-              <DialogDescription className="mt-1 flex flex-wrap gap-2 items-center">
-                <Badge variant="outline" className="text-xs">
-                  {getFileType(file.mimeType)}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  {file.size || 'Unknown size'}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  Last modified: {file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString() : 'Unknown'}
-                </span>
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
+      <DialogContent className="max-w-[98vw] w-[98vw] max-h-[98vh] h-[98vh] p-0 overflow-hidden border-0 rounded-none">
+        {/* Accessible title that's visually hidden */}
+        <VisuallyHidden asChild>
+          <DialogTitle>{file.name || 'Document Preview'}</DialogTitle>
+        </VisuallyHidden>
         
-        <Tabs 
-          defaultValue="preview" 
-          className="flex-1 flex flex-col overflow-hidden"
-          value={activeTab}
-          onValueChange={setActiveTab}
-        >
-          <TabsList className="mb-4">
-            <TabsTrigger value="preview">Preview</TabsTrigger>
-            <TabsTrigger value="details">Details</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent 
-            value="preview" 
-            className="flex-1 overflow-hidden relative data-[state=active]:flex data-[state=active]:flex-col"
+        {/* Minimal floating action buttons in the top-right corner */}
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenInDrive}
+            className="bg-white/90 hover:bg-white shadow-sm"
           >
-            <div className="flex-1 overflow-hidden rounded-md border">
-              <GoogleDriveViewer 
-                fileId={file.id}
-                fileName={file.name}
-                fileType={getFileType(file.mimeType).toLowerCase()}
-                height="100%"
-                width="100%"
-                showControls={false}
-              />
-            </div>
-          </TabsContent>
+            <ExternalLink className="h-4 w-4" />
+            <span className="ml-1.5 sm:inline hidden">Open</span>
+          </Button>
           
-          <TabsContent 
-            value="details" 
-            className="flex-1 overflow-y-auto data-[state=active]:flex data-[state=active]:flex-col"
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={handleDownload}
+            className="bg-white/90 hover:bg-white shadow-sm"
           >
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-medium mb-1">Description</h3>
-                <p className="text-sm text-muted-foreground">
-                  {file.description || 'No description available for this template.'}
-                </p>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium mb-1">Details</h3>
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div>
-                    <dt className="text-muted-foreground">Format</dt>
-                    <dd>{getFileType(file.mimeType)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Size</dt>
-                    <dd>{file.size || 'Unknown'}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Created</dt>
-                    <dd>{file.createdTime ? new Date(file.createdTime).toLocaleDateString() : 'Unknown'}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-muted-foreground">Modified</dt>
-                    <dd>{file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString() : 'Unknown'}</dd>
-                  </div>
-                </dl>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-medium mb-1">Usage</h3>
-                <p className="text-sm text-muted-foreground">
-                  This template is free to use for all Graceful Homeschooling members. 
-                  Download and customize it for your personal use.
-                </p>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            <Download className="h-4 w-4" />
+            <span className="ml-1.5 sm:inline hidden">Download</span>
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            size="icon"
+            className="h-8 w-8 rounded-full bg-white/90 hover:bg-white shadow-sm"
+            onClick={() => {
+              if (onClose) onClose();
+              if (onOpenChange) onOpenChange(false);
+            }}
+          >
+            <CloseIcon className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        </div>
         
-        <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Button
-              variant="outline"
-              onClick={handleOpenInDrive}
-              className="flex-1 sm:flex-none"
-            >
-              <ExternalLink className="mr-2 h-4 w-4" />
-              Open in Drive
-            </Button>
-            <Button 
-              variant="default" 
-              onClick={handleDownload}
-              className="flex-1 sm:flex-none"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Download
-            </Button>
-          </div>
-        </DialogFooter>
+        {/* Full-screen iframe with Google Drive's native preview */}
+        <iframe
+          src={getPreviewUrl(file.id)}
+          className="w-full h-full border-0"
+          frameBorder="0"
+          allowFullScreen
+          loading="eager"
+          title={file.name || 'Document Preview'}
+        />
       </DialogContent>
     </Dialog>
   );

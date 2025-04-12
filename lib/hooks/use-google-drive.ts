@@ -14,7 +14,7 @@ export interface UseGoogleDriveDataResult {
   isLoading: boolean;
   hasError: boolean;
   currentFolderId: string | null;
-  navigateToFolder: (folderId: string) => void;
+  navigateToFolder: (folderId: string | null) => void;
   refreshData: () => Promise<void>;
 }
 
@@ -27,59 +27,43 @@ export const useGoogleDriveFiles = (options: UseGoogleDriveDataOptions = {}): Us
   const defaultRootId = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_ROOT_FOLDER_ID || null;
   // Use provided ID, otherwise fallback to ENV var or null
   const resolvedInitialFolderId = inputFolderId ?? defaultRootId;
-  console.log('[useGoogleDriveFiles] Resolved Initial Folder ID:', resolvedInitialFolderId);
 
   const [items, setItems] = useState<DriveItem[]>([]);
   const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbSegment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   // Initialize state with the resolved ID
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(resolvedInitialFolderId);
 
   // Create a cache key based on the current folder ID
   const cacheKey = currentFolderId ? `/api/google-drive?folderId=${currentFolderId}` : '/api/google-drive'; // Fetch root if no ID
-  console.log('[useGoogleDriveFiles] Cache Key:', cacheKey);
 
   const fetchDriveData = useCallback(async (url: string) => {
-    console.log('[useGoogleDriveFiles] fetchDriveData called with URL:', url);
-    // This early return might be problematic if isLoading isn't reset correctly
-    // Commenting out for now to ensure fetch always tries
-    // if (isLoading) {
-    //   console.log('[useGoogleDriveFiles] fetchDriveData returning early due to isLoading=true');
-    //   return { items, breadcrumbs }; // Need to ensure items/breadcrumbs are correct here if we re-enable
-    // }
-
-    setIsLoading(true);
+    // Reset error state before fetch
     setHasError(false);
 
     try {
       const response = await fetch(url);
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch Google Drive data: ${response.status} ${response.statusText}`);
+        console.error(`[useGoogleDriveFiles] Fetch failed with status: ${response.status}`);
+        throw new Error(`Failed to fetch data: ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const result = await response.json();
+      return result; // Return the fetched data
 
-      if (!data || !Array.isArray(data.items) || !Array.isArray(data.breadcrumbs)) {
-        throw new Error('Invalid API response structure');
-      }
-
-      setItems(data.items);
-      setBreadcrumbs(data.breadcrumbs);
-
-      return { items: data.items, breadcrumbs: data.breadcrumbs };
-    } catch (error) {
-      console.error('Error fetching Google Drive data:', error);
+    } catch (fetchError: any) {
+      console.error('[useGoogleDriveFiles] fetchDriveData error:', fetchError.message || fetchError);
       setHasError(true);
-      return { items: [], breadcrumbs: [] };
-    } finally {
-      setIsLoading(false);
+      // Re-throw the error so SWR can catch it and populate its 'error' state
+      throw fetchError; 
     }
-  }, [isLoading]);
+  }, []); // Dependencies removed as we don't need local state like isLoading here
 
-  console.log('[useGoogleDriveFiles] Calling useSWR with key:', cacheKey);
-  const { data, error, mutate } = useSWR<{ items: DriveItem[], breadcrumbs: BreadcrumbSegment[] }, Error>(
+  const { data, error, mutate, isValidating } = useSWR<
+    { items: DriveItem[], breadcrumbs: BreadcrumbSegment[] }, 
+    Error
+  >(
     cacheKey, 
     fetchDriveData, 
     {
@@ -94,35 +78,43 @@ export const useGoogleDriveFiles = (options: UseGoogleDriveDataOptions = {}): Us
     }
   );
 
+  // Determine loading state: 
+  // It's loading if there's no data AND no error yet, OR if SWR is validating (re-fetching)
+  const isLoading = (!data && !error) || isValidating;
+
   useEffect(() => {
-    console.log('[useGoogleDriveFiles] useEffect triggered. Data:', data, 'Error:', error);
     if (data) {
       setItems(data.items || []);
       setBreadcrumbs(data.breadcrumbs || []);
+      // Reset error if data is successfully loaded
+      if (hasError) setHasError(false);
+    } 
+    // SWR sets its 'error' state if fetchDriveData throws an error
+    if (error && !hasError) {
+      setHasError(true);
     }
-  }, [data, error]);
+    // Only trigger error state update if the error state changes
+  }, [data, error, hasError]);
 
-  const navigateToFolder = useCallback((folderId: string) => {
-    console.log('[useGoogleDriveFiles] Navigating to folder:', folderId);
+  const navigateToFolder = useCallback((folderId: string | null) => {
+    // Check if the target folder ID is different from the current one
     if (folderId !== currentFolderId) {
-      setIsLoading(true);
-      setCurrentFolderId(folderId);
+      setCurrentFolderId(folderId); // Accept string or null
     }
-  }, [currentFolderId]);
+  }, [currentFolderId]); // Dependency remains currentFolderId
 
   const refreshData = useCallback(async () => {
-    console.log('[useGoogleDriveFiles] Refreshing data for key:', cacheKey);
-    setIsLoading(true);
-    await mutate();
-  }, [cacheKey, mutate]);
+    // Don't set isLoading manually, SWR will handle it via isValidating
+    await mutate(); // Revalidate the data for the current cacheKey
+  }, [mutate]); // Removed cacheKey dependency as mutate captures it
 
   return {
     items,
     breadcrumbs,
-    isLoading,
-    hasError,
+    isLoading, // Return the derived loading state
+    hasError, // Return error state derived from SWR error or fetch issues
     currentFolderId,
     navigateToFolder,
-    refreshData
+    refreshData,
   };
 };

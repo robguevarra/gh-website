@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Download, ChevronDown, ChevronUp, ChevronRight } from "lucide-react"
+import { Download, ChevronDown, ChevronUp, ChevronRight, ExternalLink } from "lucide-react"
 import { motion } from "framer-motion"
 import { TemplateBrowser } from "@/components/dashboard/template-browser"
 import type { DriveItem } from '@/lib/google-drive/driveApiUtils';
@@ -73,11 +73,13 @@ export function TemplatesLibrarySection({
                 <h2 className="text-xl font-medium text-[#5d4037]">Free Templates</h2>
               </div>
               <Link
-                href="/dashboard/templates"
+                href="https://drive.google.com/drive/folders/1Hrp7tJneYZ2Ba5nTlP4Nt36KVhCNKf2n?usp=sharing"
+                target="_blank" 
+                rel="noopener noreferrer"
                 className="text-brand-blue hover:underline text-sm flex items-center"
               >
-                View All Templates
-                <ChevronRight className="h-4 w-4 ml-1" />
+                Visit Google Drive
+                <ExternalLink className="h-4 w-4 ml-1" />
               </Link>
             </div>
 
@@ -86,11 +88,13 @@ export function TemplatesLibrarySection({
             
             <div className="mt-4 pt-4 border-t text-center md:hidden">
               <Link
-                href="/dashboard/templates"
+                href="https://drive.google.com/drive/folders/1Hrp7tJneYZ2Ba5nTlP4Nt36KVhCNKf2n?usp=sharing"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-brand-blue hover:underline text-sm flex items-center justify-center"
               >
-                View All Templates
-                <ChevronRight className="h-4 w-4 ml-1" />
+                Visit Google Drive
+                <ExternalLink className="h-4 w-4 ml-1" />
               </Link>
             </div>
           </div>
