@@ -62,48 +62,85 @@ interface FileCardProps {
 const FileCard = ({ file, onNavigate, onPreview, onDownload }: FileCardProps) => {
   const isFolder = file.isFolder;
   const Icon = getFileIcon(file.mimeType, isFolder);
+  
+  // Format the modified date if available
+  const formattedDate = file.modifiedTime 
+    ? new Date(file.modifiedTime).toLocaleDateString(undefined, { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      })
+    : null;
 
   const handleCardClick = () => {
     if (isFolder && onNavigate) {
       onNavigate(file.id);
+    } else if (!isFolder && onPreview) {
+      onPreview(file);
     }
   };
 
   return (
     <Card 
-      className={`flex flex-col h-full overflow-hidden transition-all duration-200 ease-in-out hover:scale-[1.02] ${isFolder ? 'cursor-pointer hover:shadow-lg hover:bg-secondary/30 border-yellow-600/50' : 'hover:shadow-md hover:bg-secondary/30'}`}
+      className={`group flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-lg ${isFolder 
+        ? 'cursor-pointer border-yellow-100 hover:border-yellow-300 bg-yellow-50/30' 
+        : 'hover:border-primary/30 bg-white'}`}
       onClick={handleCardClick}
     >
-      <CardHeader className="flex-shrink-0 pb-2 pt-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+      {/* Card Content Area */}
+      <div className="p-4 flex flex-col h-full">
+        {/* Icon and Title */}
+        <div className="flex items-start gap-3 mb-2">
+          <div className={`p-2 rounded-md ${isFolder ? 'bg-yellow-100' : 'bg-primary/10'} 
+            transition-colors duration-300 group-hover:${isFolder ? 'bg-yellow-200' : 'bg-primary/20'}`}>
             {Icon}
-            <CardTitle className="text-sm font-medium line-clamp-1">{file.name || 'Untitled'}</CardTitle>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-medium text-sm line-clamp-2 text-gray-800 group-hover:text-black transition-colors duration-300">
+              {file.name || 'Untitled'}
+            </h3>
+            {formattedDate && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Modified {formattedDate}
+              </p>
+            )}
           </div>
         </div>
-      </CardHeader>
-      {!isFolder && onPreview && onDownload && (
-        <CardFooter className="flex-shrink-0 grid grid-cols-2 gap-2 pt-4 mt-auto"> 
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="w-full"
-            onClick={(e) => { e.stopPropagation(); onPreview(file); }} 
-          >
-            <Eye className="mr-1 h-4 w-4" />
-            Preview
-          </Button>
-          <Button 
-            variant="default" 
-            size="sm" 
-            className="w-full"
-            onClick={(e) => { e.stopPropagation(); onDownload(file); }} 
-          >
-            <Download className="mr-1 h-4 w-4" />
-            Download
-          </Button>
-        </CardFooter>
-      )}
+        
+        {/* Button Area - Only for files, not folders */}
+        {!isFolder && onPreview && onDownload && (
+          <div className="mt-auto pt-3 flex flex-col sm:flex-row gap-2 w-full"> 
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full sm:flex-1 text-xs transition-all duration-300 hover:bg-primary/10"
+              onClick={(e) => { e.stopPropagation(); onPreview(file); }} 
+            >
+              <Eye className="mr-1.5 h-3.5 w-3.5" />
+              Preview
+            </Button>
+            <Button 
+              variant="default" 
+              size="sm" 
+              className="w-full sm:flex-1 text-xs bg-primary hover:bg-primary/90 transition-all duration-300"
+              onClick={(e) => { e.stopPropagation(); onDownload(file); }} 
+            >
+              <Download className="mr-1.5 h-3.5 w-3.5" />
+              Download
+            </Button>
+          </div>
+        )}
+        
+        {/* Folder Indicator */}
+        {isFolder && (
+          <div className="mt-auto pt-2 flex justify-end">
+            <div className="text-xs text-muted-foreground flex items-center gap-1 group-hover:text-primary transition-colors duration-300">
+              <span>Open folder</span>
+              <ChevronRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
+            </div>
+          </div>
+        )}
+      </div>
     </Card>
   );
 };
@@ -147,46 +184,64 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
   };
   
   return (
-    <div>
-      {/* === Breadcrumbs (Rendered Unconditionally) === */}
-      <div className="flex items-center space-x-1 text-sm text-muted-foreground mb-4 overflow-x-auto whitespace-nowrap py-1 min-h-[20px]"> {/* Added min-height */}
-        {isLoading && breadcrumbs.length === 0 && !hasError ? (
-          // Skeleton for initial load
-          <>
-            <Skeleton className="h-4 w-16 rounded" />
-            {/* No chevron needed for single root skeleton */}
-          </>
-        ) : !hasError && breadcrumbs.length === 0 ? (
-          // Static Root label when at the root level
-          <span className="font-medium text-foreground">Home</span>
-        ) : !hasError ? (
-          // Clickable Root link + Mapped breadcrumbs when inside subfolders
-          <>
-            <button
-              onClick={() => navigateToFolder(process.env.NEXT_PUBLIC_GOOGLE_DRIVE_ROOT_FOLDER_ID || null)} // Navigate back to root
-              className="hover:underline hover:text-foreground"
-            >
-              Home
-            </button>
-            {breadcrumbs.map((crumb, index) => (
-              <span key={crumb.id} className="flex items-center">
-                <ChevronRight className="h-4 w-4 mx-1" /> {/* Always show chevron */}
-                {index === breadcrumbs.length - 1 ? (
-                  // Last crumb is the current folder - not clickable
-                  <span className="font-medium text-foreground">{crumb.name}</span>
-                ) : (
-                  // Intermediate crumbs are clickable
-                  <button
-                    onClick={() => navigateToFolder(crumb.id)}
-                    className="hover:underline hover:text-foreground"
-                  >
-                    {crumb.name}
-                  </button>
-                )}
-              </span>
-            ))}
-          </>
-        ) : null /* Don't render breadcrumbs if there's an error */ }
+    <div className="space-y-4">
+      {/* === Header with Breadcrumbs and Refresh Button === */}
+      <div className="flex items-center justify-between">
+        {/* Breadcrumb Navigation */}
+        <div className="flex items-center space-x-1 text-sm text-muted-foreground overflow-x-auto whitespace-nowrap py-1 min-h-[28px] rounded-md bg-muted/30 px-3"> 
+          {isLoading && breadcrumbs.length === 0 && !hasError ? (
+            // Skeleton for initial load
+            <>
+              <Skeleton className="h-4 w-16 rounded" />
+            </>
+          ) : !hasError && breadcrumbs.length === 0 ? (
+            // Static Root label when at the root level
+            <div className="flex items-center">
+              <Folder className="h-3.5 w-3.5 mr-1.5 text-primary/70" />
+              <span className="font-medium text-foreground">Home</span>
+            </div>
+          ) : !hasError ? (
+            // Clickable Root link + Mapped breadcrumbs when inside subfolders
+            <>
+              <button
+                onClick={() => navigateToFolder(process.env.NEXT_PUBLIC_GOOGLE_DRIVE_ROOT_FOLDER_ID || null)}
+                className="hover:underline hover:text-foreground flex items-center"
+              >
+                <Folder className="h-3.5 w-3.5 mr-1.5 text-primary/70" />
+                <span>Home</span>
+              </button>
+              {breadcrumbs.map((crumb, index) => (
+                <span key={crumb.id} className="flex items-center">
+                  <ChevronRight className="h-3.5 w-3.5 mx-1 text-muted-foreground" />
+                  {index === breadcrumbs.length - 1 ? (
+                    // Last crumb is the current folder - not clickable
+                    <span className="font-medium text-foreground">{crumb.name}</span>
+                  ) : (
+                    // Intermediate crumbs are clickable
+                    <button
+                      onClick={() => navigateToFolder(crumb.id)}
+                      className="hover:underline hover:text-foreground"
+                    >
+                      {crumb.name}
+                    </button>
+                  )}
+                </span>
+              ))}
+            </>
+          ) : null /* Don't render breadcrumbs if there's an error */ }
+        </div>
+        
+        {/* Refresh Button */}
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={refreshData} 
+          disabled={isLoading}
+          className="text-xs h-8 px-2 text-muted-foreground hover:text-foreground transition-all duration-200"
+        >
+          <RotateCw className={`h-3.5 w-3.5 mr-1.5 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* === Conditional Content Area === */}
@@ -196,20 +251,21 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
           // Don't show skeleton if we have previous data (SWR handles this)
           if (items.length > 0 && !hasError) return null; 
           return (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {Array.from({ length: 8 }).map((_, i) => ( // Render 8 skeleton cards
-                <Card key={i} className="flex flex-col h-full overflow-hidden">
-                  <CardHeader className="flex-shrink-0 pb-2 pt-4">
-                    <div className="flex items-center gap-2">
-                      <Skeleton className="h-5 w-5 rounded" /> {/* Icon Skeleton */}
-                      <Skeleton className="h-4 w-3/4 rounded" /> {/* Title Skeleton */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+              {Array.from({ length: 6 }).map((_, i) => ( // Render 6 skeleton cards
+                <div key={i} className="bg-white border border-gray-100 rounded-lg p-4 h-[160px] animate-pulse">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="bg-gray-200 h-10 w-10 rounded-md"></div>
+                    <div className="space-y-2 flex-1">
+                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                      <div className="h-3 bg-gray-100 rounded w-1/2"></div>
                     </div>
-                  </CardHeader>
-                  <CardFooter className="flex-shrink-0 grid grid-cols-2 gap-2 pt-4 mt-auto">
-                    <Skeleton className="h-8 w-full rounded" /> {/* Button Skeleton */}
-                    <Skeleton className="h-8 w-full rounded" /> {/* Button Skeleton */}
-                  </CardFooter>
-                </Card>
+                  </div>
+                  <div className="mt-auto pt-4 flex gap-2">
+                    <div className="h-8 bg-gray-200 rounded flex-1"></div>
+                    <div className="h-8 bg-gray-200 rounded flex-1"></div>
+                  </div>
+                </div>
               ))}
             </div>
           );
@@ -218,12 +274,20 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
         // --- Error State ---
         if (hasError) {
           return (
-            <div className="border border-destructive/50 rounded-lg p-4 bg-destructive/10 text-center">
-              <div className="text-destructive font-medium mb-2">Oops! Something went wrong.</div>
-              <p className="text-sm text-destructive/80 mb-4">
-                We couldn't load the templates. This might be a temporary issue or a problem with accessing Google Drive.
+            <div className="flex flex-col items-center justify-center p-8 text-center bg-primary/5 rounded-lg border border-primary/10">
+              <div className="bg-red-100 p-3 rounded-full mb-4 transition-all duration-300 hover:bg-red-200">
+                <ExternalLink className="h-6 w-6 text-red-500" />
+              </div>
+              <h3 className="text-lg font-medium mb-2 text-gray-800">Unable to load templates</h3>
+              <p className="text-muted-foreground mb-4 max-w-md">
+                There was an error connecting to Google Drive. Please try again later or contact support if the issue persists.
               </p>
-              <Button variant="destructive" size="sm" onClick={refreshData}>
+              <Button 
+                onClick={refreshData} 
+                variant="outline" 
+                size="sm"
+                className="bg-white hover:bg-primary/5 transition-all duration-300"
+              >
                 <RotateCw className="mr-2 h-4 w-4" />
                 Try Again
               </Button>
@@ -231,23 +295,41 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
           );
         }
 
-        // --- Empty Folder State ---
+        // --- Empty State (No Items) ---
         if (items.length === 0) {
           return (
-            <div className="text-center py-16">
-              <Folder className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">This folder is empty.</p>
+            <div className="flex flex-col items-center justify-center p-8 text-center bg-primary/5 rounded-lg border border-primary/10">
+              <div className="bg-primary/10 p-3 rounded-full mb-4 transition-all duration-300 hover:bg-primary/20">
+                <Folder className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="text-lg font-medium mb-2 text-gray-800">No items found</h3>
+              <p className="text-muted-foreground mb-4 max-w-md">
+                {currentFolderId 
+                  ? "This folder is empty. Navigate to another folder or go back to the home directory."
+                  : "No templates are available. Please check back later or contact support."}
+              </p>
+              {currentFolderId && (
+                <Button 
+                  onClick={() => navigateToFolder(process.env.NEXT_PUBLIC_GOOGLE_DRIVE_ROOT_FOLDER_ID || null)}
+                  variant="outline"
+                  size="sm"
+                  className="bg-white hover:bg-primary/5 transition-all duration-300"
+                >
+                  <ChevronRight className="mr-2 h-4 w-4 rotate-180" />
+                  Back to Home
+                </Button>
+              )}
             </div>
           );
         }
 
-        // --- Default: Render Item Grid ---
+        // --- Content State (Show Files Grid) ---
         return (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {items.map((item) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            {items.map((file) => (
               <FileCard
-                key={item.id}
-                file={item}
+                key={file.id}
+                file={file}
                 onNavigate={navigateToFolder}
                 onPreview={handlePreview}
                 onDownload={handleDownload}
