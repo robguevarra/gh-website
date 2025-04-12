@@ -1,9 +1,9 @@
 /**
  * Student Dashboard Store Actions
- * 
+ *
  * This module contains action creators for the student dashboard store,
  * connecting to our Supabase data layer for real-time data.
- * 
+ *
  * Actions follow a standard pattern:
  * 1. Set loading state
  * 2. Make API call
@@ -15,11 +15,11 @@ import { type StoreApi } from 'zustand';
 import { type StudentDashboardStore } from './index';
 import { getBrowserClient } from '@/lib/supabase/client';
 import * as auth from '@/lib/supabase/auth';
-import type { 
-  UICourseProgress, 
-  UIModuleProgress, 
-  UILessonProgress, 
-  ContinueLearningLesson 
+import type {
+  UICourseProgress,
+  UIModuleProgress,
+  UILessonProgress,
+  ContinueLearningLesson
 } from './types/index';
 
 // Define properly typed set and get functions for Zustand
@@ -39,20 +39,20 @@ export const createActions = (
    */
   initializeAuthenticatedUser: async () => {
     set({ isLoadingProfile: true });
-    
+
     try {
       // Get the current authenticated user from Supabase
       const { user, error } = await auth.getCurrentUser();
-      
+
       if (error || !user) {
         console.error('Error getting authenticated user:', error);
         set({ isLoadingProfile: false });
         return;
       }
-      
+
       // Set the user ID in the store
       set({ userId: user.id });
-      
+
       // Get user profile data from the profiles table using browser client
       const supabase = getBrowserClient();
       const { data: profile, error: profileError } = await supabase
@@ -60,7 +60,7 @@ export const createActions = (
         .select('*')
         .eq('id', user.id)
         .single();
-      
+
       if (profileError || !profile) {
         console.error('Error getting user profile:', profileError);
         set({
@@ -74,7 +74,7 @@ export const createActions = (
         });
         return;
       }
-      
+
       // Set the user profile in the store
       set({
         userProfile: {
@@ -85,11 +85,11 @@ export const createActions = (
         },
         isLoadingProfile: false
       });
-      
+
       // Load the rest of the user data
       const store = get() as StudentDashboardStore;
       await store.loadUserDashboardData(user.id);
-      
+
     } catch (error) {
       console.error('Error initializing authenticated user:', error);
       set({ isLoadingProfile: false });
@@ -102,52 +102,52 @@ export const createActions = (
     if (!userId) return;
 
     const store = get() as StudentDashboardStore;
-    
+
     // Start loading all data
-    set({ 
+    set({
       isLoadingEnrollments: true,
       isLoadingProgress: true,
       isLoadingTemplates: true
     });
-    
+
     try {
       // Load enrollments with course data
       await store.loadUserEnrollments(userId);
-      
+
       // Load progress data
       await store.loadUserProgress(userId);
-      
+
       // Load templates
       await store.loadUserTemplates(userId);
-      
+
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      set({ 
+      set({
         hasEnrollmentError: true,
         hasProgressError: true,
         hasTemplatesError: true
       });
     } finally {
-      set({ 
+      set({
         isLoadingEnrollments: false,
         isLoadingProgress: false,
         isLoadingTemplates: false
       });
     }
   },
-  
+
   /**
    * Load user enrollments
    */
   loadUserEnrollments: async (userId: string) => {
     if (!userId) return;
-    
+
     set({ isLoadingEnrollments: true, hasEnrollmentError: false });
-    
+
     try {
       // Use browser client for client-side data fetching
       const supabase = getBrowserClient();
-      
+
       // Get enrollments with course data
       const { data: enrollments, error } = await supabase
         .from('user_enrollments')
@@ -163,50 +163,50 @@ export const createActions = (
         `)
         .eq('user_id', userId)
         .eq('status', 'active');
-      
+
       if (error) throw error;
-      
+
       // Format and set enrollments
-      set({ 
+      set({
         enrollments: enrollments || [],
-        isLoadingEnrollments: false 
+        isLoadingEnrollments: false
       });
     } catch (error) {
       console.error('Error loading enrollments:', error);
-      set({ 
+      set({
         hasEnrollmentError: true,
-        isLoadingEnrollments: false 
+        isLoadingEnrollments: false
       });
     }
   },
-  
+
   /**
    * Load user progress
    */
   loadUserProgress: async (userId: string) => {
     if (!userId) return;
-    
+
     set({ isLoadingProgress: true, hasProgressError: false });
-    
+
     try {
       // Use browser client for client-side data fetching
       const supabase = getBrowserClient();
-      
+
       // Process lesson progress with proper types
       const lessonProgressMap: Record<string, UILessonProgress> = {};
-      
+
       // Fetch lesson progress data from Supabase
       const { data: lessonProgressData, error: lessonProgressError } = await supabase
         .from('user_progress')
         .select('*')
         .eq('user_id', userId);
-      
+
       if (lessonProgressError) {
         console.error('Error loading lesson progress:', lessonProgressError);
         set({ hasProgressError: true, isLoadingProgress: false });
         return;
       }
-      
+
       // Process lesson progress data
       if (lessonProgressData) {
         lessonProgressData.forEach(progress => {
@@ -218,7 +218,7 @@ export const createActions = (
           };
         });
       }
-      
+
       // Get course and module structure to calculate progress
       const { data: courses, error: coursesError } = await supabase
         .from('courses')
@@ -226,40 +226,40 @@ export const createActions = (
           id, title, description, slug,
           modules:modules (id, title, course_id, lessons:lessons (id, title, module_id))
         `);
-      
+
       if (coursesError) throw coursesError;
-      
+
       // Initialize progress maps with proper types
       const courseProgressMap: Record<string, UICourseProgress> = {};
       const moduleProgressMap: Record<string, UIModuleProgress[]> = {};
-      
+
       // Calculate progress for each course and module
       courses?.forEach(course => {
         // Initialize module progress array for this course
         moduleProgressMap[course.id] = [];
-        
+
         let totalLessons = 0;
         let completedLessons = 0;
-        
+
         // Group lessons by module and calculate module progress
         if (course.modules) {
           course.modules.forEach(module => {
             const moduleId = module.id;
             const moduleLessons = module.lessons || [];
-            
+
             // Skip modules with no lessons
             if (moduleLessons.length === 0) return;
-            
+
             totalLessons += moduleLessons.length;
-            
+
             // Calculate completed lessons for this module
             const moduleCompletedLessons = moduleLessons.reduce((count, lesson) => {
               const lessonProgress = lessonProgressMap[lesson.id];
               return count + (lessonProgress?.status === 'completed' ? 1 : 0);
             }, 0);
-            
+
             completedLessons += moduleCompletedLessons;
-            
+
             // Calculate overall module progress
             const moduleProgress: UIModuleProgress = {
               moduleId,
@@ -267,12 +267,12 @@ export const createActions = (
               completedLessonsCount: moduleCompletedLessons,
               totalLessonsCount: moduleLessons.length
             };
-            
+
             // Add to module progress map
             moduleProgressMap[course.id].push(moduleProgress);
           });
         }
-        
+
         // Create course progress object
         courseProgressMap[course.id] = {
           courseId: course.id,
@@ -300,7 +300,7 @@ export const createActions = (
           totalLessonsCount: totalLessons
         };
       });
-      
+
       // Set progress data
       set({
         courseProgress: courseProgressMap,
@@ -308,20 +308,20 @@ export const createActions = (
         lessonProgress: lessonProgressMap,
         isLoadingProgress: false
       });
-      
+
       // Load continue learning lesson
       const store = get() as StudentDashboardStore;
       await store.loadContinueLearningLesson(userId);
-      
+
     } catch (error) {
       console.error('Error loading progress:', error);
-      set({ 
+      set({
         hasProgressError: true,
-        isLoadingProgress: false 
+        isLoadingProgress: false
       });
     }
   },
-  
+
   /**
    * Load user templates
    * @deprecated Now using direct Google Drive integration instead
@@ -332,10 +332,10 @@ export const createActions = (
     set({ isLoadingTemplates: false, hasTemplatesError: false, templates: [] });
     return;
   },
-  
+
   /**
    * Load continue learning lesson
-   * 
+   *
    * This function retrieves the most recent lesson a user was working on,
    * following the database schema where lessons are linked to courses via modules.
    */
@@ -344,11 +344,11 @@ export const createActions = (
       set({ continueLearningLesson: null });
       return;
     }
-    
+
     try {
       // Use browser client for client-side data fetching
       const supabase = getBrowserClient();
-      
+
       // Get the most recent lesson the user was working on with proper joins
       // Note: We need to join lessons → modules → courses to get the course_id
       const { data, error } = await supabase
@@ -356,8 +356,8 @@ export const createActions = (
         .select(`
           *,
           lesson:lessons (
-            id, 
-            title, 
+            id,
+            title,
             module_id,
             module:modules (
               id,
@@ -373,30 +373,30 @@ export const createActions = (
         .eq('user_id', userId)
         .order('updated_at', { ascending: false })
         .limit(1);
-      
+
       // Log detailed query information for debugging (only in development)
       if (process.env.NODE_ENV === 'development') {
-        console.log('Continue learning query results:', { 
-          hasData: !!data, 
+        console.log('Continue learning query results:', {
+          hasData: !!data,
           dataLength: data?.length || 0,
           hasError: !!error
         });
       }
-      
+
       if (error) {
         console.error('Error in continue learning query:', JSON.stringify(error));
         set({ continueLearningLesson: null });
         return;
       }
-      
+
       // Check if we have any results
       const recentLesson = data && data.length > 0 ? data[0] : null;
-      
+
       // Add defensive checks for the data structure
-      if (recentLesson?.lesson?.module?.course_id && 
-          recentLesson.lesson.id && 
+      if (recentLesson?.lesson?.module?.course_id &&
+          recentLesson.lesson.id &&
           recentLesson.lesson.title) {
-        
+
         // Create continue learning data with proper type safety
         const continueLearningData: ContinueLearningLesson = {
           courseId: recentLesson.lesson.module.course_id,
@@ -409,10 +409,10 @@ export const createActions = (
           lastPosition: recentLesson.last_position || 0,
           status: recentLesson.status || 'not_started'
         };
-        
+
         // Set the continue learning lesson in the store
         set({ continueLearningLesson: continueLearningData });
-        
+
         if (process.env.NODE_ENV === 'development') {
           console.log('Found continue learning lesson:', continueLearningData);
         }
@@ -420,15 +420,18 @@ export const createActions = (
         // No recent lesson found or data structure is incomplete
         set({ continueLearningLesson: null });
       }
-      
+
     } catch (error) {
       console.error('Error loading continue learning lesson:', error);
       set({ continueLearningLesson: null });
     }
   },
-  
+
   /**
    * Update lesson progress and sync with Supabase
+   *
+   * This optimized version updates only the specific lesson progress
+   * without triggering a full reload of all progress data
    */
   updateLessonProgress: async (userId: string, lessonId: string, progressData: {
     status?: string;
@@ -436,7 +439,7 @@ export const createActions = (
     lastPosition?: number;
   }) => {
     if (!userId || !lessonId) return;
-    
+
     try {
       // Update local state immediately for responsive UI
       const currentLessonProgress = get().lessonProgress[lessonId] || {
@@ -444,14 +447,15 @@ export const createActions = (
         progress: 0,
         lastPosition: 0
       };
-      
+
       const updatedProgress = {
         ...currentLessonProgress,
         status: progressData.status || currentLessonProgress.status,
         progress: progressData.progress !== undefined ? progressData.progress : currentLessonProgress.progress,
-        lastPosition: progressData.lastPosition !== undefined ? progressData.lastPosition : currentLessonProgress.lastPosition
+        lastPosition: progressData.lastPosition !== undefined ? progressData.lastPosition : currentLessonProgress.lastPosition,
+        lastAccessedAt: new Date().toISOString()
       };
-      
+
       // Update local state
       set({
         lessonProgress: {
@@ -459,7 +463,7 @@ export const createActions = (
           [lessonId]: updatedProgress
         }
       });
-      
+
       // Sync with Supabase using browser client
       const supabase = getBrowserClient();
       await supabase
@@ -473,10 +477,95 @@ export const createActions = (
           updated_at: new Date().toISOString()
         })
         .select();
-      
-      // After successful sync, refresh course progress data
-      await get().loadUserProgress(userId);
-      
+
+      // Update course and module progress calculations locally instead of reloading everything
+      // This prevents unnecessary re-renders of components using progress data
+      const { courseProgress, moduleProgress } = get();
+
+      // Find which course and module this lesson belongs to
+      const enrollments = get().enrollments;
+      let courseId = null;
+      let moduleId = null;
+
+      // Find the course and module IDs for this lesson
+      for (const enrollment of enrollments) {
+        if (!enrollment.course?.modules) continue;
+
+        for (const module of enrollment.course.modules) {
+          if (!module.lessons) continue;
+
+          const lessonExists = module.lessons.some(lesson => lesson.id === lessonId);
+          if (lessonExists) {
+            courseId = enrollment.course.id;
+            moduleId = module.id;
+            break;
+          }
+        }
+
+        if (courseId && moduleId) break;
+      }
+
+      // If we found the course and module, update their progress
+      if (courseId && moduleId) {
+        // Update module progress
+        if (moduleProgress[courseId]) {
+          const moduleProgressIndex = moduleProgress[courseId].findIndex(mp => mp.moduleId === moduleId);
+
+          if (moduleProgressIndex >= 0) {
+            const moduleProgressItem = moduleProgress[courseId][moduleProgressIndex];
+            const isCompleted = updatedProgress.status === 'completed';
+
+            // Update completed lessons count if status changed to completed
+            if (isCompleted && currentLessonProgress.status !== 'completed') {
+              moduleProgressItem.completedLessonsCount += 1;
+            } else if (!isCompleted && currentLessonProgress.status === 'completed') {
+              moduleProgressItem.completedLessonsCount = Math.max(0, moduleProgressItem.completedLessonsCount - 1);
+            }
+
+            // Recalculate progress percentage
+            moduleProgressItem.progress = moduleProgressItem.totalLessonsCount > 0 ?
+              (moduleProgressItem.completedLessonsCount / moduleProgressItem.totalLessonsCount) * 100 : 0;
+
+            // Update the module progress array
+            const updatedModuleProgress = [...moduleProgress[courseId]];
+            updatedModuleProgress[moduleProgressIndex] = moduleProgressItem;
+
+            // Update state with new module progress
+            set({
+              moduleProgress: {
+                ...moduleProgress,
+                [courseId]: updatedModuleProgress
+              }
+            });
+          }
+        }
+
+        // Update course progress
+        if (courseProgress[courseId]) {
+          const courseProgressItem = courseProgress[courseId];
+          const isCompleted = updatedProgress.status === 'completed';
+
+          // Update completed lessons count if status changed to completed
+          if (isCompleted && currentLessonProgress.status !== 'completed') {
+            courseProgressItem.completedLessonsCount += 1;
+          } else if (!isCompleted && currentLessonProgress.status === 'completed') {
+            courseProgressItem.completedLessonsCount = Math.max(0, courseProgressItem.completedLessonsCount - 1);
+          }
+
+          // Recalculate progress percentage
+          courseProgressItem.progress = courseProgressItem.totalLessonsCount > 0 ?
+            Math.round((courseProgressItem.completedLessonsCount / courseProgressItem.totalLessonsCount) * 100) : 0;
+
+          // Update state with new course progress
+          set({
+            courseProgress: {
+              ...courseProgress,
+              [courseId]: courseProgressItem
+            }
+          });
+        }
+      }
+
     } catch (error) {
       console.error('Error updating lesson progress:', error);
       // No need to revert state as we don't have the previous state stored
