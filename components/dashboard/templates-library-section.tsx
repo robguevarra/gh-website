@@ -4,13 +4,13 @@ import Link from "next/link"
 import { Download, ChevronDown, ChevronUp, ChevronRight } from "lucide-react"
 import { motion } from "framer-motion"
 import { TemplateBrowser } from "@/components/dashboard/template-browser"
-import { GoogleDriveFile } from "@/lib/hooks/use-google-drive"
+import type { DriveItem } from '@/lib/google-drive/driveApiUtils';
 import { GoogleDriveViewer } from "@/components/dashboard/google-drive-viewer"
 
 export interface TemplatesLibrarySectionProps {
   isSectionExpanded: (section: string) => boolean
   toggleSection: (section: string) => void
-  onTemplateSelect?: (file: GoogleDriveFile) => void
+  onTemplateSelect?: (file: DriveItem) => void
   isPreviewOpen?: boolean
   setIsPreviewOpen?: (isOpen: boolean) => void
 }
@@ -31,7 +31,7 @@ export function TemplatesLibrarySection({
     },
   }
 
-  const handleTemplateSelect = (file: GoogleDriveFile) => {
+  const handleTemplateSelect = (file: DriveItem) => {
     if (onTemplateSelect) {
       onTemplateSelect(file)
     }

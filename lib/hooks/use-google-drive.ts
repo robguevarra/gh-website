@@ -2,192 +2,127 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import useSWR from 'swr';
+import type { DriveItem, BreadcrumbSegment } from '@/lib/google-drive/driveApiUtils';
 
-export interface GoogleDriveFile {
-  id: string;
-  name: string;
-  mimeType: string;
-  webViewLink?: string;
-  thumbnailLink?: string;
-  size?: string;
-  fileExtension?: string;
-  createdTime?: string;
-  modifiedTime?: string;
-  description?: string;
+export interface UseGoogleDriveDataOptions {
+  initialFolderId?: string;
 }
 
-export interface UseGoogleDriveFilesOptions {
-  category?: string;
-  searchQuery?: string;
-  limit?: number;
-  initialOffset?: number;
-}
-
-export interface UseGoogleDriveFilesResult {
-  files: GoogleDriveFile[];
-  categories: string[];
+export interface UseGoogleDriveDataResult {
+  items: DriveItem[];
+  breadcrumbs: BreadcrumbSegment[];
   isLoading: boolean;
   hasError: boolean;
-  hasMore: boolean;
-  total: number;
-  loadMore: () => void;
-  applyFilter: (category: string) => void;
-  applySearch: (query: string) => void;
-  refreshFiles: () => Promise<void>;
+  currentFolderId: string | null;
+  navigateToFolder: (folderId: string) => void;
+  refreshData: () => Promise<void>;
 }
 
 /**
- * Hook for fetching files directly from Google Drive
+ * Hook for fetching folder contents and breadcrumbs from Google Drive API endpoint.
  */
-export const useGoogleDriveFiles = ({
-  category = 'all',
-  searchQuery = '',
-  limit = 20,
-  initialOffset = 0
-}: UseGoogleDriveFilesOptions = {}): UseGoogleDriveFilesResult => {
-  const [files, setFiles] = useState<GoogleDriveFile[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+export const useGoogleDriveFiles = (options: UseGoogleDriveDataOptions = {}): UseGoogleDriveDataResult => {
+  // Determine the initial folder ID inside the function body
+  const { initialFolderId: inputFolderId } = options;
+  const defaultRootId = process.env.NEXT_PUBLIC_GOOGLE_DRIVE_ROOT_FOLDER_ID || null;
+  // Use provided ID, otherwise fallback to ENV var or null
+  const resolvedInitialFolderId = inputFolderId ?? defaultRootId;
+  console.log('[useGoogleDriveFiles] Resolved Initial Folder ID:', resolvedInitialFolderId);
+
+  const [items, setItems] = useState<DriveItem[]>([]);
+  const [breadcrumbs, setBreadcrumbs] = useState<BreadcrumbSegment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const [offset, setOffset] = useState(initialOffset);
-  const [hasMore, setHasMore] = useState(true);
-  const [total, setTotal] = useState(0);
-  const [activeCategory, setActiveCategory] = useState(category);
-  const [activeSearchQuery, setActiveSearchQuery] = useState(searchQuery);
+  // Initialize state with the resolved ID
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(resolvedInitialFolderId);
 
-  // Create a cache key that includes all variables that should trigger a refetch
-  const cacheKey = `google-drive-files:${activeCategory}:${activeSearchQuery}:${limit}:${offset}`;
+  // Create a cache key based on the current folder ID
+  const cacheKey = currentFolderId ? `/api/google-drive?folderId=${currentFolderId}` : '/api/google-drive'; // Fetch root if no ID
+  console.log('[useGoogleDriveFiles] Cache Key:', cacheKey);
 
-  // Fetcher function for SWR
-  const fetchFiles = useCallback(async () => {
-    // Don't prevent initial fetching, only prevent concurrent fetches
-    if (isLoading && files.length > 0) return { files, total, categories };
-    
+  const fetchDriveData = useCallback(async (url: string) => {
+    console.log('[useGoogleDriveFiles] fetchDriveData called with URL:', url);
+    // This early return might be problematic if isLoading isn't reset correctly
+    // Commenting out for now to ensure fetch always tries
+    // if (isLoading) {
+    //   console.log('[useGoogleDriveFiles] fetchDriveData returning early due to isLoading=true');
+    //   return { items, breadcrumbs }; // Need to ensure items/breadcrumbs are correct here if we re-enable
+    // }
+
+    setIsLoading(true);
+    setHasError(false);
+
     try {
-      setIsLoading(true);
-      setHasError(false);
-
-      // Build the API URL with query parameters
-      const queryParams = new URLSearchParams();
-      if (activeCategory && activeCategory !== 'all') {
-        queryParams.append('category', activeCategory);
-      }
-      if (activeSearchQuery) {
-        queryParams.append('search', activeSearchQuery);
-      }
-      queryParams.append('limit', limit.toString());
-      queryParams.append('offset', offset.toString());
-
-      const response = await fetch(`/api/google-drive?${queryParams.toString()}`);
+      const response = await fetch(url);
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch Google Drive files: ${response.status}`);
+        throw new Error(`Failed to fetch Google Drive data: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      
-      // Extract categories from files
-      let extractedCategories: string[] = [];
-      if (data.files && Array.isArray(data.files) && data.files.length > 0) {
-        extractedCategories = Array.from(
-          new Set(
-            data.files
-              .filter((file: GoogleDriveFile) => {
-                // Extract category from MIME type or use a default categorization
-                return true; // Include all files
-              })
-              .map((file: GoogleDriveFile) => {
-                // Map MIME types to user-friendly categories
-                const mimeType = file.mimeType || '';
-                if (mimeType.includes('spreadsheet')) return 'Spreadsheets';
-                if (mimeType.includes('document')) return 'Documents';
-                if (mimeType.includes('presentation')) return 'Presentations';
-                if (mimeType.includes('pdf')) return 'PDFs';
-                if (mimeType.includes('image')) return 'Images';
-                return 'Other';
-              })
-          )
-        ) as string[];
 
-        setCategories(extractedCategories);
+      if (!data || !Array.isArray(data.items) || !Array.isArray(data.breadcrumbs)) {
+        throw new Error('Invalid API response structure');
       }
 
-      // If this is the first page, replace files; otherwise append
-      const newFiles = offset === 0 
-        ? data.files || [] 
-        : [...files, ...(data.files || []).filter((f: GoogleDriveFile) => 
-            !files.some(ef => ef.id === f.id)
-          )];
-      
-      setFiles(newFiles);
-      setTotal(data.total || newFiles.length);
-      setHasMore((data.files || []).length === limit && (offset + (data.files || []).length) < (data.total || 0));
-      
-      return { 
-        files: newFiles, 
-        total: data.total || newFiles.length,
-        categories: extractedCategories
-      };
+      setItems(data.items);
+      setBreadcrumbs(data.breadcrumbs);
+
+      return { items: data.items, breadcrumbs: data.breadcrumbs };
     } catch (error) {
-      console.error('Error fetching Google Drive files:', error);
+      console.error('Error fetching Google Drive data:', error);
       setHasError(true);
-      return { files, total, categories }; // Return current state on error
+      return { items: [], breadcrumbs: [] };
     } finally {
       setIsLoading(false);
     }
-  }, [activeCategory, activeSearchQuery, limit, offset]); // Removed 'files' from dependencies
+  }, [isLoading]);
 
-  // Use SWR for data fetching
-  const { mutate } = useSWR(cacheKey, fetchFiles, {
-    revalidateOnFocus: false,
-    revalidateOnMount: true, // Ensure it fetches on mount
-    revalidateOnReconnect: false,
-    refreshWhenHidden: false,
-    refreshWhenOffline: false,
-    dedupingInterval: 10000, // 10 seconds - allow more frequent fetches during development
-    shouldRetryOnError: false
-  });
-
-  // Load more files
-  const loadMore = useCallback(() => {
-    if (!isLoading && hasMore) {
-      setOffset(prev => prev + limit);
+  console.log('[useGoogleDriveFiles] Calling useSWR with key:', cacheKey);
+  const { data, error, mutate } = useSWR<{ items: DriveItem[], breadcrumbs: BreadcrumbSegment[] }, Error>(
+    cacheKey, 
+    fetchDriveData, 
+    {
+      revalidateOnFocus: false,
+      revalidateOnMount: true,
+      revalidateOnReconnect: false,
+      refreshWhenHidden: false,
+      refreshWhenOffline: false,
+      dedupingInterval: 5000,
+      shouldRetryOnError: false,
+      keepPreviousData: true,
     }
-  }, [isLoading, hasMore, limit]);
+  );
 
-  // Apply category filter
-  const applyFilter = useCallback((newCategory: string) => {
-    setActiveCategory(newCategory);
-    setOffset(0); // Reset pagination
-  }, []);
-
-  // Apply search filter
-  const applySearch = useCallback((query: string) => {
-    setActiveSearchQuery(query);
-    setOffset(0); // Reset pagination
-  }, []);
-
-  // Refresh files
-  const refreshFiles = useCallback(async () => {
-    await mutate();
-  }, [mutate]);
-
-  // Initial fetch when component mounts or when key parameters change
   useEffect(() => {
-    // Force fetch on mount and when category/search changes
-    fetchFiles();
-  }, [activeCategory, activeSearchQuery]); // Fetch when these change
+    console.log('[useGoogleDriveFiles] useEffect triggered. Data:', data, 'Error:', error);
+    if (data) {
+      setItems(data.items || []);
+      setBreadcrumbs(data.breadcrumbs || []);
+    }
+  }, [data, error]);
+
+  const navigateToFolder = useCallback((folderId: string) => {
+    console.log('[useGoogleDriveFiles] Navigating to folder:', folderId);
+    if (folderId !== currentFolderId) {
+      setIsLoading(true);
+      setCurrentFolderId(folderId);
+    }
+  }, [currentFolderId]);
+
+  const refreshData = useCallback(async () => {
+    console.log('[useGoogleDriveFiles] Refreshing data for key:', cacheKey);
+    setIsLoading(true);
+    await mutate();
+  }, [cacheKey, mutate]);
 
   return {
-    files,
-    categories,
+    items,
+    breadcrumbs,
     isLoading,
     hasError,
-    hasMore,
-    total,
-    loadMore,
-    applyFilter,
-    applySearch,
-    refreshFiles
+    currentFolderId,
+    navigateToFolder,
+    refreshData
   };
 };

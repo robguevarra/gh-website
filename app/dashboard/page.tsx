@@ -26,7 +26,6 @@ import { GoogleDriveViewer } from "@/components/dashboard/google-drive-viewer"
 import { OnboardingTour } from "@/components/dashboard/onboarding-tour"
 import { WelcomeModal } from "@/components/dashboard/welcome-modal"
 import { TemplatePreviewModal } from "@/components/dashboard/template-preview-modal"
-import { GoogleDriveFile } from "@/lib/hooks/use-google-drive"
 
 // Dashboard store hooks
 import { 
@@ -42,6 +41,7 @@ import {
 
 // Import types
 import type { CourseProgress } from "@/lib/stores/student-dashboard/types"
+import type { DriveItem } from '@/lib/google-drive/driveApiUtils';
 
 // Define extended CourseProgress interface to include the properties we need
 interface ExtendedCourseProgress extends CourseProgress {
@@ -111,40 +111,37 @@ export default function StudentDashboard() {
   const [activeTemplateTab, setActiveTemplateTab] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
-  const [previewFile, setPreviewFile] = useState<GoogleDriveFile | null>(null)
+  const [previewFile, setPreviewFile] = useState<DriveItem | null>(null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
   // References for animations
   const containerRef = useRef(null)
   
-  // Load user data when authenticated
+  // Load initial data when user is available
   useEffect(() => {
+    // Redirect to sign-in if user is not authenticated
     if (!isAuthLoading && !user) {
-      // Redirect to login if not authenticated
-      router.push('/auth/signin')
-      return
+      router.push('/auth/signin');
+      return;
     }
-    
+
+    // Load data only if userId is available
     if (user?.id) {
-      // Set user ID in store
-      setUserId(user.id)
-      
-      // Load user profile if available
-      if (user.email) {
-        setUserProfile({
-          name: user.user_metadata?.full_name || 'Student',
-          email: user.email,
-          avatar: user.user_metadata?.avatar_url || `/placeholder.svg?height=40&width=40&text=${user.email.substring(0, 2).toUpperCase()}`,
-          joinedDate: new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-        })
-      }
-      
-      // Load user data
-      loadUserEnrollments(user.id)
-      loadUserProgress(user.id)
-      loadUserTemplates(user.id)
+      setUserId(user.id);
+      // Load enrollments and progress data
+      loadUserEnrollments(user.id);
+      loadUserProgress(user.id);
+      // Removed deprecated template loading call: loadUserTemplates(user.id);
     }
-  }, [user, isAuthLoading, router, setUserId, setUserProfile, loadUserEnrollments, loadUserProgress, loadUserTemplates])
+  }, [
+    user,
+    isAuthLoading,
+    router,
+    setUserId,
+    loadUserEnrollments,
+    loadUserProgress,
+    // Removed loadUserTemplates from dependency array
+  ]);
 
   // Helper Functions
   function getRandomInt(min: number, max: number) {
@@ -181,7 +178,7 @@ export default function StudentDashboard() {
   }
 
   // Handle file selection
-  const handleFileSelect = (file: GoogleDriveFile) => {
+  const handleFileSelect = (file: DriveItem) => {
     setSelectedFile(file.id)
     setPreviewFile(file)
     setIsPreviewOpen(true)

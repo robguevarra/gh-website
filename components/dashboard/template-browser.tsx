@@ -25,13 +25,15 @@ import {
   FileSpreadsheet,
   ChevronRight,
   ExternalLink,
+  Folder,
 } from 'lucide-react';
 import { useUserProfileData } from '@/lib/hooks/use-dashboard-store';
-import { useGoogleDriveFiles, GoogleDriveFile } from '@/lib/hooks/use-google-drive';
-import { type Template } from '@/lib/stores/student-dashboard/types';
+import { useGoogleDriveFiles } from '@/lib/hooks/use-google-drive';
+import type { DriveItem, BreadcrumbSegment } from '@/lib/google-drive/driveApiUtils';
 
 // File type icon mapping based on MIME type
-const getFileIcon = (mimeType: string | undefined) => {
+const getFileIcon = (mimeType: string | undefined, isFolder: boolean) => {
+  if (isFolder) return <Folder className="h-5 w-5 text-yellow-600" />;
   if (!mimeType) return <FileText className="h-5 w-5 text-gray-500" />;
   
   if (mimeType.includes('pdf')) {
@@ -50,152 +52,99 @@ const getFileIcon = (mimeType: string | undefined) => {
 };
 
 interface FileCardProps {
-  file: GoogleDriveFile;
-  onPreview: (file: GoogleDriveFile) => void;
-  onDownload: (file: GoogleDriveFile) => void;
+  file: DriveItem;
+  onNavigate?: (folderId: string) => void;
+  onPreview?: (file: DriveItem) => void;
+  onDownload?: (file: DriveItem) => void;
 }
 
-const FileCard = ({ file, onPreview, onDownload }: FileCardProps) => {
-  // Get file type from MIME type
-  const getFileType = (mimeType: string | undefined): string => {
-    if (!mimeType) return 'FILE';
-    if (mimeType.includes('pdf')) return 'PDF';
-    if (mimeType.includes('document')) return 'DOC';
-    if (mimeType.includes('spreadsheet')) return 'XLS';
-    if (mimeType.includes('presentation')) return 'PPT';
-    if (mimeType.includes('image')) return 'IMG';
-    return 'FILE';
+const FileCard = ({ file, onNavigate, onPreview, onDownload }: FileCardProps) => {
+  const isFolder = file.isFolder;
+  const Icon = getFileIcon(file.mimeType, isFolder);
+
+  const handleCardClick = () => {
+    if (isFolder && onNavigate) {
+      onNavigate(file.id);
+    }
   };
-  
+
   return (
-    <Card className="flex flex-col h-full overflow-hidden hover:shadow-md transition-shadow">
-      <CardHeader className="flex-shrink-0 pb-2">
+    <Card 
+      className={`flex flex-col h-full overflow-hidden transition-shadow ${isFolder ? 'cursor-pointer hover:shadow-lg border-yellow-600/50' : 'hover:shadow-md'}`}
+      onClick={handleCardClick}
+    >
+      <CardHeader className="flex-shrink-0 pb-2 pt-4">
         <div className="flex items-center justify-between">
-          <Badge variant="outline" className="text-xs font-normal">
-            {getFileType(file.mimeType)}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {file.size || 'Unknown'}
-          </span>
+          <div className="flex items-center gap-2">
+            {Icon}
+            <CardTitle className="text-sm font-medium line-clamp-1">{file.name || 'Untitled'}</CardTitle>
+          </div>
         </div>
-        <CardTitle className="text-base mt-2 line-clamp-1">{file.name || 'Untitled'}</CardTitle>
-        <CardDescription className="line-clamp-2 text-xs">
-          {file.description || 'No description available'}
-        </CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow p-4 pt-0">
-        <div className="relative h-32 w-full overflow-hidden rounded-md bg-muted">
-          {file.thumbnailLink ? (
-            <img 
-              src={file.thumbnailLink} 
-              alt={file.name || 'File'}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              {getFileIcon(file.mimeType)}
-            </div>
-          )}
-        </div>
-      </CardContent>
-      <CardFooter className="flex-shrink-0 grid grid-cols-2 gap-2 pt-0">
-        <Button 
-          variant="outline" 
-          size="sm" 
-          className="w-full"
-          onClick={() => onPreview(file)}
-        >
-          <Eye className="mr-1 h-4 w-4" />
-          Preview
-        </Button>
-        <Button 
-          variant="default" 
-          size="sm" 
-          className="w-full"
-          onClick={() => onDownload(file)}
-        >
-          <Download className="mr-1 h-4 w-4" />
-          Download
-        </Button>
-      </CardFooter>
+      {!isFolder && onPreview && onDownload && (
+        <CardFooter className="flex-shrink-0 grid grid-cols-2 gap-2 pt-4 mt-auto"> 
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full"
+            onClick={(e) => { e.stopPropagation(); onPreview(file); }} 
+          >
+            <Eye className="mr-1 h-4 w-4" />
+            Preview
+          </Button>
+          <Button 
+            variant="default" 
+            size="sm" 
+            className="w-full"
+            onClick={(e) => { e.stopPropagation(); onDownload(file); }} 
+          >
+            <Download className="mr-1 h-4 w-4" />
+            Download
+          </Button>
+        </CardFooter>
+      )}
     </Card>
   );
 };
 
 interface TemplateBrowserProps {
-  onTemplateSelect?: (file: GoogleDriveFile) => void;
+  onTemplateSelect?: (file: DriveItem) => void;
 }
 
 export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
-  // Use memoized state to prevent re-renders
   const { userId } = useUserProfileData();
   
-  // Local component state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeCategory, setActiveCategory] = useState('all');
-  const [selectedFile, setSelectedFile] = useState<GoogleDriveFile | null>(null);
+  const [selectedFile, setSelectedFile] = useState<DriveItem | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   
-  // Use our new Google Drive files hook
   const {
-    files,
-    categories,
+    items,
+    breadcrumbs,
     isLoading,
     hasError,
-    applyFilter,
-    applySearch,
-    refreshFiles
-  } = useGoogleDriveFiles({
-    category: activeCategory,
-    searchQuery: searchTerm,
-    limit: 12
-  });
+    currentFolderId,
+    navigateToFolder,
+    refreshData,
+  } = useGoogleDriveFiles();
   
-  const handleSearchInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-  };
-  
-  const handleSearch = () => {
-    applySearch(searchTerm);
-  };
-  
-  const handleCategoryChange = (category: string) => {
-    setActiveCategory(category);
-    applyFilter(category);
-  };
-  
-  const handlePreview = (file: GoogleDriveFile) => {
+  const handlePreview = (file: DriveItem) => {
     setSelectedFile(file);
     
-    // If external file select handler is provided, use it
     if (onTemplateSelect) {
       onTemplateSelect(file);
     } else {
-      // Otherwise use internal preview modal
       setShowPreviewModal(true);
     }
   };
   
-  const handleDownload = (file: GoogleDriveFile) => {
-    // For Google Drive files, we need to open the direct download link
-    if (file.id.startsWith('mock-')) {
-      console.log('Mock download triggered for:', file.name);
-      return;
-    }
-    
+  const handleDownload = (file: DriveItem) => {
     window.open(`https://drive.google.com/uc?export=download&id=${file.id}`, '_blank');
   };
   
-  const handleOpenInDrive = (file: GoogleDriveFile) => {
-    if (file.id.startsWith('mock-')) {
-      console.log('Mock open in Drive triggered for:', file.name);
-      return;
-    }
-    
+  const handleOpenInDrive = (file: DriveItem) => {
     window.open(`https://drive.google.com/file/d/${file.id}/view`, '_blank');
   };
   
-  // Render loading skeletons
   if (isLoading) {
     return (
       <div>
@@ -219,7 +168,6 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
     );
   }
   
-  // Render error state
   if (hasError) {
     return (
       <div className="text-center py-8">
@@ -227,7 +175,7 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
         <p className="text-sm text-muted-foreground mb-4">
           This could be due to missing Google Drive configuration or API access.
         </p>
-        <Button variant="outline" onClick={refreshFiles}>
+        <Button variant="outline" onClick={refreshData}>
           Try Again
         </Button>
       </div>
@@ -236,76 +184,59 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
   
   return (
     <div>
-      {/* Search and filter bar */}
-      <div className="flex items-center mb-4">
-        <div className="relative flex-1">
-          <Input
-            placeholder="Search templates..."
-            value={searchTerm}
-            onChange={handleSearchInput}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="pr-10"
-          />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-0 top-0"
-            onClick={handleSearch}
-          >
-            <Search className="h-4 w-4" />
-          </Button>
-        </div>
-        <Button variant="outline" size="icon" className="ml-2">
-          <Filter className="h-4 w-4" />
-        </Button>
+      <div className="flex items-center space-x-1 text-sm text-muted-foreground mb-4 overflow-x-auto whitespace-nowrap py-1">
+        {breadcrumbs.map((crumb, index) => (
+          <span key={crumb.id} className="flex items-center">
+            {index > 0 && <ChevronRight className="h-4 w-4 mx-1" />}
+            {index === breadcrumbs.length - 1 ? (
+              <span className="font-medium text-foreground">{crumb.name}</span>
+            ) : (
+              <button 
+                onClick={() => navigateToFolder(crumb.id)} 
+                className="hover:underline hover:text-foreground"
+              >
+                {crumb.name}
+              </button>
+            )}
+          </span>
+        ))}
       </div>
 
-      {/* Category tabs */}
-      <Tabs
-        value={activeCategory}
-        onValueChange={handleCategoryChange}
-        className="mb-6"
-      >
-        <TabsList className="flex overflow-x-auto py-1 w-full">
-          <TabsTrigger value="all">All</TabsTrigger>
-          {categories.map((category) => (
-            <TabsTrigger key={category} value={category}>
-              {category}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
-      {/* File grid */}
-      {files.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {files.map((file) => (
-            <FileCard
-              key={file.id}
-              file={file}
-              onPreview={handlePreview}
-              onDownload={handleDownload}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <div className="flex justify-center mb-4">
-            <FileText className="h-12 w-12 text-muted-foreground opacity-50" />
-          </div>
-          <h3 className="text-lg font-medium mb-2">No templates found</h3>
-          <p className="text-sm text-muted-foreground">
-            {searchTerm 
-              ? `No templates matching "${searchTerm}"`
-              : activeCategory !== 'all'
-                ? `No templates in the ${activeCategory} category`
-                : 'No templates available yet'}
+      {hasError && (
+        <div className="text-center py-8">
+          <div className="text-red-500 mb-2">Failed to load templates</div>
+          <p className="text-sm text-muted-foreground mb-4">
+            This could be due to missing Google Drive configuration or API access.
           </p>
+          <Button variant="outline" onClick={refreshData}>
+            Try Again
+          </Button>
         </div>
       )}
       
-      {/* Preview Modal would be implemented here */}
-      {/* We'll create this as a separate component later */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"> 
+        {items.map((item) => ( 
+          <FileCard 
+            key={item.id} 
+            file={item} 
+            onNavigate={navigateToFolder} 
+            onPreview={handlePreview} 
+            onDownload={handleDownload} 
+          />
+        ))}
+      </div>
+      
+      {/* Internal Preview Modal (if needed) */}
+      {/* Simplified for now - external modal handled by parent */}
+      {/* {showPreviewModal && selectedFile && (
+        <TemplatePreviewModal
+          isOpen={showPreviewModal}
+          onClose={() => setShowPreviewModal(false)}
+          file={selectedFile}
+          onDownload={handleDownload}
+          onOpenInDrive={handleOpenInDrive}
+        />
+      )} */}
     </div>
   );
 }
