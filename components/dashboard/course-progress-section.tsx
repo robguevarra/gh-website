@@ -25,6 +25,7 @@ export interface CourseLesson {
   id: number
   title: string
   module: string
+  moduleId?: string
   duration: string
   thumbnail: string
   progress: number
@@ -46,6 +47,7 @@ export interface LiveClass {
 export interface CourseProgressProps {
   courseProgress: {
     title: string
+    courseId?: string
     progress: number
     completedLessons: number
     totalLessons: number
@@ -140,7 +142,7 @@ export function CourseProgressSection({
                     <span className="ml-1">
                       {calculateTimeRemaining({
                         currentProgress: courseProgress.progress,
-                        totalDurationMinutes: 600 // Default to 10 hours (600 minutes) total course time
+                        totalDurationMinutes: courseProgress.totalLessons * 15 // Estimate based on lesson count (15 min per lesson)
                       })} mins remaining
                     </span>
                   </span>
@@ -158,7 +160,9 @@ export function CourseProgressSection({
                 <div className="bg-gradient-to-r from-brand-purple/5 to-brand-pink/5 rounded-xl p-5 border border-brand-purple/10">
                   <div className="flex items-center gap-2 mb-1">
                     <Sparkles className="h-4 w-4 text-brand-purple" />
-                    <h3 className="text-sm font-medium text-brand-purple">Pick up where you left off</h3>
+                    <h3 className="text-sm font-medium text-brand-purple">
+                      {safeRecentLessons[0]?.progress > 0 ? "Pick up where you left off" : "Start your learning journey"}
+                    </h3>
                   </div>
 
                   <div className="flex gap-4 mt-3">
@@ -199,10 +203,12 @@ export function CourseProgressSection({
                   </div>
 
                   <div className="mt-4">
-                    <Button className="w-full bg-brand-purple hover:bg-brand-purple/90">
-                      Continue Lesson
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
+                    <Link href={`/dashboard/course?courseId=${courseProgress.courseId || ''}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`}>
+                      <Button className="w-full bg-brand-purple hover:bg-brand-purple/90">
+                        {safeRecentLessons[0]?.progress > 0 ? "Continue Lesson" : "Start Learning"}
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               )}

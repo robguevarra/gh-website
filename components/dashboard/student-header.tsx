@@ -1,10 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, memo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { signOut } from "@/lib/supabase/auth"
 import {
   Bell,
   ChevronDown,
@@ -37,38 +36,47 @@ import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 
-// Import our store hooks
-import { useUserProfileData, useCourseProgressData } from "@/lib/hooks/use-dashboard-store"
+// Import our store
 import { useStudentDashboardStore } from '@/lib/stores/student-dashboard';
 import { useAuth } from '@/context/auth-context';
+
+// Import types for proper type safety
+import type { StudentDashboardStore } from '@/lib/stores/student-dashboard';
+
+// Define stable selectors outside the component with proper typing
+const selectCourseProgress = (state: StudentDashboardStore) => state.courseProgress;
+const selectIsLoadingProgress = (state: StudentDashboardStore) => state.isLoadingProgress;
+const selectContinueLearningLesson = (state: StudentDashboardStore) => state.continueLearningLesson;
 
 // We'll get data from the store directly instead of props
 interface StudentHeaderProps {}
 
-export function StudentHeader({}: StudentHeaderProps) {
+export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps) {
   const router = useRouter()
   
   // Use the auth context to get the authenticated user and logout function
   const { user, profile, logout, isLoading: isLoadingAuth } = useAuth()
   
-  // Get course progress data from our store
-  const { 
-    courseProgress, 
-    isLoadingProgress,
-    continueLearningLesson
-  } = useCourseProgressData()
+  // Use stable selectors to prevent unnecessary re-renders
+  const courseProgress = useStudentDashboardStore(selectCourseProgress)
+  const isLoadingProgress = useStudentDashboardStore(selectIsLoadingProgress)
+  const continueLearningLesson = useStudentDashboardStore(selectContinueLearningLesson)
   
-  // Get the initialize function from the store using a direct selector
-  // This approach prevents unnecessary re-renders
-  const loadUserDashboardData = useStudentDashboardStore(state => state.loadUserDashboardData)
+  // Initialize dashboard data when user is authenticated
+  // Using getState pattern to avoid selector-based infinite loops
+  const loadUserData = useCallback((userId: string) => {
+    if (userId) {
+      useStudentDashboardStore.getState().loadUserDashboardData(userId)
+    }
+  }, [])
   
   // Initialize dashboard data when user is authenticated
   useEffect(() => {
     if (user?.id) {
       console.log('Loading dashboard data for user:', user.id)
-      loadUserDashboardData(user.id)
+      loadUserData(user.id)
     }
-  }, [user?.id, loadUserDashboardData])
+  }, [user?.id, loadUserData])
   
   // Redirect to login if no user
   useEffect(() => {
@@ -365,17 +373,17 @@ export function StudentHeader({}: StudentHeaderProps) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <div className="flex items-center gap-2 cursor-pointer">
+              <Button variant="ghost" className="p-0 h-auto bg-transparent hover:bg-transparent flex items-center gap-2">
                 {isLoadingAuth ? (
-                  <div className="flex items-center gap-2">
+                  <>
                     <Skeleton className="h-8 w-8 rounded-full" />
                     <div className="hidden md:block">
                       <Skeleton className="h-4 w-20 mb-1" />
                       <Skeleton className="h-3 w-24" />
                     </div>
-                  </div>
+                  </>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <>
                     <Avatar>
                       <AvatarImage src={profile?.avatar_url || ''} alt={profile?.full_name || user?.email || ''} />
                       <AvatarFallback>{profile?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}</AvatarFallback>
@@ -388,10 +396,10 @@ export function StudentHeader({}: StudentHeaderProps) {
                         {user?.email || 'user@example.com'}
                       </div>
                     </div>
-                  </div>
+                  </>
                 )}
                 <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              </div>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
@@ -424,4 +432,4 @@ export function StudentHeader({}: StudentHeaderProps) {
       </div>
     </header>
   )
-}
+})

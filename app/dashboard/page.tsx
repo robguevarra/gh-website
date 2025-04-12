@@ -210,7 +210,7 @@ export default function StudentDashboard() {
     },
   ]
 
-  // Format the course progress data for the component using real data from the store
+  // Get the course ID from the first enrollment
   const courseId = enrollments?.[0]?.course?.id || '';
   
   // Get the course progress from the store
@@ -229,6 +229,7 @@ export default function StudentDashboard() {
   // This avoids TypeScript errors by not directly accessing properties that might not exist
   const formattedCourseProgress = {
     title: enrollments?.[0]?.course?.title || "Papers to Profits",
+    courseId: courseId, // Add courseId for linking to the course viewer
     progress: currentCourseProgress ? currentCourseProgress.progress : 0,
     completedLessons: currentCourseProgress ? currentCourseProgress.completedLessonsCount : 0,
     totalLessons: currentCourseProgress ? currentCourseProgress.totalLessonsCount : 0,
@@ -241,11 +242,10 @@ export default function StudentDashboard() {
     },
   }
   
-  // Helper function to calculate time spent
+  // Helper function to calculate time spent based on completed lessons
   function calculateTimeSpent(progress: ExtendedCourseProgress | null): string {
     if (!progress) return "0h 0m";
-    // In a real implementation, this would calculate based on actual time tracking data
-    // For now, we'll estimate based on completed lessons (15 min per lesson)
+    // Calculate based on completed lessons (15 min per lesson)
     const minutes = (progress.completedLessonsCount || 0) * 15;
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
@@ -273,82 +273,74 @@ export default function StudentDashboard() {
   // Get the continue learning lesson from the store
   const { continueLearningLesson } = useCourseProgressData();
   
+  // Get the first course and its modules/lessons for new users with no progress
+  const firstCourse = enrollments?.[0]?.course;
+  
+  // Define extended course type with modules and lessons (as we know they exist from the API response)
+  type ExtendedCourse = typeof firstCourse & {
+    modules?: Array<{
+      id: string;
+      title: string;
+      order: number;
+      lessons?: Array<{
+        id: string;
+        title: string;
+        order: number;
+        duration?: string;
+      }>;
+    }>;
+  };
+  
+  // Use type assertion to access modules and lessons
+  const courseWithModules = firstCourse as ExtendedCourse;
+  
+  // Define module type to handle both cases
+  type ModuleType = {
+    id?: string;
+    title: string;
+    order?: number;
+    lessons?: Array<{
+      id: string;
+      title: string;
+      order?: number;
+      duration?: string;
+    }>;
+  };
+  
+  // Get first module with proper typing
+  const firstModule: ModuleType = courseWithModules?.modules?.[0] || { title: "Getting Started" };
+  
+  // Get first lesson with fallback
+  const firstLesson = firstModule?.lessons?.[0] || { 
+    id: "1", 
+    title: "Introduction to Course",
+    duration: "15 min"
+  };
+  
   // Format the continue learning lesson data for the component
   const recentLessons = continueLearningLesson ? [
     {
       id: parseInt(continueLearningLesson.lessonId) || 1,
       title: continueLearningLesson.lessonTitle,
       module: continueLearningLesson.moduleTitle,
+      moduleId: continueLearningLesson.moduleId, // Add moduleId for linking to the course viewer
       duration: "15 min", // This should come from the actual lesson data in a real implementation
       thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson",
       progress: continueLearningLesson.progress,
       current: true,
     }
   ] : [
-    // Fallback if no continue learning lesson is available
+    // Fallback if no continue learning lesson is available - use the first lesson
     {
-      id: 1,
-      title: "Introduction to Course",
-      module: "Getting Started",
-      duration: "15 min",
+      id: parseInt(firstLesson.id) || 1,
+      title: firstLesson.title || "Introduction to Course",
+      module: firstModule.title || "Getting Started",
+      moduleId: firstModule.id, // Add moduleId for linking to the course viewer
+      duration: firstLesson.duration || "15 min",
       thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson+1",
       progress: 0,
       current: true,
     }
-  ]
-
-  // Mock data for free templates
-  const freeTemplates = [
-    {
-      id: "template1",
-      name: "Digital Planner Template",
-      type: "pdf",
-      category: "planners",
-      size: "2.4 MB",
-      thumbnail: "/placeholder.svg?height=80&width=120&text=Planner",
-      downloads: 1245,
-      googleDriveId: "1abc123",
-    },
-    {
-      id: "template2",
-      name: "Journal Cover Design",
-      type: "pdf",
-      category: "journals",
-      size: "1.8 MB",
-      thumbnail: "/placeholder.svg?height=80&width=120&text=Journal",
-      downloads: 987,
-      googleDriveId: "2def456",
-    },
-    {
-      id: "template3",
-      name: "Weekly Schedule Template",
-      type: "pdf",
-      category: "planners",
-      size: "1.2 MB",
-      thumbnail: "/placeholder.svg?height=80&width=120&text=Schedule",
-      downloads: 756,
-      googleDriveId: "3ghi789",
-    },
-    {
-      id: "template4",
-      name: "Binding Guide",
-      type: "pdf",
-      category: "guides",
-      size: "3.5 MB",
-      thumbnail: "/placeholder.svg?height=80&width=120&text=Guide",
-      downloads: 532,
-      googleDriveId: "4jkl012",
-    },
-    {
-      id: "template5",
-      name: "Digital Stickers Pack",
-      type: "zip",
-      category: "stickers",
-      size: "8.2 MB",
-      thumbnail: "/placeholder.svg?height=80&width=120&text=Stickers",
-      downloads: 1879,
-      googleDriveId: "5mno345",
-    },
   ]
 
   // Mock data for recent purchases
@@ -496,7 +488,6 @@ export default function StudentDashboard() {
               </motion.div>
             )}
           </AnimatePresence>
-
           {/* Quick Stats */}
           <motion.div
             className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
