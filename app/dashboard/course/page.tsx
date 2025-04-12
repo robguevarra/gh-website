@@ -32,7 +32,8 @@ import {
   Download, 
   FileText, 
   MessageSquare, 
-  Paperclip
+  Paperclip,
+  Play
 } from "lucide-react"
 
 // Define types for our course data structure
@@ -50,6 +51,7 @@ type CourseLesson = {
   duration?: string
   videoUrl?: string
   description?: string
+  content_json?: any
   resources?: CourseResource[]
   moduleId?: string
 }
@@ -281,9 +283,9 @@ export default function CourseViewer() {
   }, [user?.id, courseViewerState.currentLesson, updateLessonProgress])
   
   // Handle navigation to another lesson
-  const navigateToLesson = useCallback((lessonId: string, moduleId?: string) => {
+  const navigateToLesson = useCallback((lesson: any, moduleId: string) => {
     // Construct the URL with the necessary parameters
-    const url = `/dashboard/course?courseId=${courseId}&lessonId=${lessonId}${moduleId ? `&moduleId=${moduleId}` : ''}`
+    const url = `/dashboard/course?courseId=${courseId}&lessonId=${lesson.id}&moduleId=${moduleId}`
     router.push(url)
   }, [courseId, router])
   
@@ -291,30 +293,47 @@ export default function CourseViewer() {
   const handleNextLesson = useCallback(() => {
     if (!courseViewerState.nextLesson) return
     
+    // If current lesson is not complete, mark it as complete
+    if (user?.id && courseViewerState.currentLesson?.id) {
+      const currentProgress = lessonProgress[courseViewerState.currentLesson.id]?.progress || 0
+      if (currentProgress < 100) {
+        updateLessonProgress(user.id, courseViewerState.currentLesson.id, {
+          status: "completed",
+          progress: 100,
+          lastPosition: 0
+        })
+      }
+    }
+    
+    // Navigate to next lesson
     navigateToLesson(
-      courseViewerState.nextLesson.id, 
-      courseViewerState.nextLesson.moduleId || courseViewerState.currentModule?.id
+      courseViewerState.nextLesson, 
+      courseViewerState.nextLesson.moduleId || courseViewerState.currentModule?.id || ''
     )
-  }, [courseViewerState, navigateToLesson])
+  }, [courseViewerState, navigateToLesson, user?.id, lessonProgress, updateLessonProgress])
   
   // Handle previous lesson click
   const handlePrevLesson = useCallback(() => {
     if (!courseViewerState.prevLesson) return
     
     navigateToLesson(
-      courseViewerState.prevLesson.id, 
-      courseViewerState.prevLesson.moduleId || courseViewerState.currentModule?.id
+      courseViewerState.prevLesson, 
+      courseViewerState.prevLesson.moduleId || courseViewerState.currentModule?.id || ''
     )
   }, [courseViewerState, navigateToLesson])
   
   // Mark lesson as complete
   const markLessonComplete = useCallback(() => {
     if (user?.id && courseViewerState.currentLesson?.id) {
+      // Update the lesson progress in the store
       updateLessonProgress(user.id, courseViewerState.currentLesson.id, {
         status: "completed",
         progress: 100,
         lastPosition: 0
       })
+      
+      // Show success message
+      alert('Lesson marked as complete!')
     }
   }, [courseViewerState.currentLesson, user?.id, updateLessonProgress])
   
@@ -449,12 +468,21 @@ export default function CourseViewer() {
               {/* Video player */}
               <div className="aspect-video bg-black relative">
                 {/* Custom LessonPlayer implementation for this page */}
-                <iframe 
-                  src={courseViewerState.currentLesson.videoUrl || "https://www.youtube.com/embed/jNQXAC9IVRw"}
-                  className="absolute inset-0 w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+                {courseViewerState.currentLesson.videoUrl ? (
+                  <iframe 
+                    src={courseViewerState.currentLesson.videoUrl}
+                    className="absolute inset-0 w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full bg-gray-800 text-white">
+                    <div className="text-center p-6">
+                      <Play className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                      <p>No video available for this lesson</p>
+                    </div>
+                  </div>
+                )}
               </div>
               
               {/* Lesson info */}
@@ -508,27 +536,21 @@ export default function CourseViewer() {
               <div className="p-4">
                 <h2 className="text-xl font-semibold mb-4">Lesson Content</h2>
                 
-                {courseViewerState.currentLesson.description ? (
-                  <div className="prose max-w-none">
-                    <p>{courseViewerState.currentLesson.description}</p>
-                    
-                    <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
-                      <h3 className="text-lg font-medium mb-2">Key Takeaways</h3>
-                      <ul className="list-disc pl-5 space-y-2">
-                        <li>Understanding the core concepts presented in this lesson</li>
-                        <li>Applying the techniques to real-world scenarios</li>
-                        <li>Building on previous knowledge from earlier modules</li>
-                        <li>Preparing for the next lessons in this course</li>
-                      </ul>
+                <div className="prose max-w-none">
+                  {courseViewerState.currentLesson.content_json?.content ? (
+                    <div className="lesson-content" dangerouslySetInnerHTML={{ __html: courseViewerState.currentLesson.content_json.content as string }} />
+                  ) : courseViewerState.currentLesson.description ? (
+                    <div>
+                      <p className="text-base">{courseViewerState.currentLesson.description}</p>
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <FileText className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-                    <h3 className="text-lg font-medium mb-1">No Content Available</h3>
-                    <p className="text-muted-foreground">This lesson doesn't have any additional content.</p>
-                  </div>
-                )}
+                  ) : (
+                    <div className="py-4 text-center">
+                      <FileText className="h-12 w-12 mx-auto text-gray-300 mb-3" />
+                      <h3 className="text-lg font-medium mb-1">No Content Available</h3>
+                      <p className="text-muted-foreground">This lesson doesn't have any additional content.</p>
+                    </div>
+                  )}
+                </div>
                 
                 {courseViewerState.currentLesson.resources && courseViewerState.currentLesson.resources.length > 0 && (
                   <div className="mt-8">
