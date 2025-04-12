@@ -324,53 +324,13 @@ export const createActions = (
   
   /**
    * Load user templates
+   * @deprecated Now using direct Google Drive integration instead
    */
-  loadUserTemplates: async (userId: string) => {
-    if (!userId) return;
-    
-    set({ isLoadingTemplates: true, hasTemplatesError: false });
-    
-    try {
-      // Use browser client for client-side data fetching
-      const supabase = getBrowserClient();
-      
-      // Get templates the user has access to based on enrollments
-      const { data: enrollments, error: enrollmentsError } = await supabase
-        .from('user_enrollments')
-        .select('course_id')
-        .eq('user_id', userId)
-        .eq('status', 'active');
-      
-      if (enrollmentsError) throw enrollmentsError;
-      
-      // Get course IDs from enrollments
-      const courseIds = enrollments?.map(e => e.course_id) || [];
-      
-      if (courseIds.length === 0) {
-        set({ templates: [], isLoadingTemplates: false });
-        return;
-      }
-      
-      // Get templates for these courses
-      const { data: templates, error: templatesError } = await supabase
-        .from('templates')
-        .select('*')
-        .in('course_id', courseIds);
-      
-      if (templatesError) throw templatesError;
-      
-      // Set templates
-      set({ 
-        templates: templates || [],
-        isLoadingTemplates: false 
-      });
-    } catch (error) {
-      console.error('Error loading templates:', error);
-      set({ 
-        hasTemplatesError: true,
-        isLoadingTemplates: false 
-      });
-    }
+  loadUserTemplates: async () => {
+    // This function is kept for backward compatibility but no longer used
+    // Templates are now loaded directly from Google Drive via useGoogleDriveFiles hook
+    set({ isLoadingTemplates: false, hasTemplatesError: false, templates: [] });
+    return;
   },
   
   /**

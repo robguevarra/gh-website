@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useTemplates } from '@/lib/hooks/use-templates';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -25,64 +24,76 @@ import {
   Table,
   FileSpreadsheet,
   ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
-import { useTemplatesData, useUserProfileData } from '@/lib/hooks/use-dashboard-store';
+import { useUserProfileData } from '@/lib/hooks/use-dashboard-store';
+import { useGoogleDriveFiles, GoogleDriveFile } from '@/lib/hooks/use-google-drive';
 import { type Template } from '@/lib/stores/student-dashboard/types';
 
-// File type icon mapping
-const getFileIcon = (type: string) => {
-  switch (type.toLowerCase()) {
-    case 'doc':
-    case 'docx':
-      return <FileText className="h-5 w-5 text-blue-500" />;
-    case 'png':
-    case 'jpg':
-    case 'jpeg':
-      return <Image className="h-5 w-5 text-green-500" />;
-    case 'xls':
-    case 'xlsx':
-      return <FileSpreadsheet className="h-5 w-5 text-green-600" />;
-    case 'csv':
-      return <Table className="h-5 w-5 text-purple-500" />;
-    default:
-      return <FileText className="h-5 w-5 text-gray-500" />;
+// File type icon mapping based on MIME type
+const getFileIcon = (mimeType: string | undefined) => {
+  if (!mimeType) return <FileText className="h-5 w-5 text-gray-500" />;
+  
+  if (mimeType.includes('pdf')) {
+    return <FileText className="h-5 w-5 text-red-500" />;
+  } else if (mimeType.includes('document')) {
+    return <FileText className="h-5 w-5 text-blue-500" />;
+  } else if (mimeType.includes('spreadsheet')) {
+    return <FileSpreadsheet className="h-5 w-5 text-green-600" />;
+  } else if (mimeType.includes('presentation')) {
+    return <Table className="h-5 w-5 text-orange-500" />;
+  } else if (mimeType.includes('image')) {
+    return <Image className="h-5 w-5 text-green-500" />;
+  } else {
+    return <FileText className="h-5 w-5 text-gray-500" />;
   }
 };
 
-interface TemplateCardProps {
-  template: Template;
-  onPreview: (template: Template) => void;
-  onDownload: (template: Template) => void;
+interface FileCardProps {
+  file: GoogleDriveFile;
+  onPreview: (file: GoogleDriveFile) => void;
+  onDownload: (file: GoogleDriveFile) => void;
 }
 
-const TemplateCard = ({ template, onPreview, onDownload }: TemplateCardProps) => {
+const FileCard = ({ file, onPreview, onDownload }: FileCardProps) => {
+  // Get file type from MIME type
+  const getFileType = (mimeType: string | undefined): string => {
+    if (!mimeType) return 'FILE';
+    if (mimeType.includes('pdf')) return 'PDF';
+    if (mimeType.includes('document')) return 'DOC';
+    if (mimeType.includes('spreadsheet')) return 'XLS';
+    if (mimeType.includes('presentation')) return 'PPT';
+    if (mimeType.includes('image')) return 'IMG';
+    return 'FILE';
+  };
+  
   return (
     <Card className="flex flex-col h-full overflow-hidden hover:shadow-md transition-shadow">
       <CardHeader className="flex-shrink-0 pb-2">
         <div className="flex items-center justify-between">
           <Badge variant="outline" className="text-xs font-normal">
-            {template.type.toUpperCase()}
+            {getFileType(file.mimeType)}
           </Badge>
           <span className="text-xs text-muted-foreground">
-            {template.size}
+            {file.size || 'Unknown'}
           </span>
         </div>
-        <CardTitle className="text-base mt-2 line-clamp-1">{template.name}</CardTitle>
+        <CardTitle className="text-base mt-2 line-clamp-1">{file.name || 'Untitled'}</CardTitle>
         <CardDescription className="line-clamp-2 text-xs">
-          {template.description || 'No description available'}
+          {file.description || 'No description available'}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-grow p-4 pt-0">
         <div className="relative h-32 w-full overflow-hidden rounded-md bg-muted">
-          {template.thumbnail ? (
+          {file.thumbnailLink ? (
             <img 
-              src={template.thumbnail} 
-              alt={template.name}
+              src={file.thumbnailLink} 
+              alt={file.name || 'File'}
               className="h-full w-full object-cover"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center">
-              {getFileIcon(template.type)}
+              {getFileIcon(file.mimeType)}
             </div>
           )}
         </div>
@@ -92,16 +103,16 @@ const TemplateCard = ({ template, onPreview, onDownload }: TemplateCardProps) =>
           variant="outline" 
           size="sm" 
           className="w-full"
-          onClick={() => onPreview(template)}
+          onClick={() => onPreview(file)}
         >
           <Eye className="mr-1 h-4 w-4" />
           Preview
         </Button>
         <Button 
           variant="default" 
-          size="sm"
+          size="sm" 
           className="w-full"
-          onClick={() => onDownload(template)}
+          onClick={() => onDownload(file)}
         >
           <Download className="mr-1 h-4 w-4" />
           Download
@@ -112,57 +123,33 @@ const TemplateCard = ({ template, onPreview, onDownload }: TemplateCardProps) =>
 };
 
 interface TemplateBrowserProps {
-  onTemplateSelect?: (template: Template) => void;
+  onTemplateSelect?: (file: GoogleDriveFile) => void;
 }
 
 export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
   // Use memoized state to prevent re-renders
   const { userId } = useUserProfileData();
   
-  // Use memoized templates data with default fallbacks
-  const templatesData = useTemplatesData();
-  const storeTemplates = templatesData.templates || [];
-  const templateFilter = templatesData.templateFilter || '';
-  const templateSearchQuery = templatesData.templateSearchQuery || '';
-  const getFilteredTemplates = templatesData.getFilteredTemplates;
-  const setTemplates = templatesData.setTemplates;
-  const setTemplateFilter = templatesData.setTemplateFilter;
-  const setTemplateSearchQuery = templatesData.setTemplateSearchQuery;
-  
   // Local component state
-  const [categories, setCategories] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [selectedFile, setSelectedFile] = useState<GoogleDriveFile | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   
+  // Use our new Google Drive files hook
   const {
-    templates,
+    files,
+    categories,
     isLoading,
     hasError,
-    filter,
-    searchQuery,
     applyFilter,
     applySearch,
-    fetchCategories,
-    loadMore,
-    hasMore,
-    refresh,
-  } = useTemplates({
+    refreshFiles
+  } = useGoogleDriveFiles({
     category: activeCategory,
     searchQuery: searchTerm,
-    limit: 12,
+    limit: 12
   });
-  
-  useEffect(() => {
-    if (userId) {
-      // Fetch template categories
-      fetchCategories().then(setCategories);
-      
-      // Apply initial filter
-      applyFilter(activeCategory);
-    }
-  }, [userId, fetchCategories, applyFilter, activeCategory]);
   
   const handleSearchInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -177,56 +164,55 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
     applyFilter(category);
   };
   
-  const handlePreview = (template: Template) => {
-    setSelectedTemplate(template);
+  const handlePreview = (file: GoogleDriveFile) => {
+    setSelectedFile(file);
     
-    // If external template select handler is provided, use it
+    // If external file select handler is provided, use it
     if (onTemplateSelect) {
-      onTemplateSelect(template);
+      onTemplateSelect(file);
     } else {
       // Otherwise use internal preview modal
       setShowPreviewModal(true);
     }
   };
   
-  const handleDownload = async (template: Template) => {
+  const handleDownload = (file: GoogleDriveFile) => {
     // For Google Drive files, we need to open the direct download link
-    window.open(`https://drive.google.com/uc?export=download&id=${template.googleDriveId}`, '_blank');
+    if (file.id.startsWith('mock-')) {
+      console.log('Mock download triggered for:', file.name);
+      return;
+    }
     
-    // Increment download count
-    const { useTemplate } = await import('@/lib/hooks/use-templates');
-    const { incrementDownloads } = useTemplate(template.id);
-    incrementDownloads();
+    window.open(`https://drive.google.com/uc?export=download&id=${file.id}`, '_blank');
+  };
+  
+  const handleOpenInDrive = (file: GoogleDriveFile) => {
+    if (file.id.startsWith('mock-')) {
+      console.log('Mock open in Drive triggered for:', file.name);
+      return;
+    }
+    
+    window.open(`https://drive.google.com/file/d/${file.id}/view`, '_blank');
   };
   
   // Render loading skeletons
-  if (isLoading && templates.length === 0) {
+  if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold">Templates</h2>
-          <div className="flex space-x-2">
-            <Skeleton className="h-9 w-[250px]" />
-            <Skeleton className="h-9 w-10" />
+      <div>
+        <div className="flex items-center mb-4">
+          <div className="relative flex-1">
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div className="ml-2">
+            <Skeleton className="h-10 w-10" />
           </div>
         </div>
-        <Skeleton className="h-10 w-full" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Card key={i} className="overflow-hidden">
-              <CardHeader className="pb-2">
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="h-5 w-full" />
-                <Skeleton className="h-4 w-[80%]" />
-              </CardHeader>
-              <CardContent className="p-4 pt-0">
-                <Skeleton className="h-32 w-full" />
-              </CardContent>
-              <CardFooter className="grid grid-cols-2 gap-2 pt-0">
-                <Skeleton className="h-9 w-full" />
-                <Skeleton className="h-9 w-full" />
-              </CardFooter>
-            </Card>
+        <div className="mb-4">
+          <Skeleton className="h-10 w-full" />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-64" />
           ))}
         </div>
       </div>
@@ -236,15 +222,12 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
   // Render error state
   if (hasError) {
     return (
-      <div className="flex flex-col items-center justify-center py-12">
-        <div className="text-destructive mb-4">
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
-        <h3 className="text-xl font-semibold mb-2">Unable to load templates</h3>
-        <p className="text-muted-foreground mb-4">There was an error loading your templates. Please try again later.</p>
-        <Button onClick={() => refresh()}>
+      <div className="text-center py-8">
+        <div className="text-red-500 mb-2">Failed to load templates</div>
+        <p className="text-sm text-muted-foreground mb-4">
+          This could be due to missing Google Drive configuration or API access.
+        </p>
+        <Button variant="outline" onClick={refreshFiles}>
           Try Again
         </Button>
       </div>
@@ -252,36 +235,37 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
   }
   
   return (
-    <div className="space-y-6">
-      {/* Header and search */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-2xl font-semibold">Templates</h2>
-        <div className="flex w-full md:w-auto gap-2">
-          <div className="relative flex flex-1 md:w-80">
-            <Input
-              placeholder="Search templates..."
-              value={searchTerm}
-              onChange={handleSearchInput}
-              className="pr-10"
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 top-0"
-              onClick={handleSearch}
-            >
-              <Search className="h-4 w-4" />
-            </Button>
-          </div>
-          <Button variant="outline" size="icon">
-            <Filter className="h-4 w-4" />
+    <div>
+      {/* Search and filter bar */}
+      <div className="flex items-center mb-4">
+        <div className="relative flex-1">
+          <Input
+            placeholder="Search templates..."
+            value={searchTerm}
+            onChange={handleSearchInput}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            className="pr-10"
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-0 top-0"
+            onClick={handleSearch}
+          >
+            <Search className="h-4 w-4" />
           </Button>
         </div>
+        <Button variant="outline" size="icon" className="ml-2">
+          <Filter className="h-4 w-4" />
+        </Button>
       </div>
-      
-      {/* Categories */}
-      <Tabs defaultValue={activeCategory} onValueChange={handleCategoryChange}>
+
+      {/* Category tabs */}
+      <Tabs
+        value={activeCategory}
+        onValueChange={handleCategoryChange}
+        className="mb-6"
+      >
         <TabsList className="flex overflow-x-auto py-1 w-full">
           <TabsTrigger value="all">All</TabsTrigger>
           {categories.map((category) => (
@@ -291,50 +275,32 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
           ))}
         </TabsList>
       </Tabs>
-      
-      {/* Template grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {templates.length > 0 ? (
-          templates.map((template) => (
-            <TemplateCard
-              key={template.id}
-              template={template}
+
+      {/* File grid */}
+      {files.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {files.map((file) => (
+            <FileCard
+              key={file.id}
+              file={file}
               onPreview={handlePreview}
               onDownload={handleDownload}
             />
-          ))
-        ) : (
-          <div className="col-span-full flex flex-col items-center justify-center py-12">
-            <div className="text-muted-foreground mb-4">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold mb-2">No templates found</h3>
-            <p className="text-muted-foreground">
-              {searchTerm 
-                ? `No templates matching "${searchTerm}"`
-                : activeCategory !== 'all'
-                  ? `No templates in the ${activeCategory} category`
-                  : 'No templates available yet'
-              }
-            </p>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <div className="flex justify-center mb-4">
+            <FileText className="h-12 w-12 text-muted-foreground opacity-50" />
           </div>
-        )}
-      </div>
-      
-      {/* Load more button */}
-      {hasMore && (
-        <div className="flex justify-center mt-6">
-          <Button
-            variant="outline"
-            onClick={loadMore}
-            disabled={isLoading}
-            className="w-full md:w-auto"
-          >
-            {isLoading ? 'Loading...' : 'Load More Templates'}
-            {!isLoading && <ChevronRight className="ml-2 h-4 w-4" />}
-          </Button>
+          <h3 className="text-lg font-medium mb-2">No templates found</h3>
+          <p className="text-sm text-muted-foreground">
+            {searchTerm 
+              ? `No templates matching "${searchTerm}"`
+              : activeCategory !== 'all'
+                ? `No templates in the ${activeCategory} category`
+                : 'No templates available yet'}
+          </p>
         </div>
       )}
       

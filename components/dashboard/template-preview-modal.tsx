@@ -13,18 +13,19 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Download, FileText, ExternalLink } from 'lucide-react';
-import { type Template } from '@/lib/stores/student-dashboard/types';
+import { GoogleDriveFile } from '@/lib/hooks/use-google-drive';
+import { GoogleDriveViewer } from '@/components/dashboard/google-drive-viewer';
 
 interface TemplatePreviewModalProps {
-  template: Template | null;
+  file: GoogleDriveFile | null;
   isOpen: boolean;
   onOpenChange?: (open: boolean) => void;
   onClose?: () => void;
-  onDownload?: (template: Template) => void;
+  onDownload?: (file: GoogleDriveFile) => void;
 }
 
 export function TemplatePreviewModal({
-  template,
+  file,
   isOpen,
   onOpenChange,
   onClose,
@@ -32,20 +33,33 @@ export function TemplatePreviewModal({
 }: TemplatePreviewModalProps) {
   const [activeTab, setActiveTab] = useState('preview');
   
-  if (!template) return null;
+  if (!file) return null;
   
-  // Generate Google Drive preview URL
-  const previewUrl = template ? `https://drive.google.com/file/d/${template.googleDriveId}/preview` : '';
+  // Get file type from MIME type
+  const getFileType = (mimeType: string | undefined): string => {
+    if (!mimeType) return 'FILE';
+    if (mimeType.includes('pdf')) return 'PDF';
+    if (mimeType.includes('document')) return 'DOC';
+    if (mimeType.includes('spreadsheet')) return 'XLS';
+    if (mimeType.includes('presentation')) return 'PPT';
+    if (mimeType.includes('image')) return 'IMG';
+    return 'FILE';
+  };
+  
   // Generate Google Drive direct view URL
-  const viewUrl = template ? `https://drive.google.com/file/d/${template.googleDriveId}/view` : '';
+  const viewUrl = file ? `https://drive.google.com/file/d/${file.id}/view` : '';
   
   const handleDownload = () => {
-    if (template && onDownload) {
-      onDownload(template);
+    if (file && onDownload) {
+      onDownload(file);
     }
   };
   
   const handleOpenInDrive = () => {
+    if (file.id.startsWith('mock-')) {
+      console.log('Mock open in Drive triggered for:', file.name);
+      return;
+    }
     window.open(viewUrl, '_blank');
   };
   
@@ -61,16 +75,16 @@ export function TemplatePreviewModal({
         <DialogHeader>
           <div className="flex justify-between items-start">
             <div>
-              <DialogTitle className="text-xl">{template.name}</DialogTitle>
+              <DialogTitle className="text-xl">{file.name}</DialogTitle>
               <DialogDescription className="mt-1 flex flex-wrap gap-2 items-center">
                 <Badge variant="outline" className="text-xs">
-                  {template.type.toUpperCase()}
+                  {getFileType(file.mimeType)}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  {template.size}
+                  {file.size || 'Unknown size'}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {template.downloads} downloads
+                  Last modified: {file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString() : 'Unknown'}
                 </span>
               </DialogDescription>
             </div>
@@ -93,12 +107,14 @@ export function TemplatePreviewModal({
             className="flex-1 overflow-hidden relative data-[state=active]:flex data-[state=active]:flex-col"
           >
             <div className="flex-1 overflow-hidden rounded-md border">
-              <iframe 
-                src={previewUrl}
-                className="w-full h-full"
-                allow="autoplay"
-                loading="lazy"
-              ></iframe>
+              <GoogleDriveViewer 
+                fileId={file.id}
+                fileName={file.name}
+                fileType={getFileType(file.mimeType).toLowerCase()}
+                height="100%"
+                width="100%"
+                showControls={false}
+              />
             </div>
           </TabsContent>
           
@@ -108,45 +124,39 @@ export function TemplatePreviewModal({
           >
             <div className="space-y-4">
               <div>
-                <h3 className="text-sm font-semibold mb-1">Description</h3>
+                <h3 className="text-sm font-medium mb-1">Description</h3>
                 <p className="text-sm text-muted-foreground">
-                  {template.description || 'No description available for this template.'}
+                  {file.description || 'No description available for this template.'}
                 </p>
               </div>
               
               <div>
-                <h3 className="text-sm font-semibold mb-1">Category</h3>
-                <p className="text-sm text-muted-foreground">{template.category}</p>
+                <h3 className="text-sm font-medium mb-1">Details</h3>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div>
+                    <dt className="text-muted-foreground">Format</dt>
+                    <dd>{getFileType(file.mimeType)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Size</dt>
+                    <dd>{file.size || 'Unknown'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Created</dt>
+                    <dd>{file.createdTime ? new Date(file.createdTime).toLocaleDateString() : 'Unknown'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Modified</dt>
+                    <dd>{file.modifiedTime ? new Date(file.modifiedTime).toLocaleDateString() : 'Unknown'}</dd>
+                  </div>
+                </dl>
               </div>
               
               <div>
-                <h3 className="text-sm font-semibold mb-1">File Details</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Type:</span>{' '}
-                    <span>{template.type.toUpperCase()}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Size:</span>{' '}
-                    <span>{template.size}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Downloads:</span>{' '}
-                    <span>{template.downloads}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Added:</span>{' '}
-                    <span>{template.createdAt ? new Date(template.createdAt).toLocaleDateString() : 'Unknown'}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-sm font-semibold mb-1">Usage Guidelines</h3>
+                <h3 className="text-sm font-medium mb-1">Usage</h3>
                 <p className="text-sm text-muted-foreground">
-                  This template is provided as part of your enrollment in the Papers to Profits program.
-                  You may use this template for your personal or commercial projects. Reselling or 
-                  redistributing these templates is prohibited.
+                  This template is free to use for all Graceful Homeschooling members. 
+                  Download and customize it for your personal use.
                 </p>
               </div>
             </div>

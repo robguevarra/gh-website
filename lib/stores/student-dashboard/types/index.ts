@@ -203,6 +203,7 @@ export interface Template {
   size: string;
   thumbnail: string;
   downloads: number;
+  views?: number;
   googleDriveId: string;
   description?: string;
   courseId?: string;
@@ -277,7 +278,7 @@ export type SetProgressAction = {
   type: 'SET_PROGRESS';
   payload: {
     courseId: string;
-    progress: CourseProgress;
+    progress: UICourseProgress;
   };
 };
 

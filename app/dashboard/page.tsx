@@ -26,6 +26,7 @@ import { GoogleDriveViewer } from "@/components/dashboard/google-drive-viewer"
 import { OnboardingTour } from "@/components/dashboard/onboarding-tour"
 import { WelcomeModal } from "@/components/dashboard/welcome-modal"
 import { TemplatePreviewModal } from "@/components/dashboard/template-preview-modal"
+import { GoogleDriveFile } from "@/lib/hooks/use-google-drive"
 
 // Dashboard store hooks
 import { 
@@ -109,8 +110,8 @@ export default function StudentDashboard() {
   // Local state
   const [activeTemplateTab, setActiveTemplateTab] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
-  const [previewTemplate, setPreviewTemplate] = useState<any>(null)
+  const [selectedFile, setSelectedFile] = useState<string | null>(null)
+  const [previewFile, setPreviewFile] = useState<GoogleDriveFile | null>(null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
 
   // References for animations
@@ -179,19 +180,11 @@ export default function StudentDashboard() {
     }
   }
 
-  // Handle template selection
-  const handleTemplateSelect = (templateId: string) => {
-    setSelectedTemplate(templateId)
-    const template = templates.find(t => t.id === templateId)
-    if (template) {
-      setPreviewTemplate(template)
-      setIsPreviewOpen(true)
-    }
-  }
-
-  // Get selected template
-  const getSelectedTemplate = () => {
-    return templates.find((template) => template.id === selectedTemplate) || templates[0]
+  // Handle file selection
+  const handleFileSelect = (file: GoogleDriveFile) => {
+    setSelectedFile(file.id)
+    setPreviewFile(file)
+    setIsPreviewOpen(true)
   }
   
   // Mock data for upcoming classes
@@ -280,33 +273,31 @@ export default function StudentDashboard() {
     },
   ]
 
-  // Mock data for recent lessons
-  const recentLessons = [
+  // Get the continue learning lesson from the store
+  const { continueLearningLesson } = useCourseProgressData();
+  
+  // Format the continue learning lesson data for the component
+  const recentLessons = continueLearningLesson ? [
     {
-      id: 7,
-      title: "Creating Your First Digital Planner",
-      module: "Digital Product Creation",
-      duration: "19:45",
-      thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson+7",
-      progress: 35,
+      id: parseInt(continueLearningLesson.lessonId) || 1,
+      title: continueLearningLesson.lessonTitle,
+      module: continueLearningLesson.moduleTitle,
+      duration: "15 min", // This should come from the actual lesson data in a real implementation
+      thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson",
+      progress: continueLearningLesson.progress,
       current: true,
-    },
+    }
+  ] : [
+    // Fallback if no continue learning lesson is available
     {
-      id: 8,
-      title: "Setting Up Your Etsy Shop",
-      module: "Selling Your Products",
-      duration: "23:10",
-      thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson+8",
+      id: 1,
+      title: "Introduction to Course",
+      module: "Getting Started",
+      duration: "15 min",
+      thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson+1",
       progress: 0,
-    },
-    {
-      id: 9,
-      title: "Product Photography Basics",
-      module: "Marketing Your Products",
-      duration: "18:22",
-      thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson+9",
-      progress: 0,
-    },
+      current: true,
+    }
   ]
 
   // Mock data for free templates
@@ -454,14 +445,19 @@ export default function StudentDashboard() {
       {/* Template Preview Modal */}
       <TemplatePreviewModal
         isOpen={isPreviewOpen}
-        template={previewTemplate}
+        file={previewFile}
         onClose={() => setIsPreviewOpen(false)}
-        onDownload={(template) => {
+        onDownload={(file) => {
           // Open Google Drive download link in new tab
-          window.open(`https://drive.google.com/uc?export=download&id=${template.googleDriveId}`, '_blank');
+          if (file.id.startsWith('mock-')) {
+            console.log('Mock download triggered for:', file.name);
+            return;
+          }
+          
+          window.open(`https://drive.google.com/uc?export=download&id=${file.id}`, '_blank');
           
           // Track download (we could add analytics here)
-          console.log(`Template downloaded: ${template.name}`);
+          console.log(`Template downloaded: ${file.name}`);
         }}
       />
 
@@ -567,26 +563,7 @@ export default function StudentDashboard() {
         <div className="mt-8">
           <CourseProgressSection
           courseProgress={formattedCourseProgress}
-          recentLessons={[
-            {
-              id: 1,
-              title: "Introduction to Business Fundamentals",
-              module: "Module 1: Getting Started",
-              duration: "15 min",
-              thumbnail: "/placeholder.svg?height=100&width=160",
-              progress: 100,
-              current: false
-            },
-            {
-              id: 2,
-              title: "Setting Up Your Business Plan",
-              module: "Module 1: Getting Started",
-              duration: "20 min",
-              thumbnail: "/placeholder.svg?height=100&width=160",
-              progress: 75,
-              current: true
-            }
-          ]}
+          recentLessons={recentLessons}
           upcomingClasses={upcomingClasses}
           isSectionExpanded={isSectionExpanded}
           toggleSection={toggleSection}
@@ -598,15 +575,15 @@ export default function StudentDashboard() {
       <ErrorBoundary componentName="Templates Library Section">
         <div className="mt-8">
           <TemplatesLibrarySection
-          isSectionExpanded={isSectionExpanded}
-          toggleSection={toggleSection}
-          onTemplateSelect={(template) => {
-            setPreviewTemplate(template);
-            setIsPreviewOpen(true);
-          }}
-          isPreviewOpen={isPreviewOpen}
-          setIsPreviewOpen={setIsPreviewOpen}
-        />
+            isSectionExpanded={isSectionExpanded}
+            toggleSection={toggleSection}
+            onTemplateSelect={(file) => {
+              setPreviewFile(file)
+              setIsPreviewOpen(true)
+            }}
+            isPreviewOpen={isPreviewOpen}
+            setIsPreviewOpen={setIsPreviewOpen}
+          />
         </div>
       </ErrorBoundary>
 
