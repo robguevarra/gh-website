@@ -290,14 +290,6 @@ export default function StudentDashboard() {
 
   // Create a formatted version for the UI components - memoized
   const formattedCourseProgress = useMemo(() => {
-    // Log the current state for debugging
-    console.log('Formatting course progress with:', {
-      courseId,
-      enrollmentsLength: enrollments?.length,
-      firstCourseId: enrollments?.[0]?.course?.id,
-      firstCourseTitle: enrollments?.[0]?.course?.title
-    });
-
     return {
       title: enrollments?.[0]?.course?.title || "Papers to Profits",
       courseId: courseId,
@@ -389,16 +381,6 @@ export default function StudentDashboard() {
 
   // Format the continue learning lesson data for the component - memoized
   const recentLessons = useMemo(() => {
-    // Log the current state for debugging
-    console.log('Formatting recent lessons with:', {
-      isLoading: isLoadingContinueLearningLesson,
-      hasContinueLearningLesson: !!continueLearningLesson,
-      continueLearningLessonId: continueLearningLesson?.lessonId,
-      continueLearningModuleId: continueLearningLesson?.moduleId,
-      firstLessonId: firstLesson?.id,
-      firstModuleId: firstModule?.id
-    });
-
     // If we're still loading, return an empty array to show loading state
     if (isLoadingContinueLearningLesson && !continueLearningLesson) {
       return [];

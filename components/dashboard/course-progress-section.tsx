@@ -1,6 +1,7 @@
 "use client"
 
 // React imports
+import React from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -61,26 +62,17 @@ export interface CourseProgressProps {
   }
   recentLessons: CourseLesson[]
   upcomingClasses: LiveClass[]
-  isMobile?: boolean
   isSectionExpanded: (section: string) => boolean
   toggleSection: (section: string) => void
 }
 
-export function CourseProgressSection({
+export const CourseProgressSection = React.memo(function CourseProgressSection({
   courseProgress,
   recentLessons,
   upcomingClasses,
-  isMobile = false,
   isSectionExpanded,
   toggleSection
 }: CourseProgressProps) {
-  // Log props for debugging
-  console.log('CourseProgressSection props:', {
-    courseId: courseProgress.courseId,
-    recentLessonsLength: recentLessons?.length,
-    firstLessonId: recentLessons?.[0]?.id,
-    firstLessonModuleId: recentLessons?.[0]?.moduleId
-  });
   // Animation variants
   const fadeInUp = {
     hidden: { opacity: 0, y: 20 },
@@ -248,13 +240,7 @@ export function CourseProgressSection({
                   </div>
 
                   <div className="mt-4">
-                    <Link href={`/dashboard/course?courseId=${courseProgress.courseId || ''}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`} prefetch={true} onClick={() => {
-                      console.log('Start Learning clicked with params:', {
-                        courseId: courseProgress.courseId || '',
-                        moduleId: safeRecentLessons[0]?.moduleId || '',
-                        lessonId: safeRecentLessons[0]?.id || ''
-                      });
-                    }}>
+                    <Link href={`/dashboard/course?courseId=${courseProgress.courseId || ''}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`} prefetch={true}>
                       <Button className="w-full bg-brand-purple hover:bg-brand-purple/90">
                         {safeRecentLessons[0]?.progress > 0 ? "Continue Lesson" : "Start Learning"}
                         <ArrowRight className="ml-2 h-4 w-4" />
@@ -308,4 +294,4 @@ export function CourseProgressSection({
       </div>
     </motion.div>
   )
-}
+})
