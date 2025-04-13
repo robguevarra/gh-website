@@ -8,7 +8,7 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useUserProfile } from '@/lib/hooks/use-user-profile'
+import { useUserProfile } from '@/lib/hooks/state/use-user-profile'
 import * as enrollmentAccess from '@/lib/supabase/enrollment-access'
 
 /**

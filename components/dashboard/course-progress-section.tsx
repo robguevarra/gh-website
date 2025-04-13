@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+// React imports
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -74,6 +74,13 @@ export function CourseProgressSection({
   isSectionExpanded,
   toggleSection
 }: CourseProgressProps) {
+  // Log props for debugging
+  console.log('CourseProgressSection props:', {
+    courseId: courseProgress.courseId,
+    recentLessonsLength: recentLessons?.length,
+    firstLessonId: recentLessons?.[0]?.id,
+    firstLessonModuleId: recentLessons?.[0]?.moduleId
+  });
   // Animation variants
   const fadeInUp = {
     hidden: { opacity: 0, y: 20 },
@@ -83,7 +90,7 @@ export function CourseProgressSection({
       transition: { duration: 0.6 },
     },
   }
-  
+
   // Ensure we have valid data with fallbacks
   const safeRecentLessons = recentLessons || []
 
@@ -119,8 +126,9 @@ export function CourseProgressSection({
                 <h2 className="text-xl font-medium text-[#5d4037]">Continue Learning</h2>
               </div>
               <Link
-                href="/dashboard/course"
+                href={`/dashboard/course?courseId=${courseProgress.courseId || ''}`}
                 className="text-brand-purple hover:underline text-sm flex items-center"
+                prefetch={true}
               >
                 View All Lessons
                 <ChevronRight className="h-4 w-4 ml-1" />
@@ -138,7 +146,7 @@ export function CourseProgressSection({
                     </Badge>
                   </div>
                   <span className="text-xs text-[#6d4c41]">
-                    {courseProgress.completedLessons} of {courseProgress.totalLessons} lessons • 
+                    {courseProgress.completedLessons} of {courseProgress.totalLessons} lessons •
                     <span className="ml-1">
                       {calculateTimeRemaining({
                         currentProgress: courseProgress.progress,
@@ -155,13 +163,50 @@ export function CourseProgressSection({
                 </div>
               </div>
 
+              {/* Loading State */}
+              {safeRecentLessons.length === 0 && (
+                <div className="bg-gradient-to-r from-brand-purple/5 to-brand-pink/5 rounded-xl p-5 border border-brand-purple/10">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="h-4 w-4 text-brand-purple" />
+                    <h3 className="text-sm font-medium text-brand-purple">
+                      Loading your learning progress...
+                    </h3>
+                  </div>
+
+                  <div className="flex gap-4 mt-3">
+                    <div className="relative w-24 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200 animate-pulse">
+                    </div>
+                    <div className="flex-1">
+                      <div className="h-5 bg-gray-200 rounded w-3/4 mb-2 animate-pulse"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2 mb-4 animate-pulse"></div>
+                      <div className="mt-2">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-[#6d4c41]">Progress</span>
+                          <span className="text-xs font-medium">0%</span>
+                        </div>
+                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-gray-200 rounded-full animate-pulse" style={{ width: '0%' }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <Button className="w-full bg-brand-purple hover:bg-brand-purple/90" disabled>
+                      Loading...
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Current Lesson */}
               {safeRecentLessons.length > 0 && (
                 <div className="bg-gradient-to-r from-brand-purple/5 to-brand-pink/5 rounded-xl p-5 border border-brand-purple/10">
                   <div className="flex items-center gap-2 mb-1">
                     <Sparkles className="h-4 w-4 text-brand-purple" />
                     <h3 className="text-sm font-medium text-brand-purple">
-                      {safeRecentLessons[0]?.progress > 0 ? "Pick up where you left off" : "Start your learning journey"}
+                      {safeRecentLessons[0]?.progress > 0 ? "Pick up where you left off" : "Continue your learning journey"}
                     </h3>
                   </div>
 
@@ -203,7 +248,13 @@ export function CourseProgressSection({
                   </div>
 
                   <div className="mt-4">
-                    <Link href={`/dashboard/course?courseId=${courseProgress.courseId || ''}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`}>
+                    <Link href={`/dashboard/course?courseId=${courseProgress.courseId || ''}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`} prefetch={true} onClick={() => {
+                      console.log('Start Learning clicked with params:', {
+                        courseId: courseProgress.courseId || '',
+                        moduleId: safeRecentLessons[0]?.moduleId || '',
+                        lessonId: safeRecentLessons[0]?.id || ''
+                      });
+                    }}>
                       <Button className="w-full bg-brand-purple hover:bg-brand-purple/90">
                         {safeRecentLessons[0]?.progress > 0 ? "Continue Lesson" : "Start Learning"}
                         <ArrowRight className="ml-2 h-4 w-4" />
@@ -229,8 +280,8 @@ export function CourseProgressSection({
                         <p>{upcomingClasses[0].time}</p>
                       </div>
                     </div>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       className="bg-brand-pink hover:bg-brand-pink/90"
                       onClick={() => window.open(upcomingClasses[0].zoomLink, '_blank')}
                     >
@@ -244,8 +295,9 @@ export function CourseProgressSection({
 
             <div className="mt-4 pt-4 border-t text-center md:hidden">
               <Link
-                href="/dashboard/course"
+                href={`/dashboard/course?courseId=${courseProgress.courseId || ''}`}
                 className="text-brand-purple hover:underline text-sm flex items-center justify-center"
+                prefetch={true}
               >
                 View All Lessons
                 <ChevronRight className="h-4 w-4 ml-1" />

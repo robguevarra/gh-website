@@ -102,36 +102,55 @@ export const createActions = (
     if (!userId) return;
 
     const store = get() as StudentDashboardStore;
+    const now = Date.now();
 
-    // Start loading all data
-    set({
-      isLoadingEnrollments: true,
-      isLoadingProgress: true,
-      isLoadingTemplates: true
-    });
+    // Check if we've loaded recently (within the last 10 seconds)
+    const state = get();
+    const recentEnrollmentsLoad = state.lastEnrollmentsLoadTime && now - state.lastEnrollmentsLoadTime < 10000;
+    const recentProgressLoad = state.lastProgressLoadTime && now - state.lastProgressLoadTime < 10000;
+
+    // Only set loading flags for data that needs to be loaded
+    const loadingFlags: any = {};
+
+    if (!recentEnrollmentsLoad && !state.isLoadingEnrollments) {
+      loadingFlags.isLoadingEnrollments = true;
+    }
+
+    if (!recentProgressLoad && !state.isLoadingProgress) {
+      loadingFlags.isLoadingProgress = true;
+    }
+
+    // Set loading flags if needed
+    if (Object.keys(loadingFlags).length > 0) {
+      set(loadingFlags);
+    }
 
     try {
-      // Load enrollments with course data
-      await store.loadUserEnrollments(userId);
+      // Load data in parallel for better performance
+      const loadPromises = [];
 
-      // Load progress data
-      await store.loadUserProgress(userId);
+      // Load enrollments if needed
+      if (!recentEnrollmentsLoad && !state.isLoadingEnrollments) {
+        loadPromises.push(store.loadUserEnrollments(userId));
+      }
 
-      // Load templates
-      await store.loadUserTemplates(userId);
+      // Load progress if needed
+      if (!recentProgressLoad && !state.isLoadingProgress) {
+        loadPromises.push(store.loadUserProgress(userId));
+      }
 
+      // Note: Templates are now loaded via Google Drive integration
+      // and no longer need to be loaded here
+
+      // Wait for all data to load
+      if (loadPromises.length > 0) {
+        await Promise.all(loadPromises);
+      }
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       set({
         hasEnrollmentError: true,
-        hasProgressError: true,
-        hasTemplatesError: true
-      });
-    } finally {
-      set({
-        isLoadingEnrollments: false,
-        isLoadingProgress: false,
-        isLoadingTemplates: false
+        hasProgressError: true
       });
     }
   },
@@ -142,7 +161,24 @@ export const createActions = (
   loadUserEnrollments: async (userId: string) => {
     if (!userId) return;
 
-    set({ isLoadingEnrollments: true, hasEnrollmentError: false });
+    // Check if we're already loading or loaded recently
+    const state = get();
+    const now = Date.now();
+
+    if (state.isLoadingEnrollments) {
+      return;
+    }
+
+    // Only load if we haven't loaded recently (within the last 10 seconds)
+    if (state.lastEnrollmentsLoadTime && now - state.lastEnrollmentsLoadTime < 10000) {
+      return;
+    }
+
+    set({
+      isLoadingEnrollments: true,
+      hasEnrollmentError: false,
+      lastEnrollmentsLoadTime: now
+    });
 
     try {
       // Use browser client for client-side data fetching
@@ -186,7 +222,24 @@ export const createActions = (
   loadUserProgress: async (userId: string) => {
     if (!userId) return;
 
-    set({ isLoadingProgress: true, hasProgressError: false });
+    // Check if we're already loading or loaded recently
+    const state = get();
+    const now = Date.now();
+
+    if (state.isLoadingProgress) {
+      return;
+    }
+
+    // Only load if we haven't loaded recently (within the last 10 seconds)
+    if (state.lastProgressLoadTime && now - state.lastProgressLoadTime < 10000) {
+      return;
+    }
+
+    set({
+      isLoadingProgress: true,
+      hasProgressError: false,
+      lastProgressLoadTime: now
+    });
 
     try {
       // Use browser client for client-side data fetching
@@ -309,9 +362,24 @@ export const createActions = (
         isLoadingProgress: false
       });
 
-      // Load continue learning lesson
-      const store = get() as StudentDashboardStore;
-      await store.loadContinueLearningLesson(userId);
+      // Load continue learning lesson with optimized version
+      // Check if we're already loading or loaded recently
+      const state = get();
+      const now = Date.now();
+
+      if (!state.isLoadingContinueLearningLesson &&
+          (!state.lastContinueLearningLessonLoadTime ||
+           now - state.lastContinueLearningLessonLoadTime > 10000)) {
+        // Set loading flag and timestamp
+        set({
+          isLoadingContinueLearningLesson: true,
+          lastContinueLearningLessonLoadTime: now
+        });
+
+        // Load continue learning lesson
+        const store = get() as StudentDashboardStore;
+        await store.loadContinueLearningLesson(userId);
+      }
 
     } catch (error) {
       console.error('Error loading progress:', error);
@@ -324,12 +392,12 @@ export const createActions = (
 
   /**
    * Load user templates
-   * @deprecated Now using direct Google Drive integration instead
+   * @deprecated Now using direct Google Drive integration instead. This function is a no-op and is kept only for backward compatibility.
    */
   loadUserTemplates: async () => {
-    // This function is kept for backward compatibility but no longer used
+    // This function is intentionally empty and no longer used
     // Templates are now loaded directly from Google Drive via useGoogleDriveFiles hook
-    set({ isLoadingTemplates: false, hasTemplatesError: false, templates: [] });
+    console.log('loadUserTemplates is deprecated and no longer used. Use useGoogleDriveFiles hook instead.');
     return;
   },
 
@@ -341,9 +409,21 @@ export const createActions = (
    */
   loadContinueLearningLesson: async (userId: string) => {
     if (!userId) {
-      set({ continueLearningLesson: null });
+      set({
+        continueLearningLesson: null,
+        isLoadingContinueLearningLesson: false
+      });
       return;
     }
+
+    // Check if we're already loading
+    const state = get();
+    if (state.isLoadingContinueLearningLesson) {
+      return;
+    }
+
+    // Set loading flag
+    set({ isLoadingContinueLearningLesson: true });
 
     try {
       // Use browser client for client-side data fetching
@@ -411,19 +491,28 @@ export const createActions = (
         };
 
         // Set the continue learning lesson in the store
-        set({ continueLearningLesson: continueLearningData });
+        set({
+          continueLearningLesson: continueLearningData,
+          isLoadingContinueLearningLesson: false
+        });
 
         if (process.env.NODE_ENV === 'development') {
           console.log('Found continue learning lesson:', continueLearningData);
         }
       } else {
         // No recent lesson found or data structure is incomplete
-        set({ continueLearningLesson: null });
+        set({
+          continueLearningLesson: null,
+          isLoadingContinueLearningLesson: false
+        });
       }
 
     } catch (error) {
       console.error('Error loading continue learning lesson:', error);
-      set({ continueLearningLesson: null });
+      set({
+        continueLearningLesson: null,
+        isLoadingContinueLearningLesson: false
+      });
     }
   },
 

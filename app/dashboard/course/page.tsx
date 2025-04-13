@@ -22,6 +22,7 @@ import { LessonComments } from "@/components/dashboard/lesson-comments"
 // Store and hooks
 import { useStudentDashboardStore } from "@/lib/stores/student-dashboard"
 import { useAuth } from "@/context/auth-context"
+import { useEnrollmentData } from "@/lib/hooks/optimized/use-enrollment-data"
 
 // Icons
 import {
@@ -106,14 +107,18 @@ export default function CourseViewer() {
   const lessonId = searchParams.get("lessonId") || ""
   const moduleId = searchParams.get("moduleId") || ""
 
+  // Use optimized hooks for better performance
+  const {
+    enrollments,
+    loadEnrollments
+  } = useEnrollmentData()
+
   // Get only the specific data needed from the store to prevent unnecessary re-renders
-  const enrollments = useStudentDashboardStore(state => state.enrollments)
   const courseProgress = useStudentDashboardStore(state => state.courseProgress)
   const lessonProgress = useStudentDashboardStore(state => state.lessonProgress)
   const updateLessonProgress = useStudentDashboardStore(state => state.updateLessonProgress)
 
   // Load user data if needed
-  const loadUserEnrollments = useStudentDashboardStore(state => state.loadUserEnrollments)
   const loadUserProgress = useStudentDashboardStore(state => state.loadUserProgress)
 
   // Initial state
@@ -157,7 +162,7 @@ export default function CourseViewer() {
 
       // Load enrollments if not already loaded
       if (enrollments.length === 0) {
-        await loadUserEnrollments(user.id)
+        await loadEnrollments(user.id)
       }
 
       // Only load progress data if we don't already have it for this course
@@ -173,14 +178,14 @@ export default function CourseViewer() {
     }
 
     loadData()
-  }, [user?.id, loadUserEnrollments, loadUserProgress, enrollments.length, courseId, courseProgress])
+  }, [user?.id, loadEnrollments, loadUserProgress, enrollments.length, courseId, courseProgress])
 
   // Use useMemo to derive course data from enrollments
   const courseData = useMemo(() => {
     if (enrollments.length === 0 || !courseId) return null
 
     // Find the current course
-    const course = enrollments.find(e => e.course?.id === courseId)?.course as ExtendedCourse | undefined
+    const course = enrollments.find((e: any) => e.course?.id === courseId)?.course as ExtendedCourse | undefined
     if (!course) return null
 
     // Return the course with properly typed modules and lessons

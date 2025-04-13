@@ -8,8 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
-import { useCourseProgressData } from '@/lib/hooks/use-dashboard-store'
-import { useUserProfile } from '@/lib/hooks/use-user-profile'
+import { useUserProfile } from '@/lib/hooks/state/use-user-profile'
+import { useCourseProgress } from '@/lib/hooks/state/use-course-progress'
 import { EnrollmentStatus } from './enrollment-status'
 
 type VideoPlayerProps = {
@@ -148,7 +148,7 @@ export function LessonPlayer() {
   const {
     lessonProgress,
     updateLessonProgress
-  } = useCourseProgressData()
+  } = useCourseProgress()
 
   const [lesson, setLesson] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)

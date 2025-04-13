@@ -1,29 +1,31 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { performanceMiddleware, subscriptionTrackingMiddleware } from './middleware';
+import { batchMiddleware } from './batch-middleware';
+import { equalityMiddleware } from './equality-middleware';
 import { createActions } from './actions';
 
 /**
  * Student Dashboard Store
- * 
+ *
  * This store manages all state related to the student dashboard experience,
  * including user profile, enrollments, course progress, templates, and UI state.
- * 
+ *
  * State Management Patterns:
  * 1. State Isolation - Each component only subscribes to the state it needs
  * 2. Performance Optimization - Custom hooks with memoized selectors prevent unnecessary re-renders
  * 3. Persistence - Critical state is persisted in localStorage
  * 4. Performance Monitoring - Development mode includes performance tracking
  */
-import { 
-  type UserEnrollment, 
-  type UICourseProgress, 
-  type UIModuleProgress, 
+import {
+  type UserEnrollment,
+  type UICourseProgress,
+  type UIModuleProgress,
   type UILessonProgress,
-  type Template, 
-  type Purchase, 
-  type LiveClass, 
-  type ContinueLearningLesson 
+  type Template,
+  type Purchase,
+  type LiveClass,
+  type ContinueLearningLesson
 } from './types/index';
 
 export interface StudentDashboardStore {
@@ -47,20 +49,24 @@ export interface StudentDashboardStore {
     joinedDate: string;
   } | null;
   isLoadingProfile: boolean;
-  
+
   // Enrollment data
   enrollments: UserEnrollment[];
   isLoadingEnrollments: boolean;
   hasEnrollmentError: boolean;
-  
+  lastEnrollmentsLoadTime: number | null;
+
   // Progress data
   courseProgress: Record<string, UICourseProgress>;
   moduleProgress: Record<string, UIModuleProgress[]>;
   lessonProgress: Record<string, UILessonProgress>;
   isLoadingProgress: boolean;
   hasProgressError: boolean;
+  lastProgressLoadTime: number | null;
   continueLearningLesson: ContinueLearningLesson | null;
-  
+  isLoadingContinueLearningLesson: boolean;
+  lastContinueLearningLessonLoadTime: number | null;
+
   // Templates data
   templates: Template[];
   selectedTemplateId: string | null;
@@ -68,17 +74,18 @@ export interface StudentDashboardStore {
   templateSearchQuery: string;
   isLoadingTemplates: boolean;
   hasTemplatesError: boolean;
-  
+  lastTemplatesLoadTime: number | null;
+
   // Purchases data
   purchases: Purchase[];
   isLoadingPurchases: boolean;
   hasPurchasesError: boolean;
-  
+
   // Live classes data
   liveClasses: LiveClass[];
   isLoadingLiveClasses: boolean;
   hasLiveClassesError: boolean;
-  
+
   // UI state
   showWelcomeModal: boolean;
   showOnboarding: boolean;
@@ -87,24 +94,24 @@ export interface StudentDashboardStore {
     [key: string]: boolean;
   };
   expandedSection?: string; // For backward compatibility
-  
+
   // Actions
   initializeAuthenticatedUser: () => Promise<void>;
   setUserId: (userId: string | null) => void;
   setUserProfile: (profile: StudentDashboardStore['userProfile']) => void;
-  
+
   // Enrollment actions
   setEnrollments: (enrollments: UserEnrollment[]) => void;
   setIsLoadingEnrollments: (isLoading: boolean) => void;
   setHasEnrollmentError: (hasError: boolean) => void;
-  
+
   // Progress actions
   setCourseProgress: (courseId: string, progress: UICourseProgress) => void;
   setModuleProgress: (courseId: string, progress: UIModuleProgress[]) => void;
   setLessonProgress: (lessonId: string, progress: UILessonProgress) => void;
   setIsLoadingProgress: (isLoading: boolean) => void;
   setHasProgressError: (hasError: boolean) => void;
-  
+
   // Templates actions
   setTemplates: (templates: Template[]) => void;
   setSelectedTemplateId: (templateId: string | null) => void;
@@ -112,28 +119,28 @@ export interface StudentDashboardStore {
   setTemplateSearchQuery: (query: string) => void;
   setIsLoadingTemplates: (isLoading: boolean) => void;
   setHasTemplatesError: (hasError: boolean) => void;
-  
+
   // Purchases actions
   setPurchases: (purchases: Purchase[]) => void;
   setIsLoadingPurchases: (isLoading: boolean) => void;
   setHasPurchasesError: (hasError: boolean) => void;
-  
+
   // Live classes actions
   setLiveClasses: (classes: LiveClass[]) => void;
   setIsLoadingLiveClasses: (isLoading: boolean) => void;
   setHasLiveClassesError: (hasError: boolean) => void;
-  
+
   // UI actions
   setShowWelcomeModal: (show: boolean) => void;
   setShowOnboarding: (show: boolean) => void;
   setShowAnnouncement: (show: boolean) => void;
   toggleSection: (section: string) => void;
-  
+
   // Utility functions
   getFilteredTemplates: () => Template[];
   getSelectedTemplate: () => Template | null;
   getContinueLearningLesson: () => { courseId: string; lessonId: string; title: string; progress: number } | null;
-  
+
   // Performance monitoring (dev only)
   _getSubscriberCount?: () => number;
   _getUpdateFrequency?: () => { [key: string]: number };
@@ -143,6 +150,8 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
   // Apply performance monitoring middleware in development mode
   subscriptionTrackingMiddleware(
   performanceMiddleware(
+  batchMiddleware(
+  equalityMiddleware(
   persist(
     (set, get) => ({
       // Import actions from the actions module
@@ -151,20 +160,24 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       userId: null,
       userProfile: null,
       isLoadingProfile: true,
-      
+
       // Enrollment data
       enrollments: [],
       isLoadingEnrollments: false,
       hasEnrollmentError: false,
-      
+      lastEnrollmentsLoadTime: null,
+
       // Progress data
       courseProgress: {},
       moduleProgress: {},
       lessonProgress: {},
       isLoadingProgress: true,
       hasProgressError: false,
+      lastProgressLoadTime: null,
       continueLearningLesson: null,
-      
+      isLoadingContinueLearningLesson: false,
+      lastContinueLearningLessonLoadTime: null,
+
       // Templates data
       templates: [],
       selectedTemplateId: null,
@@ -172,17 +185,18 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       templateSearchQuery: '',
       isLoadingTemplates: false,
       hasTemplatesError: false,
-      
+      lastTemplatesLoadTime: null,
+
       // Purchases data
       purchases: [],
       isLoadingPurchases: false,
       hasPurchasesError: false,
-      
+
       // Live classes data
       liveClasses: [],
       isLoadingLiveClasses: false,
       hasLiveClassesError: false,
-      
+
       // UI state
       showWelcomeModal: true,
       showOnboarding: false,
@@ -198,41 +212,41 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
         'community': true,
       },
       expandedSection: 'all',
-      
+
       // Actions
       setUserId: (userId) => set({ userId, isLoadingProfile: false }),
       setUserProfile: (profile) => set({ userProfile: profile, isLoadingProfile: false }),
-      
+
       // Enrollment actions
       setEnrollments: (enrollments) => set({ enrollments }),
       setIsLoadingEnrollments: (isLoading) => set({ isLoadingEnrollments: isLoading }),
       setHasEnrollmentError: (hasError) => set({ hasEnrollmentError: hasError }),
-      
+
       // Progress actions
-      setCourseProgress: (courseId, progress) => 
-        set((state) => ({ 
-          courseProgress: { 
-            ...state.courseProgress, 
-            [courseId]: progress 
-          } 
+      setCourseProgress: (courseId, progress) =>
+        set((state) => ({
+          courseProgress: {
+            ...state.courseProgress,
+            [courseId]: progress
+          }
         })),
-      setModuleProgress: (courseId, progress) => 
-        set((state) => ({ 
-          moduleProgress: { 
-            ...state.moduleProgress, 
-            [courseId]: progress 
-          } 
+      setModuleProgress: (courseId, progress) =>
+        set((state) => ({
+          moduleProgress: {
+            ...state.moduleProgress,
+            [courseId]: progress
+          }
         })),
-      setLessonProgress: (lessonId, progress) => 
-        set((state) => ({ 
-          lessonProgress: { 
-            ...state.lessonProgress, 
-            [lessonId]: progress 
-          } 
+      setLessonProgress: (lessonId, progress) =>
+        set((state) => ({
+          lessonProgress: {
+            ...state.lessonProgress,
+            [lessonId]: progress
+          }
         })),
       setIsLoadingProgress: (isLoading) => set({ isLoadingProgress: isLoading }),
       setHasProgressError: (hasError) => set({ hasProgressError: hasError }),
-      
+
       // Templates actions
       setTemplates: (templates) => set({ templates }),
       setSelectedTemplateId: (templateId) => set({ selectedTemplateId: templateId }),
@@ -240,17 +254,17 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       setTemplateSearchQuery: (query) => set({ templateSearchQuery: query }),
       setIsLoadingTemplates: (isLoading) => set({ isLoadingTemplates: isLoading }),
       setHasTemplatesError: (hasError) => set({ hasTemplatesError: hasError }),
-      
+
       // Purchases actions
       setPurchases: (purchases) => set({ purchases }),
       setIsLoadingPurchases: (isLoading) => set({ isLoadingPurchases: isLoading }),
       setHasPurchasesError: (hasError) => set({ hasPurchasesError: hasError }),
-      
+
       // Live classes actions
       setLiveClasses: (classes) => set({ liveClasses: classes }),
       setIsLoadingLiveClasses: (isLoading) => set({ isLoadingLiveClasses: isLoading }),
       setHasLiveClassesError: (hasError) => set({ hasLiveClassesError: hasError }),
-      
+
       // UI actions
       setShowWelcomeModal: (show) => set({ showWelcomeModal: show }),
       setShowOnboarding: (show) => set({ showOnboarding: show }),
@@ -265,39 +279,39 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
           }
         }));
       },
-      
+
       // Utility functions
       getFilteredTemplates: () => {
         const { templates, templateFilter, templateSearchQuery } = get();
         return templates.filter((template) => {
           const matchesCategory = templateFilter === 'all' || template.category === templateFilter;
-          const matchesSearch = templateSearchQuery === '' || 
+          const matchesSearch = templateSearchQuery === '' ||
             template.name.toLowerCase().includes(templateSearchQuery.toLowerCase());
           return matchesCategory && matchesSearch;
         });
       },
-      
+
       getSelectedTemplate: () => {
         const { templates, selectedTemplateId } = get();
-        return templates.find((template) => template.id === selectedTemplateId) || 
+        return templates.find((template) => template.id === selectedTemplateId) ||
           (templates.length > 0 ? templates[0] : null);
       },
-      
+
       getContinueLearningLesson: () => {
         const { enrollments, lessonProgress } = get();
         if (enrollments.length === 0) return null;
-        
+
         // Find the most recently accessed lesson with incomplete progress
         const lessonEntries = Object.entries(lessonProgress);
         if (lessonEntries.length === 0) return null;
-        
+
         // Sort by progress (incomplete first) and last accessed time
         const [lessonId, progress] = lessonEntries
           .filter(([_, data]) => data.progress < 100)
           .sort((a, b) => b[1].lastPosition - a[1].lastPosition)[0] || [null, null];
-          
+
         if (!lessonId || !progress) return null;
-        
+
         // For now return minimal info, this would be enhanced with actual lesson data
         return {
           courseId: enrollments[0].courseId, // This is simplified, would need to be mapped properly
@@ -320,6 +334,8 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
         expandedSection: state.expandedSection,
       }),
     }
+  )
+  )
   )
   )
   )

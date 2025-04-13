@@ -28,8 +28,7 @@ import {
   Folder,
   RotateCw,
 } from 'lucide-react';
-import { useUserProfile } from '@/lib/hooks/use-user-profile';
-import { useGoogleDriveFiles } from '@/lib/hooks/use-google-drive';
+import { useTemplateBrowser } from '@/lib/hooks/ui/use-template-browser';
 import type { DriveItem, BreadcrumbSegment } from '@/lib/google-drive/driveApiUtils';
 
 // File type icon mapping based on MIME type
@@ -150,36 +149,23 @@ interface TemplateBrowserProps {
 }
 
 export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
-  const { userId } = useUserProfile();
-
-  const [selectedFile, setSelectedFile] = useState<DriveItem | null>(null);
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
-
+  // Use our optimized hook for the template browser
   const {
     items,
     breadcrumbs,
     isLoading,
     hasError,
     currentFolderId,
+    selectedFile,
+    showPreviewModal,
     navigateToFolder,
     refreshData,
-  } = useGoogleDriveFiles();
+    handlePreview,
+    handleClosePreview,
+    handleDownload
+  } = useTemplateBrowser({ onTemplateSelect });
 
-  // Memoize event handlers with useCallback
-  const handlePreview = useCallback((file: DriveItem) => {
-    setSelectedFile(file);
-
-    if (onTemplateSelect) {
-      onTemplateSelect(file);
-    } else {
-      setShowPreviewModal(true);
-    }
-  }, [onTemplateSelect]);
-
-  const handleDownload = useCallback((file: DriveItem) => {
-    window.open(`https://drive.google.com/uc?export=download&id=${file.id}`, '_blank');
-  }, []);
-
+  // Additional handlers specific to this component
   const handleOpenInDrive = useCallback((file: DriveItem) => {
     window.open(`https://drive.google.com/file/d/${file.id}/view`, '_blank');
   }, []);

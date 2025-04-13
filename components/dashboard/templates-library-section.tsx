@@ -35,7 +35,7 @@ export function TemplatesLibrarySection({
     if (onTemplateSelect) {
       onTemplateSelect(file)
     }
-    
+
     if (setIsPreviewOpen) {
       setIsPreviewOpen(true)
     }
@@ -74,7 +74,7 @@ export function TemplatesLibrarySection({
               </div>
               <Link
                 href="https://drive.google.com/drive/folders/1Hrp7tJneYZ2Ba5nTlP4Nt36KVhCNKf2n?usp=sharing"
-                target="_blank" 
+                target="_blank"
                 rel="noopener noreferrer"
                 className="text-brand-blue hover:underline text-sm flex items-center"
               >
@@ -85,7 +85,7 @@ export function TemplatesLibrarySection({
 
             {/* Integrated Template Browser Component */}
             <TemplateBrowser onTemplateSelect={handleTemplateSelect} />
-            
+
             <div className="mt-4 pt-4 border-t text-center md:hidden">
               <Link
                 href="https://drive.google.com/drive/folders/1Hrp7tJneYZ2Ba5nTlP4Nt36KVhCNKf2n?usp=sharing"

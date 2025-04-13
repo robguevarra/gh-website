@@ -39,7 +39,9 @@ import {
 
 // Import optimized hooks
 import { useSectionExpansion } from "@/lib/hooks/use-section-expansion"
-import { useUserProfile } from "@/lib/hooks/use-user-profile"
+import { useUserProfile } from "@/lib/hooks/state/use-user-profile"
+import { useCourseProgress } from "@/lib/hooks/state/use-course-progress"
+import { useEnrollments } from "@/lib/hooks/state/use-enrollments"
 import { useOptimizedUIState } from "@/lib/hooks/use-ui-state"
 import { useLoadingStates } from "@/lib/hooks/use-loading-states"
 
@@ -243,37 +245,59 @@ export default function StudentDashboard() {
     },
   ]
 
-  // Get enrollments data with memoization to prevent unnecessary re-renders
-  const enrollments = useMemo(() => {
-    return useStudentDashboardStore.getState().enrollments || [];
-  }, []);
+  // Get enrollments data using selectors to subscribe to updates
+  const enrollments = useStudentDashboardStore(state => state.enrollments || []);
 
-  // Get course progress data with memoization
-  const courseProgress = useMemo(() => {
-    return useStudentDashboardStore.getState().courseProgress || {};
-  }, []);
+  // Get course progress data using selectors to subscribe to updates
+  const courseProgress = useStudentDashboardStore(state => state.courseProgress || {});
 
-  // Get the course ID from the first enrollment - memoized to prevent recalculation
-  const courseId = useMemo(() => {
-    return enrollments?.[0]?.course?.id || '';
-  }, [enrollments]);
+  // Get the course ID from the first enrollment
+  // Using a direct selector to ensure it's always up-to-date
+  const courseId = enrollments?.[0]?.course?.id || '';
 
   // Get the course progress from the store - memoized
   const currentCourseProgress = useMemo(() => {
     const rawCourseProgress = courseProgress[courseId] || null;
+    const course = enrollments?.[0]?.course;
 
-    if (!rawCourseProgress) return null;
+    // Calculate total lessons from the course data if available
+    let totalLessonsCount = 0;
+    if (course?.modules) {
+      course.modules.forEach(module => {
+        if (module.lessons) {
+          totalLessonsCount += module.lessons.length;
+        }
+      });
+    }
+
+    if (!rawCourseProgress) {
+      // If no progress data, return a default object with the calculated total
+      return {
+        progress: 0,
+        completedLessonsCount: 0,
+        totalLessonsCount: totalLessonsCount || 0,
+      } as ExtendedCourseProgress;
+    }
 
     return {
       ...rawCourseProgress,
       progress: rawCourseProgress.progress || 0,
       completedLessonsCount: rawCourseProgress.completedLessonsCount || 0,
-      totalLessonsCount: rawCourseProgress.totalLessonsCount || 0,
+      // Use the calculated total if available, otherwise fall back to the stored value
+      totalLessonsCount: totalLessonsCount || rawCourseProgress.totalLessonsCount || 0,
     } as ExtendedCourseProgress;
-  }, [courseProgress, courseId]);
+  }, [courseProgress, courseId, enrollments]);
 
   // Create a formatted version for the UI components - memoized
   const formattedCourseProgress = useMemo(() => {
+    // Log the current state for debugging
+    console.log('Formatting course progress with:', {
+      courseId,
+      enrollmentsLength: enrollments?.length,
+      firstCourseId: enrollments?.[0]?.course?.id,
+      firstCourseTitle: enrollments?.[0]?.course?.title
+    });
+
     return {
       title: enrollments?.[0]?.course?.title || "Papers to Profits",
       courseId: courseId,
@@ -310,10 +334,9 @@ export default function StudentDashboard() {
     },
   ]
 
-  // Get the continue learning lesson from the store - memoized to prevent unnecessary re-renders
-  const continueLearningLesson = useMemo(() => {
-    return useStudentDashboardStore.getState().continueLearningLesson;
-  }, []);
+  // Get the continue learning lesson from the store using a selector to subscribe to updates
+  const continueLearningLesson = useStudentDashboardStore(state => state.continueLearningLesson);
+  const isLoadingContinueLearningLesson = useStudentDashboardStore(state => state.isLoadingContinueLearningLesson);
 
   // Define extended course type with modules and lessons
   type ExtendedCourse = {
@@ -366,6 +389,21 @@ export default function StudentDashboard() {
 
   // Format the continue learning lesson data for the component - memoized
   const recentLessons = useMemo(() => {
+    // Log the current state for debugging
+    console.log('Formatting recent lessons with:', {
+      isLoading: isLoadingContinueLearningLesson,
+      hasContinueLearningLesson: !!continueLearningLesson,
+      continueLearningLessonId: continueLearningLesson?.lessonId,
+      continueLearningModuleId: continueLearningLesson?.moduleId,
+      firstLessonId: firstLesson?.id,
+      firstModuleId: firstModule?.id
+    });
+
+    // If we're still loading, return an empty array to show loading state
+    if (isLoadingContinueLearningLesson && !continueLearningLesson) {
+      return [];
+    }
+
     if (continueLearningLesson) {
       return [{
         id: parseInt(continueLearningLesson.lessonId) || 1,
@@ -378,7 +416,7 @@ export default function StudentDashboard() {
         current: true,
       }];
     } else {
-      // Fallback if no continue learning lesson is available
+      // Only use fallback if we're not loading and there's no continue learning lesson
       return [{
         id: parseInt(firstLesson.id) || 1,
         title: firstLesson.title || "Introduction to Course",
@@ -390,7 +428,7 @@ export default function StudentDashboard() {
         current: true,
       }];
     }
-  }, [continueLearningLesson, firstLesson, firstModule])
+  }, [continueLearningLesson, isLoadingContinueLearningLesson, firstLesson, firstModule])
 
   // Mock data for recent purchases
   const recentPurchases = [
@@ -599,7 +637,11 @@ export default function StudentDashboard() {
       <ErrorBoundary componentName="Course Progress Section">
         <div className="mt-8">
           <CourseProgressSection
-          courseProgress={formattedCourseProgress}
+          courseProgress={{
+            ...formattedCourseProgress,
+            // Ensure courseId is always the latest value
+            courseId: enrollments?.[0]?.course?.id || formattedCourseProgress.courseId || ''
+          }}
           recentLessons={recentLessons}
           upcomingClasses={upcomingClasses}
           isSectionExpanded={isSectionExpanded}

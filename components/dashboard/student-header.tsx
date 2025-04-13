@@ -37,39 +37,31 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 
 // Import our store
-import { useStudentDashboardStore } from '@/lib/stores/student-dashboard';
+import { useStudentHeader } from '@/lib/hooks/ui/use-student-header';
 import { useAuth } from '@/context/auth-context';
 
 // Import types for proper type safety
 import type { StudentDashboardStore } from '@/lib/stores/student-dashboard';
 
-// Define stable selectors outside the component with proper typing
-const selectCourseProgress = (state: StudentDashboardStore) => state.courseProgress;
-const selectIsLoadingProgress = (state: StudentDashboardStore) => state.isLoadingProgress;
-const selectContinueLearningLesson = (state: StudentDashboardStore) => state.continueLearningLesson;
+// We're now using the useStudentHeader hook which provides optimized access to the store
 
 // We'll get data from the store directly instead of props
 interface StudentHeaderProps {}
 
 export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps) {
   const router = useRouter()
-  
+
   // Use the auth context to get the authenticated user and logout function
   const { user, profile, logout, isLoading: isLoadingAuth } = useAuth()
-  
-  // Use stable selectors to prevent unnecessary re-renders
-  const courseProgress = useStudentDashboardStore(selectCourseProgress)
-  const isLoadingProgress = useStudentDashboardStore(selectIsLoadingProgress)
-  const continueLearningLesson = useStudentDashboardStore(selectContinueLearningLesson)
-  
-  // Initialize dashboard data when user is authenticated
-  // Using getState pattern to avoid selector-based infinite loops
-  const loadUserData = useCallback((userId: string) => {
-    if (userId) {
-      useStudentDashboardStore.getState().loadUserDashboardData(userId)
-    }
-  }, [])
-  
+
+  // Use our optimized hook for the student header
+  const {
+    courseProgress,
+    isLoadingProgress,
+    continueLearningLesson,
+    loadUserData
+  } = useStudentHeader()
+
   // Initialize dashboard data when user is authenticated
   useEffect(() => {
     if (user?.id) {
@@ -77,7 +69,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
       loadUserData(user.id)
     }
   }, [user?.id, loadUserData])
-  
+
   // Redirect to login if no user
   useEffect(() => {
     // Only redirect if auth is done loading and no user is found
@@ -85,7 +77,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
       router.push('/auth/signin')
     }
   }, [user, isLoadingAuth, router])
-  
+
   const [scrolled, setScrolled] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
 
@@ -126,21 +118,21 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
 
   // State for logout loading
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  
+
   const handleLogout = async () => {
     try {
       // Set loading state
       setIsLoggingOut(true)
-      
+
       // Use the auth context logout method
       const { error } = await logout();
-      
+
       if (error) {
         console.error('Error signing out:', error);
         setIsLoggingOut(false);
         return;
       }
-      
+
       // Redirect to login page after a short delay to allow for UI feedback
       setTimeout(() => {
         router.push('/auth/signin');
@@ -253,7 +245,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                       </div>
                     )}
                   </div>
-                  
+
                   <Button
                     onClick={handleLogout}
                     variant="ghost"
@@ -427,7 +419,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
             </DropdownMenuContent>
           </DropdownMenu>
 
-          
+
         </div>
       </div>
     </header>
