@@ -34,40 +34,72 @@ async function getGoogleAuthClient() {
   const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON;
   const keyFilePath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
 
+  console.log('Google Auth Client initialization:', {
+    hasCredentialsJson: !!credentialsJson,
+    hasKeyFilePath: !!keyFilePath,
+    keyFilePath: keyFilePath || 'not set'
+  });
+
   let authOptions: any = { // Using 'any' temporarily as options differ slightly
     scopes: SCOPES,
   };
 
   if (credentialsJson) {
     try {
+      console.log('Using credentials from GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON');
       const credentials = JSON.parse(credentialsJson);
+      // Verify the credentials have the required fields
+      if (!credentials.client_email || !credentials.private_key) {
+        throw new Error('Credentials JSON is missing required fields (client_email or private_key)');
+      }
       authOptions.credentials = credentials;
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error parsing credentials JSON:', error.message);
       throw new Error('Invalid service account credentials JSON provided in environment variable.');
     }
   } else if (keyFilePath) {
     try {
+      console.log('Using key file from GOOGLE_SERVICE_ACCOUNT_KEY_PATH');
       const absoluteKeyFilePath = path.resolve(process.cwd(), keyFilePath);
-      // You might want to add a check here to see if the file actually exists
-      // import fs from 'fs';
-      // if (!fs.existsSync(absoluteKeyFilePath)) {
-      //   throw new Error(`Service account key file not found at path: ${absoluteKeyFilePath}`);
-      // }
+      // Add a check to see if the file actually exists
+      const fs = require('fs');
+      if (!fs.existsSync(absoluteKeyFilePath)) {
+        console.error(`Service account key file not found at path: ${absoluteKeyFilePath}`);
+        throw new Error(`Service account key file not found at path: ${absoluteKeyFilePath}`);
+      }
       authOptions.keyFile = absoluteKeyFilePath;
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error with key file path:', error.message);
       throw new Error('Invalid service account key file path provided.');
     }
   } else {
+    console.error('No Google Drive API credentials configured');
     throw new Error('Google Drive API credentials are not configured.');
   }
 
   try {
+    console.log('Creating GoogleAuth client with options:', {
+      hasCredentials: !!authOptions.credentials,
+      hasKeyFile: !!authOptions.keyFile,
+      scopes: authOptions.scopes
+    });
+
     const auth = new google.auth.GoogleAuth(authOptions);
-    // Optionally, test the authentication by getting a client
-    // await auth.getClient(); 
+
+    // Test the authentication by getting a client
+    try {
+      console.log('Testing authentication by getting a client...');
+      const client = await auth.getClient();
+      console.log('Authentication successful');
+    } catch (clientError: any) {
+      console.error('Error getting auth client:', clientError.message);
+      throw clientError;
+    }
+
     return auth;
-  } catch (error) {
-    throw new Error('Failed to initialize Google Drive authentication.');
+  } catch (error: any) {
+    console.error('Failed to initialize Google Drive authentication:', error.message);
+    throw new Error(`Failed to initialize Google Drive authentication: ${error.message}`);
   }
 }
 

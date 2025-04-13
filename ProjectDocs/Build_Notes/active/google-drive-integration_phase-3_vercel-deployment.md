@@ -69,8 +69,42 @@ async function getGoogleAuthClient() {
 ## Testing
 - The changes have been tested locally to ensure that the Google Drive integration still works with the new environment variable approach
 - The Google Drive viewer component has been tested to ensure it can still access and display files from Google Drive
+- Added detailed logging to help diagnose authentication issues
+- Fixed an issue with the preview button not working by enabling both authentication methods during development
+
+### Debugging Steps
+1. Added logging to the Google Drive API route to track request parameters
+2. Enhanced the `getGoogleAuthClient` function with detailed logging
+3. Added validation for the credentials JSON to ensure it contains required fields
+4. Added file existence check for the key file path
+5. Added authentication testing by getting a client during initialization
+
+## Fixing Preview Button Issues
+
+After implementing the environment variable changes, we encountered an issue with the template preview button not working. We identified that the preview modal was not being properly rendered in the template browser component. We implemented the following fixes:
+
+1. **Enabled Both Authentication Methods During Development**:
+   - Uncommented the `GOOGLE_SERVICE_ACCOUNT_KEY_PATH` in the `.env` file
+   - This allows the application to fall back to the file-based approach if the JSON credentials fail
+
+2. **Added Detailed Logging**:
+   - Added logging to the `getGoogleAuthClient` function to track authentication flow
+   - Added logging to the template browser component to track preview button clicks
+   - Added logging to the template preview modal to track iframe loading
+
+3. **Enhanced Error Handling**:
+   - Added file existence check for the key file path
+   - Added validation for the credentials JSON to ensure it contains required fields
+   - Added authentication testing by getting a client during initialization
+
+4. **Fixed Template Preview Modal**:
+   - Added local state for preview file and modal visibility in the template browser component
+   - Added a custom preview handler to manage the modal state
+   - Added the TemplatePreviewModal component directly to the template browser
+   - Connected the preview button click handler to the modal state
 
 ## Next Steps
 - Deploy the application to Vercel with the new environment variable configuration
 - Verify that the Google Drive integration works correctly in the Vercel environment
 - Consider adding additional error handling and logging to help diagnose any issues that may arise in production
+- After successful deployment, clean up the debugging code

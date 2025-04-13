@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useTemplateBrowser } from '@/lib/hooks/ui/use-template-browser';
 import type { DriveItem, BreadcrumbSegment } from '@/lib/google-drive/driveApiUtils';
+import { TemplatePreviewModal } from '@/components/dashboard/template-preview-modal';
 
 // File type icon mapping based on MIME type
 const getFileIcon = (mimeType: string | undefined, isFolder: boolean) => {
@@ -113,7 +114,11 @@ const FileCard = ({ file, onNavigate, onPreview, onDownload }: FileCardProps) =>
               variant="outline"
               size="sm"
               className="w-full sm:flex-1 text-xs transition-all duration-300 hover:bg-primary/10"
-              onClick={(e) => { e.stopPropagation(); onPreview(file); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('Preview button clicked for file:', file);
+                onPreview(file);
+              }}
             >
               <Eye className="mr-1.5 h-3.5 w-3.5" />
               Preview
@@ -149,6 +154,10 @@ interface TemplateBrowserProps {
 }
 
 export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
+  // Local state for preview modal
+  const [previewFile, setPreviewFile] = useState<DriveItem | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+
   // Use our optimized hook for the template browser
   const {
     items,
@@ -156,18 +165,21 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
     isLoading,
     hasError,
     currentFolderId,
-    selectedFile,
-    showPreviewModal,
     navigateToFolder,
     refreshData,
-    handlePreview,
-    handleClosePreview,
     handleDownload
   } = useTemplateBrowser({ onTemplateSelect });
 
   // Additional handlers specific to this component
   const handleOpenInDrive = useCallback((file: DriveItem) => {
     window.open(`https://drive.google.com/file/d/${file.id}/view`, '_blank');
+  }, []);
+
+  // Handle preview
+  const handlePreview = useCallback((file: DriveItem) => {
+    console.log('Preview handler called with file:', file);
+    setPreviewFile(file);
+    setShowPreview(true);
   }, []);
 
   // Memoize navigation handlers
@@ -177,6 +189,14 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
 
   return (
     <div className="space-y-4">
+      {/* Template Preview Modal */}
+      <TemplatePreviewModal
+        isOpen={showPreview}
+        file={previewFile}
+        onClose={() => setShowPreview(false)}
+        onOpenChange={(open) => setShowPreview(open)}
+        onDownload={handleDownload}
+      />
       {/* === Header with Breadcrumbs and Refresh Button === */}
       <div className="flex items-center justify-between">
         {/* Breadcrumb Navigation */}

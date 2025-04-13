@@ -10,6 +10,13 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const folderId = searchParams.get('folderId') || null;
 
+  console.log('Google Drive API request:', {
+    folderId,
+    hasCredentialsJson: !!process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON,
+    hasKeyPath: !!process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH,
+    rootFolderId: process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID
+  });
+
   try {
     const [items, breadcrumbs] = await Promise.all([
       getFolderContents(folderId),
