@@ -235,12 +235,80 @@ export function RichTextEditor({ initialContent, onSave }: RichTextEditorProps) 
     }
   }, [editor, selectedLessonId, course, setCurrentContent, setSavedState, updateLesson, onSave, toast])
 
-  // Cleanup
+  /**
+   * Event listener for editor-save event
+   *
+   * This follows the optimistic UI pattern:
+   * 1. Immediately sync editor content to context (for instant UI updates)
+   * 2. Start a background save operation to persist to database
+   * 3. Update UI state based on the result of the save operation
+   */
   useEffect(() => {
-    return () => {
-      debouncedSave.cancel()
+    // Create a stable reference to the current editor instance
+    const currentEditor = editor
+
+    const handleEditorSave = () => {
+      if (!currentEditor) return
+
+      // Get the current HTML content from the editor
+      const html = currentEditor.getHTML()
+
+      // Immediately update the context with the latest content
+      // This ensures the student view will have access to the latest content
+      setCurrentContent(html)
+
+      // Only attempt to save to database if we have a lesson selected
+      if (selectedLessonId) {
+        // Set UI state to saving
+        setSavedState("saving")
+
+        // Start a background save operation
+        updateLesson(selectedLessonId, {
+          content_json: {
+            type: 'lesson',
+            content: html,
+            version: Date.now()
+          }
+        }).then(() => {
+          // Update UI state on success
+          setSavedState("saved")
+
+          // Notify the user (optional in this case since we're switching views)
+          toast({
+            description: "Changes saved successfully"
+          })
+
+          // Call the onSave callback
+          onSave()
+        }).catch(error => {
+          // Handle errors
+          console.error('Failed to save content:', error)
+          setSavedState("unsaved")
+
+          // Notify the user of the error
+          toast({
+            title: "Error",
+            description: "Failed to save changes. Please try again.",
+            variant: "destructive"
+          })
+        })
+      }
     }
-  }, [debouncedSave])
+
+    // Listen for the editor-save event
+    window.addEventListener('editor-save', handleEditorSave)
+
+    // Cleanup function
+    return () => {
+      // Cancel any pending debounced saves
+      if (debouncedSave && typeof debouncedSave.cancel === 'function') {
+        debouncedSave.cancel()
+      }
+
+      // Remove the event listener
+      window.removeEventListener('editor-save', handleEditorSave)
+    }
+  }, [editor, selectedLessonId, onSave, setCurrentContent, setSavedState, updateLesson, toast])
 
   return (
     <div className="relative min-h-[500px] rounded-md border border-input bg-background">

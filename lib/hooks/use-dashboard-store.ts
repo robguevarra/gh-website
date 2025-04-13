@@ -9,13 +9,14 @@
  * 4. Equality Checking - Uses shallow equality checking for state comparison
  */
 
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useMemo } from 'react'
 
 // Import the student dashboard store
 import { useStudentDashboardStore } from '@/lib/stores/student-dashboard'
 
 /**
- * Simple performance monitoring function that logs renders in development
+ * Enhanced performance monitoring function that logs renders in development
+ * with detailed information about the component and render cause
  */
 const logRender = (hookName: string): void => {
   if (process.env.NODE_ENV === 'development') {
@@ -23,12 +24,42 @@ const logRender = (hookName: string): void => {
     const renderCount = useRef(0)
     renderCount.current++
 
-    // Log render count on each render
-    console.log(`[Performance] ${hookName} rendered (count: ${renderCount.current})`)
+    // Get the component stack trace to identify which component is using this hook
+    const stackTrace = new Error().stack || ''
+    const callerComponent = stackTrace.split('\n')
+      .slice(2, 3) // Get the caller component from the stack trace
+      .map(line => line.trim())
+      .join('')
+
+    // Log render count on each render with component info
+    console.log(`[Performance] ${hookName} rendered (count: ${renderCount.current}) in ${callerComponent}`)
+
+    // Track previous state to detect changes
+    const prevStateRef = useRef<any>(null)
+
+    // Get current state
+    const currentState = useStudentDashboardStore.getState()
+
+    // Compare with previous state if available
+    if (prevStateRef.current) {
+      const changedKeys = Object.keys(currentState as Record<string, any>).filter(key => {
+        // Skip functions
+        if (typeof (currentState as Record<string, any>)[key] === 'function') return false
+        return JSON.stringify((currentState as Record<string, any>)[key]) !== JSON.stringify((prevStateRef.current as Record<string, any>)[key])
+      })
+
+      if (changedKeys.length > 0) {
+        console.log(`[Performance] State changes detected in: ${changedKeys.join(', ')}`)
+      }
+    }
+
+    // Update previous state reference
+    prevStateRef.current = { ...currentState }
 
     // Log warning if components render too many times
     if (renderCount.current > 5) {
       console.warn(`[WARNING] ${hookName} has rendered ${renderCount.current} times. This may indicate a performance issue.`)
+      console.warn(`[WARNING] Component: ${callerComponent}`)
     }
 
     // Use effect for cleanup only
@@ -59,14 +90,14 @@ export const useUserProfileData = () => {
   const setUserId = useStudentDashboardStore(state => state.setUserId)
   const setUserProfile = useStudentDashboardStore(state => state.setUserProfile)
 
-  // Return a stable object reference to prevent infinite loops
-  return {
+  // Use useMemo to return a stable object reference and prevent unnecessary re-renders
+  return useMemo(() => ({
     userId,
     userProfile,
     isLoadingProfile,
     setUserId,
     setUserProfile
-  }
+  }), [userId, userProfile, isLoadingProfile, setUserId, setUserProfile])
 }
 
 // We don't need to define these types as they're inferred from the selectors
@@ -87,14 +118,14 @@ export function useEnrollmentsData() {
   const setEnrollments = useStudentDashboardStore(state => state.setEnrollments)
   const loadUserEnrollments = useStudentDashboardStore(state => state.loadUserEnrollments)
 
-  // Return a stable object
-  return {
+  // Use useMemo to return a stable object reference
+  return useMemo(() => ({
     enrollments,
     isLoadingEnrollments,
     hasEnrollmentError,
     setEnrollments,
     loadUserEnrollments
-  }
+  }), [enrollments, isLoadingEnrollments, hasEnrollmentError, setEnrollments, loadUserEnrollments])
 }
 
 /**
@@ -122,8 +153,8 @@ export function useTemplatesData() {
   const getFilteredTemplates = useStudentDashboardStore(state => state.getFilteredTemplates)
   const loadUserTemplates = useStudentDashboardStore(state => state.loadUserTemplates)
 
-  // Return a stable object to prevent unnecessary re-renders
-  return {
+  // Use useMemo to return a stable object reference
+  return useMemo(() => ({
     templates,
     selectedTemplateId,
     templateFilter,
@@ -138,7 +169,22 @@ export function useTemplatesData() {
     setHasTemplatesError,
     getFilteredTemplates,
     loadUserTemplates
-  }
+  }), [
+    templates,
+    selectedTemplateId,
+    templateFilter,
+    templateSearchQuery,
+    isLoadingTemplates,
+    hasTemplatesError,
+    setTemplates,
+    setSelectedTemplateId,
+    setTemplateFilter,
+    setTemplateSearchQuery,
+    setIsLoadingTemplates,
+    setHasTemplatesError,
+    getFilteredTemplates,
+    loadUserTemplates
+  ])
 }
 
 // We don't need to define these types as they're inferred from the selectors
@@ -168,8 +214,8 @@ export function useCourseProgressData() {
   const updateLessonProgress = useStudentDashboardStore(state => state.updateLessonProgress)
   const loadContinueLearningLesson = useStudentDashboardStore(state => state.loadContinueLearningLesson)
 
-  // Return a stable object to prevent unnecessary re-renders
-  return {
+  // Use useMemo to return a stable object reference
+  return useMemo(() => ({
     courseProgress,
     moduleProgress,
     lessonProgress,
@@ -184,7 +230,22 @@ export function useCourseProgressData() {
     loadUserProgress,
     updateLessonProgress,
     loadContinueLearningLesson
-  }
+  }), [
+    courseProgress,
+    moduleProgress,
+    lessonProgress,
+    isLoadingProgress,
+    hasProgressError,
+    continueLearningLesson,
+    setCourseProgress,
+    setModuleProgress,
+    setLessonProgress,
+    setIsLoadingProgress,
+    setHasProgressError,
+    loadUserProgress,
+    updateLessonProgress,
+    loadContinueLearningLesson
+  ])
 }
 
 /**
@@ -202,13 +263,13 @@ export function usePurchasesData() {
   // Get actions separately as they don't need to trigger re-renders
   const setPurchases = useStudentDashboardStore(state => state.setPurchases)
 
-  // Return a stable object
-  return {
+  // Use useMemo to return a stable object reference
+  return useMemo(() => ({
     purchases,
     isLoadingPurchases,
     hasPurchasesError,
     setPurchases
-  }
+  }), [purchases, isLoadingPurchases, hasPurchasesError, setPurchases])
 }
 
 // We don't need to define these types as they're inferred from the selectors
@@ -231,13 +292,13 @@ export const useLiveClassesData = () => {
   // Get actions separately as they don't need to trigger re-renders
   const setLiveClasses = useStudentDashboardStore(state => state.setLiveClasses)
 
-  // Return a stable object reference to prevent infinite loops
-  return {
+  // Use useMemo to return a stable object reference
+  return useMemo(() => ({
     liveClasses,
     isLoadingLiveClasses,
     hasLiveClassesError,
     setLiveClasses
-  }
+  }), [liveClasses, isLoadingLiveClasses, hasLiveClassesError, setLiveClasses])
 }
 
 // We don't need to define these types as they're inferred from the selectors
@@ -261,8 +322,8 @@ export const useUIState = () => {
   const setShowAnnouncement = useStudentDashboardStore(state => state.setShowAnnouncement)
   const toggleSection = useStudentDashboardStore(state => state.toggleSection)
 
-  // Return a stable object
-  return {
+  // Use useMemo to return a stable object reference
+  return useMemo(() => ({
     showWelcomeModal,
     showOnboarding,
     showAnnouncement,
@@ -271,7 +332,16 @@ export const useUIState = () => {
     setShowOnboarding,
     setShowAnnouncement,
     toggleSection
-  }
+  }), [
+    showWelcomeModal,
+    showOnboarding,
+    showAnnouncement,
+    expandedSection,
+    setShowWelcomeModal,
+    setShowOnboarding,
+    setShowAnnouncement,
+    toggleSection
+  ])
 }
 
 // We don't need to define these types as they're inferred from the selectors
@@ -298,5 +368,9 @@ export const useSectionExpansion = () => {
     [expandedSection]
   )
 
-  return { isSectionExpanded, toggleSection }
+  // Use useMemo to return a stable object reference
+  return useMemo(() => ({
+    isSectionExpanded,
+    toggleSection
+  }), [isSectionExpanded, toggleSection])
 }

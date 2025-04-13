@@ -49,7 +49,7 @@ type StorePersist = {
 };
 
 const persistOptions: PersistOptions<CourseStore, StorePersist> = {
-  name: 'course-store',
+  name: 'admin-course-editor-store', // Changed from 'course-store' for better isolation
   storage: createJSONStorage(() => sessionStorage),
   partialize: (state): StorePersist => ({
     course: state.course,
@@ -101,4 +101,4 @@ export const useCourseStore = create<CourseStore>()(
     }),
     persistOptions
   )
-); 
+);

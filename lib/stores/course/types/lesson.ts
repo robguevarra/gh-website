@@ -1,3 +1,5 @@
+import { LessonMetadata, VideoLessonMetadata, QuizLessonMetadata, AssignmentLessonMetadata } from './lesson-metadata';
+
 /**
  * Unified Lesson type used throughout the application
  *
@@ -14,8 +16,7 @@
  * @property {string} module_id - ID of the parent module
  * @property {number} [duration] - Lesson duration in seconds/minutes
  * @property {boolean} [is_preview] - Whether this lesson is available in preview mode
- * @property {Object} [metadata] - Additional lesson metadata
- * @property {('video' | 'lesson' | 'quiz' | 'assignment')} [metadata.type] - Lesson content type
+ * @property {LessonMetadata} [metadata] - Additional lesson metadata
  * @property {string} [created_at] - Creation timestamp
  * @property {string} [updated_at] - Last update timestamp
  */
@@ -34,10 +35,31 @@ export interface Lesson {
   module_id: string;
   duration?: number;
   is_preview?: boolean;
-  metadata?: {
-    type?: 'video' | 'lesson' | 'quiz' | 'assignment';
-    [key: string]: unknown;
-  };
+  metadata?: LessonMetadata | VideoLessonMetadata | QuizLessonMetadata | AssignmentLessonMetadata;
   created_at?: string;
   updated_at?: string;
+}
+
+/**
+ * Helper function to get the video URL from a lesson
+ * @param lesson The lesson object
+ * @returns The video URL or null if not found
+ */
+export function getLessonVideoUrl(lesson: Lesson | null | undefined): string | null {
+  if (!lesson || !lesson.metadata) return null;
+
+  const metadata = lesson.metadata as VideoLessonMetadata;
+  return metadata.videoUrl || null;
+}
+
+/**
+ * Helper function to get the video ID from a lesson
+ * @param lesson The lesson object
+ * @returns The video ID or null if not found
+ */
+export function getLessonVideoId(lesson: Lesson | null | undefined): string | null {
+  if (!lesson || !lesson.metadata) return null;
+
+  const metadata = lesson.metadata as VideoLessonMetadata;
+  return metadata.videoId || null;
 }

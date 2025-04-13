@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import { getLessonVideoId, getLessonVideoUrl } from "@/lib/stores/course/types/lesson"
 import { motion } from "framer-motion"
 
 // UI Components
@@ -50,8 +51,18 @@ type CourseLesson = {
   order: number
   duration?: string
   videoUrl?: string
+  videoId?: string
+  videoType?: 'vimeo' | 'youtube' | 'other'
   description?: string
   content_json?: any
+  metadata?: {
+    type?: string
+    videoUrl?: string
+    videoId?: string
+    videoType?: string
+    duration?: number
+    [key: string]: any
+  }
   resources?: CourseResource[]
   moduleId?: string
 }
@@ -74,7 +85,11 @@ type CourseViewerState = {
   activeTab: string
   videoProgress: number
   isLoading: boolean
-  currentLesson: CourseLesson | null
+  currentLesson: (CourseLesson & {
+    videoId?: string | null
+    videoUrl?: string | null
+    videoType?: string
+  }) | null
   currentModule: CourseModule | null
   currentCourse: ExtendedCourse | null
   nextLesson: CourseLesson | null
@@ -119,6 +134,14 @@ export default function CourseViewer() {
   // Load course data
   // Using a ref to prevent multiple loads
   const dataLoadedRef = useRef(false)
+
+  // Prepare for student view and clear any conflicting caches
+  useEffect(() => {
+    // Import dynamically to avoid SSR issues
+    import('@/lib/utils/view-transition').then(({ prepareForStudentView }) => {
+      prepareForStudentView();
+    });
+  }, []);
 
   useEffect(() => {
     if (!user?.id || dataLoadedRef.current) return
@@ -251,11 +274,28 @@ export default function CourseViewer() {
   useEffect(() => {
     // Only update state if we have valid data
     if (courseData && targetModule && targetLesson) {
+      // Extract video metadata from the lesson
+      const videoId = targetLesson.metadata?.videoId ||
+                     (targetLesson.metadata?.type === 'video' ?
+                      getLessonVideoId(targetLesson as any) : undefined)
+
+      const videoUrl = targetLesson.metadata?.videoUrl ||
+                      (targetLesson.metadata?.type === 'video' ?
+                       getLessonVideoUrl(targetLesson as any) : undefined)
+
+      // Create an enhanced lesson with video metadata
+      const enhancedLesson = {
+        ...targetLesson,
+        videoId: videoId || undefined,
+        videoUrl: videoUrl || undefined,
+        videoType: targetLesson.metadata?.videoType || 'vimeo'
+      } as CourseViewerState['currentLesson']
+
       setCourseViewerState(prevState => ({
         ...prevState,
         currentCourse: courseData,
         currentModule: targetModule,
-        currentLesson: targetLesson,
+        currentLesson: enhancedLesson,
         prevLesson,
         nextLesson
       }))
@@ -501,8 +541,17 @@ export default function CourseViewer() {
             <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
               {/* Video player */}
               <div className="aspect-video bg-black relative">
-                {/* Custom LessonPlayer implementation for this page */}
-                {courseViewerState.currentLesson.videoUrl ? (
+                {/* Check for video in metadata first, then fallback to legacy videoUrl */}
+                {courseViewerState.currentLesson.videoId ? (
+                  <iframe
+                    src={`https://player.vimeo.com/video/${courseViewerState.currentLesson.videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479`}
+                    className="absolute inset-0 w-full h-full"
+                    style={{ border: 0 }}
+                    allow="autoplay; fullscreen; picture-in-picture"
+                    allowFullScreen
+                    title={`Video: ${courseViewerState.currentLesson.title}`}
+                  />
+                ) : courseViewerState.currentLesson.videoUrl ? (
                   <iframe
                     src={courseViewerState.currentLesson.videoUrl}
                     className="absolute inset-0 w-full h-full"

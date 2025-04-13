@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
-import { useUserProfileData, useCourseProgressData } from '@/lib/hooks/use-dashboard-store'
+import { useCourseProgressData } from '@/lib/hooks/use-dashboard-store'
+import { useUserProfile } from '@/lib/hooks/use-user-profile'
 import { EnrollmentStatus } from './enrollment-status'
 
 type VideoPlayerProps = {
@@ -22,12 +23,12 @@ type VideoPlayerProps = {
 /**
  * Video player component that tracks progress and updates the store
  */
-function VideoPlayer({ 
-  videoUrl, 
-  autoPlay = false, 
+function VideoPlayer({
+  videoUrl,
+  autoPlay = false,
   initialPosition = 0,
   onProgressUpdate,
-  onComplete 
+  onComplete
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -35,39 +36,39 @@ function VideoPlayer({
   const [duration, setDuration] = useState(0)
   const [progress, setProgress] = useState(0)
   const progressUpdateInterval = useRef<NodeJS.Timeout | null>(null)
-  
+
   // Set initial position when component mounts
   useEffect(() => {
     if (videoRef.current && initialPosition) {
       videoRef.current.currentTime = initialPosition
     }
   }, [initialPosition])
-  
+
   // Setup event listeners for the video player
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
-    
+
     const handleTimeUpdate = () => {
       const current = video.currentTime
       const total = video.duration
       setCurrentTime(current)
-      
+
       // Calculate progress percentage
       const progressPercentage = (current / total) * 100
       setProgress(progressPercentage)
-      
+
       // Track every 5 seconds of playback
       if (Math.floor(current) % 5 === 0) {
         onProgressUpdate(progressPercentage, current)
       }
-      
+
       // Mark as complete when 95% watched
       if (progressPercentage >= 95 && !video.paused) {
         onComplete()
       }
     }
-    
+
     const handlePlay = () => setIsPlaying(true)
     const handlePause = () => setIsPlaying(false)
     const handleLoadedMetadata = () => setDuration(video.duration)
@@ -75,34 +76,34 @@ function VideoPlayer({
       setIsPlaying(false)
       onComplete()
     }
-    
+
     video.addEventListener('timeupdate', handleTimeUpdate)
     video.addEventListener('play', handlePlay)
     video.addEventListener('pause', handlePause)
     video.addEventListener('loadedmetadata', handleLoadedMetadata)
     video.addEventListener('ended', handleEnded)
-    
+
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate)
       video.removeEventListener('play', handlePlay)
       video.removeEventListener('pause', handlePause)
       video.removeEventListener('loadedmetadata', handleLoadedMetadata)
       video.removeEventListener('ended', handleEnded)
-      
+
       // Update progress one last time when component unmounts
       if (currentTime > 0) {
         onProgressUpdate(progress, currentTime)
       }
     }
   }, [onProgressUpdate, onComplete, progress, currentTime])
-  
+
   // Format time display (MM:SS)
   const formatTime = (timeInSeconds: number) => {
     const minutes = Math.floor(timeInSeconds / 60)
     const seconds = Math.floor(timeInSeconds % 60)
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`
   }
-  
+
   return (
     <div className="rounded-lg overflow-hidden bg-black">
       <video
@@ -138,30 +139,30 @@ function VideoPlayer({
  * Main lesson player component that integrates with the dashboard store
  */
 export function LessonPlayer() {
-  const { courseId, moduleId, lessonId } = useParams<{ 
-    courseId: string, 
-    moduleId: string, 
-    lessonId: string 
+  const { courseId, moduleId, lessonId } = useParams<{
+    courseId: string,
+    moduleId: string,
+    lessonId: string
   }>()
-  const { userId } = useUserProfileData()
-  const { 
-    lessonProgress, 
-    updateLessonProgress 
+  const { userId } = useUserProfile()
+  const {
+    lessonProgress,
+    updateLessonProgress
   } = useCourseProgressData()
-  
+
   const [lesson, setLesson] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Fetch lesson data and check enrollment
   useEffect(() => {
     async function fetchLessonData() {
       if (!userId || !courseId || !moduleId || !lessonId) return
-      
+
       try {
         setIsLoading(true)
         setError(null)
-        
+
         // We would normally fetch this from the API
         // For now, let's simulate it with a timeout
         setTimeout(() => {
@@ -183,16 +184,16 @@ export function LessonPlayer() {
         setIsLoading(false)
       }
     }
-    
+
     fetchLessonData()
   }, [userId, courseId, moduleId, lessonId])
-  
+
   // Handle progress updates
   const handleProgressUpdate = (progress: number, position: number) => {
     if (!userId || !lessonId) return
-    
+
     const parsedLessonId = Array.isArray(lessonId) ? lessonId[0] : lessonId
-    
+
     // Update progress in the store
     updateLessonProgress(userId, parsedLessonId, {
       status: progress >= 95 ? 'completed' : 'in-progress',
@@ -200,29 +201,29 @@ export function LessonPlayer() {
       lastPosition: Math.floor(position)
     })
   }
-  
+
   // Handle lesson completion
   const handleLessonComplete = () => {
     if (!userId || !lessonId) return
-    
+
     const parsedLessonId = Array.isArray(lessonId) ? lessonId[0] : lessonId
-    
+
     // Mark as completed in the store
     updateLessonProgress(userId, parsedLessonId, {
       status: 'completed',
       progress: 100
     })
   }
-  
+
   // Get the current lesson progress from the store
-  const currentProgress = lessonId 
-    ? lessonProgress[Array.isArray(lessonId) ? lessonId[0] : lessonId] 
+  const currentProgress = lessonId
+    ? lessonProgress[Array.isArray(lessonId) ? lessonId[0] : lessonId]
     : null
-  
+
   if (isLoading) {
     return <LessonPlayerSkeleton />
   }
-  
+
   if (error) {
     return (
       <Alert variant="destructive">
@@ -231,7 +232,7 @@ export function LessonPlayer() {
       </Alert>
     )
   }
-  
+
   if (!lesson) {
     return (
       <Alert>
@@ -242,47 +243,47 @@ export function LessonPlayer() {
       </Alert>
     )
   }
-  
+
   return (
     <div className="space-y-6">
       {/* Enrollment verification */}
       <EnrollmentStatus />
-      
+
       {/* Lesson content */}
       <div>
         <h1 className="text-2xl font-bold mb-2">{lesson.title}</h1>
         <p className="text-muted-foreground mb-6">{lesson.description}</p>
-        
+
         {/* Video player */}
-        <VideoPlayer 
+        <VideoPlayer
           videoUrl={lesson.videoUrl}
           initialPosition={currentProgress?.lastPosition || 0}
           onProgressUpdate={handleProgressUpdate}
           onComplete={handleLessonComplete}
         />
-        
+
         {/* Lesson navigation */}
         <div className="flex justify-between mt-6">
-          <Link 
-            href={`/courses/${courseId}/modules/${moduleId}`} 
+          <Link
+            href={`/courses/${courseId}/modules/${moduleId}`}
             passHref
           >
             <Button variant="outline" size="sm">
               <ChevronLeft className="h-4 w-4 mr-1" /> Back to Module
             </Button>
           </Link>
-          
-          <Button 
-            variant="outline" 
+
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => handleLessonComplete()}
           >
-            <BookOpen className="h-4 w-4 mr-1" /> 
+            <BookOpen className="h-4 w-4 mr-1" />
             {currentProgress?.status === 'completed' ? 'Already Completed' : 'Mark as Complete'}
           </Button>
-          
-          <Link 
-            href={`/courses/${courseId}/modules/${moduleId}/lessons/${parseInt(Array.isArray(lessonId) ? lessonId[0] : lessonId) + 1}`} 
+
+          <Link
+            href={`/courses/${courseId}/modules/${moduleId}/lessons/${parseInt(Array.isArray(lessonId) ? lessonId[0] : lessonId) + 1}`}
             passHref
           >
             <Button>
@@ -299,13 +300,13 @@ function LessonPlayerSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-16 w-full rounded-lg" />
-      
+
       <div>
         <Skeleton className="h-8 w-72 mb-2" />
         <Skeleton className="h-4 w-full max-w-2xl mb-6" />
-        
+
         <Skeleton className="w-full aspect-video rounded-lg" />
-        
+
         <div className="flex justify-between mt-6">
           <Skeleton className="h-9 w-32" />
           <Skeleton className="h-9 w-40" />

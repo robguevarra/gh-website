@@ -48,36 +48,51 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  
+
   // Use the profile hook to fetch the user's profile
   const { data: profile, isLoading: isProfileLoading } = useUserProfile(user?.id);
-  
+
   // Use the admin status hook
   const { data: adminData, isLoading: isAdminLoading } = useAdminStatus(user?.id);
 
   // Initialize auth state
   useEffect(() => {
     let mounted = true;
-    
+
     const initializeAuth = async () => {
       try {
-        // Get current user - this is secure as it validates with the Supabase server
-        const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-        
-        if (userError) {
-          console.error('User fetch error:', userError);
-          if (mounted) {
+        // Import auth coordination utilities
+        const { coordinateTokenRefresh, notifyTokenRefreshComplete } = await import('@/lib/utils/auth-coordination');
+
+        // Check if we should refresh the token
+        const shouldRefresh = await coordinateTokenRefresh();
+
+        if (shouldRefresh) {
+          console.log('🔄 [Auth] Refreshing auth token');
+          // Get current user - this is secure as it validates with the Supabase server
+          const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+
+          // Notify other tabs that refresh is complete
+          notifyTokenRefreshComplete();
+
+          if (userError) {
+            console.error('User fetch error:', userError);
+            if (mounted) {
+              setUser(null);
+              setSession(null);
+            }
+            return;
+          }
+
+          if (currentUser && mounted) {
+            setUser(currentUser);
+          } else if (mounted) {
             setUser(null);
             setSession(null);
           }
-          return;
-        }
-        
-        if (currentUser && mounted) {
-          setUser(currentUser);
-        } else if (mounted) {
-          setUser(null);
-          setSession(null);
+        } else {
+          console.log('🔄 [Auth] Skipping token refresh - using cached auth state');
+          // Use existing auth state
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
@@ -95,19 +110,19 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        
+
         if (currentSession && mounted) {
           // Validate the user with the server on auth state change
-          const { data: { user: validatedUser }, error: validationError } = 
+          const { data: { user: validatedUser }, error: validationError } =
             await supabase.auth.getUser();
-            
+
           if (validationError) {
             console.error('User validation error:', validationError);
             setUser(null);
             setSession(null);
             return;
           }
-          
+
           if (validatedUser) {
             setUser(validatedUser);
             setSession(currentSession);
@@ -116,7 +131,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           setUser(null);
           setSession(null);
         }
-        
+
         setIsLoading(false);
       }
     );
@@ -135,22 +150,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signIn = async (email: string, password: string) => {
     setIsLoading(true);
     const { user: signedInUser, session: newSession, error } = await signInWithEmail(email, password);
-    
+
     if (!error) {
       setUser(signedInUser);
       setSession(newSession);
-      
+
       // Wait for admin status to be loaded
       const { data: adminData } = await supabase
         .from('profiles')
         .select('is_admin')
         .eq('id', signedInUser.id)
         .single();
-      
+
       // Redirect based on admin status
       window.location.href = '/dashboard';
     }
-    
+
     setIsLoading(false);
     return { error };
   };
@@ -159,12 +174,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const signUp = async (email: string, password: string) => {
     setIsLoading(true);
     const { user: signedUpUser, session: newSession, error } = await signUpWithEmail(email, password);
-    
+
     if (!error) {
       setUser(signedUpUser);
       setSession(newSession);
     }
-    
+
     setIsLoading(false);
     return { error };
   };
@@ -181,12 +196,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const logout = async () => {
     setIsLoading(true);
     const { error } = await signOut();
-    
+
     if (!error) {
       setUser(null);
       setSession(null);
     }
-    
+
     setIsLoading(false);
     return { error };
   };
@@ -229,10 +244,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 // Hook for using auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  
+
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  
+
   return context;
-}; 
+};

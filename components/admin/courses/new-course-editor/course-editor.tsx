@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast"
 import EditorSidebar from "./editor-sidebar"
 import ContentEditor from "./content-editor"
 import SettingsPanel from "./settings-panel"
+import LessonSettingsPanel from "./lesson-settings-panel"
 import StudentView from "./student-view"
 import EditorHeader from "./editor-header"
 import { useCourseStore } from "@/lib/stores/course"
@@ -89,6 +90,14 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
     expandedModules,
     fetchCourse
   } = useCourseStore()
+
+  // Prepare for admin view and clear any conflicting caches
+  useEffect(() => {
+    // Import dynamically to avoid SSR issues
+    import('@/lib/utils/view-transition').then(({ prepareForAdminView }) => {
+      prepareForAdminView();
+    });
+  }, []);
 
   // Fetch course data on mount and handle course ID changes
   useEffect(() => {
@@ -268,16 +277,19 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
       const activeLesson = activeModule?.lessons?.find(l => l.id === activeItemId)
 
       if (activeLesson) {
-        // Get the current content from the editor
-        const contentEditor = document.querySelector('[contenteditable="true"]')
-        const currentContent = contentEditor?.innerHTML || ''
+        // Use the current content from the context
+        // This ensures we're using the latest content that's been edited
+        console.log('💾 [CourseEditor] Saving content for lesson:', {
+          lessonId: activeItemId,
+          contentLength: currentContent ? currentContent.length : 0
+        })
 
         // Update lesson content and title
         await useCourseStore.getState().updateLesson(activeLesson.id, {
           content_json: {
-            content: currentContent,
+            content: currentContent || activeLesson.content_json?.content || '',
             type: "html",
-            version: 1
+            version: Date.now() // Use timestamp for versioning
           },
           title: activeLesson.title
         })
@@ -374,13 +386,39 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
       })
   }
 
+  /**
+   * Toggle between editor and student view modes
+   *
+   * This function follows the optimistic UI pattern:
+   * 1. It immediately updates the UI to show the new view mode
+   * 2. It persists the current content to the database in the background
+   * 3. The student view uses the latest content from context rather than waiting for DB
+   */
   const toggleViewMode = () => {
-    // Save content before switching to student view
+    // If we're in editor mode, trigger a save operation
     if (viewMode === "editor") {
-      handleSave()
+      // Dispatch event to ensure the editor's content is synced to context
+      window.dispatchEvent(new Event("editor-save"))
+
+      // Start a background save operation - don't wait for it
+      // This follows the optimistic UI pattern
+      Promise.resolve().then(async () => {
+        try {
+          setSavedState("saving")
+          await handleSave()
+          setSavedState("saved")
+        } catch (error) {
+          console.error("Error saving content in background:", error)
+          setSavedState("unsaved")
+          // Don't show an error toast as we've already switched views
+        }
+      })
     }
 
+    // Immediately switch view mode - don't wait for save to complete
+    // The student view will use the content from context, which is already updated
     setViewMode(viewMode === "editor" ? "student" : "editor")
+
     toast({
       title: viewMode === "editor" ? "Student View" : "Editor View",
       description:
@@ -453,11 +491,17 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
                         </svg>
                         Content
                       </TabsTrigger>
-                      <TabsTrigger value="settings" className="data-[state=active]:bg-primary/10">
+                      <TabsTrigger value="lesson-settings" className="data-[state=active]:bg-primary/10">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Lesson Settings
+                      </TabsTrigger>
+                      <TabsTrigger value="course-settings" className="data-[state=active]:bg-primary/10">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                         </svg>
-                        Settings
+                        Course Settings
                       </TabsTrigger>
                     </TabsList>
                   </div>
@@ -466,7 +510,16 @@ export default function CourseEditor({ courseId }: CourseEditorProps) {
                       <TabsContent value="content" className="mt-0 h-full">
                         <ContentEditor onSave={handleSave} />
                       </TabsContent>
-                      <TabsContent value="settings" className="mt-0">
+                      <TabsContent value="lesson-settings" className="mt-0">
+                        {course && activeItemId ? (
+                          <LessonSettingsPanel lessonId={activeItemId} />
+                        ) : (
+                          <div className="p-4 text-center">
+                            <p className="text-muted-foreground">Select a lesson to edit its settings</p>
+                          </div>
+                        )}
+                      </TabsContent>
+                      <TabsContent value="course-settings" className="mt-0">
                         <SettingsPanel
                           courseId={courseId}
                           initialData={{

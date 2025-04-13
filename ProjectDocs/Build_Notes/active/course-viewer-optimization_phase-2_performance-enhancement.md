@@ -136,6 +136,16 @@ The course editor implementation (from `course-editor-enhancement_phase-2_kajabi
   - [x] Use React.memo for pure components
   - [x] Implement proper dependency arrays in useEffect hooks
   - [x] Add useCallback for event handlers
+  - [x] Fix excessive re-rendering issues in dashboard store hooks
+  - [x] Optimize Zustand store selectors to prevent infinite loops
+  - [x] Implement refs to prevent redundant data loading
+
+- [x] Optimize state management:
+  - [x] Refactor updateLessonProgress to avoid circular dependencies
+  - [x] Implement local state updates instead of full data reloads
+  - [x] Use direct store selectors instead of custom hooks where appropriate
+  - [x] Add proper performance monitoring for hooks
+  - [x] Fix logRender implementation to accurately track render counts
 
 - [ ] Add loading states and error boundaries:
   - [ ] Implement skeleton loaders for content
@@ -153,6 +163,10 @@ The course editor implementation (from `course-editor-enhancement_phase-2_kajabi
 - Use individual selectors for each piece of state to prevent unnecessary re-renders
 - Maintain stable object references to prevent infinite loops
 - Implement proper cleanup in useEffect hooks to prevent memory leaks
+- Define selector functions outside of hooks to ensure stability
+- Use refs to track initialization state and prevent redundant operations
+- Avoid circular dependencies in store actions that trigger cascading updates
+- Implement local state updates instead of reloading entire data sets
 
 ### Content Rendering
 - Use dangerouslySetInnerHTML with caution, ensuring content is properly sanitized
@@ -163,6 +177,11 @@ The course editor implementation (from `course-editor-enhancement_phase-2_kajabi
 - Monitor render counts with development tools
 - Implement virtualization for long lists of modules and lessons
 - Use React DevTools Profiler to identify and fix performance bottlenecks
+- Implement custom performance monitoring for hooks to track render counts
+- Use refs to prevent redundant data loading and initialization
+- Optimize store actions to avoid unnecessary state updates
+- Implement proper memoization patterns for derived values
+- Use direct store selectors instead of custom hooks for critical components
 
 ### Type Safety
 - Use strict TypeScript configurations
@@ -178,11 +197,19 @@ This phase is partially complete. Achievements so far:
 - Fixed infinite loop issues in Zustand store usage
 - Added proper type safety with TypeScript interfaces
 - Implemented lesson navigation and progress tracking
+- Optimized dashboard store hooks to prevent excessive re-renders
+- Fixed circular dependencies in store actions
+- Implemented performance monitoring for critical hooks
+- Added refs to prevent redundant data loading and initialization
 
 Challenges addressed:
 - Resolved infinite loop issues by implementing proper selector patterns
 - Fixed content rendering by properly accessing content_json.content
 - Improved type safety with comprehensive interfaces and null checks
+- Fixed excessive re-rendering in dashboard store hooks
+- Optimized updateLessonProgress to avoid circular dependencies
+- Implemented proper memoization patterns for derived values
+- Added performance monitoring to track render counts
 
 Pending items:
 - Enhanced video player integration

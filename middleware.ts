@@ -56,7 +56,16 @@ export async function middleware(request: NextRequest) {
 
   // Refresh session if expired - required for Server Components
   // This will validate the session with the Supabase Auth server
-  const { data: { user }, error } = await supabase.auth.getUser()
+  // Note: We can't use auth-coordination.ts here because middleware runs on the server
+  // But we add a custom header to track refreshes
+  const authRefreshHeader = request.headers.get('x-auth-refresh-timestamp');
+  const skipRefresh = authRefreshHeader &&
+    (Date.now() - parseInt(authRefreshHeader, 10) < 60000); // Skip if refreshed in last minute
+
+  // Only refresh if needed
+  const { data: { user }, error } = skipRefresh
+    ? { data: { user: null }, error: null }
+    : await supabase.auth.getUser()
 
   // If there's an error or no user, clear the session
   if (error || !user) {
@@ -68,12 +77,17 @@ export async function middleware(request: NextRequest) {
     })
   }
 
+  // Add auth refresh timestamp to response headers if we performed a refresh
+  if (!skipRefresh) {
+    response.headers.set('x-auth-refresh-timestamp', Date.now().toString());
+  }
+
   // Check for special auth routes that shouldn't be redirected
   const isPasswordResetFlow = request.nextUrl.pathname.startsWith('/auth/update-password')
-  
+
   // Handle protected routes
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
-  const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') || 
+  const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') ||
                           request.nextUrl.pathname.startsWith('/admin')
 
   // Allow password reset flow even without authentication
@@ -103,4 +117,4 @@ export const config = {
      */
     '/((?!_next/static|_next/image|favicon.ico|public/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
-} 
+}

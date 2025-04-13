@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import Link from "next/link"
@@ -28,16 +28,23 @@ import { WelcomeModal } from "@/components/dashboard/welcome-modal"
 import { TemplatePreviewModal } from "@/components/dashboard/template-preview-modal"
 
 // Dashboard store hooks
-import { 
-  useUserProfileData,
-  useEnrollmentsData, 
+import {
+  useEnrollmentsData,
   useCourseProgressData,
   useTemplatesData,
   useLiveClassesData,
   usePurchasesData,
-  useUIState,
-  useSectionExpansion
+  useUIState
 } from "@/lib/hooks/use-dashboard-store"
+
+// Import optimized hooks
+import { useSectionExpansion } from "@/lib/hooks/use-section-expansion"
+import { useUserProfile } from "@/lib/hooks/use-user-profile"
+import { useOptimizedUIState } from "@/lib/hooks/use-ui-state"
+import { useLoadingStates } from "@/lib/hooks/use-loading-states"
+
+// Import store
+import { useStudentDashboardStore } from "@/lib/stores/student-dashboard"
 
 // Import types
 import type { CourseProgress } from "@/lib/stores/student-dashboard/types"
@@ -86,27 +93,31 @@ import {
 export default function StudentDashboard() {
   const router = useRouter()
   const { user, isLoading: isAuthLoading } = useAuth()
-  
-  // Dashboard store hooks
-  const { userId, userProfile, isLoadingProfile, setUserId, setUserProfile } = useUserProfileData()
-  const { enrollments = [], isLoadingEnrollments = false, loadUserEnrollments } = useEnrollmentsData() || {}
-  const { courseProgress = {}, isLoadingProgress = false, loadUserProgress } = useCourseProgressData() || {}
-  const { templates = [], isLoadingTemplates = false, loadUserTemplates } = useTemplatesData() || {}
-  const { liveClasses = [], isLoadingLiveClasses = false } = useLiveClassesData() || {}
-  const { purchases = [], isLoadingPurchases = false } = usePurchasesData() || {}
-  
-  // UI state from store
-  const { 
-    showWelcomeModal = false, 
-    showOnboarding = false, 
-    showAnnouncement = false,
-    expandedSection = null,
-    setShowWelcomeModal = () => {},
-    setShowOnboarding = () => {},
-    setShowAnnouncement = () => {},
-    toggleSection = () => {} 
-  } = useUIState() || {}
-  
+
+  // Use optimized hooks for better performance
+  const { userId, isLoadingProfile, setUserId } = useUserProfile()
+
+  // Use optimized loading states hook for better performance
+  const {
+    isLoadingEnrollments,
+    isLoadingProgress,
+    loadUserEnrollments,
+    loadUserProgress
+  } = useLoadingStates()
+
+  // Use optimized UI state hook for better performance
+  const {
+    showWelcomeModal,
+    showOnboarding,
+    showAnnouncement,
+    setShowWelcomeModal,
+    setShowOnboarding,
+    setShowAnnouncement
+  } = useOptimizedUIState()
+
+  // Use the optimized section expansion hook
+  const { isSectionExpanded, toggleSection } = useSectionExpansion()
+
   // Local state
   const [activeTemplateTab, setActiveTemplateTab] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
@@ -116,7 +127,10 @@ export default function StudentDashboard() {
 
   // References for animations
   const containerRef = useRef(null)
-  
+
+  // Track data loading to prevent redundant API calls
+  const dataLoadedRef = useRef(false)
+
   // Load initial data when user is available
   useEffect(() => {
     // Redirect to sign-in if user is not authenticated
@@ -125,22 +139,36 @@ export default function StudentDashboard() {
       return;
     }
 
-    // Load data only if userId is available
-    if (user?.id) {
+    // Load data only if userId is available and not already loaded
+    if (user?.id && !dataLoadedRef.current) {
+      // Mark data as loaded to prevent redundant calls
+      dataLoadedRef.current = true;
+
+      // Set user ID in store
       setUserId(user.id);
-      // Load enrollments and progress data
-      loadUserEnrollments(user.id);
-      loadUserProgress(user.id);
-      // Removed deprecated template loading call: loadUserTemplates(user.id);
+
+      // Load enrollments and progress data in parallel
+      Promise.all([
+        loadUserEnrollments(user.id),
+        loadUserProgress(user.id)
+      ]).catch(error => {
+        console.error('Error loading dashboard data:', error);
+        // Reset the ref if loading fails so we can retry
+        dataLoadedRef.current = false;
+      });
     }
+
+    // Cleanup function to reset ref when component unmounts
+    return () => {
+      dataLoadedRef.current = false;
+    };
   }, [
     user,
     isAuthLoading,
     router,
     setUserId,
     loadUserEnrollments,
-    loadUserProgress,
-    // Removed loadUserTemplates from dependency array
+    loadUserProgress
   ]);
 
   // Helper Functions
@@ -148,16 +176,21 @@ export default function StudentDashboard() {
     return Math.floor(Math.random() * (max - min + 1)) + min
   }
 
-  // Format progress percentage
-  function formatProgress(value: number): string {
+  // Format progress percentage - memoized to prevent recreation on each render
+  const formatProgress = useCallback((value: number): string => {
     return `${Math.round(value)}%`
-  }
+  }, [])
 
-  // Check if section is expanded
-  const isSectionExpanded = (section: string) => {
-    return expandedSection === section
-  }
-  
+  // Helper function to calculate time spent - memoized
+  const calculateTimeSpent = useCallback((progress: ExtendedCourseProgress | null): string => {
+    if (!progress) return "0h 0m";
+    // Calculate based on completed lessons (15 min per lesson)
+    const minutes = (progress.completedLessonsCount || 0) * 15;
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours}h ${remainingMinutes}m`;
+  }, [])
+
   // Animation variants
   const fadeInUp = {
     hidden: { opacity: 0, y: 20 },
@@ -167,7 +200,7 @@ export default function StudentDashboard() {
       transition: { duration: 0.6 }
     }
   }
-  
+
   const staggerContainer = {
     hidden: {},
     visible: {
@@ -183,7 +216,7 @@ export default function StudentDashboard() {
     setPreviewFile(file)
     setIsPreviewOpen(true)
   }
-  
+
   // Mock data for upcoming classes
   const upcomingClasses = [
     {
@@ -210,47 +243,54 @@ export default function StudentDashboard() {
     },
   ]
 
-  // Get the course ID from the first enrollment
-  const courseId = enrollments?.[0]?.course?.id || '';
-  
-  // Get the course progress from the store
-  // Use a safer approach to handle the type conversion
-  const rawCourseProgress = courseProgress[courseId] || null;
-  const currentCourseProgress: ExtendedCourseProgress | null = rawCourseProgress ? {
-    ...rawCourseProgress,
-    progress: 0, // Default values that will be overridden if they exist in the actual data
-    completedLessonsCount: 0,
-    totalLessonsCount: 0,
-    // Use any actual values from the raw data if they exist
-    ...(rawCourseProgress as any)
-  } : null;
-  
-  // Create a formatted version for the UI components with real data
-  // This avoids TypeScript errors by not directly accessing properties that might not exist
-  const formattedCourseProgress = {
-    title: enrollments?.[0]?.course?.title || "Papers to Profits",
-    courseId: courseId, // Add courseId for linking to the course viewer
-    progress: currentCourseProgress ? currentCourseProgress.progress : 0,
-    completedLessons: currentCourseProgress ? currentCourseProgress.completedLessonsCount : 0,
-    totalLessons: currentCourseProgress ? currentCourseProgress.totalLessonsCount : 0,
-    nextLesson: "Continue Learning", // Will be updated with real data in future
-    timeSpent: calculateTimeSpent(currentCourseProgress),
-    nextLiveClass: upcomingClasses?.[0] ? `${upcomingClasses[0].date} - ${upcomingClasses[0].time}` : "No upcoming classes",
-    instructor: {
-      name: "Grace Guevarra",
-      avatar: "/placeholder.svg?height=40&width=40&text=GG",
-    },
-  }
-  
-  // Helper function to calculate time spent based on completed lessons
-  function calculateTimeSpent(progress: ExtendedCourseProgress | null): string {
-    if (!progress) return "0h 0m";
-    // Calculate based on completed lessons (15 min per lesson)
-    const minutes = (progress.completedLessonsCount || 0) * 15;
-    const hours = Math.floor(minutes / 60);
-    const remainingMinutes = minutes % 60;
-    return `${hours}h ${remainingMinutes}m`;
-  }
+  // Get enrollments data with memoization to prevent unnecessary re-renders
+  const enrollments = useMemo(() => {
+    return useStudentDashboardStore.getState().enrollments || [];
+  }, []);
+
+  // Get course progress data with memoization
+  const courseProgress = useMemo(() => {
+    return useStudentDashboardStore.getState().courseProgress || {};
+  }, []);
+
+  // Get the course ID from the first enrollment - memoized to prevent recalculation
+  const courseId = useMemo(() => {
+    return enrollments?.[0]?.course?.id || '';
+  }, [enrollments]);
+
+  // Get the course progress from the store - memoized
+  const currentCourseProgress = useMemo(() => {
+    const rawCourseProgress = courseProgress[courseId] || null;
+
+    if (!rawCourseProgress) return null;
+
+    return {
+      ...rawCourseProgress,
+      progress: rawCourseProgress.progress || 0,
+      completedLessonsCount: rawCourseProgress.completedLessonsCount || 0,
+      totalLessonsCount: rawCourseProgress.totalLessonsCount || 0,
+    } as ExtendedCourseProgress;
+  }, [courseProgress, courseId]);
+
+  // Create a formatted version for the UI components - memoized
+  const formattedCourseProgress = useMemo(() => {
+    return {
+      title: enrollments?.[0]?.course?.title || "Papers to Profits",
+      courseId: courseId,
+      progress: currentCourseProgress?.progress || 0,
+      completedLessons: currentCourseProgress?.completedLessonsCount || 0,
+      totalLessons: currentCourseProgress?.totalLessonsCount || 0,
+      nextLesson: "Continue Learning",
+      timeSpent: calculateTimeSpent(currentCourseProgress),
+      nextLiveClass: upcomingClasses?.[0] ? `${upcomingClasses[0].date} - ${upcomingClasses[0].time}` : "No upcoming classes",
+      instructor: {
+        name: "Grace Guevarra",
+        avatar: "/placeholder.svg?height=40&width=40&text=GG",
+      },
+    };
+  }, [enrollments, courseId, currentCourseProgress, upcomingClasses])
+
+  // Helper function to calculate time spent is now defined above as a memoized function
 
   // Mock data for announcements
   const announcements = [
@@ -270,14 +310,15 @@ export default function StudentDashboard() {
     },
   ]
 
-  // Get the continue learning lesson from the store
-  const { continueLearningLesson } = useCourseProgressData();
-  
-  // Get the first course and its modules/lessons for new users with no progress
-  const firstCourse = enrollments?.[0]?.course;
-  
-  // Define extended course type with modules and lessons (as we know they exist from the API response)
-  type ExtendedCourse = typeof firstCourse & {
+  // Get the continue learning lesson from the store - memoized to prevent unnecessary re-renders
+  const continueLearningLesson = useMemo(() => {
+    return useStudentDashboardStore.getState().continueLearningLesson;
+  }, []);
+
+  // Define extended course type with modules and lessons
+  type ExtendedCourse = {
+    id: string;
+    title: string;
     modules?: Array<{
       id: string;
       title: string;
@@ -290,10 +331,12 @@ export default function StudentDashboard() {
       }>;
     }>;
   };
-  
-  // Use type assertion to access modules and lessons
-  const courseWithModules = firstCourse as ExtendedCourse;
-  
+
+  // Get the first course and its modules/lessons - memoized
+  const firstCourse = useMemo(() => {
+    return enrollments?.[0]?.course as ExtendedCourse | undefined;
+  }, [enrollments]);
+
   // Define module type to handle both cases
   type ModuleType = {
     id?: string;
@@ -306,42 +349,48 @@ export default function StudentDashboard() {
       duration?: string;
     }>;
   };
-  
-  // Get first module with proper typing
-  const firstModule: ModuleType = courseWithModules?.modules?.[0] || { title: "Getting Started" };
-  
-  // Get first lesson with fallback
-  const firstLesson = firstModule?.lessons?.[0] || { 
-    id: "1", 
-    title: "Introduction to Course",
-    duration: "15 min"
-  };
-  
-  // Format the continue learning lesson data for the component
-  const recentLessons = continueLearningLesson ? [
-    {
-      id: parseInt(continueLearningLesson.lessonId) || 1,
-      title: continueLearningLesson.lessonTitle,
-      module: continueLearningLesson.moduleTitle,
-      moduleId: continueLearningLesson.moduleId, // Add moduleId for linking to the course viewer
-      duration: "15 min", // This should come from the actual lesson data in a real implementation
-      thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson",
-      progress: continueLearningLesson.progress,
-      current: true,
+
+  // Get first module with proper typing - memoized
+  const firstModule = useMemo(() => {
+    return firstCourse?.modules?.[0] || { title: "Getting Started" } as ModuleType;
+  }, [firstCourse]);
+
+  // Get first lesson with fallback - memoized
+  const firstLesson = useMemo(() => {
+    return firstModule?.lessons?.[0] || {
+      id: "1",
+      title: "Introduction to Course",
+      duration: "15 min"
+    };
+  }, [firstModule]);
+
+  // Format the continue learning lesson data for the component - memoized
+  const recentLessons = useMemo(() => {
+    if (continueLearningLesson) {
+      return [{
+        id: parseInt(continueLearningLesson.lessonId) || 1,
+        title: continueLearningLesson.lessonTitle,
+        module: continueLearningLesson.moduleTitle,
+        moduleId: continueLearningLesson.moduleId,
+        duration: "15 min",
+        thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson",
+        progress: continueLearningLesson.progress,
+        current: true,
+      }];
+    } else {
+      // Fallback if no continue learning lesson is available
+      return [{
+        id: parseInt(firstLesson.id) || 1,
+        title: firstLesson.title || "Introduction to Course",
+        module: firstModule.title || "Getting Started",
+        moduleId: firstModule.id,
+        duration: firstLesson.duration || "15 min",
+        thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson+1",
+        progress: 0,
+        current: true,
+      }];
     }
-  ] : [
-    // Fallback if no continue learning lesson is available - use the first lesson
-    {
-      id: parseInt(firstLesson.id) || 1,
-      title: firstLesson.title || "Introduction to Course",
-      module: firstModule.title || "Getting Started",
-      moduleId: firstModule.id, // Add moduleId for linking to the course viewer
-      duration: firstLesson.duration || "15 min",
-      thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson+1",
-      progress: 0,
-      current: true,
-    }
-  ]
+  }, [continueLearningLesson, firstLesson, firstModule])
 
   // Mock data for recent purchases
   const recentPurchases = [
@@ -430,7 +479,7 @@ export default function StudentDashboard() {
 
       {/* Onboarding Tour */}
       {showOnboarding && <OnboardingTour onComplete={() => setShowOnboarding(false)} />}
-      
+
       {/* Template Preview Modal */}
       <TemplatePreviewModal
         isOpen={isPreviewOpen}
@@ -442,9 +491,9 @@ export default function StudentDashboard() {
             console.log('Mock download triggered for:', file.name);
             return;
           }
-          
+
           window.open(`https://drive.google.com/uc?export=download&id=${file.id}`, '_blank');
-          
+
           // Track download (we could add analytics here)
           console.log(`Template downloaded: ${file.name}`);
         }}

@@ -8,7 +8,7 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useUserProfileData } from '@/lib/hooks/use-dashboard-store'
+import { useUserProfile } from '@/lib/hooks/use-user-profile'
 import * as enrollmentAccess from '@/lib/supabase/enrollment-access'
 
 /**
@@ -17,7 +17,7 @@ import * as enrollmentAccess from '@/lib/supabase/enrollment-access'
  */
 export function EnrollmentStatus() {
   const { courseId } = useParams<{ courseId: string }>()
-  const { userId } = useUserProfileData()
+  const { userId } = useUserProfile()
   const [enrollmentStatus, setEnrollmentStatus] = useState<{
     isEnrolled: boolean;
     status: string;
@@ -155,7 +155,7 @@ export function EnrollmentStatus() {
             <div>
               <h3 className="font-medium text-blue-800 mb-1">Enrollment Pending</h3>
               <p className="text-sm text-blue-700">
-                Your enrollment is being processed. This may take a few minutes. 
+                Your enrollment is being processed. This may take a few minutes.
                 Please check back soon.
               </p>
             </div>

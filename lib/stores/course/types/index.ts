@@ -1,4 +1,5 @@
 export * from './course';
 export * from './module';
 export * from './lesson';
-export * from './store'; 
+export * from './lesson-metadata';
+export * from './store';

@@ -23,6 +23,8 @@ import {
 import { useCourseContext } from "./course-editor"
 import { useCourseStore } from "@/lib/stores/course"
 import { useToast } from "@/hooks/use-toast"
+import { getLessonVideoId, getLessonVideoUrl } from "@/lib/stores/course/types/lesson"
+import { isVideoLessonMetadata } from "@/lib/stores/course/types/lesson-metadata"
 // Import removed as we're using dangerouslySetInnerHTML directly
 
 interface StudentViewProps {
@@ -35,6 +37,8 @@ interface LessonItem {
   title: string
   type: string
   content: string
+  videoId?: string | null
+  videoUrl?: string | null
 }
 
 // Define a type for modules in student view
@@ -58,14 +62,31 @@ export default function StudentView({ courseId }: StudentViewProps) {
     return course.modules.map(module => ({
       id: module.id,
       title: module.title,
-      items: module.lessons?.map(lesson => ({
-        id: lesson.id,
-        title: lesson.title,
-        type: lesson.metadata?.type as string || "lesson",
-        content: lesson.content_json?.content as string || lesson.content || ""
-      })) || []
+      items: module.lessons?.map(lesson => {
+        // Get video metadata if available
+        const videoId = getLessonVideoId(lesson)
+        const videoUrl = getLessonVideoUrl(lesson)
+
+        // Check if this is the currently active lesson
+        const isActiveLesson = lesson.id === activeItemId || lesson.id === selectedLessonId
+
+        // If this is the active lesson and we have current content in the context,
+        // use that instead of the database content to ensure we see the latest edits
+        const lessonContent = isActiveLesson && currentContent
+          ? currentContent
+          : lesson.content_json?.content as string || lesson.content || ""
+
+        return {
+          id: lesson.id,
+          title: lesson.title,
+          type: lesson.metadata?.type as string || "lesson",
+          content: lessonContent,
+          videoId,
+          videoUrl
+        }
+      }) || []
     }))
-  }, [course])
+  }, [course, activeItemId, selectedLessonId, currentContent])
 
   // Find active module and item
   const activeModule = studentModules.find((m) => m.id === (activeModuleId || selectedModuleId))
@@ -77,17 +98,21 @@ export default function StudentView({ courseId }: StudentViewProps) {
 
   // Force a save before entering student view to ensure latest content is shown
   useEffect(() => {
-    // Dispatch a custom event to trigger save in the content editor
-    window.dispatchEvent(new Event("editor-save"))
+    const initializeStudentView = async () => {
+      // Set active module and item if not already set
+      if (!activeModuleId && selectedModuleId) {
+        setActiveModuleId(selectedModuleId)
+      }
 
-    // Set active module and item if not already set
-    if (!activeModuleId && selectedModuleId) {
-      setActiveModuleId(selectedModuleId)
+      if (!activeItemId && selectedLessonId) {
+        setActiveItemId(selectedLessonId)
+      }
+
+      // Small delay to ensure content is loaded from the latest state
+      await new Promise(resolve => setTimeout(resolve, 100))
     }
 
-    if (!activeItemId && selectedLessonId) {
-      setActiveItemId(selectedLessonId)
-    }
+    initializeStudentView()
   }, [activeModuleId, activeItemId, selectedModuleId, selectedLessonId, setActiveModuleId, setActiveItemId])
 
   const markAsComplete = () => {
@@ -291,6 +316,23 @@ export default function StudentView({ courseId }: StudentViewProps) {
               <div className="max-w-3xl mx-auto">
                 <Card className="shadow-md border-muted">
                   <CardContent className="p-6 md:p-8">
+                    {/* Display video if available */}
+                    {activeItem.videoId && (
+                      <div className="mb-6">
+                        <div className="aspect-video rounded-md overflow-hidden border bg-black">
+                          <iframe
+                            src={`https://player.vimeo.com/video/${activeItem.videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479`}
+                            width="100%"
+                            height="100%"
+                            frameBorder="0"
+                            allow="autoplay; fullscreen; picture-in-picture"
+                            allowFullScreen
+                            title={`Video: ${activeItem.title}`}
+                          ></iframe>
+                        </div>
+                      </div>
+                    )}
+
                     <div
                       className="prose prose-sm sm:prose lg:prose-lg xl:prose-2xl max-w-none rich-text-content"
                       dangerouslySetInnerHTML={{ __html: activeItem.content || "" }}

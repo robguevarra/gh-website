@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -28,7 +28,7 @@ import {
   Folder,
   RotateCw,
 } from 'lucide-react';
-import { useUserProfileData } from '@/lib/hooks/use-dashboard-store';
+import { useUserProfile } from '@/lib/hooks/use-user-profile';
 import { useGoogleDriveFiles } from '@/lib/hooks/use-google-drive';
 import type { DriveItem, BreadcrumbSegment } from '@/lib/google-drive/driveApiUtils';
 
@@ -36,7 +36,7 @@ import type { DriveItem, BreadcrumbSegment } from '@/lib/google-drive/driveApiUt
 const getFileIcon = (mimeType: string | undefined, isFolder: boolean) => {
   if (isFolder) return <Folder className="h-5 w-5 text-yellow-600" />;
   if (!mimeType) return <FileText className="h-5 w-5 text-gray-500" />;
-  
+
   if (mimeType.includes('pdf')) {
     return <FileText className="h-5 w-5 text-red-500" />;
   } else if (mimeType.includes('document')) {
@@ -62,13 +62,13 @@ interface FileCardProps {
 const FileCard = ({ file, onNavigate, onPreview, onDownload }: FileCardProps) => {
   const isFolder = file.isFolder;
   const Icon = getFileIcon(file.mimeType, isFolder);
-  
+
   // Format the modified date if available
-  const formattedDate = file.modifiedTime 
-    ? new Date(file.modifiedTime).toLocaleDateString(undefined, { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric' 
+  const formattedDate = file.modifiedTime
+    ? new Date(file.modifiedTime).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
       })
     : null;
 
@@ -81,9 +81,9 @@ const FileCard = ({ file, onNavigate, onPreview, onDownload }: FileCardProps) =>
   };
 
   return (
-    <Card 
-      className={`group flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-lg ${isFolder 
-        ? 'cursor-pointer border-yellow-100 hover:border-yellow-300 bg-yellow-50/30' 
+    <Card
+      className={`group flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-lg ${isFolder
+        ? 'cursor-pointer border-yellow-100 hover:border-yellow-300 bg-yellow-50/30'
         : 'hover:border-primary/30 bg-white'}`}
       onClick={handleCardClick}
     >
@@ -91,7 +91,7 @@ const FileCard = ({ file, onNavigate, onPreview, onDownload }: FileCardProps) =>
       <div className="p-4 flex flex-col h-full">
         {/* Icon and Title */}
         <div className="flex items-start gap-3 mb-2">
-          <div className={`p-2 rounded-md ${isFolder ? 'bg-yellow-100' : 'bg-primary/10'} 
+          <div className={`p-2 rounded-md ${isFolder ? 'bg-yellow-100' : 'bg-primary/10'}
             transition-colors duration-300 group-hover:${isFolder ? 'bg-yellow-200' : 'bg-primary/20'}`}>
             {Icon}
           </div>
@@ -106,31 +106,31 @@ const FileCard = ({ file, onNavigate, onPreview, onDownload }: FileCardProps) =>
             )}
           </div>
         </div>
-        
+
         {/* Button Area - Only for files, not folders */}
         {!isFolder && onPreview && onDownload && (
-          <div className="mt-auto pt-3 flex flex-col sm:flex-row gap-2 w-full"> 
-            <Button 
-              variant="outline" 
-              size="sm" 
+          <div className="mt-auto pt-3 flex flex-col sm:flex-row gap-2 w-full">
+            <Button
+              variant="outline"
+              size="sm"
               className="w-full sm:flex-1 text-xs transition-all duration-300 hover:bg-primary/10"
-              onClick={(e) => { e.stopPropagation(); onPreview(file); }} 
+              onClick={(e) => { e.stopPropagation(); onPreview(file); }}
             >
               <Eye className="mr-1.5 h-3.5 w-3.5" />
               Preview
             </Button>
-            <Button 
-              variant="default" 
-              size="sm" 
+            <Button
+              variant="default"
+              size="sm"
               className="w-full sm:flex-1 text-xs bg-primary hover:bg-primary/90 transition-all duration-300"
-              onClick={(e) => { e.stopPropagation(); onDownload(file); }} 
+              onClick={(e) => { e.stopPropagation(); onDownload(file); }}
             >
               <Download className="mr-1.5 h-3.5 w-3.5" />
               Download
             </Button>
           </div>
         )}
-        
+
         {/* Folder Indicator */}
         {isFolder && (
           <div className="mt-auto pt-2 flex justify-end">
@@ -150,11 +150,11 @@ interface TemplateBrowserProps {
 }
 
 export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
-  const { userId } = useUserProfileData();
-  
+  const { userId } = useUserProfile();
+
   const [selectedFile, setSelectedFile] = useState<DriveItem | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
-  
+
   const {
     items,
     breadcrumbs,
@@ -164,31 +164,37 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
     navigateToFolder,
     refreshData,
   } = useGoogleDriveFiles();
-  
-  const handlePreview = (file: DriveItem) => {
+
+  // Memoize event handlers with useCallback
+  const handlePreview = useCallback((file: DriveItem) => {
     setSelectedFile(file);
-    
+
     if (onTemplateSelect) {
       onTemplateSelect(file);
     } else {
       setShowPreviewModal(true);
     }
-  };
-  
-  const handleDownload = (file: DriveItem) => {
+  }, [onTemplateSelect]);
+
+  const handleDownload = useCallback((file: DriveItem) => {
     window.open(`https://drive.google.com/uc?export=download&id=${file.id}`, '_blank');
-  };
-  
-  const handleOpenInDrive = (file: DriveItem) => {
+  }, []);
+
+  const handleOpenInDrive = useCallback((file: DriveItem) => {
     window.open(`https://drive.google.com/file/d/${file.id}/view`, '_blank');
-  };
-  
+  }, []);
+
+  // Memoize navigation handlers
+  const navigateToRoot = useCallback(() => {
+    navigateToFolder(process.env.NEXT_PUBLIC_GOOGLE_DRIVE_ROOT_FOLDER_ID || null);
+  }, [navigateToFolder]);
+
   return (
     <div className="space-y-4">
       {/* === Header with Breadcrumbs and Refresh Button === */}
       <div className="flex items-center justify-between">
         {/* Breadcrumb Navigation */}
-        <div className="flex items-center space-x-1 text-sm text-muted-foreground overflow-x-auto whitespace-nowrap py-1 min-h-[28px] rounded-md bg-muted/30 px-3"> 
+        <div className="flex items-center space-x-1 text-sm text-muted-foreground overflow-x-auto whitespace-nowrap py-1 min-h-[28px] rounded-md bg-muted/30 px-3">
           {isLoading && breadcrumbs.length === 0 && !hasError ? (
             // Skeleton for initial load
             <>
@@ -204,7 +210,7 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
             // Clickable Root link + Mapped breadcrumbs when inside subfolders
             <>
               <button
-                onClick={() => navigateToFolder(process.env.NEXT_PUBLIC_GOOGLE_DRIVE_ROOT_FOLDER_ID || null)}
+                onClick={navigateToRoot}
                 className="hover:underline hover:text-foreground flex items-center"
               >
                 <Folder className="h-3.5 w-3.5 mr-1.5 text-primary/70" />
@@ -230,12 +236,12 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
             </>
           ) : null /* Don't render breadcrumbs if there's an error */ }
         </div>
-        
+
         {/* Refresh Button */}
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={refreshData} 
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={refreshData}
           disabled={isLoading}
           className="text-xs h-8 px-2 text-muted-foreground hover:text-foreground transition-all duration-200"
         >
@@ -249,7 +255,7 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
         // --- Loading State (Show Skeleton Grid) ---
         if (isLoading) {
           // Don't show skeleton if we have previous data (SWR handles this)
-          if (items.length > 0 && !hasError) return null; 
+          if (items.length > 0 && !hasError) return null;
           return (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {Array.from({ length: 6 }).map((_, i) => ( // Render 6 skeleton cards
@@ -282,9 +288,9 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
               <p className="text-muted-foreground mb-4 max-w-md">
                 There was an error connecting to Google Drive. Please try again later or contact support if the issue persists.
               </p>
-              <Button 
-                onClick={refreshData} 
-                variant="outline" 
+              <Button
+                onClick={refreshData}
+                variant="outline"
                 size="sm"
                 className="bg-white hover:bg-primary/5 transition-all duration-300"
               >
@@ -304,13 +310,13 @@ export function TemplateBrowser({ onTemplateSelect }: TemplateBrowserProps) {
               </div>
               <h3 className="text-lg font-medium mb-2 text-gray-800">No items found</h3>
               <p className="text-muted-foreground mb-4 max-w-md">
-                {currentFolderId 
+                {currentFolderId
                   ? "This folder is empty. Navigate to another folder or go back to the home directory."
                   : "No templates are available. Please check back later or contact support."}
               </p>
               {currentFolderId && (
-                <Button 
-                  onClick={() => navigateToFolder(process.env.NEXT_PUBLIC_GOOGLE_DRIVE_ROOT_FOLDER_ID || null)}
+                <Button
+                  onClick={navigateToRoot}
                   variant="outline"
                   size="sm"
                   className="bg-white hover:bg-primary/5 transition-all duration-300"

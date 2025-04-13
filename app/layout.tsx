@@ -8,6 +8,7 @@ import Script from "next/script"
 import { SkipLink } from "@/components/ui/skip-link"
 import SupabaseProvider from "@/components/providers/supabase-provider"
 import { AuthProvider } from "@/context/auth-context"
+import { AuthCoordinationProvider } from "@/components/providers/auth-coordination-provider"
 
 // Import critical CSS first for priority loading
 import './critical.css'
@@ -50,23 +51,25 @@ export default function RootLayout({
         <link rel="preconnect" href="https://hebbkx1anhila5yf.public.blob.vercel-storage.com" />
         <link rel="dns-prefetch" href="https://gracefulhomeschooling.blob.core.windows.net" />
         <link rel="dns-prefetch" href="https://hebbkx1anhila5yf.public.blob.vercel-storage.com" />
-        
+
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </head>
       <body className={`${inter.variable} ${playfair.variable} font-sans`}>
         <SkipLink href="#main-content">Skip to main content</SkipLink>
         <SupabaseProvider>
-          <AuthProvider>
-            <ThemeProvider>
-              <main id="main-content" tabIndex={-1}>
-                {children}
-              </main>
-              <CustomCursorToggle />
-              <Toaster />
-            </ThemeProvider>
-          </AuthProvider>
+          <AuthCoordinationProvider>
+            <AuthProvider>
+              <ThemeProvider>
+                <main id="main-content" tabIndex={-1}>
+                  {children}
+                </main>
+                <CustomCursorToggle />
+                <Toaster />
+              </ThemeProvider>
+            </AuthProvider>
+          </AuthCoordinationProvider>
         </SupabaseProvider>
-        
+
         <Script
           src="/scripts/analytics.js"
           strategy="lazyOnload"
