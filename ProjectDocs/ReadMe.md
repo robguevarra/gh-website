@@ -159,5 +159,3 @@ Feel free to fork and modify these rules for your own projects. Contributions an
 MIT License - Feel free to use and modify for your projects.
 
 ---
-
-Created by [@kryptobaseddev](https://github.com/kryptobaseddev)
