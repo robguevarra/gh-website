@@ -30,7 +30,7 @@ export function useStudentHeader() {
   const { userId } = useUserProfile();
 
   // Use optimized hooks for better performance
-  const { loadEnrollments } = useEnrollmentData({ autoFetch: false });
+  const { loadEnrollments, enrollments } = useEnrollmentData({ autoFetch: false });
   const {
     courseProgress,
     isLoadingProgress,
@@ -67,6 +67,7 @@ export function useStudentHeader() {
     isLoadingProgress,
     continueLearningLesson,
     loadUserData,
+    enrollments,
 
     // Convenience getters
     hasCourseProgress: Object.keys(courseProgress).length > 0,
@@ -81,6 +82,7 @@ export function useStudentHeader() {
     continueLearningLesson,
     loadUserData,
     loadUserProgress,
-    loadContinueLearningLesson
+    loadContinueLearningLesson,
+    enrollments
   ]);
 }

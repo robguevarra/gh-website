@@ -59,7 +59,8 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
     courseProgress,
     isLoadingProgress,
     continueLearningLesson,
-    loadUserData
+    loadUserData,
+    enrollments
   } = useStudentHeader()
 
   // Initialize dashboard data when user is authenticated
@@ -178,18 +179,20 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                     Dashboard
                   </Link>
                   <Link
-                    href="/dashboard/course"
+                    href={`/dashboard/course?courseId=${enrollments?.[0]?.course?.id || ''}`}
                     className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    prefetch={true}
                   >
                     <BookOpen className="h-5 w-5" />
                     Course Content
                   </Link>
                   <Link
-                    href="/dashboard/templates"
+                    href="/dashboard/resources"
                     className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    prefetch={true}
                   >
                     <Download className="h-5 w-5" />
-                    Templates
+                    Resources
                   </Link>
                   <Link
                     href="/dashboard/live-classes"
@@ -272,14 +275,19 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
             <Link href="/dashboard" className="text-sm font-medium text-brand-purple">
               Dashboard
             </Link>
-            <Link href="/dashboard/course" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+            <Link
+              href={`/dashboard/course?courseId=${enrollments?.[0]?.course?.id || ''}`}
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              prefetch={true}
+            >
               Course Content
             </Link>
             <Link
-              href="/dashboard/templates"
+              href="/dashboard/resources"
               className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              prefetch={true}
             >
-              Templates
+              Resources
             </Link>
             <Link
               href="/dashboard/live-classes"
