@@ -1,7 +1,7 @@
 "use client"
 
 // React imports
-import React from "react"
+import React, { useEffect, useMemo } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -21,6 +21,9 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { formatProgress, calculateTimeRemaining } from "@/lib/utils/progress-utils"
 import { motion } from "framer-motion"
+import { useStudentDashboardStore } from "@/lib/stores/student-dashboard"
+import { getBrowserClient } from "@/lib/supabase/client"
+import { useAuth } from "@/context/auth-context"
 
 export interface CourseLesson {
   id: number
@@ -50,8 +53,8 @@ export interface CourseProgressProps {
     title: string
     courseId?: string
     progress: number
-    completedLessons: number
-    totalLessons: number
+    completedLessons: number // Maps to completedLessonsCount in store
+    totalLessons: number // Maps to totalLessonsCount in store
     nextLesson: string
     timeSpent: string
     nextLiveClass: string
@@ -67,12 +70,321 @@ export interface CourseProgressProps {
 }
 
 export const CourseProgressSection = React.memo(function CourseProgressSection({
-  courseProgress,
+  courseProgress: propCourseProgress,
   recentLessons,
   upcomingClasses,
   isSectionExpanded,
   toggleSection
 }: CourseProgressProps) {
+  // Get current user
+  const { user } = useAuth()
+
+  // Get lesson progress data from the store
+  const lessonProgress = useStudentDashboardStore(state => state.lessonProgress)
+  const enrollments = useStudentDashboardStore(state => state.enrollments)
+  const storeProgress = useStudentDashboardStore(state =>
+    propCourseProgress.courseId ? state.courseProgress[propCourseProgress.courseId] : null
+  )
+
+  // State to track validated course progress
+  const [courseProgress, setCourseProgress] = React.useState(propCourseProgress)
+
+  // Calculate course progress from lessonProgress data
+  const calculatedProgress = useMemo(() => {
+    // Skip if no course ID or no enrollments
+    if (!propCourseProgress.courseId || !enrollments.length) {
+      return propCourseProgress
+    }
+
+    // Find course in enrollments
+    const course = enrollments.find(e => e.course?.id === propCourseProgress.courseId)?.course
+    if (!course || !course.modules) {
+      return propCourseProgress
+    }
+
+    // Get all lessons from the course
+    const allLessons = course.modules.flatMap(m => m.lessons || [])
+    if (!allLessons.length) {
+      return propCourseProgress
+    }
+
+    // Count total and completed lessons
+    const totalLessons = allLessons.length
+    const completedLessons = allLessons.filter(lesson => {
+      const progress = lessonProgress[lesson.id]
+      return progress?.status === 'completed' || progress?.progress >= 100
+    }).length
+
+    // Calculate progress percentage
+    const progressPercentage = totalLessons > 0
+      ? Math.round((completedLessons / totalLessons) * 100)
+      : 0
+
+    // Use calculated values or fall back to props
+    return {
+      ...propCourseProgress,
+      progress: progressPercentage,
+      completedLessons,
+      totalLessons
+    }
+  }, [propCourseProgress, enrollments, lessonProgress])
+
+  // Use store progress if available, then calculated progress, then props
+  useEffect(() => {
+    if (storeProgress) {
+      // Use the store's course progress data
+      console.log('Using store progress data:', {
+        storeProgress,
+        progress: storeProgress.progress,
+        completedLessonsCount: storeProgress.completedLessonsCount,
+        totalLessonsCount: storeProgress.totalLessonsCount
+      })
+
+      setCourseProgress({
+        ...propCourseProgress,
+        progress: storeProgress.progress,
+        completedLessons: storeProgress.completedLessonsCount,
+        totalLessons: storeProgress.totalLessonsCount
+      })
+    } else if (calculatedProgress) {
+      // Fall back to calculated progress
+      console.log('Using calculated progress data:', calculatedProgress)
+      setCourseProgress(calculatedProgress)
+    } else {
+      // Use props as a last resort
+      console.log('Using prop progress data:', propCourseProgress)
+      setCourseProgress(propCourseProgress)
+    }
+  }, [propCourseProgress, storeProgress, calculatedProgress])
+
+  // If course progress still shows 0 completed but store has lesson progress entries, verify directly from database
+  useEffect(() => {
+    // Skip if we have completion data already or no course ID
+    if (courseProgress.completedLessons > 0 || !courseProgress.courseId || !user?.id) {
+      return
+    }
+
+    // We used to check for completed lessons here, but now we always verify from database
+    // This ensures we have the most accurate data regardless of the store state
+
+    // Always verify from database if we have a courseId but no completed lessons
+    // This ensures we have the most accurate data
+    const verifyFromDatabase = async () => {
+      try {
+        console.log('Verifying course progress from database for course:', courseProgress.courseId)
+
+        // Use browser client for client-side data fetching
+        const supabase = getBrowserClient()
+
+        // First, check the course_progress table directly
+        const { data: courseProgressData, error: courseProgressError } = await supabase
+          .from('course_progress')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('course_id', courseProgress.courseId)
+          .single()
+
+        if (courseProgressError && courseProgressError.code !== 'PGRST116') { // PGRST116 is "not found"
+          console.error('Error fetching course progress:', courseProgressError)
+        }
+
+        if (courseProgressData) {
+          console.log('Found course progress in database:', courseProgressData)
+
+          // Get the course structure to count total lessons
+          const { data: courseData, error: courseError } = await supabase
+            .from('courses')
+            .select(`
+              id, title,
+              modules:modules (id, title, lessons:lessons (id, title))
+            `)
+            .eq('id', courseProgress.courseId)
+            .single()
+
+          if (courseError) {
+            console.error('Error fetching course structure:', courseError)
+            return
+          }
+
+          // Count total lessons in the course
+          let totalLessons = 0
+          if (courseData?.modules) {
+            courseData.modules.forEach(module => {
+              if (module.lessons) {
+                totalLessons += module.lessons.length
+              }
+            })
+          }
+
+          // Calculate completed lessons based on progress percentage
+          const completedLessons = Math.round((courseProgressData.progress_percentage / 100) * totalLessons)
+
+          console.log('Updating course progress from database:', {
+            progress: courseProgressData.progress_percentage,
+            completedLessons,
+            totalLessons
+          })
+
+          setCourseProgress(prev => ({
+            ...prev,
+            completedLessons: completedLessons,
+            totalLessons: totalLessons || prev.totalLessons,
+            progress: courseProgressData.progress_percentage
+          }))
+
+          // Also update the store to ensure consistency
+          useStudentDashboardStore.setState(state => {
+            const updatedCourseProgress = {
+              ...state.courseProgress
+            }
+
+            // Make sure courseId is not undefined
+            const courseId = courseProgress.courseId || ''
+
+            if (!courseId || !updatedCourseProgress[courseId]) {
+              if (courseId) {
+                // Get the course data from the store if available
+                const courseData = state.enrollments?.find(e => e.course?.id === courseId)?.course
+
+                updatedCourseProgress[courseId] = {
+                  courseId: courseId,
+                  progress: courseProgressData.progress_percentage,
+                  completedLessonsCount: completedLessons,
+                  totalLessonsCount: totalLessons,
+                  course: courseData || {
+                    id: courseId,
+                    title: '',
+                    description: '',
+                    slug: '',
+                    modules: []
+                  }
+                }
+              }
+            } else {
+              updatedCourseProgress[courseId] = {
+                ...updatedCourseProgress[courseId],
+                progress: courseProgressData.progress_percentage,
+                completedLessonsCount: completedLessons,
+                totalLessonsCount: totalLessons
+              }
+            }
+
+            return {
+              courseProgress: updatedCourseProgress
+            }
+          })
+
+          return
+        }
+
+        // If no course progress found, check for completed lessons
+        const { data, error } = await supabase
+          .from('user_progress')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'completed')
+
+        if (error) {
+          console.error('Error fetching completed lessons:', error)
+          return
+        }
+
+        // If we have completed lessons in the database, update the count
+        if (data && data.length > 0) {
+          console.log('Found completed lessons in database:', data.length)
+
+          // Get the course structure to count total lessons
+          const { data: courseData, error: courseError } = await supabase
+            .from('courses')
+            .select(`
+              id, title,
+              modules:modules (id, title, lessons:lessons (id, title))
+            `)
+            .eq('id', courseProgress.courseId)
+            .single()
+
+          if (courseError) {
+            console.error('Error fetching course structure:', courseError)
+            return
+          }
+
+          // Count total lessons in the course
+          let totalLessons = 0
+          if (courseData?.modules) {
+            courseData.modules.forEach(module => {
+              if (module.lessons) {
+                totalLessons += module.lessons.length
+              }
+            })
+          }
+
+          console.log('Total lessons in course:', totalLessons)
+
+          // Calculate progress percentage
+          const progressPercentage = totalLessons > 0
+            ? Math.round((data.length / totalLessons) * 100)
+            : 0
+
+          setCourseProgress(prev => ({
+            ...prev,
+            completedLessons: data.length,
+            totalLessons: totalLessons || prev.totalLessons,
+            progress: progressPercentage
+          }))
+
+          // Also update the store to ensure consistency
+          useStudentDashboardStore.setState(state => {
+            const updatedCourseProgress = {
+              ...state.courseProgress
+            }
+
+            // Make sure courseId is not undefined
+            const courseId = courseProgress.courseId || ''
+
+            if (!courseId || !updatedCourseProgress[courseId]) {
+              if (courseId) {
+                // Get the course data from the store if available
+                const courseData = state.enrollments?.find(e => e.course?.id === courseId)?.course
+
+                updatedCourseProgress[courseId] = {
+                  courseId: courseId,
+                  progress: progressPercentage,
+                  completedLessonsCount: data.length,
+                  totalLessonsCount: totalLessons,
+                  course: courseData || {
+                    id: courseId,
+                    title: '',
+                    description: '',
+                    slug: '',
+                    modules: []
+                  }
+                }
+              }
+            } else {
+              updatedCourseProgress[courseId] = {
+                ...updatedCourseProgress[courseId],
+                progress: progressPercentage,
+                completedLessonsCount: data.length,
+                totalLessonsCount: totalLessons
+              }
+            }
+
+            return {
+              courseProgress: updatedCourseProgress
+            }
+          })
+        }
+      } catch (err) {
+        console.error('Error verifying completion count:', err)
+      }
+    }
+
+    // Always verify from database if we have a courseId
+    if (courseProgress.courseId) {
+      verifyFromDatabase()
+    }
+  }, [courseProgress.completedLessons, courseProgress.courseId, courseProgress.totalLessons, lessonProgress, user?.id])
+
   // Animation variants
   const fadeInUp = {
     hidden: { opacity: 0, y: 20 },
@@ -85,34 +397,15 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
 
   // Ensure we have valid data with fallbacks
   const safeRecentLessons = recentLessons || []
-  
-  // Calculate safe values for progress properties to prevent rendering issues
-  const safeProgress = {
-    title: courseProgress?.title || "Course Progress",
-    courseId: courseProgress?.courseId || "",
-    progress: courseProgress?.progress || 0,
-    completedLessons: courseProgress?.completedLessons || 0,
-    totalLessons: courseProgress?.totalLessons || 0,
-    nextLesson: courseProgress?.nextLesson || "Start Learning",
-    timeSpent: courseProgress?.timeSpent || "0 mins",
-    nextLiveClass: courseProgress?.nextLiveClass || "No upcoming classes",
-    instructor: courseProgress?.instructor || {
-      name: "Instructor",
-      avatar: "/placeholder.svg"
-    }
-  }
-  
+
   // Debug log for course progress data
   React.useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('CourseProgressSection received progress data:', {
-        progress: courseProgress?.progress,
-        completedLessons: courseProgress?.completedLessons,
-        totalLessons: courseProgress?.totalLessons,
-        courseId: courseProgress?.courseId,
-        usingFallbacks: !courseProgress || !courseProgress.progress
-      });
-    }
+    console.log('CourseProgressSection received progress data:', {
+      progress: courseProgress.progress,
+      completedLessons: courseProgress.completedLessons,
+      totalLessons: courseProgress.totalLessons,
+      courseId: courseProgress.courseId
+    });
   }, [courseProgress]);
 
   return (
@@ -147,7 +440,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                 <h2 className="text-xl font-medium text-[#5d4037]">Continue Learning</h2>
               </div>
               <Link
-                href={`/dashboard/course?courseId=${safeProgress.courseId}`}
+                href={`/dashboard/course?courseId=${courseProgress.courseId || ''}`}
                 className="text-brand-purple hover:underline text-sm flex items-center"
                 prefetch={true}
               >
@@ -161,17 +454,17 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-[#5d4037]">{safeProgress.title}</span>
+                    <span className="text-sm font-medium text-[#5d4037]">{courseProgress.title}</span>
                     <Badge className="bg-brand-purple/10 text-brand-purple border-brand-purple/20">
-                      {formatProgress(safeProgress.progress)}
+                      {formatProgress(courseProgress.progress)}
                     </Badge>
                   </div>
                   <span className="text-xs text-[#6d4c41]">
-                    {safeProgress.completedLessons} of {safeProgress.totalLessons} lessons •
+                    {courseProgress.completedLessons} of {courseProgress.totalLessons} lessons •
                     <span className="ml-1">
                       {calculateTimeRemaining({
-                        currentProgress: safeProgress.progress,
-                        totalDurationMinutes: safeProgress.totalLessons * 15 // Estimate based on lesson count (15 min per lesson)
+                        currentProgress: courseProgress.progress,
+                        totalDurationMinutes: courseProgress.totalLessons * 15 // Estimate based on lesson count (15 min per lesson)
                       })} mins remaining
                     </span>
                   </span>
@@ -179,7 +472,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-brand-purple to-brand-pink rounded-full"
-                    style={{ width: `${safeProgress.progress}%` }}
+                    style={{ width: `${courseProgress.progress}%` }}
                   ></div>
                 </div>
               </div>
@@ -269,7 +562,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                   </div>
 
                   <div className="mt-4">
-                    <Link href={`/dashboard/course?courseId=${safeProgress.courseId}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`} prefetch={true}>
+                    <Link href={`/dashboard/course?courseId=${courseProgress.courseId || ''}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`} prefetch={true}>
                       <Button className="w-full bg-brand-purple hover:bg-brand-purple/90">
                         {safeRecentLessons[0]?.progress > 0 ? "Continue Lesson" : "Start Learning"}
                         <ArrowRight className="ml-2 h-4 w-4" />
@@ -310,7 +603,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
 
             <div className="mt-4 pt-4 border-t text-center md:hidden">
               <Link
-                href={`/dashboard/course?courseId=${safeProgress.courseId}`}
+                href={`/dashboard/course?courseId=${courseProgress.courseId || ''}`}
                 className="text-brand-purple hover:underline text-sm flex items-center justify-center"
                 prefetch={true}
               >

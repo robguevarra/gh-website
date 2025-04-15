@@ -352,7 +352,99 @@ export const createActions = (
           completedLessonsCount: completedLessons,
           totalLessonsCount: totalLessons
         };
+
+        // Log the calculated progress for debugging
+        console.log('Calculated course progress:', {
+          courseId: course.id,
+          title: course.title,
+          completedLessons,
+          totalLessons,
+          progress: courseProgressMap[course.id].progress
+        });
       });
+
+      // Always get the course progress from the database
+      // This ensures we have the most accurate data
+      const courseIds = Object.keys(courseProgressMap);
+      if (courseIds.length > 0) {
+        // Get the course progress from the database
+        const { data: dbCourseProgress, error: dbProgressError } = await supabase
+          .from('course_progress')
+          .select('*')
+          .eq('user_id', userId);
+
+        if (!dbProgressError && dbCourseProgress) {
+          console.log('Database course progress:', dbCourseProgress);
+
+          // Update the course progress with the database values
+          dbCourseProgress.forEach(progress => {
+            if (courseProgressMap[progress.course_id]) {
+              // Calculate the completed lessons based on the progress percentage
+              const totalLessons = courseProgressMap[progress.course_id].totalLessonsCount;
+              const completedLessons = Math.round((progress.progress_percentage / 100) * totalLessons);
+
+              console.log('Updating progress from database:', {
+                courseId: progress.course_id,
+                calculatedProgress: courseProgressMap[progress.course_id].progress,
+                dbProgress: progress.progress_percentage,
+                calculatedCompletedLessons: courseProgressMap[progress.course_id].completedLessonsCount,
+                newCompletedLessons: completedLessons
+              });
+
+              // Update the course progress with the database values
+              courseProgressMap[progress.course_id] = {
+                ...courseProgressMap[progress.course_id],
+                progress: progress.progress_percentage,
+                completedLessonsCount: completedLessons
+              };
+            } else {
+              // If we don't have this course in our map, try to find the course in our courses array
+              const course = courses?.find(c => c.id === progress.course_id);
+              if (course) {
+                // Count total lessons
+                let totalLessons = 0;
+                if (course.modules) {
+                  course.modules.forEach(module => {
+                    if (module.lessons) {
+                      totalLessons += module.lessons.length;
+                    }
+                  });
+                }
+
+                // Calculate completed lessons based on progress percentage
+                const completedLessons = Math.round((progress.progress_percentage / 100) * totalLessons);
+
+                // Create a new course progress entry
+                courseProgressMap[progress.course_id] = {
+                  courseId: progress.course_id,
+                  progress: progress.progress_percentage,
+                  completedLessonsCount: completedLessons,
+                  totalLessonsCount: totalLessons,
+                  course: {
+                    id: course.id,
+                    title: course.title,
+                    description: course.description || '',
+                    slug: course.slug || course.id,
+                    modules: course.modules?.map(module => ({
+                      id: module.id,
+                      courseId: course.id,
+                      title: module.title,
+                      order: 0,
+                      lessons: module.lessons?.map(lesson => ({
+                        id: lesson.id,
+                        moduleId: module.id,
+                        title: lesson.title,
+                        order: 0,
+                        duration: 0
+                      })) || []
+                    })) || []
+                  }
+                };
+              }
+            }
+          });
+        }
+      }
 
       // Set progress data
       set({
@@ -522,21 +614,21 @@ export const createActions = (
    *
    * This optimized version updates only the specific lesson progress
    * without triggering a full reload of all progress data
-   * 
+   *
    * NOTE: This function triggers a cascade of automatic progress calculations:
    * 1. When it updates a user_progress record, a database trigger "update_module_progress_trigger" fires
    * 2. This calculates and updates module progress in the module_progress table
    * 3. When module_progress is updated, another trigger "update_course_progress_trigger" fires
    * 4. This calculates and updates course progress in the course_progress table
-   * 
+   *
    * See ProjectDocs/Build_Notes/progress-tracking-system_phase-1_db-trigger-fix.md for details
    * on the automated progress calculation system and potential issues.
-   * 
+   *
    * IMPORTANT: When initializing progress for a lesson the user is viewing for the first time,
    * always check if progress exists in the database first before initializing with default values.
    * Otherwise, you risk overwriting existing progress with zeros if the client-side store hasn't
    * yet loaded the progress data from the database.
-   * 
+   *
    * Example of proper initialization (from app/dashboard/course/page.tsx):
    * ```
    * // Check database for existing progress before initializing with defaults
@@ -574,7 +666,7 @@ export const createActions = (
 
     try {
       console.log('updateLessonProgress called with:', { userId, lessonId, progressData });
-      
+
       // Update local state immediately for responsive UI
       const currentLessonProgress = get().lessonProgress[lessonId] || {
         status: 'not_started',
@@ -606,7 +698,7 @@ export const createActions = (
 
       // Sync with Supabase using browser client
       const supabase = getBrowserClient();
-      
+
       // Use a simple approach to avoid SQL conflicts
       // First check if a record exists - just get the ID
       const { data: existingRecord, error: checkError } = await supabase
@@ -615,12 +707,12 @@ export const createActions = (
         .eq('user_id', userId)
         .eq('lesson_id', lessonId)
         .maybeSingle(); // Use maybeSingle instead of single to prevent errors
-      
+
       if (checkError) {
         console.error('Error checking for existing record:', checkError);
         throw checkError;
       }
-      
+
       // Format the update data
       const progressRecord: {
         status: string;
@@ -636,36 +728,36 @@ export const createActions = (
         last_position: progressData.lastPosition || 0,
         updated_at: new Date().toISOString(),
       };
-      
+
       // Add completed_at only if status is 'completed'
       if (progressData.status === 'completed') {
         progressRecord.completed_at = new Date().toISOString();
       }
-      
+
       let error;
-      
+
       // Use upsert operation with on_conflict for both insert and update
       console.log('Using upsert for progress record, existing ID:', existingRecord?.id);
-      
+
       // Always include the user_id and lesson_id for new records
       progressRecord.user_id = userId;
       progressRecord.lesson_id = lessonId;
-      
+
       const { data: upsertData, error: upsertError, status } = await supabase
         .from('user_progress')
         .upsert(progressRecord, {
           onConflict: 'user_id,lesson_id'
         })
         .select('*');
-      
+
       console.log('Upsert response:', { data: upsertData, error: upsertError, status });
       error = upsertError;
-      
+
       if (error) {
         console.error('Error updating progress in database:', error);
         throw error;
       }
-      
+
       console.log('Progress updated in database successfully');
 
       // Update course and module progress calculations locally instead of reloading everything
@@ -782,7 +874,7 @@ export const createActions = (
               [courseId]: courseProgressItem
             }
           });
-          
+
           // Verify the update worked by getting the state after the update
           console.log('Verified course progress after update:', get().courseProgress[courseId]);
         }

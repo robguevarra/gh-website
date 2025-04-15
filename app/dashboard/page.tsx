@@ -47,6 +47,7 @@ import { useLoadingStates } from "@/lib/hooks/use-loading-states"
 
 // Import store
 import { useStudentDashboardStore } from "@/lib/stores/student-dashboard"
+import { getBrowserClient } from "@/lib/supabase/client"
 
 // Import types
 import type { CourseProgress } from "@/lib/stores/student-dashboard/types"
@@ -194,6 +195,71 @@ export default function StudentDashboard() {
       // Refresh progress data to ensure we have the latest
       loadUserProgress(user.id).then(() => {
         console.log('Course progress refreshed');
+
+        // Add debugging to see the current course progress after loading
+        const currentState = useStudentDashboardStore.getState();
+        const courseId = currentState.enrollments?.[0]?.course?.id;
+        if (courseId) {
+          const progress = currentState.courseProgress[courseId];
+          console.log('Current course progress after refresh:', {
+            courseId,
+            progress: progress?.progress || 0,
+            completedLessons: progress?.completedLessonsCount || 0,
+            totalLessons: progress?.totalLessonsCount || 0
+          });
+
+          // If we have a courseId but no progress data, try to fetch it directly from the database
+          if (!progress || progress.progress === undefined) {
+            console.log('No progress data found in store, fetching directly from database');
+            const fetchProgressDirectly = async () => {
+              const supabase = getBrowserClient();
+              const { data, error } = await supabase
+                .from('course_progress')
+                .select('*')
+                .eq('user_id', user.id)
+                .eq('course_id', courseId)
+                .single();
+
+              if (error) {
+                console.error('Error fetching course progress:', error);
+                return;
+              }
+
+              if (data) {
+                console.log('Found course progress in database:', data);
+                // Update the store with the database values
+                useStudentDashboardStore.setState(state => {
+                  const updatedCourseProgress = {
+                    ...state.courseProgress
+                  };
+
+                  // If we don't have a progress object for this course, create one
+                  if (!updatedCourseProgress[courseId]) {
+                    updatedCourseProgress[courseId] = {
+                      courseId,
+                      progress: data.progress_percentage,
+                      completedLessonsCount: 0, // We'll need to calculate this
+                      totalLessonsCount: 0, // We'll need to calculate this
+                      course: currentState.enrollments?.[0]?.course
+                    };
+                  } else {
+                    // Update the existing progress object
+                    updatedCourseProgress[courseId] = {
+                      ...updatedCourseProgress[courseId],
+                      progress: data.progress_percentage
+                    };
+                  }
+
+                  return {
+                    courseProgress: updatedCourseProgress
+                  };
+                });
+              }
+            };
+
+            fetchProgressDirectly();
+          }
+        }
       });
     }
   }, [user?.id, loadUserProgress]);
@@ -282,6 +348,9 @@ export default function StudentDashboard() {
 
   // Get the course progress from the store - memoized
   const currentCourseProgress = useMemo(() => {
+    // Log all course progress for debugging
+    console.log('All course progress in store:', courseProgress);
+
     const rawCourseProgress = courseProgress[courseId] || null;
     const course = enrollments?.[0]?.course;
 
@@ -297,6 +366,54 @@ export default function StudentDashboard() {
 
     if (!rawCourseProgress) {
       // If no progress data, return a default object with the calculated total
+      console.log('No progress data found for course:', courseId);
+
+      // If we have a courseId but no progress, try to fetch it directly from the database
+      if (courseId && user?.id) {
+        console.log('Fetching progress directly from database for course:', courseId);
+        const fetchProgressDirectly = async () => {
+          const supabase = getBrowserClient();
+          const { data, error } = await supabase
+            .from('course_progress')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('course_id', courseId)
+            .single();
+
+          if (error) {
+            console.error('Error fetching course progress:', error);
+            return;
+          }
+
+          if (data) {
+            console.log('Found course progress in database:', data);
+            // Calculate completed lessons based on progress percentage
+            const completedLessons = Math.round((data.progress_percentage / 100) * totalLessonsCount);
+
+            // Update the store with the database values
+            useStudentDashboardStore.setState(state => {
+              const updatedCourseProgress = {
+                ...state.courseProgress
+              };
+
+              updatedCourseProgress[courseId] = {
+                courseId,
+                progress: data.progress_percentage,
+                completedLessonsCount: completedLessons,
+                totalLessonsCount,
+                course: enrollments?.[0]?.course
+              };
+
+              return {
+                courseProgress: updatedCourseProgress
+              };
+            });
+          }
+        };
+
+        fetchProgressDirectly();
+      }
+
       return {
         progress: 0,
         completedLessonsCount: 0,
@@ -304,6 +421,7 @@ export default function StudentDashboard() {
       } as ExtendedCourseProgress;
     }
 
+    console.log('Using existing progress data:', rawCourseProgress);
     return {
       ...rawCourseProgress,
       progress: rawCourseProgress.progress || 0,
@@ -311,10 +429,19 @@ export default function StudentDashboard() {
       // Use the calculated total if available, otherwise fall back to the stored value
       totalLessonsCount: totalLessonsCount || rawCourseProgress.totalLessonsCount || 0,
     } as ExtendedCourseProgress;
-  }, [courseProgress, courseId, enrollments]);
+  }, [courseProgress, courseId, enrollments, user?.id]);
 
   // Create a formatted version for the UI components - memoized
   const formattedCourseProgress = useMemo(() => {
+    // Log the current course progress for debugging
+    console.log('Formatting course progress:', {
+      courseId,
+      rawProgress: currentCourseProgress,
+      progress: currentCourseProgress?.progress,
+      completedLessonsCount: currentCourseProgress?.completedLessonsCount,
+      totalLessonsCount: currentCourseProgress?.totalLessonsCount
+    });
+
     return {
       title: enrollments?.[0]?.course?.title || "Papers to Profits",
       courseId: courseId,

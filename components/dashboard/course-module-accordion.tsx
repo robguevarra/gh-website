@@ -89,7 +89,7 @@ export function CourseModuleAccordion({
         const missingLessonIds = lessonsMissingProgress.map((lesson: any) => lesson.id)
         
         // Mark these lessons as attempted to load
-        missingLessonIds.forEach((id: string) => {
+        missingLessonIds.forEach(id => {
           attemptedLoadLessonsRef.current[id] = true
         })
         
