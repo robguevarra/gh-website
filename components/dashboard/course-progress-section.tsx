@@ -85,6 +85,35 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
 
   // Ensure we have valid data with fallbacks
   const safeRecentLessons = recentLessons || []
+  
+  // Calculate safe values for progress properties to prevent rendering issues
+  const safeProgress = {
+    title: courseProgress?.title || "Course Progress",
+    courseId: courseProgress?.courseId || "",
+    progress: courseProgress?.progress || 0,
+    completedLessons: courseProgress?.completedLessons || 0,
+    totalLessons: courseProgress?.totalLessons || 0,
+    nextLesson: courseProgress?.nextLesson || "Start Learning",
+    timeSpent: courseProgress?.timeSpent || "0 mins",
+    nextLiveClass: courseProgress?.nextLiveClass || "No upcoming classes",
+    instructor: courseProgress?.instructor || {
+      name: "Instructor",
+      avatar: "/placeholder.svg"
+    }
+  }
+  
+  // Debug log for course progress data
+  React.useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('CourseProgressSection received progress data:', {
+        progress: courseProgress?.progress,
+        completedLessons: courseProgress?.completedLessons,
+        totalLessons: courseProgress?.totalLessons,
+        courseId: courseProgress?.courseId,
+        usingFallbacks: !courseProgress || !courseProgress.progress
+      });
+    }
+  }, [courseProgress]);
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeInUp}>
@@ -118,7 +147,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                 <h2 className="text-xl font-medium text-[#5d4037]">Continue Learning</h2>
               </div>
               <Link
-                href={`/dashboard/course?courseId=${courseProgress.courseId || ''}`}
+                href={`/dashboard/course?courseId=${safeProgress.courseId}`}
                 className="text-brand-purple hover:underline text-sm flex items-center"
                 prefetch={true}
               >
@@ -132,17 +161,17 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-[#5d4037]">{courseProgress.title}</span>
+                    <span className="text-sm font-medium text-[#5d4037]">{safeProgress.title}</span>
                     <Badge className="bg-brand-purple/10 text-brand-purple border-brand-purple/20">
-                      {formatProgress(courseProgress.progress)}
+                      {formatProgress(safeProgress.progress)}
                     </Badge>
                   </div>
                   <span className="text-xs text-[#6d4c41]">
-                    {courseProgress.completedLessons} of {courseProgress.totalLessons} lessons •
+                    {safeProgress.completedLessons} of {safeProgress.totalLessons} lessons •
                     <span className="ml-1">
                       {calculateTimeRemaining({
-                        currentProgress: courseProgress.progress,
-                        totalDurationMinutes: courseProgress.totalLessons * 15 // Estimate based on lesson count (15 min per lesson)
+                        currentProgress: safeProgress.progress,
+                        totalDurationMinutes: safeProgress.totalLessons * 15 // Estimate based on lesson count (15 min per lesson)
                       })} mins remaining
                     </span>
                   </span>
@@ -150,7 +179,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-brand-purple to-brand-pink rounded-full"
-                    style={{ width: `${courseProgress.progress}%` }}
+                    style={{ width: `${safeProgress.progress}%` }}
                   ></div>
                 </div>
               </div>
@@ -240,7 +269,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                   </div>
 
                   <div className="mt-4">
-                    <Link href={`/dashboard/course?courseId=${courseProgress.courseId || ''}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`} prefetch={true}>
+                    <Link href={`/dashboard/course?courseId=${safeProgress.courseId}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`} prefetch={true}>
                       <Button className="w-full bg-brand-purple hover:bg-brand-purple/90">
                         {safeRecentLessons[0]?.progress > 0 ? "Continue Lesson" : "Start Learning"}
                         <ArrowRight className="ml-2 h-4 w-4" />
@@ -281,7 +310,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
 
             <div className="mt-4 pt-4 border-t text-center md:hidden">
               <Link
-                href={`/dashboard/course?courseId=${courseProgress.courseId || ''}`}
+                href={`/dashboard/course?courseId=${safeProgress.courseId}`}
                 className="text-brand-purple hover:underline text-sm flex items-center justify-center"
                 prefetch={true}
               >

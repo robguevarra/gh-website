@@ -149,11 +149,24 @@ export default function StudentDashboard() {
       // Set user ID in store
       setUserId(user.id);
 
+      console.log('Loading dashboard data for user:', user.id);
+
       // Load enrollments and progress data in parallel
       Promise.all([
         loadUserEnrollments(user.id),
         loadUserProgress(user.id)
-      ]).catch(error => {
+      ]).then(() => {
+        console.log('Dashboard data loaded successfully');
+        // Add debugging to see the current course progress after loading
+        const currentState = useStudentDashboardStore.getState();
+        const courseId = currentState.enrollments?.[0]?.course?.id;
+        if (courseId) {
+          console.log('Current course progress after loading:', {
+            courseId,
+            progress: currentState.courseProgress[courseId]
+          });
+        }
+      }).catch(error => {
         console.error('Error loading dashboard data:', error);
         // Reset the ref if loading fails so we can retry
         dataLoadedRef.current = false;
@@ -172,6 +185,18 @@ export default function StudentDashboard() {
     loadUserEnrollments,
     loadUserProgress
   ]);
+
+  // Force refresh progress on every dashboard visit
+  useEffect(() => {
+    // Only run if user is authenticated and after initial data load
+    if (user?.id && dataLoadedRef.current) {
+      console.log('Refreshing course progress on dashboard visit');
+      // Refresh progress data to ensure we have the latest
+      loadUserProgress(user.id).then(() => {
+        console.log('Course progress refreshed');
+      });
+    }
+  }, [user?.id, loadUserProgress]);
 
   // Helper Functions
   function getRandomInt(min: number, max: number) {

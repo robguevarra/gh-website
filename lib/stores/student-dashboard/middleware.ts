@@ -34,16 +34,17 @@ export const performanceMiddleware =
             (partialState as any)[key] !== (previousState as any)[key]
           );
           
-          console.group('State Update');
-          console.log(`Changed state keys: ${changedKeys.join(', ')}`);
+
+          //console.group('State Update');
+          //console.log(`Changed state keys: ${changedKeys.join(', ')}`);
           
           // Execute the state update
           set(partialState);
           
           // Measure and log performance impact
-          const endTime = performance.now();
-          console.log(`Update took: ${(endTime - startTime).toFixed(2)}ms`);
-          console.groupEnd();
+          //const endTime = performance.now();
+          //console.log(`Update took: ${(endTime - startTime).toFixed(2)}ms`);
+          //console.groupEnd();
         } else {
           // In production, just update the state without monitoring
           set(partialState);

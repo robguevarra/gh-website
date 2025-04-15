@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   ChevronDown, 
@@ -13,6 +13,8 @@ import {
 
 import { cn } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
+import { getBrowserClient } from "@/lib/supabase/client"
+import { useAuth } from "@/context/auth-context"
 
 interface CourseModuleAccordionProps {
   course: any
@@ -27,12 +29,119 @@ export function CourseModuleAccordion({
   currentModuleId,
   currentLessonId,
   onLessonClick,
-  lessonProgress
+  lessonProgress: propLessonProgress
 }: CourseModuleAccordionProps) {
+  // Get current user
+  const { user } = useAuth()
+  
   // Local state for expanded modules
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({
     [currentModuleId]: true // Initially expand the current module
   })
+  
+  // Local state for lesson progress to ensure we have complete data
+  const [lessonProgress, setLessonProgress] = useState(propLessonProgress)
+  
+  // Data loading state
+  const [isLoadingProgress, setIsLoadingProgress] = useState(false)
+  
+  // Ref to track which lessons we've already tried to load
+  const attemptedLoadLessonsRef = useRef<Record<string, boolean>>({})
+  
+  // Effect to update local state when props change
+  useEffect(() => {
+    setLessonProgress(prevProgress => ({
+      ...prevProgress,
+      ...propLessonProgress
+    }))
+  }, [propLessonProgress])
+  
+  // Effect to ensure we have complete progress data for all lessons
+  useEffect(() => {
+    // Skip if no course data or no user
+    if (!course?.modules || !user?.id) return
+    
+    // Skip if already loading
+    if (isLoadingProgress) return
+    
+    // Find all lessons in this course
+    const allLessons = course.modules.flatMap((m: any) => m.lessons || [])
+    
+    // Find lessons that are missing progress data and we haven't tried to load yet
+    const lessonsMissingProgress = allLessons.filter((lesson: any) => 
+      !lessonProgress[lesson.id] && !attemptedLoadLessonsRef.current[lesson.id]
+    )
+    
+    // If we have progress data for all lessons or have already tried to load them, we're done
+    if (lessonsMissingProgress.length === 0) {
+      return
+    }
+    
+    // Otherwise, load progress data for missing lessons
+    const loadMissingProgressData = async () => {
+      setIsLoadingProgress(true)
+      
+      try {
+        // Get database client
+        const supabase = getBrowserClient()
+        
+        // Get IDs of lessons missing progress data
+        const missingLessonIds = lessonsMissingProgress.map((lesson: any) => lesson.id)
+        
+        // Mark these lessons as attempted to load
+        missingLessonIds.forEach((id: string) => {
+          attemptedLoadLessonsRef.current[id] = true
+        })
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Loading progress data for ${missingLessonIds.length} lessons...`)
+        }
+        
+        // Query database for progress data
+        const { data: progressData, error } = await supabase
+          .from('user_progress')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('lesson_id', missingLessonIds)
+        
+        if (error) {
+          console.error('Error loading lesson progress:', error)
+          return
+        }
+        
+        // Update local state with fetched data
+        if (progressData && progressData.length > 0) {
+          const newProgressData: Record<string, any> = {}
+          
+          progressData.forEach(progress => {
+            newProgressData[progress.lesson_id] = {
+              status: progress.status || 'not_started',
+              progress: progress.progress_percentage || 0,
+              lastPosition: progress.last_position || 0,
+              lastAccessedAt: progress.updated_at
+            }
+          })
+          
+          // Merge with existing progress data
+          setLessonProgress(prevProgress => ({
+            ...prevProgress,
+            ...newProgressData
+          }))
+          
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`Loaded progress data for ${progressData.length} lessons`)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading lesson progress:', error)
+      } finally {
+        setIsLoadingProgress(false)
+      }
+    }
+    
+    // Load missing progress data
+    loadMissingProgressData()
+  }, [course?.modules, user?.id, isLoadingProgress])
   
   // Toggle module expansion
   const toggleModule = (moduleId: string) => {
@@ -52,7 +161,8 @@ export function CourseModuleAccordion({
     if (!lessons || lessons.length === 0) return 0
     
     const completedLessons = lessons.filter(lesson => 
-      lessonProgress[lesson.id]?.progress >= 100
+      lessonProgress[lesson.id]?.progress >= 100 || 
+      lessonProgress[lesson.id]?.status === 'completed'
     ).length
     
     return Math.round((completedLessons / lessons.length) * 100)
@@ -122,8 +232,22 @@ export function CourseModuleAccordion({
                 >
                   <div className="divide-y">
                     {sortedLessons.map(lesson => {
-                      const lessonProgressData = lessonProgress[lesson.id] || { progress: 0 }
-                      const isCompleted = lessonProgressData.progress >= 100
+                      const lessonProgressData = lessonProgress[lesson.id] || { progress: 0, status: 'not_started' }
+                      
+                      // Consider a lesson complete if either status is 'completed' or progress is 100%
+                      const isCompleted = lessonProgressData.progress >= 100 || 
+                                         lessonProgressData.status === 'completed'
+                      
+                      // Log for debugging
+                      if (process.env.NODE_ENV === 'development' && 
+                          (lessonProgressData.progress >= 100 || lessonProgressData.status === 'completed')) {
+                        console.log(`Lesson ${lesson.id} (${lesson.title}) completion state:`, {
+                          progress: lessonProgressData.progress,
+                          status: lessonProgressData.status,
+                          isMarkedComplete: isCompleted
+                        })
+                      }
+                      
                       const isActive = lesson.id === currentLessonId
                       
                       return (

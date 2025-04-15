@@ -57,9 +57,10 @@ export function isEqual(a: any, b: any): boolean {
  * Create a set function with equality checking
  * 
  * @param set Original set function
+ * @param getState Function to get the current state
  * @returns New set function with equality checking
  */
-export function createSetWithEqualityCheck(set: Function) {
+export function createSetWithEqualityCheck(set: Function, getState: () => any) {
   return (state: any) => {
     // If state is a function, call it with the current state
     if (typeof state === 'function') {
@@ -69,7 +70,7 @@ export function createSetWithEqualityCheck(set: Function) {
     // If state is an object, check each key for equality
     if (typeof state === 'object' && state !== null) {
       // Get current state
-      const currentState = useStudentDashboardStore.getState();
+      const currentState = getState();
       
       // Check if any values are different
       const hasChanges = Object.keys(state).some(key => {
@@ -101,6 +102,3 @@ export function createSetWithEqualityCheck(set: Function) {
     return set(state);
   };
 }
-
-// Import at the end to avoid circular dependencies
-import { useStudentDashboardStore } from './index';

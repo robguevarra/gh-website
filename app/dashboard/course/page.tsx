@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { getLessonVideoId, getLessonVideoUrl } from "@/lib/stores/course/types/lesson"
 import { motion } from "framer-motion"
+import { getBrowserClient } from "@/lib/supabase/client"
 
 // UI Components
 import { Button } from "@/components/ui/button"
@@ -165,12 +166,11 @@ export default function CourseViewer() {
         await loadEnrollments(user.id)
       }
 
-      // Only load progress data if we don't already have it for this course
-      const hasProgressData = courseId && courseProgress[courseId]
-      if (!hasProgressData) {
-        await loadUserProgress(user.id)
-      }
-
+      // Always load the latest progress data for all lessons when viewing a course
+      // This ensures the module accordion shows the correct completion status for all lessons
+      console.log('Loading latest progress data for course view...')
+      await loadUserProgress(user.id)
+      
       setCourseViewerState(prevState => ({
         ...prevState,
         isLoading: false
@@ -178,7 +178,7 @@ export default function CourseViewer() {
     }
 
     loadData()
-  }, [user?.id, loadEnrollments, loadUserProgress, enrollments.length, courseId, courseProgress])
+  }, [user?.id, loadEnrollments, loadUserProgress, enrollments.length])
 
   // Use useMemo to derive course data from enrollments
   const courseData = useMemo(() => {
@@ -191,6 +191,34 @@ export default function CourseViewer() {
     // Return the course with properly typed modules and lessons
     return course
   }, [enrollments, courseId])
+
+  // When course data is available, ensure we load progress for all lessons
+  useEffect(() => {
+    // Skip if no course data or no user
+    if (!courseData?.modules || !user?.id) return
+
+    // Find all lessons in this course
+    const allLessons = courseData.modules.flatMap(m => m.lessons || [])
+    console.log(`Course has ${allLessons.length} lessons, checking progress data...`)
+
+    // Check if we have progress data for any lesson that's marked as complete
+    // This helps detect if progress state data is stale or incomplete
+    const anyCompleteLessonsMissingProgress = allLessons.some(lesson => {
+      // For any lesson that might be complete, verify we have its progress data
+      const hasProgressData = !!lessonProgress[lesson.id]
+      const needsProgressCheck = !hasProgressData
+      if (needsProgressCheck) {
+        console.log(`Missing progress data for lesson: ${lesson.id} (${lesson.title})`)
+      }
+      return needsProgressCheck
+    })
+
+    // If we're missing progress data for any lessons, reload all progress
+    if (anyCompleteLessonsMissingProgress) {
+      console.log('Found lessons missing progress data, reloading progress...')
+      loadUserProgress(user.id)
+    }
+  }, [courseData, user?.id, lessonProgress, loadUserProgress])
 
   // Use useMemo to derive sorted modules from course data
   const sortedModules = useMemo(() => {
@@ -312,18 +340,58 @@ export default function CourseViewer() {
   const initializedLessonsRef = useRef<Record<string, boolean>>({})
 
   useEffect(() => {
-    if (targetLesson && user?.id && lessonProgress &&
-        !lessonProgress[targetLesson.id] &&
+    if (targetLesson && user?.id && 
         !initializedLessonsRef.current[targetLesson.id]) {
-      // Mark this lesson as initialized
+      // Mark this lesson as initialized to prevent duplicate initialization
       initializedLessonsRef.current[targetLesson.id] = true
 
-      // Initialize progress for this lesson
-      updateLessonProgress(user.id, targetLesson.id, {
-        status: 'in-progress',
-        progress: 0,
-        lastPosition: 0
-      })
+      // Only initialize new progress records if no progress exists in the store
+      // This prevents resetting progress that exists in the database but hasn't been loaded yet
+      if (!lessonProgress[targetLesson.id]) {
+        console.log('Initializing progress for lesson:', targetLesson.id)
+        
+        // First check if this is a first visit or returning to a lesson with existing progress
+        const supabase = getBrowserClient()
+        
+        // Check database for existing progress before initializing
+        supabase
+          .from('user_progress')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('lesson_id', targetLesson.id)
+          .maybeSingle()
+          .then(({ data: existingProgress, error }: { 
+            data: { 
+              status: string; 
+              progress_percentage: number; 
+              last_position: number; 
+            } | null; 
+            error: any 
+          }) => {
+            if (error) {
+              console.error('Error checking existing progress:', error)
+              return
+            }
+            
+            // If progress exists in the database, use those values
+            // Otherwise initialize with defaults
+            if (existingProgress) {
+              console.log('Found existing progress in database:', existingProgress)
+              updateLessonProgress(user.id, targetLesson.id, {
+                status: existingProgress.status,
+                progress: existingProgress.progress_percentage,
+                lastPosition: existingProgress.last_position
+              })
+            } else {
+              // No existing progress, initialize with defaults
+              updateLessonProgress(user.id, targetLesson.id, {
+                status: 'in-progress',
+                progress: 0,
+                lastPosition: 0
+              })
+            }
+          })
+      }
     }
   }, [targetLesson, user?.id, lessonProgress, updateLessonProgress])
 
@@ -401,17 +469,40 @@ export default function CourseViewer() {
       // Mark this lesson as completed in our ref
       completedLessonsRef.current[lessonId] = true
 
+      // Add debug logging
+      console.log('Marking lesson as complete:', {
+        userId: user.id,
+        lessonId,
+        currentStatus: lessonProgress[lessonId]?.status || 'unknown'
+      })
+
       // Update the lesson progress in the store
       updateLessonProgress(user.id, lessonId, {
         status: "completed",
         progress: 100,
         lastPosition: 0
       })
-
-      // Show success message
-      alert('Lesson marked as complete!')
+      .then(() => {
+        console.log('Lesson marked as complete successfully');
+        
+        // Find course ID for this lesson to ensure we get the right progress
+        const currentCourseId = courseId || courseViewerState.currentCourse?.id;
+        if (currentCourseId) {
+          console.log('Current course progress:', {
+            courseId: currentCourseId,
+            progress: courseProgress[currentCourseId]
+          });
+        }
+        
+        // Show success message
+        alert('Lesson marked as complete!');
+      })
+      .catch(error => {
+        console.error('Failed to mark lesson as complete:', error);
+        alert('Failed to mark lesson as complete. Please try again.');
+      });
     }
-  }, [courseViewerState.currentLesson, user?.id, updateLessonProgress])
+  }, [courseViewerState.currentLesson, user?.id, updateLessonProgress, lessonProgress, courseId, courseProgress, courseViewerState.currentCourse?.id])
 
   // Handle tab change - this function is used by the Tabs component
   // We're keeping it here for future reference, but it's not currently used

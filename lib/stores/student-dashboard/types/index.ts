@@ -51,6 +51,15 @@ export interface UserEnrollment {
     description: string;
     slug: string;
     coverImage: string;
+    modules?: Array<{
+      id: string;
+      title: string;
+      lessons?: Array<{
+        id: string;
+        title: string;
+        module_id: string;
+      }>;
+    }>;
   };
 }
 

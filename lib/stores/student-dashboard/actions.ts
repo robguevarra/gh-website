@@ -431,6 +431,7 @@ export const createActions = (
 
       // Get the most recent lesson the user was working on with proper joins
       // Note: We need to join lessons → modules → courses to get the course_id
+      // Fix: Use table aliases to prevent ambiguous column references
       const { data, error } = await supabase
         .from('user_progress')
         .select(`
@@ -442,7 +443,7 @@ export const createActions = (
             module:modules (
               id,
               title,
-              course_id,
+              course_id:course_id,
               course:courses (
                 id,
                 title
@@ -521,6 +522,48 @@ export const createActions = (
    *
    * This optimized version updates only the specific lesson progress
    * without triggering a full reload of all progress data
+   * 
+   * NOTE: This function triggers a cascade of automatic progress calculations:
+   * 1. When it updates a user_progress record, a database trigger "update_module_progress_trigger" fires
+   * 2. This calculates and updates module progress in the module_progress table
+   * 3. When module_progress is updated, another trigger "update_course_progress_trigger" fires
+   * 4. This calculates and updates course progress in the course_progress table
+   * 
+   * See ProjectDocs/Build_Notes/progress-tracking-system_phase-1_db-trigger-fix.md for details
+   * on the automated progress calculation system and potential issues.
+   * 
+   * IMPORTANT: When initializing progress for a lesson the user is viewing for the first time,
+   * always check if progress exists in the database first before initializing with default values.
+   * Otherwise, you risk overwriting existing progress with zeros if the client-side store hasn't
+   * yet loaded the progress data from the database.
+   * 
+   * Example of proper initialization (from app/dashboard/course/page.tsx):
+   * ```
+   * // Check database for existing progress before initializing with defaults
+   * supabase
+   *   .from('user_progress')
+   *   .select('*')
+   *   .eq('user_id', user.id)
+   *   .eq('lesson_id', lessonId)
+   *   .maybeSingle()
+   *   .then(({ data: existingProgress }) => {
+   *     if (existingProgress) {
+   *       // Use existing progress values
+   *       updateLessonProgress(user.id, lessonId, {
+   *         status: existingProgress.status,
+   *         progress: existingProgress.progress_percentage,
+   *         lastPosition: existingProgress.last_position
+   *       })
+   *     } else {
+   *       // No existing progress, initialize with defaults
+   *       updateLessonProgress(user.id, lessonId, {
+   *         status: 'in-progress',
+   *         progress: 0,
+   *         lastPosition: 0
+   *       })
+   *     }
+   *   })
+   * ```
    */
   updateLessonProgress: async (userId: string, lessonId: string, progressData: {
     status?: string;
@@ -530,6 +573,8 @@ export const createActions = (
     if (!userId || !lessonId) return;
 
     try {
+      console.log('updateLessonProgress called with:', { userId, lessonId, progressData });
+      
       // Update local state immediately for responsive UI
       const currentLessonProgress = get().lessonProgress[lessonId] || {
         status: 'not_started',
@@ -545,6 +590,12 @@ export const createActions = (
         lastAccessedAt: new Date().toISOString()
       };
 
+      // Log progress change
+      console.log('Lesson progress update:', {
+        before: currentLessonProgress,
+        after: updatedProgress
+      });
+
       // Update local state
       set({
         lessonProgress: {
@@ -555,17 +606,67 @@ export const createActions = (
 
       // Sync with Supabase using browser client
       const supabase = getBrowserClient();
-      await supabase
+      
+      // Use a simple approach to avoid SQL conflicts
+      // First check if a record exists - just get the ID
+      const { data: existingRecord, error: checkError } = await supabase
         .from('user_progress')
-        .upsert({
-          user_id: userId,
-          lesson_id: lessonId,
-          status: progressData.status,
-          progress_percentage: progressData.progress,
-          last_position: progressData.lastPosition,
-          updated_at: new Date().toISOString()
+        .select('id')
+        .eq('user_id', userId)
+        .eq('lesson_id', lessonId)
+        .maybeSingle(); // Use maybeSingle instead of single to prevent errors
+      
+      if (checkError) {
+        console.error('Error checking for existing record:', checkError);
+        throw checkError;
+      }
+      
+      // Format the update data
+      const progressRecord: {
+        status: string;
+        progress_percentage: number;
+        last_position: number;
+        updated_at: string;
+        completed_at?: string;
+        user_id?: string;
+        lesson_id?: string;
+      } = {
+        status: progressData.status || 'in-progress',
+        progress_percentage: progressData.progress || 0,
+        last_position: progressData.lastPosition || 0,
+        updated_at: new Date().toISOString(),
+      };
+      
+      // Add completed_at only if status is 'completed'
+      if (progressData.status === 'completed') {
+        progressRecord.completed_at = new Date().toISOString();
+      }
+      
+      let error;
+      
+      // Use upsert operation with on_conflict for both insert and update
+      console.log('Using upsert for progress record, existing ID:', existingRecord?.id);
+      
+      // Always include the user_id and lesson_id for new records
+      progressRecord.user_id = userId;
+      progressRecord.lesson_id = lessonId;
+      
+      const { data: upsertData, error: upsertError, status } = await supabase
+        .from('user_progress')
+        .upsert(progressRecord, {
+          onConflict: 'user_id,lesson_id'
         })
-        .select();
+        .select('*');
+      
+      console.log('Upsert response:', { data: upsertData, error: upsertError, status });
+      error = upsertError;
+      
+      if (error) {
+        console.error('Error updating progress in database:', error);
+        throw error;
+      }
+      
+      console.log('Progress updated in database successfully');
 
       // Update course and module progress calculations locally instead of reloading everything
       // This prevents unnecessary re-renders of components using progress data
@@ -594,6 +695,8 @@ export const createActions = (
         if (courseId && moduleId) break;
       }
 
+      console.log('Found lesson in course:', { courseId, moduleId });
+
       // If we found the course and module, update their progress
       if (courseId && moduleId) {
         // Update module progress
@@ -603,6 +706,13 @@ export const createActions = (
           if (moduleProgressIndex >= 0) {
             const moduleProgressItem = moduleProgress[courseId][moduleProgressIndex];
             const isCompleted = updatedProgress.status === 'completed';
+
+            console.log('Updating module progress:', {
+              moduleId,
+              beforeCount: moduleProgressItem.completedLessonsCount,
+              currentLessonStatus: currentLessonProgress.status,
+              newLessonStatus: updatedProgress.status
+            });
 
             // Update completed lessons count if status changed to completed
             if (isCompleted && currentLessonProgress.status !== 'completed') {
@@ -614,6 +724,12 @@ export const createActions = (
             // Recalculate progress percentage
             moduleProgressItem.progress = moduleProgressItem.totalLessonsCount > 0 ?
               (moduleProgressItem.completedLessonsCount / moduleProgressItem.totalLessonsCount) * 100 : 0;
+
+            console.log('Updated module progress:', {
+              moduleId,
+              afterCount: moduleProgressItem.completedLessonsCount,
+              newProgress: moduleProgressItem.progress
+            });
 
             // Update the module progress array
             const updatedModuleProgress = [...moduleProgress[courseId]];
@@ -634,6 +750,13 @@ export const createActions = (
           const courseProgressItem = courseProgress[courseId];
           const isCompleted = updatedProgress.status === 'completed';
 
+          console.log('Updating course progress:', {
+            courseId,
+            beforeCount: courseProgressItem.completedLessonsCount,
+            currentLessonStatus: currentLessonProgress.status,
+            newLessonStatus: updatedProgress.status
+          });
+
           // Update completed lessons count if status changed to completed
           if (isCompleted && currentLessonProgress.status !== 'completed') {
             courseProgressItem.completedLessonsCount += 1;
@@ -645,6 +768,13 @@ export const createActions = (
           courseProgressItem.progress = courseProgressItem.totalLessonsCount > 0 ?
             Math.round((courseProgressItem.completedLessonsCount / courseProgressItem.totalLessonsCount) * 100) : 0;
 
+          console.log('Updated course progress:', {
+            courseId,
+            afterCount: courseProgressItem.completedLessonsCount,
+            newProgress: courseProgressItem.progress,
+            totalLessons: courseProgressItem.totalLessonsCount
+          });
+
           // Update state with new course progress
           set({
             courseProgress: {
@@ -652,14 +782,19 @@ export const createActions = (
               [courseId]: courseProgressItem
             }
           });
+          
+          // Verify the update worked by getting the state after the update
+          console.log('Verified course progress after update:', get().courseProgress[courseId]);
         }
       }
 
+      return true;
     } catch (error) {
       console.error('Error updating lesson progress:', error);
       // No need to revert state as we don't have the previous state stored
       // Just set error flag
       set({ hasProgressError: true });
+      return false;
     }
   }
 });

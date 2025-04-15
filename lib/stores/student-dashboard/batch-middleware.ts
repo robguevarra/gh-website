@@ -1,5 +1,5 @@
 import { StateCreator, StoreApi } from 'zustand';
-import { StudentDashboardState } from './types';
+import type { StudentDashboardStore } from './index';
 
 /**
  * Middleware for batching state updates in Zustand
@@ -12,7 +12,7 @@ import { StudentDashboardState } from './types';
  * // In your store definition
  * import { batchMiddleware } from './batch-middleware';
  * 
- * const useStudentDashboardStore = create<StudentDashboardState>()(
+ * const useStudentDashboardStore = create<StudentDashboardStore>()(
  *   batchMiddleware(
  *     (set) => ({
  *       // state and actions
@@ -62,11 +62,11 @@ export const batch = (callback: () => void) => {
 /**
  * Middleware for batching state updates
  */
-export const batchMiddleware = <T extends StudentDashboardState>(
+export const batchMiddleware = <T extends object>(
   config: StateCreator<T>
-): StateCreator<T> => (set, get, api) => {
+) => (set: any, get: any, api: any) => {
   // Create a batched version of the set function
-  const batchedSet: typeof set = (updater, replace) => {
+  const batchedSet = (updater: any, replace?: boolean) => {
     // If we're already processing the queue, use the original set
     if (scheduled) {
       return set(updater, replace);
@@ -93,7 +93,7 @@ export const batchMiddleware = <T extends StudentDashboardState>(
  * @param store - The store to batch updates for
  * @param callback - Function containing multiple state updates
  */
-export const batchWithStore = <T>(
+export const batchWithStore = <T extends object>(
   store: StoreApi<T>,
   callback: () => void
 ) => {
@@ -113,6 +113,9 @@ export const batchWithStore = <T>(
   
   // Apply all updates at once
   if (Object.keys(updates).length > 0) {
-    store.setState(updates as Partial<T>);
+    store.setState(updates);
   }
 };
+
+// Type definition for Zustand middleware
+type StoreMutatorIdentifier = string;
