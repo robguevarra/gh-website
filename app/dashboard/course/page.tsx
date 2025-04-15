@@ -170,7 +170,7 @@ export default function CourseViewer() {
       // This ensures the module accordion shows the correct completion status for all lessons
       console.log('Loading latest progress data for course view...')
       await loadUserProgress(user.id)
-      
+
       setCourseViewerState(prevState => ({
         ...prevState,
         isLoading: false
@@ -199,23 +199,17 @@ export default function CourseViewer() {
 
     // Find all lessons in this course
     const allLessons = courseData.modules.flatMap(m => m.lessons || [])
-    console.log(`Course has ${allLessons.length} lessons, checking progress data...`)
-
     // Check if we have progress data for any lesson that's marked as complete
     // This helps detect if progress state data is stale or incomplete
     const anyCompleteLessonsMissingProgress = allLessons.some(lesson => {
       // For any lesson that might be complete, verify we have its progress data
       const hasProgressData = !!lessonProgress[lesson.id]
       const needsProgressCheck = !hasProgressData
-      if (needsProgressCheck) {
-        console.log(`Missing progress data for lesson: ${lesson.id} (${lesson.title})`)
-      }
       return needsProgressCheck
     })
 
     // If we're missing progress data for any lessons, reload all progress
     if (anyCompleteLessonsMissingProgress) {
-      console.log('Found lessons missing progress data, reloading progress...')
       loadUserProgress(user.id)
     }
   }, [courseData, user?.id, lessonProgress, loadUserProgress])
@@ -340,7 +334,7 @@ export default function CourseViewer() {
   const initializedLessonsRef = useRef<Record<string, boolean>>({})
 
   useEffect(() => {
-    if (targetLesson && user?.id && 
+    if (targetLesson && user?.id &&
         !initializedLessonsRef.current[targetLesson.id]) {
       // Mark this lesson as initialized to prevent duplicate initialization
       initializedLessonsRef.current[targetLesson.id] = true
@@ -348,11 +342,9 @@ export default function CourseViewer() {
       // Only initialize new progress records if no progress exists in the store
       // This prevents resetting progress that exists in the database but hasn't been loaded yet
       if (!lessonProgress[targetLesson.id]) {
-        console.log('Initializing progress for lesson:', targetLesson.id)
-        
         // First check if this is a first visit or returning to a lesson with existing progress
         const supabase = getBrowserClient()
-        
+
         // Check database for existing progress before initializing
         supabase
           .from('user_progress')
@@ -360,23 +352,22 @@ export default function CourseViewer() {
           .eq('user_id', user.id)
           .eq('lesson_id', targetLesson.id)
           .maybeSingle()
-          .then(({ data: existingProgress, error }: { 
-            data: { 
-              status: string; 
-              progress_percentage: number; 
-              last_position: number; 
-            } | null; 
-            error: any 
+          .then(({ data: existingProgress, error }: {
+            data: {
+              status: string;
+              progress_percentage: number;
+              last_position: number;
+            } | null;
+            error: any
           }) => {
             if (error) {
               console.error('Error checking existing progress:', error)
               return
             }
-            
+
             // If progress exists in the database, use those values
             // Otherwise initialize with defaults
             if (existingProgress) {
-              console.log('Found existing progress in database:', existingProgress)
               updateLessonProgress(user.id, targetLesson.id, {
                 status: existingProgress.status,
                 progress: existingProgress.progress_percentage,
@@ -484,7 +475,7 @@ export default function CourseViewer() {
       })
       .then(() => {
         console.log('Lesson marked as complete successfully');
-        
+
         // Find course ID for this lesson to ensure we get the right progress
         const currentCourseId = courseId || courseViewerState.currentCourse?.id;
         if (currentCourseId) {
@@ -493,7 +484,7 @@ export default function CourseViewer() {
             progress: courseProgress[currentCourseId]
           });
         }
-        
+
         // Show success message
         alert('Lesson marked as complete!');
       })

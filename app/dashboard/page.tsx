@@ -150,22 +150,19 @@ export default function StudentDashboard() {
       // Set user ID in store
       setUserId(user.id);
 
-      console.log('Loading dashboard data for user:', user.id);
+      // Loading dashboard data for user
 
       // Load enrollments and progress data in parallel
       Promise.all([
         loadUserEnrollments(user.id),
         loadUserProgress(user.id)
       ]).then(() => {
-        console.log('Dashboard data loaded successfully');
+        // Dashboard data loaded successfully
         // Add debugging to see the current course progress after loading
         const currentState = useStudentDashboardStore.getState();
         const courseId = currentState.enrollments?.[0]?.course?.id;
         if (courseId) {
-          console.log('Current course progress after loading:', {
-            courseId,
-            progress: currentState.courseProgress[courseId]
-          });
+          // Check current course progress after loading
         }
       }).catch(error => {
         console.error('Error loading dashboard data:', error);
@@ -187,30 +184,38 @@ export default function StudentDashboard() {
     loadUserProgress
   ]);
 
-  // Force refresh progress on every dashboard visit
+  // Track if we've already refreshed progress
+  const progressRefreshedRef = useRef(false);
+
+  // Force refresh progress on dashboard visit, but only once
   useEffect(() => {
-    // Only run if user is authenticated and after initial data load
-    if (user?.id && dataLoadedRef.current) {
-      console.log('Refreshing course progress on dashboard visit');
+    // Only run if user is authenticated, after initial data load, and we haven't refreshed yet
+    if (user?.id && dataLoadedRef.current && !progressRefreshedRef.current) {
+      // Mark as refreshed to prevent redundant calls
+      progressRefreshedRef.current = true;
+
+      // Refresh course progress on dashboard visit, but only once
+
       // Refresh progress data to ensure we have the latest
       loadUserProgress(user.id).then(() => {
-        console.log('Course progress refreshed');
+        // Course progress has been refreshed
 
         // Add debugging to see the current course progress after loading
         const currentState = useStudentDashboardStore.getState();
         const courseId = currentState.enrollments?.[0]?.course?.id;
         if (courseId) {
           const progress = currentState.courseProgress[courseId];
-          console.log('Current course progress after refresh:', {
-            courseId,
-            progress: progress?.progress || 0,
-            completedLessons: progress?.completedLessonsCount || 0,
-            totalLessons: progress?.totalLessonsCount || 0
-          });
+
+          // Check current course progress after refresh
 
           // If we have a courseId but no progress data, try to fetch it directly from the database
-          if (!progress || progress.progress === undefined) {
-            console.log('No progress data found in store, fetching directly from database');
+          // But only if we haven't already tried via the progressFetchedRef
+          if ((!progress || progress.progress === undefined) && !progressFetchedRef.current[courseId]) {
+            // Mark this courseId as fetched to prevent redundant calls
+            progressFetchedRef.current[courseId] = true;
+
+            // No progress data found in store, fetching directly from database
+
             const fetchProgressDirectly = async () => {
               const supabase = getBrowserClient();
               const { data, error } = await supabase
@@ -220,13 +225,28 @@ export default function StudentDashboard() {
                 .eq('course_id', courseId)
                 .single();
 
-              if (error) {
+              if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
                 console.error('Error fetching course progress:', error);
                 return;
               }
 
               if (data) {
-                console.log('Found course progress in database:', data);
+                // Found course progress in database, update the store
+
+                // Calculate total lessons from the course data if available
+                let totalLessonsCount = 0;
+                const course = currentState.enrollments?.[0]?.course;
+                if (course?.modules) {
+                  course.modules.forEach(module => {
+                    if (module.lessons) {
+                      totalLessonsCount += module.lessons.length;
+                    }
+                  });
+                }
+
+                // Calculate completed lessons based on progress percentage
+                const completedLessons = Math.round((data.progress_percentage / 100) * totalLessonsCount);
+
                 // Update the store with the database values
                 useStudentDashboardStore.setState(state => {
                   const updatedCourseProgress = {
@@ -238,15 +258,17 @@ export default function StudentDashboard() {
                     updatedCourseProgress[courseId] = {
                       courseId,
                       progress: data.progress_percentage,
-                      completedLessonsCount: 0, // We'll need to calculate this
-                      totalLessonsCount: 0, // We'll need to calculate this
+                      completedLessonsCount: completedLessons,
+                      totalLessonsCount,
                       course: currentState.enrollments?.[0]?.course
                     };
                   } else {
                     // Update the existing progress object
                     updatedCourseProgress[courseId] = {
                       ...updatedCourseProgress[courseId],
-                      progress: data.progress_percentage
+                      progress: data.progress_percentage,
+                      completedLessonsCount: completedLessons,
+                      totalLessonsCount
                     };
                   }
 
@@ -257,7 +279,8 @@ export default function StudentDashboard() {
               }
             };
 
-            fetchProgressDirectly();
+            // Use a small timeout to prevent this from blocking rendering
+            setTimeout(fetchProgressDirectly, 0);
           }
         }
       });
@@ -346,10 +369,12 @@ export default function StudentDashboard() {
   // Using a direct selector to ensure it's always up-to-date
   const courseId = enrollments?.[0]?.course?.id || '';
 
+  // Track if we've already fetched progress from the database
+  const progressFetchedRef = useRef<Record<string, boolean>>({});
+
   // Get the course progress from the store - memoized
   const currentCourseProgress = useMemo(() => {
-    // Log all course progress for debugging
-    console.log('All course progress in store:', courseProgress);
+    // Progress data is now properly loaded from the store
 
     const rawCourseProgress = courseProgress[courseId] || null;
     const course = enrollments?.[0]?.course;
@@ -366,11 +391,15 @@ export default function StudentDashboard() {
 
     if (!rawCourseProgress) {
       // If no progress data, return a default object with the calculated total
-      console.log('No progress data found for course:', courseId);
 
       // If we have a courseId but no progress, try to fetch it directly from the database
-      if (courseId && user?.id) {
-        console.log('Fetching progress directly from database for course:', courseId);
+      // But only if we haven't already tried for this courseId
+      if (courseId && user?.id && !progressFetchedRef.current[courseId]) {
+        // Mark this courseId as fetched to prevent redundant calls
+        progressFetchedRef.current[courseId] = true;
+
+        // Fetch progress directly from database for this course
+
         const fetchProgressDirectly = async () => {
           const supabase = getBrowserClient();
           const { data, error } = await supabase
@@ -380,13 +409,14 @@ export default function StudentDashboard() {
             .eq('course_id', courseId)
             .single();
 
-          if (error) {
+          if (error && error.code !== 'PGRST116') { // PGRST116 is "not found"
             console.error('Error fetching course progress:', error);
             return;
           }
 
           if (data) {
-            console.log('Found course progress in database:', data);
+            // Found course progress in database, update the store
+
             // Calculate completed lessons based on progress percentage
             const completedLessons = Math.round((data.progress_percentage / 100) * totalLessonsCount);
 
@@ -411,7 +441,8 @@ export default function StudentDashboard() {
           }
         };
 
-        fetchProgressDirectly();
+        // Use a small timeout to prevent this from blocking rendering
+        setTimeout(fetchProgressDirectly, 0);
       }
 
       return {
@@ -421,7 +452,8 @@ export default function StudentDashboard() {
       } as ExtendedCourseProgress;
     }
 
-    console.log('Using existing progress data:', rawCourseProgress);
+    // Using existing progress data from the store
+
     return {
       ...rawCourseProgress,
       progress: rawCourseProgress.progress || 0,
@@ -433,14 +465,7 @@ export default function StudentDashboard() {
 
   // Create a formatted version for the UI components - memoized
   const formattedCourseProgress = useMemo(() => {
-    // Log the current course progress for debugging
-    console.log('Formatting course progress:', {
-      courseId,
-      rawProgress: currentCourseProgress,
-      progress: currentCourseProgress?.progress,
-      completedLessonsCount: currentCourseProgress?.completedLessonsCount,
-      totalLessonsCount: currentCourseProgress?.totalLessonsCount
-    });
+    // Format course progress data for UI components
 
     return {
       title: enrollments?.[0]?.course?.title || "Papers to Profits",
@@ -660,14 +685,14 @@ export default function StudentDashboard() {
         onDownload={(file) => {
           // Open Google Drive download link in new tab
           if (file.id.startsWith('mock-')) {
-            console.log('Mock download triggered for:', file.name);
+            // Mock download triggered for this file
             return;
           }
 
           window.open(`https://drive.google.com/uc?export=download&id=${file.id}`, '_blank');
 
           // Track download (we could add analytics here)
-          console.log(`Template downloaded: ${file.name}`);
+          // Template downloaded successfully
         }}
       />
 

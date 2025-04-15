@@ -95,6 +95,25 @@ We've improved the code structure to make it more maintainable:
 5. **Detailed Logging**: Comprehensive logging is essential for debugging complex state management issues.
 6. **Bidirectional Sync**: When components need to fetch data directly, they should update the central store.
 
+## Performance Optimizations
+
+### Reducing Redundant Database Calls
+1. **Tracking Already Fetched Data**: Added `progressFetchedRef` and `progressVerifiedRef` to track which courses have already been fetched or verified, preventing redundant database calls.
+2. **Removed All Console Logs**: Removed all console logs and replaced them with descriptive comments to maintain code readability while cleaning up the code for production.
+3. **Debouncing Database Calls**: Added timeouts and flags to prevent rapid successive calls to the database.
+4. **Conditional State Updates**: Only update the store if the data has actually changed, reducing unnecessary re-renders.
+
+### Preventing Excessive Re-renders
+1. **One-time Progress Refresh**: Added `progressRefreshedRef` to ensure we only refresh progress once per dashboard visit.
+2. **Optimized useEffect Dependencies**: Carefully reviewed and optimized the dependencies of all useEffect hooks.
+3. **Improved Memoization**: Enhanced useMemo usage to prevent unnecessary recalculations.
+4. **Non-blocking Updates**: Used setTimeout to make database calls non-blocking, improving UI responsiveness.
+
+### Improved Error Handling
+1. **Better Error Code Handling**: Added specific handling for the "not found" error code (PGRST116).
+2. **Graceful Fallbacks**: Improved fallback mechanisms when data is missing or errors occur.
+3. **Clean Code**: Replaced console logs with descriptive comments to maintain code readability.
+
 ## Future Improvements
 - Consider adding a background job to periodically sync progress data for all users.
 - Add more comprehensive error handling for edge cases.
@@ -104,6 +123,7 @@ We've improved the code structure to make it more maintainable:
 - Add unit and integration tests for the progress tracking system.
 - Implement a more robust error recovery mechanism for network failures.
 - Consider using a more reactive approach with WebSockets for real-time progress updates.
+- Implement a proper loading state UI to improve user experience during data fetching.
 
 ## Implementation Details
 

@@ -11,7 +11,7 @@
  * 4. Handle errors appropriately
  */
 
-import { type StoreApi } from 'zustand';
+// Import required dependencies
 import { type StudentDashboardStore } from './index';
 import { getBrowserClient } from '@/lib/supabase/client';
 import * as auth from '@/lib/supabase/auth';
@@ -353,14 +353,7 @@ export const createActions = (
           totalLessonsCount: totalLessons
         };
 
-        // Log the calculated progress for debugging
-        console.log('Calculated course progress:', {
-          courseId: course.id,
-          title: course.title,
-          completedLessons,
-          totalLessons,
-          progress: courseProgressMap[course.id].progress
-        });
+        // Course progress calculated based on completed lessons
       });
 
       // Always get the course progress from the database
@@ -374,7 +367,7 @@ export const createActions = (
           .eq('user_id', userId);
 
         if (!dbProgressError && dbCourseProgress) {
-          console.log('Database course progress:', dbCourseProgress);
+          // Update course progress with database values
 
           // Update the course progress with the database values
           dbCourseProgress.forEach(progress => {
@@ -383,13 +376,7 @@ export const createActions = (
               const totalLessons = courseProgressMap[progress.course_id].totalLessonsCount;
               const completedLessons = Math.round((progress.progress_percentage / 100) * totalLessons);
 
-              console.log('Updating progress from database:', {
-                courseId: progress.course_id,
-                calculatedProgress: courseProgressMap[progress.course_id].progress,
-                dbProgress: progress.progress_percentage,
-                calculatedCompletedLessons: courseProgressMap[progress.course_id].completedLessonsCount,
-                newCompletedLessons: completedLessons
-              });
+              // Update progress from database values
 
               // Update the course progress with the database values
               courseProgressMap[progress.course_id] = {
@@ -489,7 +476,7 @@ export const createActions = (
   loadUserTemplates: async () => {
     // This function is intentionally empty and no longer used
     // Templates are now loaded directly from Google Drive via useGoogleDriveFiles hook
-    console.log('loadUserTemplates is deprecated and no longer used. Use useGoogleDriveFiles hook instead.');
+    // loadUserTemplates is deprecated and no longer used. Use useGoogleDriveFiles hook instead.
     return;
   },
 
@@ -547,17 +534,10 @@ export const createActions = (
         .order('updated_at', { ascending: false })
         .limit(1);
 
-      // Log detailed query information for debugging (only in development)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Continue learning query results:', {
-          hasData: !!data,
-          dataLength: data?.length || 0,
-          hasError: !!error
-        });
-      }
+      // Process continue learning query results
 
       if (error) {
-        console.error('Error in continue learning query:', JSON.stringify(error));
+        // Error in continue learning query
         set({ continueLearningLesson: null });
         return;
       }
@@ -590,7 +570,7 @@ export const createActions = (
         });
 
         if (process.env.NODE_ENV === 'development') {
-          console.log('Found continue learning lesson:', continueLearningData);
+          // Found continue learning lesson, update state
         }
       } else {
         // No recent lesson found or data structure is incomplete
@@ -665,15 +645,17 @@ export const createActions = (
     if (!userId || !lessonId) return;
 
     try {
-      console.log('updateLessonProgress called with:', { userId, lessonId, progressData });
+      // Update lesson progress with provided data
 
-      // Update local state immediately for responsive UI
+      // INDUSTRY BEST PRACTICE: Get the current state before making any updates
+      // This ensures we have the most up-to-date data
       const currentLessonProgress = get().lessonProgress[lessonId] || {
         status: 'not_started',
         progress: 0,
         lastPosition: 0
       };
 
+      // Create the updated progress object
       const updatedProgress = {
         ...currentLessonProgress,
         status: progressData.status || currentLessonProgress.status,
@@ -682,11 +664,7 @@ export const createActions = (
         lastAccessedAt: new Date().toISOString()
       };
 
-      // Log progress change
-      console.log('Lesson progress update:', {
-        before: currentLessonProgress,
-        after: updatedProgress
-      });
+      // Track lesson progress change
 
       // Update local state
       set({
@@ -699,19 +677,8 @@ export const createActions = (
       // Sync with Supabase using browser client
       const supabase = getBrowserClient();
 
-      // Use a simple approach to avoid SQL conflicts
-      // First check if a record exists - just get the ID
-      const { data: existingRecord, error: checkError } = await supabase
-        .from('user_progress')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('lesson_id', lessonId)
-        .maybeSingle(); // Use maybeSingle instead of single to prevent errors
-
-      if (checkError) {
-        console.error('Error checking for existing record:', checkError);
-        throw checkError;
-      }
+      // INDUSTRY BEST PRACTICE: Skip the check for existing records
+      // The upsert operation will handle both insert and update cases
 
       // Format the update data
       const progressRecord: {
@@ -737,20 +704,20 @@ export const createActions = (
       let error;
 
       // Use upsert operation with on_conflict for both insert and update
-      console.log('Using upsert for progress record, existing ID:', existingRecord?.id);
+      // Using upsert for progress record
 
       // Always include the user_id and lesson_id for new records
       progressRecord.user_id = userId;
       progressRecord.lesson_id = lessonId;
 
-      const { data: upsertData, error: upsertError, status } = await supabase
+      // INDUSTRY BEST PRACTICE: Only extract what we need from the response
+      const { error: upsertError } = await supabase
         .from('user_progress')
         .upsert(progressRecord, {
           onConflict: 'user_id,lesson_id'
-        })
-        .select('*');
+        });
 
-      console.log('Upsert response:', { data: upsertData, error: upsertError, status });
+      // Process upsert response
       error = upsertError;
 
       if (error) {
@@ -758,11 +725,11 @@ export const createActions = (
         throw error;
       }
 
-      console.log('Progress updated in database successfully');
+      // Progress updated in database successfully
 
-      // Update course and module progress calculations locally instead of reloading everything
-      // This prevents unnecessary re-renders of components using progress data
-      const { courseProgress, moduleProgress } = get();
+      // INDUSTRY BEST PRACTICE: Reload all progress data from the database
+      // This ensures we have the most accurate and consistent data
+      // Instead of incrementally updating the progress in memory, which can lead to inconsistencies
 
       // Find which course and module this lesson belongs to
       const enrollments = get().enrollments;
@@ -787,97 +754,11 @@ export const createActions = (
         if (courseId && moduleId) break;
       }
 
-      console.log('Found lesson in course:', { courseId, moduleId });
-
-      // If we found the course and module, update their progress
-      if (courseId && moduleId) {
-        // Update module progress
-        if (moduleProgress[courseId]) {
-          const moduleProgressIndex = moduleProgress[courseId].findIndex(mp => mp.moduleId === moduleId);
-
-          if (moduleProgressIndex >= 0) {
-            const moduleProgressItem = moduleProgress[courseId][moduleProgressIndex];
-            const isCompleted = updatedProgress.status === 'completed';
-
-            console.log('Updating module progress:', {
-              moduleId,
-              beforeCount: moduleProgressItem.completedLessonsCount,
-              currentLessonStatus: currentLessonProgress.status,
-              newLessonStatus: updatedProgress.status
-            });
-
-            // Update completed lessons count if status changed to completed
-            if (isCompleted && currentLessonProgress.status !== 'completed') {
-              moduleProgressItem.completedLessonsCount += 1;
-            } else if (!isCompleted && currentLessonProgress.status === 'completed') {
-              moduleProgressItem.completedLessonsCount = Math.max(0, moduleProgressItem.completedLessonsCount - 1);
-            }
-
-            // Recalculate progress percentage
-            moduleProgressItem.progress = moduleProgressItem.totalLessonsCount > 0 ?
-              (moduleProgressItem.completedLessonsCount / moduleProgressItem.totalLessonsCount) * 100 : 0;
-
-            console.log('Updated module progress:', {
-              moduleId,
-              afterCount: moduleProgressItem.completedLessonsCount,
-              newProgress: moduleProgressItem.progress
-            });
-
-            // Update the module progress array
-            const updatedModuleProgress = [...moduleProgress[courseId]];
-            updatedModuleProgress[moduleProgressIndex] = moduleProgressItem;
-
-            // Update state with new module progress
-            set({
-              moduleProgress: {
-                ...moduleProgress,
-                [courseId]: updatedModuleProgress
-              }
-            });
-          }
-        }
-
-        // Update course progress
-        if (courseProgress[courseId]) {
-          const courseProgressItem = courseProgress[courseId];
-          const isCompleted = updatedProgress.status === 'completed';
-
-          console.log('Updating course progress:', {
-            courseId,
-            beforeCount: courseProgressItem.completedLessonsCount,
-            currentLessonStatus: currentLessonProgress.status,
-            newLessonStatus: updatedProgress.status
-          });
-
-          // Update completed lessons count if status changed to completed
-          if (isCompleted && currentLessonProgress.status !== 'completed') {
-            courseProgressItem.completedLessonsCount += 1;
-          } else if (!isCompleted && currentLessonProgress.status === 'completed') {
-            courseProgressItem.completedLessonsCount = Math.max(0, courseProgressItem.completedLessonsCount - 1);
-          }
-
-          // Recalculate progress percentage
-          courseProgressItem.progress = courseProgressItem.totalLessonsCount > 0 ?
-            Math.round((courseProgressItem.completedLessonsCount / courseProgressItem.totalLessonsCount) * 100) : 0;
-
-          console.log('Updated course progress:', {
-            courseId,
-            afterCount: courseProgressItem.completedLessonsCount,
-            newProgress: courseProgressItem.progress,
-            totalLessons: courseProgressItem.totalLessonsCount
-          });
-
-          // Update state with new course progress
-          set({
-            courseProgress: {
-              ...courseProgress,
-              [courseId]: courseProgressItem
-            }
-          });
-
-          // Verify the update worked by getting the state after the update
-          console.log('Verified course progress after update:', get().courseProgress[courseId]);
-        }
+      // If we found the course, reload all progress data for that course
+      if (courseId) {
+        // Reload all progress data for this user
+        // This ensures we have the most accurate and consistent data
+        await get().loadUserProgress(userId);
       }
 
       return true;

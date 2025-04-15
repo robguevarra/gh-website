@@ -1,7 +1,7 @@
 "use client"
 
 // React imports
-import React, { useEffect, useMemo } from "react"
+import React, { useEffect, useMemo, useRef } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -26,7 +26,7 @@ import { getBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/context/auth-context"
 
 export interface CourseLesson {
-  id: number
+  id: string | number
   title: string
   module: string
   moduleId?: string
@@ -79,20 +79,38 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
   // Get current user
   const { user } = useAuth()
 
-  // Get lesson progress data from the store
+  // Get data from the store
   const lessonProgress = useStudentDashboardStore(state => state.lessonProgress)
   const enrollments = useStudentDashboardStore(state => state.enrollments)
   const storeProgress = useStudentDashboardStore(state =>
     propCourseProgress.courseId ? state.courseProgress[propCourseProgress.courseId] : null
   )
+  const continueLearningLesson = useStudentDashboardStore(state => state.continueLearningLesson)
+  const loadContinueLearningLesson = useStudentDashboardStore(state => state.loadContinueLearningLesson)
 
   // State to track validated course progress
   const [courseProgress, setCourseProgress] = React.useState(propCourseProgress)
 
-  // Calculate course progress from lessonProgress data
+  // INDUSTRY BEST PRACTICE: Use the store's course progress data as the single source of truth
+  // This ensures consistency across the application
   const calculatedProgress = useMemo(() => {
-    // Skip if no course ID or no enrollments
-    if (!propCourseProgress.courseId || !enrollments.length) {
+    // Skip if no course ID
+    if (!propCourseProgress.courseId) {
+      return propCourseProgress
+    }
+
+    // If we have store progress, use it directly
+    if (storeProgress) {
+      return {
+        ...propCourseProgress,
+        progress: storeProgress.progress,
+        completedLessons: storeProgress.completedLessonsCount,
+        totalLessons: storeProgress.totalLessonsCount
+      }
+    }
+
+    // If no store progress, fall back to enrollment data
+    if (!enrollments.length) {
       return propCourseProgress
     }
 
@@ -110,9 +128,12 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
 
     // Count total and completed lessons
     const totalLessons = allLessons.length
+
+    // INDUSTRY BEST PRACTICE: Use a strict definition of completed lessons
+    // ONLY count lessons that are explicitly marked as 'completed'
     const completedLessons = allLessons.filter(lesson => {
       const progress = lessonProgress[lesson.id]
-      return progress?.status === 'completed' || progress?.progress >= 100
+      return progress?.status === 'completed'
     }).length
 
     // Calculate progress percentage
@@ -120,42 +141,24 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
       ? Math.round((completedLessons / totalLessons) * 100)
       : 0
 
-    // Use calculated values or fall back to props
+    // Return calculated values
     return {
       ...propCourseProgress,
       progress: progressPercentage,
       completedLessons,
       totalLessons
     }
-  }, [propCourseProgress, enrollments, lessonProgress])
+  }, [propCourseProgress, storeProgress, enrollments, lessonProgress])
 
-  // Use store progress if available, then calculated progress, then props
+  // INDUSTRY BEST PRACTICE: Simplify state management by using a single source of truth
+  // Use calculated progress which already prioritizes store progress
   useEffect(() => {
-    if (storeProgress) {
-      // Use the store's course progress data
-      console.log('Using store progress data:', {
-        storeProgress,
-        progress: storeProgress.progress,
-        completedLessonsCount: storeProgress.completedLessonsCount,
-        totalLessonsCount: storeProgress.totalLessonsCount
-      })
+    // Set course progress based on calculated values
+    setCourseProgress(calculatedProgress)
+  }, [calculatedProgress])
 
-      setCourseProgress({
-        ...propCourseProgress,
-        progress: storeProgress.progress,
-        completedLessons: storeProgress.completedLessonsCount,
-        totalLessons: storeProgress.totalLessonsCount
-      })
-    } else if (calculatedProgress) {
-      // Fall back to calculated progress
-      console.log('Using calculated progress data:', calculatedProgress)
-      setCourseProgress(calculatedProgress)
-    } else {
-      // Use props as a last resort
-      console.log('Using prop progress data:', propCourseProgress)
-      setCourseProgress(propCourseProgress)
-    }
-  }, [propCourseProgress, storeProgress, calculatedProgress])
+  // Track if we've already verified progress from the database
+  const progressVerifiedRef = useRef<Record<string, boolean>>({})
 
   // If course progress still shows 0 completed but store has lesson progress entries, verify directly from database
   useEffect(() => {
@@ -164,14 +167,18 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
       return
     }
 
-    // We used to check for completed lessons here, but now we always verify from database
-    // This ensures we have the most accurate data regardless of the store state
+    // Skip if we've already verified this course
+    if (progressVerifiedRef.current[courseProgress.courseId]) {
+      return
+    }
 
-    // Always verify from database if we have a courseId but no completed lessons
-    // This ensures we have the most accurate data
+    // Mark this course as verified to prevent redundant calls
+    progressVerifiedRef.current[courseProgress.courseId] = true
+
+    // Verify from database if we have a courseId but no completed lessons
     const verifyFromDatabase = async () => {
       try {
-        console.log('Verifying course progress from database for course:', courseProgress.courseId)
+        // Verify course progress from database for this course
 
         // Use browser client for client-side data fetching
         const supabase = getBrowserClient()
@@ -189,7 +196,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
         }
 
         if (courseProgressData) {
-          console.log('Found course progress in database:', courseProgressData)
+          // Found course progress in database, update component state and store
 
           // Get the course structure to count total lessons
           const { data: courseData, error: courseError } = await supabase
@@ -219,11 +226,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
           // Calculate completed lessons based on progress percentage
           const completedLessons = Math.round((courseProgressData.progress_percentage / 100) * totalLessons)
 
-          console.log('Updating course progress from database:', {
-            progress: courseProgressData.progress_percentage,
-            completedLessons,
-            totalLessons
-          })
+          // Update course progress with data from database
 
           setCourseProgress(prev => ({
             ...prev,
@@ -232,7 +235,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
             progress: courseProgressData.progress_percentage
           }))
 
-          // Also update the store to ensure consistency
+          // Also update the store to ensure consistency, but only if the data is different
           useStudentDashboardStore.setState(state => {
             const updatedCourseProgress = {
               ...state.courseProgress
@@ -241,8 +244,17 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
             // Make sure courseId is not undefined
             const courseId = courseProgress.courseId || ''
 
-            if (!courseId || !updatedCourseProgress[courseId]) {
-              if (courseId) {
+            if (!courseId) return state
+
+            const existingProgress = updatedCourseProgress[courseId]
+
+            // Only update if the data is different or missing
+            if (!existingProgress ||
+                Math.abs(existingProgress.progress - courseProgressData.progress_percentage) > 0.1 ||
+                existingProgress.completedLessonsCount !== completedLessons ||
+                existingProgress.totalLessonsCount !== totalLessons) {
+
+              if (!existingProgress) {
                 // Get the course data from the store if available
                 const courseData = state.enrollments?.find(e => e.course?.id === courseId)?.course
 
@@ -259,19 +271,22 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                     modules: []
                   }
                 }
+              } else {
+                updatedCourseProgress[courseId] = {
+                  ...existingProgress,
+                  progress: courseProgressData.progress_percentage,
+                  completedLessonsCount: completedLessons,
+                  totalLessonsCount: totalLessons
+                }
               }
-            } else {
-              updatedCourseProgress[courseId] = {
-                ...updatedCourseProgress[courseId],
-                progress: courseProgressData.progress_percentage,
-                completedLessonsCount: completedLessons,
-                totalLessonsCount: totalLessons
+
+              return {
+                courseProgress: updatedCourseProgress
               }
             }
 
-            return {
-              courseProgress: updatedCourseProgress
-            }
+            // No changes needed
+            return state
           })
 
           return
@@ -291,7 +306,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
 
         // If we have completed lessons in the database, update the count
         if (data && data.length > 0) {
-          console.log('Found completed lessons in database:', data.length)
+          // Found completed lessons in database, update progress
 
           // Get the course structure to count total lessons
           const { data: courseData, error: courseError } = await supabase
@@ -318,7 +333,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
             })
           }
 
-          console.log('Total lessons in course:', totalLessons)
+          // Counted total lessons in course for progress calculation
 
           // Calculate progress percentage
           const progressPercentage = totalLessons > 0
@@ -395,18 +410,46 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
     },
   }
 
-  // Ensure we have valid data with fallbacks
-  const safeRecentLessons = recentLessons || []
+  // Load continue learning lesson when component mounts
+  useEffect(() => {
+    if (user?.id) {
+      loadContinueLearningLesson(user.id)
+    }
+  }, [user?.id, loadContinueLearningLesson])
 
-  // Debug log for course progress data
-  React.useEffect(() => {
-    console.log('CourseProgressSection received progress data:', {
-      progress: courseProgress.progress,
-      completedLessons: courseProgress.completedLessons,
-      totalLessons: courseProgress.totalLessons,
-      courseId: courseProgress.courseId
-    });
-  }, [courseProgress]);
+  // Create a combined list of lessons, prioritizing the continue learning lesson
+  const safeRecentLessons = useMemo(() => {
+    // If we have a continue learning lesson, add it to the top of the list
+    if (continueLearningLesson && continueLearningLesson.courseId === courseProgress.courseId) {
+      // Convert the continue learning lesson to the CourseLesson format
+      const continueLessonFormatted: CourseLesson = {
+        id: continueLearningLesson.lessonId,
+        title: continueLearningLesson.lessonTitle,
+        module: continueLearningLesson.moduleTitle,
+        moduleId: continueLearningLesson.moduleId,
+        duration: '15 mins', // Default duration
+        thumbnail: '/placeholder.svg?height=80&width=120&text=Lesson',
+        progress: continueLearningLesson.progress,
+        current: true
+      }
+
+      // Add the continue learning lesson to the top if it's not already in the list
+      const existingIndex = recentLessons?.findIndex(lesson => lesson.id === continueLearningLesson.lessonId)
+
+      if (existingIndex === -1) {
+        return [continueLessonFormatted, ...(recentLessons || [])]
+      } else if (existingIndex > 0) {
+        // If it exists but not at the top, move it to the top
+        const updatedLessons = [...(recentLessons || [])]
+        updatedLessons.splice(existingIndex, 1)
+        return [continueLessonFormatted, ...updatedLessons]
+      }
+    }
+
+    return recentLessons || []
+  }, [continueLearningLesson, recentLessons, courseProgress.courseId])
+
+  // Course progress data is now properly tracked and displayed
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeInUp}>
@@ -562,9 +605,15 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                   </div>
 
                   <div className="mt-4">
-                    <Link href={`/dashboard/course?courseId=${courseProgress.courseId || ''}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`} prefetch={true}>
+                    <Link
+                      href={`/dashboard/course?courseId=${courseProgress.courseId || ''}&moduleId=${safeRecentLessons[0]?.moduleId || ''}&lessonId=${safeRecentLessons[0]?.id || ''}`}
+                      prefetch={true}
+                    >
                       <Button className="w-full bg-brand-purple hover:bg-brand-purple/90">
-                        {safeRecentLessons[0]?.progress > 0 ? "Continue Lesson" : "Start Learning"}
+                        {continueLearningLesson && continueLearningLesson.courseId === courseProgress.courseId
+                          ? (continueLearningLesson.progress > 0 ? "Continue Your Learning Journey" : "Start Your Learning Journey")
+                          : (safeRecentLessons[0]?.progress > 0 ? "Continue Lesson" : "Start Learning")
+                        }
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </Link>
