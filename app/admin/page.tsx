@@ -1,35 +1,105 @@
+import { Suspense } from 'react';
 import { cookies } from 'next/headers';
-import Link from 'next/link';
 import type { Database } from '@/types/supabase';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { AdminHeading } from '@/components/admin/admin-heading';
-import {
-  BarChart4,
-  BookOpen,
-  CreditCard,
-  Settings,
-  Users,
-  Tag,
-  BarChart2,
-  Plus,
-  ArrowRight,
-  UserPlus,
-  BarChart,
-  DollarSign,
-  Clock,
-  ArrowUpRight,
-  Shield,
-  BookOpenCheck,
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
+import { 
+  BookOpen, 
+  Users, 
+  BarChart2, 
+  CreditCard, 
+  Settings, 
+  TrendingUp, 
+  Target, 
+  Package 
 } from 'lucide-react';
+
+// Dashboard Sections
+import { AdminHeader } from '@/components/admin/admin-header';
 import { DashboardOverview } from '@/components/admin/dashboard-overview';
+import { EnrollmentAnalytics } from '@/components/admin/enrollment-analytics';
+import { RevenueAnalysis } from '@/components/admin/revenue-analysis';
+import { MarketingInsights } from '@/components/admin/marketing-insights';
 
 export const metadata = {
   title: 'Admin Dashboard | Graceful Homeschooling',
-  description: 'Manage your courses, students, and content.',
+  description: 'Business intelligence dashboard for enrollment tracking, revenue analysis, and marketing insights.',
 };
 
 export default async function AdminDashboardPage() {
-  return <DashboardOverview />;
-} 
+  // We will eventually fetch initial data here for SSR
+  // const supabase = createServerSupabaseClient();
+  // const initialStats = await fetchInitialDashboardStats();
+  
+  return (
+    <div className="space-y-8">
+      <AdminHeader 
+        title="Business Intelligence Dashboard" 
+        description="Track enrollments, revenue, and marketing performance"
+      />
+      
+      <Tabs defaultValue="overview" className="space-y-8">
+        <TabsList className="grid w-full grid-cols-4 md:w-auto">
+          <TabsTrigger value="overview" className="flex items-center gap-2">
+            <BarChart2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Overview</span>
+          </TabsTrigger>
+          <TabsTrigger value="enrollments" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Enrollments</span>
+          </TabsTrigger>
+          <TabsTrigger value="revenue" className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" />
+            <span className="hidden sm:inline">Revenue</span>
+          </TabsTrigger>
+          <TabsTrigger value="marketing" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            <span className="hidden sm:inline">Marketing</span>
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="overview" className="m-0">
+          <Suspense fallback={<DashboardSkeleton />}>
+            <DashboardOverview />
+          </Suspense>
+        </TabsContent>
+        
+        <TabsContent value="enrollments" className="m-0">
+          <Suspense fallback={<DashboardSkeleton />}>
+            <EnrollmentAnalytics />
+          </Suspense>
+        </TabsContent>
+        
+        <TabsContent value="revenue" className="m-0">
+          <Suspense fallback={<DashboardSkeleton />}>
+            <RevenueAnalysis />
+          </Suspense>
+        </TabsContent>
+        
+        <TabsContent value="marketing" className="m-0">
+          <Suspense fallback={<DashboardSkeleton />}>
+            <MarketingInsights />
+          </Suspense>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {Array(4).fill(0).map((_, i) => (
+          <Skeleton key={i} className="h-32 w-full" />
+        ))}
+      </div>
+      <Skeleton className="h-[400px] w-full" />
+      <div className="grid gap-4 md:grid-cols-2">
+        <Skeleton className="h-[300px] w-full" />
+        <Skeleton className="h-[300px] w-full" />
+      </div>
+    </div>
+  );
+}
