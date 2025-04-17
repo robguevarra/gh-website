@@ -16,11 +16,11 @@ import {
 } from 'lucide-react';
 
 // Dashboard Sections
-import { AdminHeader } from '@/components/admin/admin-header';
-import { DashboardOverview } from '@/components/admin/dashboard-overview';
-import { EnrollmentAnalytics } from '@/components/admin/enrollment-analytics';
-import { RevenueAnalysis } from '@/components/admin/revenue-analysis';
-import { MarketingInsights } from '@/components/admin/marketing-insights';
+//import { AdminHeader } from '@/components/admin/admin-header';
+//import { DashboardOverview } from '@/components/admin/dashboard-overview';
+//import { EnrollmentAnalytics } from '@/components/admin/enrollment-analytics';
+//import { RevenueAnalysis } from '@/components/admin/revenue-analysis';
+//import { MarketingInsights } from '@/components/admin/marketing-insights';
 
 export const metadata = {
   title: 'Admin Dashboard | Graceful Homeschooling',
@@ -59,6 +59,7 @@ export default async function AdminDashboardPage() {
           </TabsTrigger>
         </TabsList>
         
+        {/*
         <TabsContent value="overview" className="m-0">
           <Suspense fallback={<DashboardSkeleton />}>
             <DashboardOverview />
@@ -82,6 +83,7 @@ export default async function AdminDashboardPage() {
             <MarketingInsights />
           </Suspense>
         </TabsContent>
+        */}
       </Tabs>
     </div>
   );
