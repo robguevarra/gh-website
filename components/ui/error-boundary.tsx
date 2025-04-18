@@ -5,6 +5,12 @@ import { AlertCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 
+/**
+ * ErrorBoundary - A reusable error boundary for robust UI.
+ * Props:
+ * - children: ReactNode
+ * - fallback?: ReactNode (optional fallback UI)
+ */
 interface ErrorBoundaryProps {
   children: ReactNode
   fallback?: ReactNode

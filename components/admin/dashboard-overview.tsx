@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MetricCard } from './metric-card';
+import { ChartContainer } from './chart-container';
 
 interface DashboardStats {
   totalCourses: number;
@@ -176,6 +177,12 @@ export function DashboardOverview() {
           </CardContent>
         </Card>
       </div>
+      
+      <ChartContainer title="Enrollment Trends">
+        <div className="h-64 flex items-center justify-center text-muted-foreground">
+          Enrollment Trends Chart Coming Soon
+        </div>
+      </ChartContainer>
       
       <Tabs defaultValue="recent">
         <TabsList>
