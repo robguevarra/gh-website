@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, FileText, Users, BarChart2, Clock, TrendingUp, PlusCircle, User, Pencil } from "lucide-react";
+import { BookOpen, Users, BarChart2, TrendingUp, DollarSign, UserPlus, Activity } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,81 +14,137 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MetricCard } from './metric-card';
 import { ChartContainer } from './chart-container';
+import { EnrollmentTrendsChart } from './enrollment-trends-chart';
+import { RevenueTrendsChart } from './revenue-trends-chart';
+import { DateRangePicker, DateRange } from './date-range-picker';
 
-interface DashboardStats {
-  totalCourses: number;
-  publishedCourses: number;
-  draftCourses: number;
-  totalModules: number;
-  totalLessons: number;
-  totalUsers: number;
-  recentCourses: RecentCourse[];
-  activeUsers: ActiveUser[];
-}
+// --- Types matching the new API response ---
+type SummaryMetrics = {
+  totalEnrollments: number;
+  totalRevenue: number;
+  conversionRate: number;
+  activeUsers: number;
+  previousPeriod: {
+    totalEnrollments: number;
+    totalRevenue: number;
+    conversionRate: number;
+    activeUsers: number;
+  };
+  percentChange: {
+    totalEnrollments: number;
+    totalRevenue: number;
+    conversionRate: number;
+    activeUsers: number;
+  };
+};
 
-interface RecentCourse {
-  id: string;
-  title: string;
-  slug: string;
-  status: "draft" | "published";
-  featured_image?: string;
-  updated_at: string;
-}
+type TrendPoint = { date: string; count?: number; amount?: number };
 
-interface ActiveUser {
-  id: string;
-  name: string;
-  email: string;
-  avatar_url?: string;
-  last_active: string;
-}
+type RecentEnrollment = {
+  user: { id: string };
+  course: { id: string };
+  enrolledAt: string;
+};
+
+type RecentPayment = {
+  user: { id: string };
+  amount: number;
+  paidAt: string;
+  method?: string;
+};
+
+type OverviewData = {
+  summaryMetrics: SummaryMetrics;
+  enrollmentTrends: TrendPoint[];
+  revenueTrends: TrendPoint[];
+  recentActivity: {
+    enrollments: RecentEnrollment[];
+    payments: RecentPayment[];
+  };
+  performanceSummaries: {
+    enrollments: { current: number; previous: number; percentChange: number };
+    revenue: { current: number; previous: number; percentChange: number };
+    conversionRate: { current: number; previous: number; percentChange: number };
+    activeUsers: { current: number; previous: number; percentChange: number };
+  };
+};
+
+// Helper to get default date ranges
+const getDefaultDateRange = (preset: 'last30' | 'thisMonth' | 'last12mo'): DateRange => {
+  const now = new Date();
+  if (preset === 'last30') {
+    const start = new Date(now);
+    start.setDate(now.getDate() - 29);
+    return { start, end: now };
+  }
+  if (preset === 'thisMonth') {
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    return { start, end: now };
+  }
+  // last 12 months
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1));
+  return { start, end: now };
+};
 
 export function DashboardOverview() {
   const router = useRouter();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [data, setData] = useState<OverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+  // Date range state for the slicer
+  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange('last12mo'));
+
+  // Presets for quick selection
+  const datePresets = [
+    { label: 'Last 30 days', range: getDefaultDateRange('last30') },
+    { label: 'This month', range: getDefaultDateRange('thisMonth') },
+    { label: 'Last 12 months', range: getDefaultDateRange('last12mo') },
+  ];
+
+  // Fetch overview data with date range
   useEffect(() => {
-    const fetchDashboardStats = async () => {
+    const fetchOverview = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch("/api/admin/dashboard");
-        
-        if (!response.ok) {
-          throw new Error("Failed to fetch dashboard stats");
-        }
-        
-        const data = await response.json();
-        setStats(data);
+        const params = new URLSearchParams();
+        if (dateRange.start) params.append('startDate', dateRange.start.toISOString());
+        if (dateRange.end) params.append('endDate', dateRange.end.toISOString());
+        const response = await fetch(`/api/admin/dashboard/overview?${params.toString()}`);
+        if (!response.ok) throw new Error("Failed to fetch dashboard overview");
+        const json = await response.json();
+        setData(json);
       } catch (error) {
-        console.error("Error fetching dashboard stats:", error);
-        toast.error("Failed to load dashboard statistics");
+        console.error("Error fetching dashboard overview:", error);
+        toast.error("Failed to load dashboard overview");
       } finally {
         setIsLoading(false);
       }
     };
-    
-    fetchDashboardStats();
-  }, []);
-  
-  // Format date
+    fetchOverview();
+  }, [dateRange]);
+
+  // Format date for display
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      return "Today";
-    } else if (diffDays === 1) {
-      return "Yesterday";
-    } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
-    } else {
-      return date.toLocaleDateString();
-    }
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
   };
-  
+
+  // Format percent with sign
+  const formatPercent = (value: number) => {
+    if (isNaN(value)) return "-";
+    return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
+  };
+
+  // Format currency
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  };
+
   // Render loading skeletons
   if (isLoading) {
     return (
@@ -97,298 +153,190 @@ export function DashboardOverview() {
           <Skeleton className="h-10 w-40" />
           <Skeleton className="h-10 w-32" />
         </div>
-        
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {Array(4).fill(0).map((_, i) => (
             <Skeleton key={i} className="h-32 w-full" />
           ))}
         </div>
-        
         <Skeleton className="h-[400px] w-full" />
       </div>
     );
   }
-  
+
+  if (!data) return null;
+  const { summaryMetrics, enrollmentTrends, revenueTrends, recentActivity, performanceSummaries } = data;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Overview of your course platform
-          </p>
+          <p className="text-muted-foreground">Overview of your business performance</p>
         </div>
-        
-        <Button onClick={() => router.push("/admin/courses/new")}>
-          <PlusCircle className="h-4 w-4 mr-2" />
-          New Course
-        </Button>
+        {/* Date Slicer UI */}
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold">Date Range:</span>
+          <DateRangePicker value={dateRange} onChange={setDateRange} presets={datePresets} />
+        </div>
+        {/* Temporary Admin Buttons for Data Migration/QA */}
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              setIsLoading(true);
+              try {
+                // Call backend sync/migration endpoint
+                const response = await fetch("/api/admin/dashboard/sync", { method: "POST" });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.message || "Sync failed");
+                toast.success(result.message || "Manual sync completed");
+              } catch (err: any) {
+                toast.error(err.message || "Manual sync failed");
+              } finally {
+                setIsLoading(false);
+              }
+            }}
+            disabled={isLoading}
+          >
+            {isLoading ? "Syncing..." : "Manual Sync"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              setIsLoading(true);
+              try {
+                // Call backend conflict check endpoint
+                const response = await fetch("/api/admin/dashboard/conflict", { method: "POST" });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.message || "Conflict check failed");
+                toast.success(result.message || "Checked for email conflicts");
+              } catch (err: any) {
+                toast.error(err.message || "Conflict check failed");
+              } finally {
+                setIsLoading(false);
+              }
+            }}
+            disabled={isLoading}
+          >
+            {isLoading ? "Checking..." : "Check Email Conflicts"}
+          </Button>
+        </div>
+        <Button onClick={() => router.push("/admin/courses/new")}>New Course</Button>
       </div>
-      
+
+      {/* Summary Metrics Row */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
-          icon={<BookOpen className="h-4 w-4 text-muted-foreground" />}
-          title="Total Courses"
-          value={stats?.totalCourses || 0}
-          description={`${stats?.publishedCourses || 0} published, ${stats?.draftCourses || 0} drafts`}
+          icon={<UserPlus className="h-4 w-4 text-muted-foreground" />}
+          title="Enrollments"
+          value={summaryMetrics.totalEnrollments}
+          description={`Change: ${formatPercent(summaryMetrics.percentChange.totalEnrollments)}`}
         />
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Content
-            </CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalModules || 0} Modules</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.totalLessons || 0} lessons
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Users
-            </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalUsers || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              Active learners on your platform
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Activity
-            </CardTitle>
-            <BarChart2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {stats?.activeUsers?.length || 0}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Users active in the past 7 days
-            </p>
-          </CardContent>
-        </Card>
+        <MetricCard
+          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+          title="Revenue"
+          value={formatCurrency(summaryMetrics.totalRevenue)}
+          description={`Change: ${formatPercent(summaryMetrics.percentChange.totalRevenue)}`}
+        />
+        <MetricCard
+          icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
+          title="Conversion Rate"
+          value={summaryMetrics.conversionRate.toFixed(1) + "%"}
+          description={`Change: ${formatPercent(summaryMetrics.percentChange.conversionRate)}`}
+        />
+        <MetricCard
+          icon={<Users className="h-4 w-4 text-muted-foreground" />}
+          title="Active Users"
+          value={summaryMetrics.activeUsers}
+          description={`Change: ${formatPercent(summaryMetrics.percentChange.activeUsers)}`}
+        />
       </div>
-      
+
+      {/* Enrollment Trends Chart */}
       <ChartContainer title="Enrollment Trends">
-        <div className="h-64 flex items-center justify-center text-muted-foreground">
-          Enrollment Trends Chart Coming Soon
-        </div>
+        {enrollmentTrends.length === 0 ? (
+          <div className="h-64 flex items-center justify-center text-muted-foreground">No data</div>
+        ) : (
+          <EnrollmentTrendsChart data={enrollmentTrends} />
+        )}
       </ChartContainer>
-      
-      <Tabs defaultValue="recent">
+
+      {/* Revenue Trends Chart */}
+      <ChartContainer title="Revenue Trends">
+        {revenueTrends.length === 0 ? (
+          <div className="h-64 flex items-center justify-center text-muted-foreground">No data</div>
+        ) : (
+          <RevenueTrendsChart data={revenueTrends} />
+        )}
+      </ChartContainer>
+
+      {/* Recent Activity Feed */}
+      <Tabs defaultValue="enrollments">
         <TabsList>
-          <TabsTrigger value="recent">Recent Activity</TabsTrigger>
-          <TabsTrigger value="courses">Recent Courses</TabsTrigger>
-          <TabsTrigger value="users">Active Users</TabsTrigger>
+          <TabsTrigger value="enrollments">Recent Enrollments</TabsTrigger>
+          <TabsTrigger value="payments">Recent Payments</TabsTrigger>
         </TabsList>
-        
-        <TabsContent value="recent" className="space-y-4">
+        <TabsContent value="enrollments" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>
-                The latest updates across your platform
-              </CardDescription>
+              <CardTitle>Recent Enrollments</CardTitle>
+              <CardDescription>Latest users who enrolled</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                {stats?.recentCourses.length === 0 && stats?.activeUsers.length === 0 ? (
+              <div className="space-y-4">
+                {recentActivity.enrollments.length === 0 ? (
                   <div className="text-center py-8">
-                    <Clock className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-                    <h3 className="text-lg font-medium">No recent activity</h3>
-                    <p className="text-sm text-muted-foreground">
-                      You'll see updates here as users interact with your platform.
-                    </p>
+                    <Activity className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+                    <h3 className="text-lg font-medium">No recent enrollments</h3>
                   </div>
                 ) : (
-                  <>
-                    {stats?.recentCourses.slice(0, 3).map((course) => (
-                      <div 
-                        key={course.id}
-                        className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0"
-                      >
-                        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
-                          <Pencil className="h-5 w-5 text-primary" />
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium">Course Updated</p>
-                          <div 
-                            className="text-sm text-blue-600 dark:text-blue-500 hover:underline cursor-pointer"
-                            onClick={() => router.push(`/admin/courses/${course.id}`)}
-                          >
-                            {course.title}
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Badge variant="outline">{course.status}</Badge>
-                          <div className="text-xs text-muted-foreground">
-                            {formatDate(course.updated_at)}
-                          </div>
-                        </div>
+                  recentActivity.enrollments.map((enrollment, idx) => (
+                    <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
+                      <Avatar>
+                        <AvatarFallback>{enrollment.user.id.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-medium">User ID: {enrollment.user.id}</p>
+                        <p className="text-xs text-muted-foreground">Course ID: {enrollment.course.id}</p>
                       </div>
-                    ))}
-                    
-                    {stats?.activeUsers.slice(0, 3).map((user) => (
-                      <div 
-                        key={user.id}
-                        className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0"
-                      >
-                        <Avatar>
-                          <AvatarImage src={user.avatar_url} />
-                          <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium">User Activity</p>
-                          <div className="text-sm text-muted-foreground">
-                            {user.name} ({user.email})
-                          </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {formatDate(user.last_active)}
-                        </div>
-                      </div>
-                    ))}
-                  </>
+                      <div className="text-xs text-muted-foreground">{formatDate(enrollment.enrolledAt)}</div>
+                    </div>
+                  ))
                 )}
               </div>
             </CardContent>
-            <CardFooter>
-              <Button variant="outline" className="w-full">
-                <TrendingUp className="h-4 w-4 mr-2" />
-                View All Activity
-              </Button>
-            </CardFooter>
           </Card>
         </TabsContent>
-        
-        <TabsContent value="courses">
+        <TabsContent value="payments" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Recent Courses</CardTitle>
-              <CardDescription>
-                Your recently updated courses
-              </CardDescription>
+              <CardTitle>Recent Payments</CardTitle>
+              <CardDescription>Latest completed payments</CardDescription>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[300px]">
-                <div className="space-y-4">
-                  {stats?.recentCourses.length === 0 ? (
-                    <div className="text-center py-8">
-                      <BookOpen className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-                      <h3 className="text-lg font-medium">No courses yet</h3>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Start creating your first course now.
-                      </p>
-                      <Button 
-                        variant="outline" 
-                        onClick={() => router.push("/admin/courses/new")}
-                      >
-                        <PlusCircle className="h-4 w-4 mr-2" />
-                        Create Course
-                      </Button>
-                    </div>
-                  ) : (
-                    stats?.recentCourses.map((course) => (
-                      <div 
-                        key={course.id} 
-                        className="flex items-center space-x-4 border rounded-md p-3 hover:bg-muted/30 transition-colors cursor-pointer"
-                        onClick={() => router.push(`/admin/courses/${course.id}`)}
-                      >
-                        <div className="h-12 w-12 rounded-md overflow-hidden flex items-center justify-center bg-muted">
-                          {course.featured_image ? (
-                            <img 
-                              src={course.featured_image} 
-                              alt={course.title}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <BookOpen className="h-6 w-6 text-muted-foreground" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{course.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Updated {formatDate(course.updated_at)}
-                          </p>
-                        </div>
-                        <Badge variant={course.status === "published" ? "default" : "secondary"}>
-                          {course.status === "published" ? "Published" : "Draft"}
-                        </Badge>
+              <div className="space-y-4">
+                {recentActivity.payments.length === 0 ? (
+                  <div className="text-center py-8">
+                    <DollarSign className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+                    <h3 className="text-lg font-medium">No recent payments</h3>
+                  </div>
+                ) : (
+                  recentActivity.payments.map((payment, idx) => (
+                    <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
+                      <Avatar>
+                        <AvatarFallback>{payment.user.id.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-medium">User ID: {payment.user.id}</p>
+                        <p className="text-xs text-muted-foreground">Amount: {formatCurrency(payment.amount)}</p>
+                        {payment.method && <p className="text-xs text-muted-foreground">Method: {payment.method}</p>}
                       </div>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                variant="outline" 
-                className="w-full"
-                onClick={() => router.push("/admin/courses")}
-              >
-                <BookOpen className="h-4 w-4 mr-2" />
-                View All Courses
-              </Button>
-            </CardFooter>
-          </Card>
-        </TabsContent>
-        
-        <TabsContent value="users">
-          <Card>
-            <CardHeader>
-              <CardTitle>Active Users</CardTitle>
-              <CardDescription>
-                Users who recently accessed your platform
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-[300px]">
-                <div className="space-y-4">
-                  {stats?.activeUsers.length === 0 ? (
-                    <div className="text-center py-8">
-                      <User className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-                      <h3 className="text-lg font-medium">No active users</h3>
-                      <p className="text-sm text-muted-foreground">
-                        User activity will be shown here once students engage with your courses.
-                      </p>
+                      <div className="text-xs text-muted-foreground">{formatDate(payment.paidAt)}</div>
                     </div>
-                  ) : (
-                    stats?.activeUsers.map((user) => (
-                      <div key={user.id} className="flex items-center space-x-4 border rounded-md p-3">
-                        <Avatar>
-                          <AvatarImage src={user.avatar_url} />
-                          <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium">{user.name}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {user.email}
-                          </p>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Last active: {formatDate(user.last_active)}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
+                  ))
+                )}
+              </div>
             </CardContent>
-            <CardFooter>
-              <Button variant="outline" className="w-full">
-                <Users className="h-4 w-4 mr-2" />
-                Manage Users
-              </Button>
-            </CardFooter>
           </Card>
         </TabsContent>
       </Tabs>

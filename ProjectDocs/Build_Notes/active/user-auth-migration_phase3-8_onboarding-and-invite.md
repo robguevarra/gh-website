@@ -1,15 +1,34 @@
 # User Auth Migration - Phase 3-8: Onboarding and Invite
 
-## Current State & Next Actions (Update)
-- The previous migration (Phase 3-2) only included users with existing Supabase Auth accounts.
-- Many unified profiles do not yet have Supabase Auth accounts and cannot log in.
-- **Next:**
-  - Create Supabase Auth users for all remaining unified profiles (legacy users).
-  - Send onboarding/invitation emails with default password and require password reset on first login.
-  - After onboarding, re-run the migration for profiles, transactions, and enrollments to ensure all users and their data are included.
+## [NEXT STEP: 2024-06-09] Complete Legacy User Migration for Full Data Unification
+- The next step is to identify all emails in Xendit and Systemeio that are NOT present in `auth.users` or `unified_profiles`.
+- Bulk-create Supabase Auth users for these missing emails.
+- Re-run the migration scripts to populate `unified_profiles`, `transactions`, and `enrollments` for all users.
+- This will ensure the unified schema is complete and the dashboard/analytics are accurate.
+- After this, validate with the provided QA queries and only then proceed to onboarding/invite.
+
+## [UPDATE: 2024-06-09] Decoupling Migration from Onboarding/Invite
+**We are now separating the user migration from the onboarding/invite process.**
+
+- All legacy users will be migrated into Supabase Auth and linked to unified profiles, but onboarding/invite emails will NOT be sent until the site and email marketing systems are ready.
+- Each migrated user will be flagged as 'pending onboarding' in metadata.
+- This allows us to complete the dashboard, QA, and all business logic with real data, without inviting users to an unfinished product.
+- When the site is ready, we will run a separate onboarding/invite phase to send emails and require password resets.
+
+## [2024-06-10] Temporary Admin Controls for Migration & QA
+
+- Added two temporary admin buttons to the dashboard overview UI:
+  1. **Manual Sync**: Triggers a backend sync/migration process to update unified tables (`unified_profiles`, `transactions`, `enrollments`) with the latest data from Xendit and systemeio. Ensures all new/changed records are processed. Intended for use during build/testing to keep data fresh.
+  2. **Check Email Conflicts**: Runs a conflict check to identify users who are marked as PAID/SETTLED in Xendit but not tagged as PaidP2P in systemeio. Flags these for review or auto-tagging. Supports QA and data integrity during migration.
+
+- Both buttons are visible in the dashboard header, show loading states, and display toast notifications. Currently, they use placeholder logic; backend API integration is the next step.
+
+- These controls are for admin/build use only and will be removed or restricted in production.
+
+---
 
 ## Task Objective
-Ensure all unified profiles in the new data model have corresponding Supabase Auth accounts, enabling all users to log in. Implement onboarding and invitation flows, including default password assignment, required password reset, and integration with email marketing.
+Ensure all unified profiles in the new data model have corresponding Supabase Auth user accounts, enabling all users to log in. Implement onboarding and invitation flows, including default password assignment, required password reset, and integration with email marketing.
 
 ## Current State Assessment
 - Unified profiles have been created from Xendit and Systemeio data.
@@ -32,35 +51,38 @@ Ensure all unified profiles in the new data model have corresponding Supabase Au
 >
 > This ensures consistency and alignment with project goals and standards.
 
-## Implementation Plan
+## Implementation Plan (Simple, Modular Approach)
 
-### 1. Identify Profiles Without Supabase Auth Accounts
-- [ ] Query `unified_profiles` for records not linked to `auth.users`.
-- [ ] Document the count and details for audit.
+1. **Compare Paid P2P Email List with Existing Supabase Auth Users**
+   - [ ] Query Xendit and systemeio for all users with 'PAID' status for 'Papers to Profits'.
+   - [ ] Normalize and deduplicate email addresses.
+   - [ ] Compare with `auth.users` to identify missing accounts.
 
-### 2. Create Supabase Auth Users for Legacy Profiles
-- [ ] Use Supabase Admin API to bulk-create users for missing accounts.
-- [ ] Assign a secure, random default password to each new user.
-- [ ] Store a flag or metadata indicating migration-created users.
+2. **Identify Emails Needing New Auth Accounts**
+   - [ ] List all emails not present in `auth.users`.
+   - [ ] Prepare for bulk creation.
 
-### 3. Send Onboarding/Invitation Emails
-- [ ] Integrate with email marketing system (e.g., Mailgun, SendGrid, Systemeio).
-- [ ] Send personalized invitation emails with login instructions and default password.
-- [ ] Track delivery and open rates for onboarding emails.
+3. **Bulk-Create Missing Users in Supabase Auth**
+   - [ ] Use Supabase MCP Auth Admin API to create users in bulk.
+   - [ ] Set password to `graceful2025` (documented password policy for migration).
+   - [ ] Set metadata: `onboarding_status: 'pending'`, `user_type: 'PaidP2P'`.
+   - [ ] Do not send onboarding/invite emails yet.
 
-### 4. Require Password Reset on First Login
-- [ ] Set Supabase Auth to require password change on first login for migrated users.
-- [ ] Provide clear instructions in onboarding email.
-- [ ] Monitor and log password reset completions.
+4. **Cross-Link/Enrich with systemeio Data and Set 'PaidP2P' Status**
+   - [ ] For each new user, enrich profile with systemeio data if available.
+   - [ ] Mark user as 'PaidP2P' in metadata.
 
-### 5. Integrate with Email Marketing
-- [ ] Sync new Supabase Auth users to email marketing lists.
-- [ ] Tag users as "migrated" for future campaigns.
-- [ ] Ensure compliance with opt-in/opt-out preferences.
+5. **Log All Actions for Traceability**
+   - [ ] Log user creation, metadata updates, and any errors.
+   - [ ] Provide audit trail for compliance.
 
-### 6. Audit Logging and Compliance
-- [ ] Log all user creation, email delivery, and password reset events.
-- [ ] Provide reports for audit and troubleshooting.
+// Password Policy for Migration:
+// - All bulk-created users will have the password: 'graceful2025'.
+// - Users will be required to reset their password on first login (enforced in onboarding phase).
+// - This is a temporary measure for migration/testing only.
+
+// Bulk creation will use Supabase MCP Auth Admin API, not direct SQL, for security and compliance.
+// SQL will be used to identify missing users and prepare data for MCP.
 
 ## Technical Considerations
 

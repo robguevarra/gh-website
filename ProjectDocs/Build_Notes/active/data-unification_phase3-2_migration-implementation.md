@@ -11,7 +11,133 @@
 Implement the data migration process to populate the enhanced database schema with unified data from the existing Xendit and Systemeio tables, ensuring data integrity and consistency throughout the migration.
 
 ## Current State Assessment
-We have designed a unified database schema in Phase 3-1 with properly structured tables for profiles, transactions, and enrollments. However, the actual data still resides in the original Xendit and Systemeio tables in their raw format. We need a robust migration process to transform and load this data into our new schema.
+The unified schema is in place, and the migration process is now modularized and automated via API endpoints. The process is designed to be idempotent and robust, supporting both initial migration and incremental syncs.
+
+## Migration Workflow (2024-06-09)
+
+### 1. Auth User Creation (via `/sync` API)
+- The `/api/admin/dashboard/sync` endpoint fetches all unique, normalized emails from Xendit (PAID/SETTLED for P2P) and systemeio (tagged PaidP2P).
+- It compares these to existing Supabase Auth users (using paginated fetches for >1000 users).
+- For each missing email, it creates a new Auth user with a default password and confirmed email status.
+- This step ensures referential integrity for all subsequent migrations, as `unified_profiles.id` references `auth.users.id`.
+- The endpoint is idempotent: it skips users that already exist and logs all actions.
+
+### 2. Unified Profile Upsert (deduplication, upsert logic)
+- After Auth users are created, a deduplicated upsert is performed into `unified_profiles`:
+  - For each Auth user, merge profile info from systemeio (prefer names/tags from systemeio, fallback to Xendit if needed).
+  - Use a CTE with `distinct on (u.id)` to ensure only one row per user.
+  - Upsert into `unified_profiles` using `ON CONFLICT (id) DO UPDATE` to avoid duplicate key errors and ensure idempotency.
+  - Example SQL:
+    ```sql
+    with deduped as (
+      select distinct on (u.id)
+        u.id,
+        lower(trim(u.email)) as email,
+        s."First name",
+        s."Last name",
+        null as phone,
+        string_to_array(s."Tag", ',') as tags,
+        case
+          when s."Tag" ilike '%squeeze%' then 'squeeze'
+          when s."Tag" ilike '%canva%' then 'canva'
+          else null
+        end as acquisition_source,
+        coalesce(s."Date Registered", now()) as created_at,
+        now() as updated_at
+      from auth.users u
+      left join systemeio s on lower(trim(s."Email")) = lower(trim(u.email))
+      order by u.id, s."Date Registered" desc nulls last
+    )
+    insert into unified_profiles (id, email, first_name, last_name, phone, tags, acquisition_source, created_at, updated_at)
+    select * from deduped
+    on conflict (id) do update set
+      email = excluded.email,
+      first_name = excluded.first_name,
+      last_name = excluded.last_name,
+      tags = excluded.tags,
+      acquisition_source = excluded.acquisition_source,
+      updated_at = now();
+    ```
+- This step is also idempotent and can be safely re-run.
+
+### 3. Transactions Migration (normalization, upsert, trigger for enrollments)
+- All payment records from Xendit are migrated to the `transactions` table:
+  - Normalize status, amount, timestamps, and product type.
+  - Link each transaction to the correct unified profile by normalized email.
+  - Use `nullif(..., '')::timestamptz` to handle empty timestamp strings.
+  - Upsert using `ON CONFLICT (external_id) DO UPDATE` to ensure no duplicates and allow incremental syncs.
+  - Example SQL:
+    ```sql
+    insert into transactions (
+      user_id, amount, currency, status, transaction_type, payment_method, external_id,
+      created_at, paid_at, settled_at, expires_at
+    )
+    select
+      p.id,
+      x."Amount",
+      x."Currency",
+      case x."Status"
+        when 'PAID' then 'completed'
+        when 'SETTLED' then 'completed'
+        when 'UNPAID' then 'pending'
+        when 'EXPIRED' then 'expired'
+        else 'pending' end,
+      case
+        when x."Description" ilike '%papers to profits%' then 'P2P'
+        when x."Description" ilike '%canva%' then 'Canva'
+        else 'Other' end,
+      x."Payment Method",
+      x."External ID",
+      nullif(x."Created Timestamp", '')::timestamptz,
+      nullif(x."Paid Timestamp", '')::timestamptz,
+      nullif(x."Settled Timestamp", '')::timestamptz,
+      nullif(x."Expiry Date", '')::timestamptz
+    from xendit x
+    join unified_profiles p on lower(trim(x."Email")) = p.email
+    where p.id is not null and x."External ID" is not null
+    on conflict (external_id) do update set
+      user_id = excluded.user_id,
+      amount = excluded.amount,
+      currency = excluded.currency,
+      status = excluded.status,
+      transaction_type = excluded.transaction_type,
+      payment_method = excluded.payment_method,
+      created_at = excluded.created_at,
+      paid_at = excluded.paid_at,
+      settled_at = excluded.settled_at,
+      expires_at = excluded.expires_at;
+    ```
+- **Trigger Fix:** The `handle_transaction_insert` trigger was updated to use `lower(title)` instead of `lower(name)` for course lookup, matching the actual schema of the `courses` table.
+- The trigger automatically creates enrollments for each new "P2P" completed transaction.
+
+### 4. Enrollments Auto-Generation via Trigger
+- The `after_transaction_insert` trigger calls `handle_transaction_insert()` after each insert into `transactions`.
+- If the transaction is for a completed "P2P" payment, it inserts an enrollment for the user and course.
+- The trigger is idempotent and uses `ON CONFLICT (user_id, course_id) DO NOTHING` to avoid duplicates.
+
+### 5. Idempotency and Data Integrity
+- All migration steps use upsert logic and deduplication to ensure they can be safely re-run.
+- Referential integrity is enforced by only creating profiles for existing Auth users and only creating transactions/enrollments for valid profiles and courses.
+
+### 6. Manual vs. Production Workflow
+- **During development:** The dashboard "sync" button triggers the `/sync` API, which creates missing Auth users. Additional endpoints for updating profiles, transactions, and enrollments can be called in sequence for a full migration.
+- **In production:** New users, payments, and enrollments are written directly to the unified tables as part of the app's business logic. The migration/sync endpoints are used for initial migration, bulk updates, or admin-triggered refreshes.
+
+### 7. Modularization and Chaining
+- Plan to modularize the migration endpoints:
+  - `/api/admin/dashboard/update-profiles`
+  - `/api/admin/dashboard/update-transactions`
+  - `/api/admin/dashboard/update-enrollments`
+- The `/sync` endpoint will be updated to call these endpoints in sequence after creating Auth users, enabling a single dashboard action to trigger the full migration.
+
+## Validation and QA
+- After each migration step, run validation queries (as documented in previous build notes) to ensure data quality and integrity.
+- Monitor logs and handle any exceptions or data quality issues as they arise.
+
+// Comments:
+// - This build note documents the full, robust, and idempotent migration process for unified data.
+// - All steps are traceable to the original strategy and schema enhancement phases.
+// - The process is designed for both initial migration and ongoing incremental syncs.
 
 ## Future State Goal
 A successfully completed data migration with:
