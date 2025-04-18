@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MetricCard } from './metric-card';
 
 interface DashboardStats {
   totalCourses: number;
@@ -124,21 +125,12 @@ export function DashboardOverview() {
       </div>
       
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Courses
-            </CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats?.totalCourses || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.publishedCourses || 0} published, {stats?.draftCourses || 0} drafts
-            </p>
-          </CardContent>
-        </Card>
-        
+        <MetricCard
+          icon={<BookOpen className="h-4 w-4 text-muted-foreground" />}
+          title="Total Courses"
+          value={stats?.totalCourses || 0}
+          description={`${stats?.publishedCourses || 0} published, ${stats?.draftCourses || 0} drafts`}
+        />
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -153,7 +145,6 @@ export function DashboardOverview() {
             </p>
           </CardContent>
         </Card>
-        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -168,7 +159,6 @@ export function DashboardOverview() {
             </p>
           </CardContent>
         </Card>
-        
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">

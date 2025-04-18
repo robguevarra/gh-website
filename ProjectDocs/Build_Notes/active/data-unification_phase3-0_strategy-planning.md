@@ -121,15 +121,17 @@ The database architecture includes:
 ### 2. Data Model Design (Progress Update)
 
 #### Unified User Profile Structure
-- **Table:** `profiles`
+- **Table:** `unified_profiles`
 - **Fields:**
   - `id` (UUID, PK, references `auth.users.id`)
   - `email` (text, unique, indexed)
   - `first_name` (text)
   - `last_name` (text)
+  - `phone` (text)
   - `tags` (text[], array of normalized tags)
-  - `date_registered` (timestamp with time zone)
-  - `created_at` (timestamp, default now())
+  - `acquisition_source` (text)
+  - `created_at` (timestamptz, default now())
+  - `updated_at` (timestamptz, default now())
 - **Notes:**
   - Email is always lowercased and trimmed.
   - Tags are split and normalized from Systemeio.
@@ -140,7 +142,7 @@ The database architecture includes:
 - **Fields:**
   - `id` (UUID, PK)
   - `external_id` (text, unique, from Xendit)
-  - `user_id` (UUID, FK to `profiles.id`)
+  - `user_id` (UUID, FK to `unified_profiles.id`)
   - `amount` (integer)
   - `currency` (text, ISO 4217)
   - `status` (enum: 'completed', 'pending', 'expired')
@@ -157,7 +159,7 @@ The database architecture includes:
 - **Table:** `enrollments`
 - **Fields:**
   - `id` (UUID, PK)
-  - `user_id` (UUID, FK to `profiles.id`)
+  - `user_id` (UUID, FK to `unified_profiles.id`)
   - `course_id` (UUID, FK to `courses.id`)
   - `payment_id` (UUID, FK to `payments.id`)
   - `status` (enum: 'active', 'expired', 'pending')
@@ -168,14 +170,14 @@ The database architecture includes:
   - Supports future access control and expiration.
 
 #### Entity Relationship Diagram (ERD) Notes
-- `profiles` (1) ←→ (M) `payments`
-- `profiles` (1) ←→ (M) `enrollments` (M) ←→ (1) `courses`
+- `unified_profiles` (1) ←→ (M) `payments`
+- `unified_profiles` (1) ←→ (M) `enrollments` (M) ←→ (1) `courses`
 - `payments` (1) ←→ (M) `enrollments`
 - All FKs are indexed for performance.
 - Use ON DELETE CASCADE for user-related FKs, but consider soft deletes for audit/history.
 
 #### Indexing & Constraints
-- Unique index on `profiles.email` and `payments.external_id`.
+- Unique index on `unified_profiles.email` and `payments.external_id`.
 - Foreign key constraints for all relationships.
 - Indexes on `payments.status`, `enrollments.status`, and all timestamp fields for dashboard queries.
 
