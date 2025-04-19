@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { BookOpen, Users, BarChart2, TrendingUp, DollarSign, UserPlus, Activity } from "lucide-react";
+import { BookOpen, Users, BarChart2, TrendingUp, UserPlus, Activity } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -41,16 +41,17 @@ type SummaryMetrics = {
 type TrendPoint = { date: string; count?: number; amount?: number };
 
 type RecentEnrollment = {
-  user: { id: string };
-  course: { id: string };
+  user: { id: string; first_name?: string; last_name?: string };
+  course: { id: string; title?: string };
   enrolledAt: string;
 };
 
 type RecentPayment = {
-  user: { id: string };
+  user: { id: string; first_name?: string; last_name?: string };
   amount: number;
   paidAt: string;
   method?: string;
+  transactionType?: string;
 };
 
 type OverviewData = {
@@ -67,6 +68,7 @@ type OverviewData = {
     conversionRate: { current: number; previous: number; percentChange: number };
     activeUsers: { current: number; previous: number; percentChange: number };
   };
+  trendGranularity?: string;
 };
 
 // Helper to get default date ranges
@@ -142,7 +144,8 @@ export function DashboardOverview() {
 
   // Format currency
   const formatCurrency = (value: number) => {
-    return value.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    // Use PHP currency formatting
+    return value.toLocaleString(undefined, { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 });
   };
 
   // Render loading skeletons
@@ -164,7 +167,7 @@ export function DashboardOverview() {
   }
 
   if (!data) return null;
-  const { summaryMetrics, enrollmentTrends, revenueTrends, recentActivity, performanceSummaries } = data;
+  const { summaryMetrics, enrollmentTrends, revenueTrends, recentActivity, performanceSummaries, trendGranularity } = data;
 
   return (
     <div className="space-y-6">
@@ -233,7 +236,8 @@ export function DashboardOverview() {
           description={`Change: ${formatPercent(summaryMetrics.percentChange.totalEnrollments)}`}
         />
         <MetricCard
-          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+          // Use Peso sign for revenue
+          icon={<span className="h-4 w-4 text-muted-foreground font-bold">₱</span>}
           title="Revenue"
           value={formatCurrency(summaryMetrics.totalRevenue)}
           description={`Change: ${formatPercent(summaryMetrics.percentChange.totalRevenue)}`}
@@ -257,7 +261,7 @@ export function DashboardOverview() {
         {enrollmentTrends.length === 0 ? (
           <div className="h-64 flex items-center justify-center text-muted-foreground">No data</div>
         ) : (
-          <EnrollmentTrendsChart data={enrollmentTrends} />
+          <EnrollmentTrendsChart data={enrollmentTrends} granularity={trendGranularity as 'day' | 'week' | 'month' || 'month'} />
         )}
       </ChartContainer>
 
@@ -266,7 +270,7 @@ export function DashboardOverview() {
         {revenueTrends.length === 0 ? (
           <div className="h-64 flex items-center justify-center text-muted-foreground">No data</div>
         ) : (
-          <RevenueTrendsChart data={revenueTrends} />
+          <RevenueTrendsChart data={revenueTrends} granularity={trendGranularity as 'day' | 'week' | 'month' || 'month'} />
         )}
       </ChartContainer>
 
@@ -290,18 +294,22 @@ export function DashboardOverview() {
                     <h3 className="text-lg font-medium">No recent enrollments</h3>
                   </div>
                 ) : (
-                  recentActivity.enrollments.map((enrollment, idx) => (
-                    <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
-                      <Avatar>
-                        <AvatarFallback>{enrollment.user.id.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 space-y-1">
-                        <p className="text-sm font-medium">User ID: {enrollment.user.id}</p>
-                        <p className="text-xs text-muted-foreground">Course ID: {enrollment.course.id}</p>
+                  recentActivity.enrollments.map((enrollment, idx) => {
+                    const name = `${enrollment.user.first_name || ''} ${enrollment.user.last_name || ''}`.trim() || enrollment.user.id;
+                    const courseTitle = enrollment.course.title || enrollment.course.id;
+                    return (
+                      <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
+                        <Avatar>
+                          <AvatarFallback>{(enrollment.user.first_name?.charAt(0) || enrollment.user.id.charAt(0)).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 space-y-1">
+                          <p className="text-sm font-medium">{name}</p>
+                          <p className="text-xs text-muted-foreground">Course: {courseTitle}</p>
+                        </div>
+                        <div className="text-xs text-muted-foreground">{formatDate(enrollment.enrolledAt)}</div>
                       </div>
-                      <div className="text-xs text-muted-foreground">{formatDate(enrollment.enrolledAt)}</div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </CardContent>
@@ -317,23 +325,27 @@ export function DashboardOverview() {
               <div className="space-y-4">
                 {recentActivity.payments.length === 0 ? (
                   <div className="text-center py-8">
-                    <DollarSign className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+                    <span className="mx-auto h-10 w-10 text-muted-foreground mb-3 text-4xl font-bold">₱</span>
                     <h3 className="text-lg font-medium">No recent payments</h3>
                   </div>
                 ) : (
-                  recentActivity.payments.map((payment, idx) => (
-                    <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
-                      <Avatar>
-                        <AvatarFallback>{payment.user.id.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 space-y-1">
-                        <p className="text-sm font-medium">User ID: {payment.user.id}</p>
-                        <p className="text-xs text-muted-foreground">Amount: {formatCurrency(payment.amount)}</p>
-                        {payment.method && <p className="text-xs text-muted-foreground">Method: {payment.method}</p>}
+                  recentActivity.payments.map((payment, idx) => {
+                    const name = `${payment.user.first_name || ''} ${payment.user.last_name || ''}`.trim() || payment.user.id;
+                    return (
+                      <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
+                        <Avatar>
+                          <AvatarFallback>{(payment.user.first_name?.charAt(0) || payment.user.id.charAt(0)).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 space-y-1">
+                          <p className="text-sm font-medium">{name}</p>
+                          <p className="text-xs text-muted-foreground">Amount: {formatCurrency(payment.amount)}</p>
+                          {payment.method && <p className="text-xs text-muted-foreground">Method: {payment.method}</p>}
+                          {payment.transactionType && <p className="text-xs text-muted-foreground">Type: {payment.transactionType}</p>}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{formatDate(payment.paidAt)}</div>
                       </div>
-                      <div className="text-xs text-muted-foreground">{formatDate(payment.paidAt)}</div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </CardContent>
