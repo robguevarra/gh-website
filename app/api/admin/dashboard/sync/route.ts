@@ -112,6 +112,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 5. Call migration endpoints in sequence
+    // Helper to call local endpoints using absolute URLs (required in server context)
+    function getBaseUrl(req: NextRequest) {
+      // Try to infer protocol and host from headers
+      const proto = req.headers.get('x-forwarded-proto') || 'http';
+      const host = req.headers.get('host');
+      return `${proto}://${host}`;
+    }
+    const baseUrl = getBaseUrl(req);
+    async function callMigrationEndpoint(path: string) {
+      const url = `${baseUrl}${path}`;
+      const res = await fetch(url, { method: 'POST' });
+      try {
+        return await res.json();
+      } catch {
+        return { success: false, message: 'Invalid JSON response' };
+      }
+    }
+
+    // Call /update-profiles
+    const profilesResult = await callMigrationEndpoint('/api/admin/dashboard/update-profiles');
+    // Call /update-transactions
+    const transactionsResult = await callMigrationEndpoint('/api/admin/dashboard/update-transactions');
+    // Call /update-enrollments
+    const enrollmentsResult = await callMigrationEndpoint('/api/admin/dashboard/update-enrollments');
+
     return NextResponse.json({
       success: true,
       created,
@@ -119,7 +145,12 @@ export async function POST(req: NextRequest) {
       errors,
       createdEmails: createdEmails.slice(0, 10), // sample
       skippedEmails: skippedEmails.slice(0, 10), // sample
-      message: `Created ${created} users, skipped ${skipped}. ${errors.length} errors.`
+      message: `Created ${created} users, skipped ${skipped}. ${errors.length} errors.`,
+      migration: {
+        profiles: profilesResult,
+        transactions: transactionsResult,
+        enrollments: enrollmentsResult,
+      }
     });
   } catch (err: any) {
     return NextResponse.json({

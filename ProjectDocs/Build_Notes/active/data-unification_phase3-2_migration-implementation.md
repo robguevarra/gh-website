@@ -134,10 +134,56 @@ The unified schema is in place, and the migration process is now modularized and
 - After each migration step, run validation queries (as documented in previous build notes) to ensure data quality and integrity.
 - Monitor logs and handle any exceptions or data quality issues as they arise.
 
-// Comments:
-// - This build note documents the full, robust, and idempotent migration process for unified data.
-// - All steps are traceable to the original strategy and schema enhancement phases.
-// - The process is designed for both initial migration and ongoing incremental syncs.
+## Recent Findings: Profile Upsert Idempotency & Sync Issues (2024-06-09)
+
+### Summary of Recent Sync Results
+- After running the `/update-profiles` endpoint for a second time (following a successful initial sync), the process reported **1745 upserts** and **1000 skipped records**.
+- This was unexpected, as the migration logic is designed to be idempotent—meaning only genuinely changed records should be upserted, and unchanged records should be skipped.
+
+### What We Did
+- We reviewed the upsert SQL and endpoint logic to confirm that:
+  - The upsert uses `ON CONFLICT (id) DO UPDATE` to avoid duplicate key errors.
+  - The update sets all profile fields (email, first/last name, tags, acquisition_source, updated_at) to the incoming values.
+  - The process should only update rows if the incoming data differs from the existing row.
+- We checked for common causes of non-idempotent upserts, including:
+  - Type mismatches (e.g., string vs. array for tags)
+  - Implicit changes from normalization (e.g., whitespace, case)
+  - Always-updating fields (e.g., `updated_at` always set to `now()`)
+  - Database triggers or defaults that might alter data on upsert
+- We confirmed that the endpoint is not introducing new or duplicate users, and that the email matching logic is consistent.
+
+### Explanation of the 1000+ Upserts/Skipped Entries
+- Possible causes include:
+  - The `updated_at` field is always set to `now()`, causing the row to be considered changed on every run, even if no other fields differ.
+  - Minor differences in data formatting (e.g., array order, whitespace, case) may cause the database to treat the incoming row as different from the existing one.
+  - The upsert statement does not include a `WHERE` clause to check for actual data changes before updating, so it always performs the update on conflict.
+  - The skipped records likely correspond to users who were not present in the incoming data or who failed validation.
+
+### Changes to `/update-profiles` Endpoint (April 2025)
+- **Field‑level diff detection:** Only upsert when an incoming profile record actually differs from the existing row, avoiding no‑op updates.  
+- **Preserve existing fields:** Read and reuse `phone` from the database instead of overwriting it with `null`.  
+- **Batched inserts & updates:** Collected new vs. changed profiles, bulk‑inserted new rows with `insert(..., { skipDuplicates: true })`, and ran individual `update()` calls for genuine changes.  
+- **Removed always‑updating timestamps:** Eliminated unconditional `updated_at = now()` on every run so that re‑runs don't mark unchanged records as updated.  
+- **Enhanced logging & responses:** Added detailed console logs and returned `sampleErrors` in the JSON response for easy auditing of upserts, skips, and errors.  
+
+### Current Issues
+- **Non-idempotent Upserts:** The current upsert logic updates all fields (and the `updated_at` timestamp) on every run, even if the data is unchanged. This leads to unnecessary writes and can obscure true data changes.
+- **Lack of Change Detection:** There is no mechanism to compare incoming data to existing rows and only update when a real change is detected.
+- **Potential Data Drift:** Repeated updates may introduce subtle data drift if normalization or transformation logic changes over time.
+- **Audit/Debug Difficulty:** The logs do not clearly distinguish between meaningful updates and no-op upserts, making it harder to audit changes.
+
+### Next Steps
+1. **Refine Upsert Logic:**
+   - Update the upsert SQL to only update fields if the incoming data is different from the existing row (e.g., using `WHERE` clauses or more granular conflict handling).
+   - Consider excluding `updated_at` from always being set to `now()` unless a real change occurs.
+2. **Add Change Detection:**
+   - Implement logic to compare incoming and existing data before performing an update.
+   - Log when a row is actually changed vs. when it is a no-op.
+3. **Improve Logging:**
+   - Enhance logs to clearly report which records were truly updated, which were unchanged, and why.
+4. **Validation & Testing:**
+   - Add tests to verify that repeated syncs do not result in unnecessary upserts.
+   - Run validation queries after each sync to confirm idempotency.
 
 ## Future State Goal
 A successfully completed data migration with:
@@ -596,3 +642,100 @@ After implementing the data migration, we will move to Phase 3-3: Dashboard Core
 // Comments:
 // - This summary documents the current state and next steps for full data unification and user onboarding.
 // - See the new build note for detailed onboarding and invite process.
+
+## Endpoint Implementation: /update-transactions & /update-enrollments (In Progress)
+
+### Task Objective
+Implement robust, idempotent API endpoints for `/update-transactions` and `/update-enrollments` to automate and modularize the migration of payment and enrollment data into the unified schema.
+
+### Current State Assessment
+- `/update-profiles` endpoint is complete and serves as a template for modular migration endpoints.
+- No endpoints exist yet for `/update-transactions` or `/update-enrollments`.
+- Migration logic for both is defined in this build note and prior phases.
+
+### Future State Goal
+- Both endpoints exist, are fully implemented, and can be triggered independently or as part of the `/sync` workflow.
+- Endpoints are safe to re-run (idempotent), log errors, and provide clear feedback.
+- All relevant transactions and enrollments are migrated, normalized, and linked to unified profiles and courses.
+
+### Implementation Plan
+1. **Scaffold Endpoints**
+- [x] Create `app/api/admin/dashboard/update-profiles/route.ts`
+- [x] Create `app/api/admin/dashboard/update-transactions/route.ts`
+- [x] Create `app/api/admin/dashboard/update-enrollments/route.ts`
+- [x] Create `app/api/admin/dashboard/sync/route.ts`
+- [x] Create `app/api/admin/dashboard/conflict/route.ts`
+- [x] Create `app/api/admin/dashboard/overview/route.ts`
+// Implementation status verified as of 2024-06-09. All major migration endpoints are scaffolded and present in the codebase.
+2. **Implement /update-profiles Logic**
+- [x] Fetch all Auth users via paginated API (1000 per page)
+- [x] Build a map of systemeio profiles by email, preferring the most recent registration
+- [x] Fetch all existing unified_profiles into a map by user ID
+- [x] For each Auth user, merge systemeio and existing data, preserving phone and acquisition_source
+- [x] Diff each profile: only insert or update if fields have changed (field-level diffing)
+- [x] Batch-insert new profiles (skip duplicates); individually update changed profiles
+- [x] Log upserted, skipped, and error emails; return detailed change logs and error samples in response
+
+3. **Implement /update-transactions Logic**
+- [x] Load all unified profiles and existing transactions in 1000-row batches (pagination)
+- [x] Fetch all Xendit payment records since last sync, paginated
+- [x] Normalize and map fields (status, type, timestamps, etc.)
+- [x] Link transactions to unified profiles by normalized email
+- [x] Diff each transaction: only insert or update if core fields have changed (field-level diffing)
+- [x] Deduplicate inserts by external_id before bulk insert
+- [x] Batch-insert new transactions (skip duplicates); individually update changed transactions
+- [x] Log/report errors and upserted records; return error samples in response
+
+4. **Implement /update-enrollments Logic**
+- [x] Lookup course_id for 'Papers to Profits' by title
+- [x] Load all existing enrollments for the course in 1000-row batches (pagination)
+- [x] Fetch all completed P2P transactions in 1000-row batches
+- [x] For each transaction, build enrollment record and diff against existing
+- [x] Deduplicate inserts by user_id, keeping the latest enrolled_at
+- [x] Batch-insert new enrollments (skip duplicates); individually update changed enrollments
+- [x] Log/report errors and upserted records; return error samples in response
+
+5. **Implement /sync Logic**
+- [x] Fetch all PAID P2P emails from Xendit and systemeio (paginated)
+- [x] Fetch all existing Auth user emails (paginated)
+- [x] For each union email, create Auth user if not exists (default password, confirmed)
+- [x] Call /update-profiles, /update-transactions, and /update-enrollments endpoints in sequence
+- [x] Return summary of created/skipped users, errors, and migration results for each step
+
+6. **Implement /conflict Logic**
+- [x] Accepts an email, checks Xendit for PAID 'Papers to Profits' enrollment
+- [x] Returns enrollment details if found, or a not-found message if not
+- [x] Handles missing email and error cases with clear messages
+
+7. **Implement /overview Logic**
+- [x] Aggregates summary metrics, trends, recent activity, and performance summaries from unified tables/views
+- [x] Supports date range filtering via query params
+- [x] Returns summary metrics (enrollments, revenue, conversion, active users), trend data, recent enrollments/payments, and performance summaries
+- [x] Handles errors gracefully and returns clear error messages
+
+### Notes & Decisions
+- Endpoints will follow the structure and error handling of `/update-profiles` for consistency.
+- All field mappings and normalization rules will strictly follow the build notes and schema.
+- Code will be modular, well-commented, and under 150 lines per endpoint.
+- Any deviations or issues will be documented here.
+
+### Changes to `/update-enrollments` Endpoint (April 2025)
+- **Full pagination:** Refactored both the existing‑enrollments and transactions fetches to page through results in 1 000‑row batches, removing default limits.  
+- **Typed payloads:** Introduced an `EnrollmentUpsert` TypeScript interface for clarity and type‑safety.  
+- **Diff & classify logic:** Compared each incoming transaction to a pre‑loaded map of existing enrollments to categorize records as "new," "changed," or "skipped."  
+- **Deduplication step:** Before inserting, deduplicated `toInsert` by `user_id`, keeping only the record with the latest `enrolled_at` to avoid unique‑constraint errors.  
+- **Bulk insert & selective updates:** Used `insert(..., { skipDuplicates: true })` for brand‑new enrollments, and ran individual `update()` calls only for truly changed rows, minimizing writes on repeated runs.  
+- **Error sampling:** Logged and returned the first 10 errors under `sampleErrors` so you can quickly see issues like duplicate‑key violations.  
+- **Fixed course lookup:** Corrected the lookup to use `title` instead of `name` for the "Papers to Profits" course when resolving `course_id`.  
+
++### Changes to `/update-transactions` Endpoint (April 2025)
++- **Full pagination:** Loads all unified profiles and existing transactions in 1,000-row batches, ensuring no default limits or missed records.  
++- **Field-level diff detection:** Compares each incoming Xendit record to the existing transaction by `external_id`, only updating if a core field (user, amount, status, etc.) has changed.  
++- **Deduplication:** Deduplicates `toInsert` by `external_id` before bulk insert to avoid unique constraint errors.  
++- **Bulk insert & selective updates:** Attempts to use `insert(..., { skipDuplicates: true })` for new transactions, but due to a linter/type error (Supabase JS client does not support `skipDuplicates`), this option is ignored—actual deduplication is handled in code.  
++- **No always-updating timestamps:** `updated_at` is only set when a real change occurs, not on every run.  
++- **Error sampling:** Logs and returns the first 10 errors in `sampleErrors` for quick debugging.  
++- **Enhanced logging:** Console logs summarize batch sizes, classification counts, and error samples for transparency.  
++- **Robust error handling:** Returns all errors and a sample in the JSON response for easy auditing.  
+
+// Update this section as work progresses. Do not delete completed tasks; line them out instead for traceability.
