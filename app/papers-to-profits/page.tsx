@@ -105,7 +105,7 @@ export default function PapersToProfit() {
     };
 
     // Replace with your actual deployed function URL
-    const functionUrl = 'https://cidenjydokpzpsnpywcf.supabase.co/functions/v1/send-facebook-capi-event';
+    const functionUrl = 'https://cidenjydokpzpsnpywcf.functions.supabase.co/send-facebook-capi-event';
 
     fetch(functionUrl, {
       method: 'POST',
