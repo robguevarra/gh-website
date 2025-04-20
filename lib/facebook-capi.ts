@@ -10,7 +10,7 @@ if (!PIXEL_ID || !ACCESS_TOKEN) {
 function sha256Hash(value: string): string {
   return createHash('sha256').update(value.trim().toLowerCase()).digest('hex');
 }
-
+//testing
 interface RawUserData {
   email?: string;
   phone?: string;
