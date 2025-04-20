@@ -158,6 +158,22 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
   - Public tracking endpoints are common for analytics and ad attribution, but must be implemented securely to avoid abuse.
   - Using server-side CAPI improves reliability and attribution accuracy compared to client-only pixel tracking.
 
+#### 2.2 Facebook CAPI Edge Function Improvements (2024-04-20)
+
+- **CORS Support:** Function now handles `OPTIONS` preflight requests and includes CORS headers on all responses, allowing browser-based POST requests from any origin.
+- **Public Endpoint:** Uses the correct `.functions.supabase.co` public URL for frontend integration.
+- **Validation:** Uses `zod` for strict payload validation, ensuring only valid event data is processed.
+- **Error Handling:** Improved error handling, including:
+  - Clear error messages for invalid JSON, unsupported methods, and invalid payloads.
+  - Timeouts and up to 3 retries for Facebook API requests.
+  - Logs errors and returns appropriate status codes for troubleshooting.
+- **Security:** Credentials are loaded from environment variables and checked at function startup.
+- **Browser Compatibility:** Function now works with browser-based POST requests from the `/papers-to-profits` landing page, and events are successfully received in Facebook Events Manager.
+- **Tested:** End-to-end test confirmed: visiting the landing page triggers a `ViewContent` event that appears in Facebook Events Manager.
+
+**Next Step:**
+- Integrate the same CAPI function for `InitiateCheckout` (when user starts checkout) and `Purchase` (after payment success) events in the app. This will provide full-funnel tracking for Facebook Ads attribution.
+
 ### 3. Facebook Marketing API Integration (Metadata & Spend)
 *Goal: Periodically fetch campaign structure and spend data to enrich our database.* 
 *Best Practice: Use scheduled tasks, handle pagination/rate limits, store credentials securely.* 
