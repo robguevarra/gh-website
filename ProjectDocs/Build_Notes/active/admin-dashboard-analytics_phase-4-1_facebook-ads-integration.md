@@ -38,43 +38,125 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
 *Goal: Create the necessary tables to store ad hierarchy, spend, and attribution data.* 
 *Best Practice: Use specific data types, clear naming, foreign keys for integrity, and appropriate indexing for performance.* 
 
-- [ ] **Design `ad_campaigns` Table:**
+- [x] **Design `ad_campaigns` Table:**
     - Fields: `id` (UUID, PK), `fb_campaign_id` (TEXT, UNIQUE, NOT NULL), `name` (TEXT), `objective` (TEXT), `status` (TEXT), `effective_status` (TEXT), `start_time` (TIMESTAMPTZ), `stop_time` (TIMESTAMPTZ), `created_at` (TIMESTAMPTZ, default now()), `updated_at` (TIMESTAMPTZ, default now()).
     - Index: `fb_campaign_id`.
-- [ ] **Design `ad_adsets` Table:**
+- [x] **Design `ad_adsets` Table:**
     - Fields: `id` (UUID, PK), `campaign_id` (UUID, FK to `ad_campaigns.id`), `fb_adset_id` (TEXT, UNIQUE, NOT NULL), `name` (TEXT), `status` (TEXT), `effective_status` (TEXT), `daily_budget` (NUMERIC), `lifetime_budget` (NUMERIC), `targeting_summary` (TEXT), `start_time` (TIMESTAMPTZ), `stop_time` (TIMESTAMPTZ), `created_at` (TIMESTAMPTZ, default now()), `updated_at` (TIMESTAMPTZ, default now()).
     - Indexes: `fb_adset_id`, `campaign_id`.
-- [ ] **Design `ad_ads` Table:**
+- [x] **Design `ad_ads` Table:**
     - Fields: `id` (UUID, PK), `adset_id` (UUID, FK to `ad_adsets.id`), `fb_ad_id` (TEXT, UNIQUE, NOT NULL), `name` (TEXT), `status` (TEXT), `effective_status` (TEXT), `creative_id` (TEXT), `creative_summary` (TEXT), `created_at` (TIMESTAMPTZ, default now()), `updated_at` (TIMESTAMPTZ, default now()).
     - Indexes: `fb_ad_id`, `adset_id`.
-- [ ] **Design `ad_spend` Table:**
+- [x] **Design `ad_spend` Table:**
     - Fields: `id` (UUID, PK), `date` (DATE, NOT NULL), `campaign_id` (UUID, FK to `ad_campaigns.id`), `adset_id` (UUID, FK to `ad_adsets.id`), `ad_id` (UUID, FK to `ad_ads.id`), `spend` (NUMERIC, NOT NULL), `impressions` (INTEGER), `clicks` (INTEGER), `currency` (TEXT), `created_at` (TIMESTAMPTZ, default now()).
     - Composite Index: `(date, ad_id)` or relevant granularity based on API data.
     - Note: This table stores aggregated daily spend/metrics fetched from the Marketing API.
-- [ ] **Design `ad_attributions` Table:**
+- [x] **Design `ad_attributions` Table:**
     - Fields: `id` (UUID, PK), `user_id` (UUID, FK to `unified_profiles.id`, NULLABLE), `transaction_id` (UUID, FK to `transactions.id`, UNIQUE), `campaign_id` (UUID, FK to `ad_campaigns.id`), `adset_id` (UUID, FK to `ad_adsets.id`), `ad_id` (UUID, FK to `ad_ads.id`), `conversion_event` (TEXT, NOT NULL), `event_time` (TIMESTAMPTZ, NOT NULL), `conversion_value` (NUMERIC), `currency` (TEXT), `source_platform` (TEXT, default 'facebook'), `fb_click_id` (TEXT, NULLABLE), `created_at` (TIMESTAMPTZ, default now()).
     - Indexes: `transaction_id`, `user_id`, `campaign_id`, `adset_id`, `ad_id`, `event_time`.
     - Note: Links a specific transaction (our source of truth for purchase) back to the ad components.
-- [ ] **Implement Migrations:** Create versioned SQL migration scripts (e.g., using Supabase CLI `migration new`) to create these tables, constraints, and indexes.
+- [x] **Implement Migrations:** Create versioned SQL migration scripts (e.g., using Supabase CLI `migration new`) to create these tables, constraints, and indexes.
 
 ### 2. Facebook Conversion API (CAPI) Setup
-*Goal: Reliably send server-side events to Facebook for matching and attribution.* 
-*Best Practice: Prioritize CAPI over Pixel for accuracy and privacy. Send hashed user data securely.* 
+*Goal: Reliably send server-side events from our website to Facebook for matching and attribution.*
+*Best Practice: Prioritize CAPI over Pixel for accuracy and privacy. Send hashed PII (Personally Identifiable Information) securely.*
+*Environment Variables: Use `FB_CAPI_ACCESS_TOKEN` for the CAPI Access Token and `FB_PIXEL_ID` for the Facebook Pixel ID.*
 
-- [ ] **Configure Facebook Assets:** Obtain Facebook Pixel ID and generate a CAPI System User Access Token.
+- [x] **Configure Facebook Assets:** Obtain `FB_PIXEL_ID` and generate `FB_CAPI_ACCESS_TOKEN`. Stored in environment variables.
 - [ ] **Server-Side Event Implementation:**
-    - Choose a suitable library/method for sending server-side HTTP requests (e.g., Node fetch, Python requests within a Supabase Edge Function or backend service).
-    - Implement functions to send standard events:
-        - `PageView`: Triggered on key page loads (e.g., course page, checkout).
-        - `Lead`: (If applicable) Triggered on significant non-purchase conversions (e.g., ebook download form submission).
-        - `InitiateCheckout`: Triggered when a user starts the Xendit/Shopify checkout process.
-        - `Purchase`: Triggered *after* successful confirmation of a completed transaction in our `transactions` table (for both P2P and Canva).
-    - **User Data Parameters:** Include as much *hashed* user data as possible for better matching (email, phone, first/last name, city, state, zip, country, IP address, User-Agent). Follow Facebook's hashing requirements (SHA-256).
-    - **Event Parameters:** Include `event_name`, `event_time`, `event_source_url`, `event_id` (unique ID for deduplication), `currency`, `value` (for Purchase), `action_source` ('web').
-    - **Cookies:** Include `fbp` (Facebook browser ID) and `fbc` (Facebook click ID) cookies if available on the server (may require passing from client).
-- [ ] **Security:** Store CAPI Access Token securely (e.g., Supabase Vault, environment variables). NEVER expose it client-side.
-- [ ] **Validation:** Use Facebook's Events Manager testing tool to verify events are received correctly.
-- [ ] **Error Handling & Logging:** Implement robust logging for successful sends and detailed error logging for failed requests (e.g., invalid token, malformed data).
+    - **Technology Choice:** Implement using Supabase Edge Functions for server-side execution, triggered by relevant backend actions or page loads. Use standard `fetch` API for HTTP requests.
+    - **Targeted Events & Triggers:** Based on the current user flow (Facebook Ad -> Messenger/ManyChat -> Website), we will implement the following standard CAPI events triggered by specific *website* actions:
+        - **`ViewContent`**: Trigger when the primary landing page (`/papers-to-profits`) is loaded server-side. This indicates significant content engagement after arriving from an external source (like ManyChat).
+        - **`InitiateCheckout`**: Trigger when the user successfully navigates to the first step of the website's checkout form/page (where they typically enter contact/shipping info). This marks a clear intent to purchase.
+        - **`Purchase`**: Trigger *after* the backend successfully confirms a completed payment transaction (e.g., via webhook from Xendit/Canva or callback confirmation) and the corresponding record is updated in our `transactions` table. This is the core conversion event.
+    - **Deferred Events & Rationale:**
+        - **`Lead` / `LeadSubmitted`:** Implementation is **deferred**. The primary "lead" generation (initial user inquiry) occurs off-website within ManyChat. There is currently no distinct *website* form submission (like a newsletter signup or contact form) that clearly maps to this event. Attempting to trigger it based on website arrival alone would be inaccurate. Parameters like `messaging_channel` and `page_id` seen in setup likely relate to the off-site ManyChat interaction and would require a complex (future state) integration to pass through.
+        - **`CompleteRegistration`:** Implementation is **deferred**. There doesn't appear to be a separate user account registration process distinct from the checkout flow. Triggering this during checkout would overlap confusingly with `InitiateCheckout` or `Purchase`.
+    - **Required Parameters for All Events:**
+        - `event_name`: The standard CAPI event name (e.g., 'ViewContent', 'Purchase').
+        - `event_time`: Unix timestamp (seconds) of when the event occurred on the server.
+        - `event_source_url`: The full URL of the page where the event was triggered.
+        - `event_id`: A unique identifier for this specific event instance (e.g., UUID) to enable Facebook's deduplication.
+        - `action_source`: Hardcoded as `'website'`.
+    - **User Data Parameters (`user_data` object):**
+        - **Hashed PII (SHA-256):** Send when available, *especially* for `Purchase` and potentially `InitiateCheckout`. Requires obtaining user input (e.g., from checkout form).
+            - `em`: Hashed email address.
+            - `ph`: Hashed phone number.
+            - `fn`: Hashed first name.
+            - `ln`: Hashed last name.
+            - *(Include others like city, state, zip, country if reliably collected)*
+        - **Do Not Hash (Send as-is):**
+            - `client_ip_address`: User's IP address (obtain from request headers in Edge Function).
+            - `client_user_agent`: User's browser user agent string (obtain from request headers).
+            - `fbp`: Facebook Browser ID cookie (`_fbp`). Pass from client request to server/Edge Function if available.
+            - `fbc`: Facebook Click ID cookie (`_fbc`). Pass from client request to server/Edge Function if available (especially important for click-through attribution).
+    - **Custom Data Parameters (`custom_data` object):**
+        - **`Purchase` Event:** Must include `currency` (e.g., 'USD') and `value` (e.g., 99.99).
+        - *(Potentially add custom parameters if needed, e.g., product SKU)*.
+- [ ] **Security:** Store `FB_CAPI_ACCESS_TOKEN` securely using Supabase Vault in production (environment variables acceptable for local development). Ensure the Edge Function handling CAPI calls is properly secured.
+- [ ] **Validation:** Use Facebook's Events Manager -> Test Events tool *during development* to send test events from the Edge Function and verify they are received correctly by Facebook, checking parameter matching and hashing.
+- [ ] **Error Handling & Logging:** Implement robust logging within the Edge Function. Log successful event sends (with `event_id`) and detailed error messages (including Facebook API response if available) for failed requests. Consider retries for transient network errors.
+
+#### 2.1 Facebook CAPI Edge Function Deployment (2024-04-20)
+
+- **Function Name:** `send-facebook-capi-event`
+- **Location:** `supabase/functions/send-facebook-capi-event/index.ts`
+- **Stack:** TypeScript, Deno (Supabase Edge Functions)
+- **Purpose:** Handles all Facebook CAPI event types (`ViewContent`, `InitiateCheckout`, `Purchase`) for server-side event tracking.
+- **Supported Events:**
+  - `ViewContent` (landing page load)
+  - `InitiateCheckout` (checkout start)
+  - `Purchase` (successful transaction)
+- **Input Payload Structure:**
+  ```json
+  {
+    "eventName": "ViewContent", // or "InitiateCheckout", "Purchase"
+    "eventSourceUrl": "https://yourdomain.com/papers-to-profits",
+    "userData": {
+      "email": "optional@email.com", // hashed if present
+      "phone": "optional", // hashed if present
+      "firstName": "optional", // hashed if present
+      "lastName": "optional", // hashed if present
+      "clientIpAddress": "user-ip",
+      "clientUserAgent": "user-agent",
+      "fbp": "fbp-cookie-value",
+      "fbc": "fbc-cookie-value"
+    },
+    "customData": { /* e.g., currency, value for Purchase */ }
+  }
+  ```
+- **Hashing:** All PII (email, phone, first/last name) is SHA-256 hashed using Deno's `crypto.subtle` API per Facebook requirements.
+- **Security/Authentication:**
+  - By default, Supabase Edge Functions require an `Authorization` header (Bearer token, e.g., anon key).
+  - If missing, function returns a 401 error (`{"code":401,"message":"Missing authorization header"}`).
+  - For public tracking endpoints, consider allowing unauthenticated access (see troubleshooting section).
+- **Testing Instructions:**
+  1. Deploy the function using `npx supabase functions deploy send-facebook-capi-event`.
+  2. Obtain the function URL from Supabase dashboard or CLI.
+  3. Send a POST request using curl or Postman:
+     ```sh
+     curl -X POST <FUNCTION_URL> \
+       -H "Content-Type: application/json" \
+       -H "Authorization: Bearer <SUPABASE_ANON_KEY>" \
+       -d '{
+         "eventName": "ViewContent",
+         "eventSourceUrl": "https://yourdomain.com/papers-to-profits",
+         "userData": {
+           "clientIpAddress": "1.2.3.4",
+           "clientUserAgent": "Mozilla/5.0",
+           "fbp": "fb.1.1234567890.1234567890",
+           "fbc": "fb.1.1234567890.AbCdEfGhIj"
+         }
+       }'
+     ```
+  4. Check Facebook Events Manager (Test Events) for event receipt.
+- **Next Steps:**
+  - Decide whether to allow unauthenticated (public) access for this function (recommended for tracking endpoints).
+  - Integrate function call into `/app/papers-to-profits/page.tsx` for real user tracking.
+  - Troubleshoot any 401 or payload errors as needed.
+- **Rationale:**
+  - Public tracking endpoints are common for analytics and ad attribution, but must be implemented securely to avoid abuse.
+  - Using server-side CAPI improves reliability and attribution accuracy compared to client-only pixel tracking.
 
 ### 3. Facebook Marketing API Integration (Metadata & Spend)
 *Goal: Periodically fetch campaign structure and spend data to enrich our database.* 
@@ -142,7 +224,7 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
 
 ## Completion Status
 
-This phase is **Not Started**.
+This phase is **In Progress**.
 
 Challenges anticipated:
 - Technical complexity of correctly implementing server-side CAPI with user data hashing.

@@ -84,6 +84,45 @@ export default function PapersToProfit() {
     }
   }, [])
 
+  // Facebook CAPI ViewContent tracking (fires on page load)
+  useEffect(() => {
+    // Helper to get cookie value by name
+    function getCookie(name: string) {
+      const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+      return match ? match[2] : undefined;
+    }
+
+    // Prepare payload for CAPI
+    const payload = {
+      eventName: 'ViewContent',
+      eventSourceUrl: window.location.href,
+      userData: {
+        clientUserAgent: navigator.userAgent,
+        fbp: getCookie('_fbp'),
+        fbc: getCookie('_fbc'),
+        // Optionally add email, phone, etc. if available
+      }
+    };
+
+    // Replace with your actual deployed function URL
+    const functionUrl = 'https://cidenjydokpzpsnpywcf.supabase.co/functions/v1/send-facebook-capi-event';
+
+    fetch(functionUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(res => res.json())
+      .then(data => {
+        // Optionally log for debugging
+        // console.log('Facebook CAPI event sent:', data);
+      })
+      .catch(err => {
+        // Optionally log errors
+        // console.error('Facebook CAPI error:', err);
+      });
+  }, []);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData({ ...formData, [name]: value })
