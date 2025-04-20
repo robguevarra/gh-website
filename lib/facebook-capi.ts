@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 
-const PIXEL_ID = process.env.PIXEL_DATASET_ID!;
-const ACCESS_TOKEN = process.env.PIXEL_ACCESS_TOKEN!;
+const PIXEL_ID = process.env.FB_PIXEL_ID!;
+const ACCESS_TOKEN = process.env.FB_CAPI_ACCESS_TOKEN!;
 // Fail fast if env vars are missing
 if (!PIXEL_ID || !ACCESS_TOKEN) {
   throw new Error('[Facebook CAPI] PIXEL_ID and PIXEL_ACCESS_TOKEN must be set in environment variables');
