@@ -536,6 +536,15 @@ export default function Home() {
               <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
             </Link>
             <Link
+              href="/canva-ebook"
+              className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
+              onMouseEnter={() => setIsHovering(true)}
+              onMouseLeave={() => setIsHovering(false)}
+            >
+              Get Ebook
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
+            </Link>
+            <Link
               href="#"
               className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
               onMouseEnter={() => setIsHovering(true)}

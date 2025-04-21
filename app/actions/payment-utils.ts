@@ -8,10 +8,17 @@ import { getAdminClient } from '@/lib/supabase/admin'
 /**
  * Ensures a Supabase Auth user and unified profile exist for a course buyer.
  * - Checks if user exists by email; creates if not.
- * - Upserts unified profile.
+ * - Upserts unified profile (first_name, last_name, phone).
  * - Returns userId and profile.
+ * - NOTE: The calling function (e.g., in payment-actions.ts) must be updated
+ *   to pass firstName and lastName separately instead of a combined name.
  */
-export async function ensureAuthUserAndProfile({ email, name }: { email: string; name: string }) {
+export async function ensureAuthUserAndProfile({ email, firstName, lastName, phone }: { 
+  email: string; 
+  firstName: string; 
+  lastName?: string | null; 
+  phone?: string | null;
+}) {
   // Get Supabase admin client
   const supabase = getAdminClient();
 
@@ -32,21 +39,61 @@ export async function ensureAuthUserAndProfile({ email, name }: { email: string;
       email,
       email_confirm: true,
     });
-    if (createUserError || !newUser?.user?.id) {
-      throw new Error(`Failed to create user: ${createUserError?.message || 'Unknown error'}`);
+    if (createUserError) {
+      // If error is "already registered", fetch the user again using admin API
+      if (createUserError.message && createUserError.message.includes('already been registered')) {
+        console.log(`[Auth] User already registered for ${email}. Fetching existing user ID.`);
+        // Use listUsers to find the user by email - more reliable
+        // The type for listUsers params doesn't directly take email, need to paginate or search
+        // For simplicity here, assuming low user count and filtering after getting first page
+        // Production might need search or pagination if user count is high
+        const { data: usersResponse, error: listUsersError } = await supabase.auth.admin.listUsers({ 
+            page: 1, 
+            perPage: 1000 // Adjust perPage as needed, check limits
+          });
+
+        if (listUsersError) {
+          throw new Error(`Failed to list users to find existing user after duplicate error: ${listUsersError.message}`);
+        }
+
+        // Find the user with the matching email from the list
+        const existingUser = usersResponse?.users?.find(u => u.email === email);
+
+        if (existingUser?.id) {
+          userId = existingUser.id;
+          console.log(`[Auth] Found existing user ID: ${userId}`);
+        } else {
+          // This case should ideally not happen if the error was truly 'already registered'
+          console.error(`[Auth] Could not find user via listUsers despite 'already registered' error for ${email}. Response:`, usersResponse);
+          throw new Error(`Failed to fetch existing user after duplicate error for ${email}.`);
+        }
+      } else {
+        // Handle other createUser errors
+        throw new Error(`Failed to create user: ${createUserError?.message || 'Unknown error'}`);
+      }
+    } else if (!newUser?.user?.id) {
+      throw new Error(`Failed to create user: Unknown error`);
+    } else {
+      userId = newUser.user.id;
     }
-    userId = newUser.user.id;
   }
 
-  // 3. Upsert the user's profile in unified_profiles
+  // 3. Parse name into first_name and last_name
+  // const [firstName, ...rest] = (name || '').split(' ');
+  // const lastName = rest.length > 0 ? rest.join(' ') : null;
+  // -- REMOVED Name Parsing - Use passed firstName and lastName directly --
+
+  // 4. Upsert the user's profile in unified_profiles
   const { data: profile, error: profileError } = await supabase
     .from('unified_profiles')
     .upsert({
-      user_id: userId,
+      id: userId, // PK matches auth.users.id
       email,
-      name,
+      first_name: firstName,
+      last_name: lastName,
+      phone: phone,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' })
+    }, { onConflict: 'id' })
     .select()
     .maybeSingle();
 
@@ -54,7 +101,7 @@ export async function ensureAuthUserAndProfile({ email, name }: { email: string;
     throw new Error(`Failed to upsert unified profile: ${profileError.message}`);
   }
 
-  // 4. Return userId and profile
+  // 5. Return userId and profile
   return { userId, profile };
 }
 
@@ -64,34 +111,46 @@ export async function ensureAuthUserAndProfile({ email, name }: { email: string;
  * - For ebook buyers: userId is null, stores contact info in metadata.
  * - Returns transaction record.
  */
-export async function logTransaction({ productType, userId, email, amount, metadata }: {
-  productType: 'course' | 'ebook';
+export async function logTransaction({ transactionType, userId, email, amount, metadata, externalId, paymentMethod, phone }: {
+  transactionType: 'course' | 'ebook';
   userId?: string | null;
   email: string;
   amount: number;
   metadata?: Record<string, any>;
+  externalId?: string | null;
+  paymentMethod?: string | null;
+  phone?: string | null;
 }) {
   // Get Supabase admin client
   const supabase = getAdminClient();
+
+  // Map conceptual type to database value
+  const dbTransactionType = transactionType === 'course' ? 'P2P' : 'Canva';
 
   // Prepare transaction data
   const transactionData: Record<string, any> = {
     user_id: userId || null, // null for ebook buyers
     amount,
-    product_type: productType,
+    transaction_type: dbTransactionType, // Use mapped database type
     status: 'pending', // default status; update as needed
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    // Store contact info for ebook buyers in metadata
+    external_id: externalId || null,
+    payment_method: paymentMethod || null,
+    // Store contact info and phone in metadata
     metadata: {
       ...metadata,
-      ...(productType === 'ebook' ? { contact_email: email } : {}),
+      ...(transactionType === 'ebook' ? { contact_email: email } : {}),
+      phone: phone || metadata?.phone,
     },
+    contact_email: email,
   };
 
-  // Optionally store email directly for analytics/BI
-  if (productType === 'ebook') {
-    transactionData.contact_email = email;
+  // Clean metadata before insertion (remove undefined/null)
+  if (transactionData.metadata) {
+    Object.keys(transactionData.metadata).forEach(key => 
+      (transactionData.metadata[key] === undefined || transactionData.metadata[key] === null) && delete transactionData.metadata[key]
+    );
   }
 
   // Insert transaction
@@ -112,6 +171,7 @@ export async function logTransaction({ productType, userId, email, amount, metad
  * Creates an enrollment for a course buyer.
  * - Links enrollment to user and transaction.
  * - Returns enrollment record.
+ * - NOTE: Verify this data structure matches the exact 'enrollments' table schema.
  */
 export async function createEnrollment({ userId, transactionId, courseId }: {
   userId: string;
@@ -121,13 +181,15 @@ export async function createEnrollment({ userId, transactionId, courseId }: {
   // Get Supabase admin client
   const supabase = getAdminClient();
 
-  // Prepare enrollment data
+  // Prepare enrollment data (verify against actual schema)
   const enrollmentData = {
     user_id: userId,
     transaction_id: transactionId,
     course_id: courseId,
+    status: 'active', // Added default status
     enrolled_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    // updated_at: new Date().toISOString(), // Removed: Column likely doesn't exist
+    // expires_at, last_accessed_at, metadata can be added as needed
   };
 
   // Insert enrollment
@@ -140,6 +202,9 @@ export async function createEnrollment({ userId, transactionId, courseId }: {
   if (error) {
     throw new Error(`Failed to create enrollment: ${error.message}`);
   }
+
+  // Log successful enrollment
+  console.log(`[Enrollment] Successfully created enrollment ${enrollment?.id} for user ${userId}, transaction ${transactionId}, course ${courseId}`);
 
   return enrollment;
 }
@@ -157,22 +222,33 @@ export async function storeEbookContactInfo({ email, metadata }: {
   // Get Supabase admin client
   const supabase = getAdminClient();
 
-  // Prepare contact data
+  // Normalize email to lowercase before storing
+  const normalizedEmail = email.toLowerCase();
+
+  // Prepare contact data, extracting specific fields from metadata
   const contactData = {
-    email,
-    metadata: metadata || {},
+    email: normalizedEmail, // Use normalized email
+    first_name: metadata?.firstName || null, // Extract firstName
+    last_name: metadata?.lastName || null,  // Extract lastName
+    phone: metadata?.phone || null,        // Extract phone
+    metadata: metadata || {},              // Keep the full metadata too
     updated_at: new Date().toISOString(),
   };
 
-  // Upsert contact info (by email)
+  // Upsert contact info (by normalized email)
   const { data: contact, error } = await supabase
     .from('ebook_contacts')
-    .upsert(contactData, { onConflict: 'email' })
+    .upsert(contactData, { onConflict: 'email' }) // onConflict still uses the 'email' column name
     .select()
     .maybeSingle();
 
   if (error) {
-    throw new Error(`Failed to store ebook contact info: ${error.message}`);
+    // Log the full error object for detailed diagnostics
+    console.error("Supabase error in storeEbookContactInfo:", error);
+    // Construct a more informative error message
+    const errorMessage = error.message || 'Unknown error storing ebook contact info';
+    // Include stringified error details in the thrown error
+    throw new Error(`Failed to store ebook contact info: ${errorMessage}. Details: ${JSON.stringify(error)}`);
   }
 
   return contact;
@@ -184,12 +260,13 @@ export async function storeEbookContactInfo({ email, metadata }: {
  * - Updates previous ebook transactions to link to new userId.
  * - Returns userId and count of updated transactions.
  */
-export async function upgradeEbookBuyerToCourse({ email, name }: {
+export async function upgradeEbookBuyerToCourse({ email, firstName, lastName }: {
   email: string;
-  name: string;
+  firstName: string;
+  lastName?: string | null;
 }) {
   // 1. Ensure user and profile exist
-  const { userId } = await ensureAuthUserAndProfile({ email, name });
+  const { userId } = await ensureAuthUserAndProfile({ email, firstName, lastName });
 
   // 2. Get Supabase admin client
   const supabase = getAdminClient();
@@ -198,7 +275,7 @@ export async function upgradeEbookBuyerToCourse({ email, name }: {
   const { data, error }: { data: any[] | null; error: any } = await supabase
     .from('transactions')
     .update({ user_id: userId })
-    .eq('product_type', 'ebook')
+    .eq('transaction_type', 'ebook')
     .eq('contact_email', email);
 
   if (error) {

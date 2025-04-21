@@ -30,7 +30,6 @@ export default function PapersToProfit() {
     lastName: "",
     email: "",
     phone: "",
-    promoCode: "",
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
@@ -56,18 +55,18 @@ export default function PapersToProfit() {
     name: "Papers to Profits",
     description:
       "Learn to create and sell beautiful paper products that transform your homeschooling passion into a sustainable business",
-    fullPrice: 120000, // in cents (199.99)
+    fullPrice: 100000, // in cents (199.99)
     discountedPrice: 100000, // in cents (149.99)
     monthlyPrice: 4999, // in cents (49.99)
     duration: "8 weeks",
     startDate: "Immediate Access",
     features: [
       "Full course access for life",
-      "One-on-one coaching sessions",
+      "Over 20+ recorded videos to teach you everything you need to know",
       "Private community access",
       "Lifetime updates",
-      "Certificate of completion",
-      "Bonus: Design templates worth $97",
+      "Access to live classes",
+      "Bonus: Design templates worth Php 5000+",
     ],
   }
 
@@ -144,7 +143,12 @@ export default function PapersToProfit() {
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = "Email is invalid"
     }
-    if (!formData.phone) newErrors.phone = "Phone number is required"
+    if (!formData.phone) {
+      newErrors.phone = "Phone number is required"
+    } else if (!/^\+?[\d\s-()]{10,}$/.test(formData.phone)) { 
+      // Basic check: optional +, digits, spaces, hyphens, parens, at least 10 digits total (adjust regex as needed)
+      newErrors.phone = "Phone number format is invalid"
+    }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
@@ -161,7 +165,7 @@ export default function PapersToProfit() {
     try {
       // Get the price based on the selected plan
       const planPrice = selectedPlan === "full" 
-        ? courseDetails.discountedPrice 
+        ? courseDetails.fullPrice 
         : courseDetails.monthlyPrice;
       
       // Call the server action to create a payment intent with Xendit
@@ -170,13 +174,14 @@ export default function PapersToProfit() {
         currency: process.env.PAYMENT_CURRENCY || "PHP",
         paymentMethod: "invoice",
         email: formData.email,
-        name: `${formData.firstName} ${formData.lastName}`,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
         phone: formData.phone,
         description: `Papers to Profits Course - ${selectedPlan === "full" ? "Full Payment" : "Monthly Plan"}`,
         metadata: {
           plan: selectedPlan,
-          promo_code: formData.promoCode || "none",
           source: "website",
+          course_id: "7e386720-8839-4252-bd5f-09a33c3e1afb",
         },
       })
 
@@ -809,13 +814,7 @@ export default function PapersToProfit() {
                   <motion.div variants={fadeIn} className="space-y-4">
                     <div className="flex items-center gap-2">
                       <div className="text-3xl font-bold text-brand-purple">
-                        ₱{(courseDetails.discountedPrice / 100).toFixed(2)}
-                      </div>
-                      <div className="text-lg text-gray-500 line-through">
                         ₱{(courseDetails.fullPrice / 100).toFixed(2)}
-                      </div>
-                      <div className="bg-brand-pink/20 text-brand-purple px-2 py-1 rounded-full text-xs font-medium">
-                        Save {Math.round(100 - (courseDetails.discountedPrice / courseDetails.fullPrice) * 100)}%
                       </div>
                     </div>
 
@@ -933,34 +932,13 @@ export default function PapersToProfit() {
                       <Input
                         id="phone"
                         name="phone"
+                        type="tel"
                         value={formData.phone}
                         onChange={handleInputChange}
                         className={`bg-white ${errors.phone ? "border-red-500" : ""}`}
                         placeholder="+63 XXX XXX XXXX"
                       />
                       {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="promoCode" className="text-[#5d4037]">
-                        Promo Code (Optional)
-                      </Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="promoCode"
-                          name="promoCode"
-                          value={formData.promoCode}
-                          onChange={handleInputChange}
-                          className="bg-white"
-                          placeholder="Enter promo code"
-                        />
-                        <Button
-                          variant="outline"
-                          className="border-brand-purple text-brand-purple hover:bg-brand-purple/10"
-                        >
-                          Apply
-                        </Button>
-                      </div>
                     </div>
 
                     <div className="bg-brand-purple/5 rounded-lg p-4 flex items-center text-sm text-[#6d4c41]">

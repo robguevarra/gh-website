@@ -1,179 +1,57 @@
-"use client"
-
-import { useEffect, useState, Suspense } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { motion } from "framer-motion"
-import { CheckCircle, ArrowLeft, Loader } from "lucide-react"
+import { CheckCircle, ArrowLeft, Loader, XCircle } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { getTransactionByExternalId, TransactionDetails } from "@/app/actions/payment-actions"
+import { Suspense } from "react" // Keep Suspense for potential future client needs
 
-// Separate component that uses useSearchParams to handle client-side navigation
-function PaymentVerification() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const [isVerifying, setIsVerifying] = useState(true)
-  const [isCreatingAccount, setIsCreatingAccount] = useState(false)
-  const [accountCreated, setAccountCreated] = useState(false)
-  const [paymentDetails, setPaymentDetails] = useState<{
-    id: string;
-    status: string;
-    amount?: number;
-    email?: string;
-    firstName?: string;
-    lastName?: string;
-    phone?: string;
-    membershipTierId?: string;
-  } | null>(null)
+// Define props for the page
+interface PaymentSuccessPageProps {
+  searchParams: { [key: string]: string | string[] | undefined };
+}
 
-  useEffect(() => {
-    // Get the payment ID from the URL
-    const paymentId = searchParams.get("id")
-    
-    if (!paymentId) {
-      // If no payment ID is provided, redirect to home
-      router.push("/")
-      return
-    }
-    
-    // Verify the payment status with our API
-    const verifyPayment = async () => {
-      try {
-        setIsVerifying(true)
-        
-        // Call our API to check payment status
-        const response = await fetch(`/api/payments/status?id=${paymentId}`)
-        const data = await response.json()
-        
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Failed to verify payment")
-        }
-        
-        // Set payment details from the API response
-        setPaymentDetails({
-          id: data.data.id,
-          status: data.data.status.toLowerCase(),
-          amount: data.data.amount,
-          email: data.data.customer_email,
-          firstName: data.data.customer_first_name,
-          lastName: data.data.customer_last_name,
-          phone: data.data.customer_phone,
-          membershipTierId: data.data.membership_tier_id,
-        })
+// Loading component (can be reused)
+function LoadingState() {
+  return (
+    <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
+        <Loader className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
+        <h2 className="text-xl font-serif text-[#5d4037]">Loading Payment Confirmation...</h2>
+        <p className="text-[#6d4c41] mt-2">Please wait a moment.</p>
+      </div>
+    </div>
+  );
+}
 
-        // If payment is successful and has an email, create account
-        if (data.data.status.toLowerCase() === 'succeeded' && data.data.customer_email) {
-          await createUserAccount(data.data)
-        }
-      } catch (error) {
-        console.error("Failed to verify payment:", error)
-        // If verification fails, redirect to failure page
-        router.push(`/payment-failure?id=${paymentId}&error=verification_failed`)
-      } finally {
-        setIsVerifying(false)
-      }
-    }
-    
-    verifyPayment()
-  }, [router, searchParams])
+// Main page component - now an async Server Component
+export default async function PaymentSuccessPage({ searchParams }: PaymentSuccessPageProps) {
+  // Await searchParams before accessing properties
+  const awaitedSearchParams = await searchParams;
+  const externalId = typeof awaitedSearchParams.id === 'string' ? awaitedSearchParams.id : undefined;
+  let transaction: TransactionDetails | null = null;
+  let errorMessage: string | null = null;
 
-  // Function to create a user account after successful payment
-  const createUserAccount = async (paymentData: any) => {
-    if (!paymentData.customer_email) return
-
-    try {
-      setIsCreatingAccount(true)
-      
-      // Call our API to create the account
-      const response = await fetch('/api/payment-webhooks/create-account', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: paymentData.customer_email,
-          firstName: paymentData.customer_first_name,
-          lastName: paymentData.customer_last_name,
-          phone: paymentData.customer_phone,
-          membershipTierId: paymentData.membership_tier_id,
-        }),
-      })
-      
-      const result = await response.json()
-      
-      if (!response.ok) {
-        console.error('Failed to create account:', result.error)
-      } else {
-        setAccountCreated(true)
-      }
-    } catch (error) {
-      console.error('Error creating account:', error)
-    } finally {
-      setIsCreatingAccount(false)
+  if (!externalId) {
+    errorMessage = "Payment reference ID is missing.";
+  } else {
+    transaction = await getTransactionByExternalId(externalId);
+    if (!transaction) {
+      errorMessage = `Could not retrieve transaction details for ID: ${externalId}. Please contact support.`;
+    } else if (transaction.status !== 'paid' && transaction.status !== 'completed') {
+      // Even if redirected here, if our backend hasn't confirmed via webhook, show pending/error
+      errorMessage = `Payment status is currently ${transaction.status}. Please wait a few moments or contact support if this persists.`;
+      // Optionally redirect to failure page: redirect(`/payment-failure?id=${externalId}&error=status_pending`);
     }
   }
 
-  if (isVerifying) {
+  // Handle errors or missing transaction
+  if (errorMessage) {
     return (
       <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-          <Loader className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
-          <h2 className="text-xl font-serif text-[#5d4037]">Verifying your payment...</h2>
-          <p className="text-[#6d4c41] mt-2">Please wait while we confirm your payment.</p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="max-w-md w-full bg-white rounded-xl shadow-lg p-8"
-      >
-        <div className="text-center space-y-6">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ duration: 0.5, type: "spring" }}
-            className="w-20 h-20 rounded-full bg-[#f0e6dd] flex items-center justify-center mx-auto"
-          >
-            <CheckCircle className="h-10 w-10 text-[#ad8174]" />
-          </motion.div>
-
-          <div className="space-y-2">
-            <h1 className="text-2xl font-serif text-[#5d4037]">Payment Successful!</h1>
-            <p className="text-[#6d4c41]">
-              Thank you for enrolling in Papers to Profits. Your payment has been processed successfully.
-            </p>
-          </div>
-
-          {paymentDetails && (
-            <div className="bg-[#f0e6dd] rounded-lg p-4 text-sm text-[#6d4c41]">
-              <p className="font-medium mb-2">Payment Details:</p>
-              <p>Order ID: {paymentDetails.id}</p>
-              {paymentDetails.amount && (
-                <p>Amount: ${(paymentDetails.amount / 100).toFixed(2)}</p>
-              )}
-              <p className="mt-2">A confirmation email has been sent to your email address with all the details.</p>
-              
-              {isCreatingAccount && (
-                <p className="mt-2 flex items-center justify-center">
-                  <Loader className="h-4 w-4 animate-spin mr-2" />
-                  Setting up your account...
-                </p>
-              )}
-              
-              {accountCreated && paymentDetails.email && (
-                <p className="mt-2 font-medium">
-                  We've sent an email to {paymentDetails.email} with instructions to set up your account.
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="pt-4">
+          <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-serif text-[#5d4037]">Confirmation Error</h1>
+          <p className="text-[#6d4c41] mt-2">{errorMessage}</p>
+          <div className="pt-6">
             <Link href="/">
               <Button className="bg-[#ad8174] hover:bg-[#8d6e63] text-white">
                 <ArrowLeft className="h-4 w-4 mr-2" />
@@ -182,30 +60,84 @@ function PaymentVerification() {
             </Link>
           </div>
         </div>
-      </motion.div>
-    </div>
-  )
-}
+      </div>
+    );
+  }
 
-// Loading fallback for Suspense
-function LoadingFallback() {
+  // Successful state - transaction details are available
+  const firstName = transaction?.metadata?.firstName || 'Valued Customer';
+  const amountPaid = transaction?.amount; // Already in base units (cents for PHP)
+  const currency = transaction?.currency || 'PHP'; // Default currency
+  const productType = transaction?.metadata?.product_type as string | undefined; // e.g., 'ebook', 'course'
+  const productId = transaction?.metadata?.product_id as string | undefined; // e.g., 'canva-ebook-01', 'p2p-course'
+
+  // --- Determine Product Specific Details ---
+  let productName = "Your Purchase";
+  let confirmationLine1 = `Thank you, ${firstName}, for your purchase!`;
+  let confirmationLine2 = "You should receive a confirmation email shortly with access details.";
+
+  // TODO: Refactor product details into a separate config/helper if more products are added
+  if (productId === "canva-ebook-01") {
+    productName = "My Canva Business Ebook";
+    confirmationLine1 = `Thank you, ${firstName}, for purchasing the ${productName}!`;
+    confirmationLine2 = "You should receive an email shortly with the download link for your ebook.";
+  } else if (productId === "p2p-course-01" || productType === 'course') { // Assuming 'p2p-course-01' is the ID for Papers to Profits
+    productName = "Papers to Profits Course";
+    confirmationLine1 = `Thank you, ${firstName}, for enrolling in ${productName}!`;
+    confirmationLine2 = "Your enrollment is confirmed. You should receive a confirmation email shortly with details on how to access the course materials.";
+  }
+  // Add more else if blocks for other products
+
+  // Format amount correctly (assuming amountPaid is the primary unit for PHP)
+  const formattedAmount = amountPaid !== null && amountPaid !== undefined 
+     ? new Intl.NumberFormat('en-PH', { style: 'currency', currency: currency }).format(amountPaid)
+     : 'N/A';
+
   return (
     <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-        <Loader className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
-        <h2 className="text-xl font-serif text-[#5d4037]">Loading payment information...</h2>
-        <p className="text-[#6d4c41] mt-2">Please wait a moment.</p>
+      {/* Motion can be added back with a Client Component wrapper if desired */}
+      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
+        <div className="text-center space-y-6">
+          <div className="w-20 h-20 rounded-full bg-[#f0e6dd] flex items-center justify-center mx-auto">
+            <CheckCircle className="h-10 w-10 text-[#ad8174]" />
+          </div>
+
+          <div className="space-y-2">
+            <h1 className="text-2xl font-serif text-[#5d4037]">Payment Successful!</h1>
+            <p className="text-[#6d4c41]">
+              {/* Dynamic confirmation line 1 */}
+              {confirmationLine1}
+            </p>
+          </div>
+
+          <div className="bg-[#f0e6dd] rounded-lg p-4 text-sm text-[#6d4c41]">
+            <p className="font-medium mb-2">Confirmation Details:</p>
+            <p>Product: {productName}</p> {/* Added Product Name */}
+            <p>Order Reference: {transaction?.external_id || 'N/A'}</p>
+            {amountPaid !== null && amountPaid !== undefined && (
+              <p>Amount Paid: {formattedAmount}</p> // Use formatted amount
+            )}
+            <p className="mt-2">
+              {/* Dynamic confirmation line 2 */}
+              {confirmationLine2}
+            </p>
+          </div>
+
+          <div className="pt-4">
+            {/* TODO: Add relevant links, e.g., to a student dashboard or course page */}
+            <Link href="/"> 
+              <Button className="bg-[#ad8174] hover:bg-[#8d6e63] text-white">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Return to Home
+              </Button>
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
-  )
+  );
 }
 
-// Main page component that uses Suspense boundary
-export default function PaymentSuccessPage() {
-  return (
-    <Suspense fallback={<LoadingFallback />}>
-      <PaymentVerification />
-    </Suspense>
-  )
-}
+// Removed client-side components (PaymentVerification) and Suspense wrapper for now
+// as the main logic is handled server-side.
 

@@ -208,6 +208,88 @@ CREATE INDEX idx_enrollments_user_course ON enrollments (user_id, course_id);
 - [x] Add appropriate indexes for common queries
 - [x] Implement constraints
 
+### 3.5 Create Ebook Contacts Table (Added for Ebook Purchases)
+
+#### Table: ebook_contacts
+- **Purpose:** Stores contact information for users who purchase ebooks, primarily for email delivery and future marketing, independent of the unified_profiles used for course enrollments.
+- **Fields:**
+  - `email` TEXT NOT NULL PRIMARY KEY (Unique email of the buyer, normalized to lowercase)
+  - `first_name` TEXT (Extracted from transaction metadata if available)
+  - `last_name` TEXT (Extracted from transaction metadata if available)
+  - `phone` TEXT (Extracted from transaction metadata if available)
+  - `metadata` JSONB DEFAULT '{}'::jsonb (Stores additional details like product ID, source)
+  - `created_at` TIMESTAMPTZ NOT NULL DEFAULT now() (When contact first added)
+  - `updated_at` TIMESTAMPTZ NOT NULL DEFAULT now() (When contact last updated)
+- **Indexes:**
+  - CREATE INDEX ON `ebook_contacts` (`created_at`)
+- **Constraints:**
+  - NOT NULL for required fields (`email`, `created_at`, `updated_at`)
+  - PRIMARY KEY (`email`)
+  - CHECK (email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$') for valid email format
+
+#### Example DDL (PostgreSQL)
+```sql
+-- Table: ebook_contacts
+-- Purpose: Stores contact information for users who purchase ebooks,
+-- primarily for email delivery and future marketing.
+
+CREATE TABLE public.ebook_contacts (
+  email TEXT NOT NULL PRIMARY KEY,            -- Unique email of the buyer, acts as primary key
+  first_name TEXT,                            -- First name, extracted from transaction metadata if available
+  last_name TEXT,                             -- Last name, extracted from transaction metadata if available
+  phone TEXT,                                 -- Phone number, extracted from transaction metadata if available
+  metadata JSONB DEFAULT '{}'::jsonb,         -- Stores additional details like product ID, source, etc.
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(), -- Timestamp when the contact was first added
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), -- Timestamp when the contact info was last updated (by upsert)
+
+  CONSTRAINT ebook_contacts_email_check CHECK (email ~* '^[^@\s]+@[^@\s]+\.[^@\s]+$') -- Basic email format validation
+);
+
+-- Indexes
+CREATE INDEX idx_ebook_contacts_created_at ON public.ebook_contacts (created_at);
+
+-- Comments
+COMMENT ON TABLE public.ebook_contacts IS 'Stores contact information for ebook purchasers for delivery and marketing.';
+COMMENT ON COLUMN public.ebook_contacts.email IS 'Unique email address of the ebook buyer.';
+COMMENT ON COLUMN public.ebook_contacts.metadata IS 'Stores additional metadata related to the purchase (e.g., product ID, source).';
+COMMENT ON COLUMN public.ebook_contacts.updated_at IS 'Tracks the last time the contact record was updated.';
+
+-- Enable Row Level Security (RLS) - Recommended
+ALTER TABLE public.ebook_contacts ENABLE ROW LEVEL SECURITY;
+
+-- Grant access permissions (Example: allow service_role full access)
+-- Adjust permissions based on your application's needs.
+-- Authenticated users might not need direct access, only service roles.
+GRANT ALL ON TABLE public.ebook_contacts TO service_role;
+GRANT SELECT ON TABLE public.ebook_contacts TO authenticated; -- Adjust if needed
+-- Add policies as necessary, e.g., service role bypasses RLS
+
+-- Function to automatically update 'updated_at' timestamp
+CREATE OR REPLACE FUNCTION public.handle_ebook_contacts_update()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger to update 'updated_at' on modification
+CREATE TRIGGER on_ebook_contacts_update
+BEFORE UPDATE ON public.ebook_contacts
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_ebook_contacts_update();
+```
+// Comments:
+// - This table specifically handles contacts from standalone ebook purchases.
+// - It is distinct from unified_profiles which is linked to Supabase Auth and course enrollments.
+// - Email is the primary key, ensuring uniqueness.
+// - Metadata JSONB field allows storing purchase specifics (e.g., ebook ID).
+// - Timestamp trigger ensures updated_at reflects the latest modification.
+
+- [x] Design and create `ebook_contacts` table with required fields
+- [x] Add appropriate indexes
+- [x] Implement constraints and timestamp trigger
+
 ### 4. Create Analytics Views (Executed)
 
 #### View: monthly_enrollments_view
