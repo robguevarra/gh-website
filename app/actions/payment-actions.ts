@@ -2,6 +2,8 @@
 
 // This is a server action to handle payment processing with Xendit
 
+import { getAdminClient } from '@/lib/supabase/admin';
+
 // Define payment method types
 export type PaymentMethod = "invoice" | "card" | "ewallet" | "direct_debit"
 
@@ -158,20 +160,44 @@ export async function verifyWebhookSignature(payload: any, signature: string): P
 
 // Function to handle payment status updates
 export async function updatePaymentStatus(paymentId: string, status: string): Promise<boolean> {
+  // Use Supabase admin client for secure server-side DB access
+  const supabase = getAdminClient();
+
+  // Map incoming status to normalized enum
+  // 'paid' (from Xendit) should be stored as 'completed' in our schema
+  const normalizedStatus = status === 'paid' ? 'completed' : status;
+
   try {
-    // Here you would update your database with the payment status
-    // This is a placeholder for the actual implementation
-    console.log(`Payment ${paymentId} status updated to ${status}`)
-    
-    // In a real implementation, you would:
-    // 1. Update the payment status in your database
-    // 2. Send confirmation emails
-    // 3. Grant access to the course
-    
-    return true
+    // Prepare update object
+    const updateObj: Record<string, any> = { status: normalizedStatus };
+    // If status is 'completed', set paid_at to now (ISO string)
+    if (normalizedStatus === 'completed') {
+      updateObj.paid_at = new Date().toISOString();
+    }
+
+    // Update the transaction by external_id (Xendit paymentId)
+    const { error, data } = await supabase
+      .from('transactions')
+      .update(updateObj)
+      .eq('external_id', paymentId)
+      .select();
+
+    if (error) {
+      console.error(`Failed to update payment status for ${paymentId}:`, error);
+      return false;
+    }
+
+    // Log for audit/debugging
+    console.log(
+      `Payment ${paymentId} status updated to ${normalizedStatus}` +
+        (normalizedStatus === 'completed' ? ' and paid_at set.' : '.')
+    );
+
+    return true;
   } catch (error) {
-    console.error("Failed to update payment status:", error)
-    return false
+    // Log unexpected errors
+    console.error('Failed to update payment status:', error);
+    return false;
   }
 }
 

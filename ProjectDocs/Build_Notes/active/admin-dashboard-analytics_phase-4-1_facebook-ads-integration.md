@@ -174,6 +174,18 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
 **Next Step:**
 - Integrate the same CAPI function for `InitiateCheckout` (when user starts checkout) and `Purchase` (after payment success) events in the app. This will provide full-funnel tracking for Facebook Ads attribution.
 
+#### 2.3 Facebook CAPI Edge Function: End-to-End Test & Production Readiness (2024-04-20)
+
+- **App-Friendly Input:** The function now accepts a simple, flat payload from the app or Postman (with keys like `eventName`, `eventSourceUrl`, `userData`, etc.).
+- **Validation & Transformation:** The function validates the input, hashes PII, builds the correct Facebook API payload, and sends it to Facebook CAPI.
+- **Clear Output:** Returns a clear JSON response: `{ success: true, eventId, eventName, fbResponse }` on success, or a detailed error object on failure.
+- **Tested:** A test event was sent from the app/Postman, received a success response, and appeared in Facebook Events Manager.
+- **Hybrid Tracking:** Both Facebook Pixel (browser) and CAPI (server) are now running for maximum attribution accuracy.
+- **Production-Ready:** The function is now production-ready for `ViewContent` events from the landing page.
+
+**Next:**
+- Integrate the same CAPI function for `InitiateCheckout` (when user starts checkout) and `Purchase` (after payment success) events in the app for full-funnel Facebook Ads tracking and attribution.
+
 ### 3. Facebook Marketing API Integration (Metadata & Spend)
 *Goal: Periodically fetch campaign structure and spend data to enrich our database.* 
 *Best Practice: Use scheduled tasks, handle pagination/rate limits, store credentials securely.* 
