@@ -11,32 +11,28 @@ import { getAdminClient } from "@/lib/supabase/admin"
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the request body
+    // Log incoming request
+    console.log("[Webhook] Incoming request headers:", Object.fromEntries(request.headers.entries()))
     const body = await request.json()
-    
+    console.log("[Webhook] Incoming request body:", JSON.stringify(body, null, 2))
     // Get the Xendit signature from headers
     const signature = request.headers.get("x-callback-token") || ""
-    
     // Verify the webhook signature
     const isValid = await verifyWebhookSignature(body, signature)
-    
+    console.log(`[Webhook] Signature valid:`, isValid)
     if (!isValid) {
-      console.error("Invalid webhook signature")
+      console.error("[Webhook] Invalid webhook signature")
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
     }
-    
     // Process the webhook based on the event type
     const { event, data } = body
-    
-    console.log(`Received Xendit webhook: ${event}`, {
+    console.log(`[Webhook] Received Xendit webhook: ${event}`, {
       id: data?.id,
       status: data?.status,
       external_id: data?.external_id,
     })
-    
     // Get Supabase admin client
     const supabase = getAdminClient()
-    
     // Handle different event types
     switch (event) {
       case "invoice.paid": {
@@ -48,7 +44,9 @@ export async function POST(request: NextRequest) {
           .maybeSingle()
         let tx = transaction
         if (txError) {
-          console.error("Error fetching transaction:", txError)
+          console.error("[Webhook] Error fetching transaction:", txError)
+        } else {
+          console.log("[Webhook] Transaction fetched:", tx)
         }
         // 2. If not found, log it
         if (!tx) {
@@ -61,12 +59,14 @@ export async function POST(request: NextRequest) {
               amount: data.amount || 0,
               metadata: data.metadata || {},
             })
+            console.log("[Webhook] Transaction logged via logTransaction:", tx)
           } catch (err) {
-            console.error("Failed to log transaction from webhook:", err)
+            console.error("[Webhook] Failed to log transaction from webhook:", err)
           }
         }
         // 3. If still no transaction, abort
         if (!tx) {
+          console.error("[Webhook] Transaction not found or could not be logged. Aborting.")
           return NextResponse.json({ error: "Transaction not found or could not be logged" }, { status: 400 })
         }
         // 4. Handle by product type
@@ -82,60 +82,76 @@ export async function POST(request: NextRequest) {
               userId = ensuredUserId
               // Optionally update transaction with userId
               await supabase.from("transactions").update({ user_id: userId }).eq("id", tx.id)
+              console.log("[Webhook] User/profile ensured and transaction updated with userId:", userId)
             } catch (err) {
-              console.error("Failed to ensure user/profile:", err)
+              console.error("[Webhook] Failed to ensure user/profile:", err)
             }
+          } else {
+            console.log("[Webhook] User already present on transaction:", userId)
           }
           // Create enrollment
           if (userId) {
             try {
-              await createEnrollment({
+              const enrollment = await createEnrollment({
                 userId,
                 transactionId: tx.id,
                 courseId: tx.metadata?.course_id || "default-course-id",
               })
+              console.log("[Webhook] Enrollment created:", enrollment)
             } catch (err) {
-              console.error("Failed to create enrollment:", err)
+              console.error("[Webhook] Failed to create enrollment:", err)
             }
           }
           // If this user previously bought an ebook, upgrade their transactions
           try {
-            await upgradeEbookBuyerToCourse({
+            const upgradeResult = await upgradeEbookBuyerToCourse({
               email: tx.contact_email || tx.email,
               name: tx.metadata?.name || "Course Buyer",
             })
+            console.log("[Webhook] Upgrade ebook buyer to course result:", upgradeResult)
           } catch (err) {
-            console.error("Failed to upgrade ebook buyer to course:", err)
+            console.error("[Webhook] Failed to upgrade ebook buyer to course:", err)
           }
         } else if (tx.product_type === "ebook") {
           // Store ebook contact info
           try {
-            await storeEbookContactInfo({
+            const contact = await storeEbookContactInfo({
               email: tx.contact_email || tx.email,
               metadata: tx.metadata || {},
             })
+            console.log("[Webhook] Ebook contact info stored:", contact)
           } catch (err) {
-            console.error("Failed to store ebook contact info:", err)
+            console.error("[Webhook] Failed to store ebook contact info:", err)
           }
         }
         // Always update payment status
-        await updatePaymentStatus(data.external_id, "paid")
+        try {
+          await updatePaymentStatus(data.external_id, "paid")
+          console.log("[Webhook] Payment status updated to 'paid' for:", data.external_id)
+        } catch (err) {
+          console.error("[Webhook] Failed to update payment status:", err)
+        }
         break
       }
       case "invoice.expired": {
         // Payment expired
-        await updatePaymentStatus(data.external_id, "expired")
+        try {
+          await updatePaymentStatus(data.external_id, "expired")
+          console.log("[Webhook] Payment status updated to 'expired' for:", data.external_id)
+        } catch (err) {
+          console.error("[Webhook] Failed to update payment status:", err)
+        }
         break
       }
       default:
         // Log unknown events
-        console.log(`Unhandled Xendit webhook event: ${event}`)
+        console.log(`[Webhook] Unhandled Xendit webhook event: ${event}`)
     }
-    
     // Return a success response
+    console.log("[Webhook] Handler completed successfully.")
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error processing Xendit webhook:", error)
+    console.error("[Webhook] Error processing Xendit webhook:", error)
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
