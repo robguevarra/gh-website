@@ -22,26 +22,35 @@ Document and implement the unified payment and enrollment flow in `payment-actio
 
 ## Implementation Plan
 
-1. **Auth User Creation**
+1. **Create Modular Utility Functions**
+   - [x] Implement modular, reusable utility functions for:
+     - [x] Ensuring Auth user and profile creation for course buyers (`ensureAuthUserAndProfile`)
+     - [x] Logging transactions for both product types (`logTransaction`)
+     - [x] Creating enrollments for course buyers (`createEnrollment`)
+     - [x] Storing contact info for ebook buyers (`storeEbookContactInfo`)
+     - [x] Handling upgrade path for ebook-to-course conversion (`upgradeEbookBuyerToCourse`)
+   - Keep each function focused and well-documented.
+
+2. **Auth User Creation**
    - For course purchases ("Papers to Profits"), check if the user exists in `auth.users` by email.
    - If not, create the Auth user (with confirmed status).
    - Upsert the user's profile in `unified_profiles`.
    - For ebook purchases, do NOT create an Auth user or unified profile.
 
-2. **Transaction Logging**
+3. **Transaction Logging**
    - Log all transactions in the `transactions` table.
    - For course buyers, set `user_id` to the Auth user's ID.
    - For ebook buyers, set `user_id` to `NULL` and store their email in a `contact_email` or `metadata` field.
 
-3. **Enrollment Creation**
+4. **Enrollment Creation**
    - For completed course transactions, create an enrollment in the `enrollments` table, linking to the user and transaction.
    - For ebook transactions, do NOT create an enrollment.
 
-4. **Upgrade Path**
+5. **Upgrade Path**
    - If an ebook buyer later purchases the course, create the Auth user and profile at that time.
    - Optionally, update previous transactions to link to the new user ID for a unified customer record.
 
-5. **Testing and Validation**
+6. **Testing and Validation**
    - Test with both product types to ensure correct account, transaction, and enrollment handling.
    - Validate that analytics and BI queries work as expected for both user and non-user transactions.
 
@@ -59,6 +68,14 @@ Document and implement the unified payment and enrollment flow in `payment-actio
 - [ ] Metadata/contact info storage for ebook buyers
 - [ ] Upgrade path for ebook-to-course conversion
 - [ ] Testing and validation for all flows
+
+---
+
+### Progress Update (May 30, 2024)
+- All modular utility functions are now implemented, robust, and well-commented:
+  - `ensureAuthUserAndProfile`, `logTransaction`, `createEnrollment`, `storeEbookContactInfo`, `upgradeEbookBuyerToCourse`.
+- Code is clean, modular, and follows project and industry best practices.
+- **Next step:** Integrate and test these utilities in the main payment and enrollment flow (e.g., in `payment-actions.ts`).
 
 ---
 
