@@ -63,7 +63,7 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
 *Environment Variables: Use `FB_CAPI_ACCESS_TOKEN` for the CAPI Access Token and `FB_PIXEL_ID` for the Facebook Pixel ID.*
 
 - [x] **Configure Facebook Assets:** Obtain `FB_PIXEL_ID` and generate `FB_CAPI_ACCESS_TOKEN`. Stored in environment variables.
-- [ ] **Server-Side Event Implementation:**
+- [x] **Server-Side Event Implementation:**
     - **Technology Choice:** Implement using Supabase Edge Functions for server-side execution, triggered by relevant backend actions or page loads. Use standard `fetch` API for HTTP requests.
     - **Targeted Events & Triggers:** Based on the current user flow (Facebook Ad -> Messenger/ManyChat -> Website), we will implement the following standard CAPI events triggered by specific *website* actions:
         - **`ViewContent`**: Trigger when the primary landing page (`/papers-to-profits`) is loaded server-side. This indicates significant content engagement after arriving from an external source (like ManyChat).
@@ -93,8 +93,6 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
     - **Custom Data Parameters (`custom_data` object):**
         - **`Purchase` Event:** Must include `currency` (e.g., 'USD') and `value` (e.g., 99.99).
         - *(Potentially add custom parameters if needed, e.g., product SKU)*.
-    - **Frontend Integration Update (2024-06-03):**
-        - The landing page payment form now captures Facebook `_fbp` and `_fbc` cookies and includes them in the payment intent metadata. This ensures these values are available to the backend for CAPI attribution after payment confirmation.
 - [ ] **Security:** Store `FB_CAPI_ACCESS_TOKEN` securely using Supabase Vault in production (environment variables acceptable for local development). Ensure the Edge Function handling CAPI calls is properly secured.
 - [ ] **Validation:** Use Facebook's Events Manager -> Test Events tool *during development* to send test events from the Edge Function and verify they are received correctly by Facebook, checking parameter matching and hashing.
 - [ ] **Error Handling & Logging:** Implement robust logging within the Edge Function. Log successful event sends (with `event_id`) and detailed error messages (including Facebook API response if available) for failed requests. Consider retries for transient network errors.
@@ -192,9 +190,11 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
 *Goal: Periodically fetch campaign structure and spend data to enrich our database.* 
 *Best Practice: Use scheduled tasks, handle pagination/rate limits, store credentials securely.* 
 
-- [ ] **Configure Facebook App:** Create a Facebook App, request necessary Marketing API permissions (e.g., `ads_read`). Generate a non-expiring System User Access Token or manage User Tokens.
+- [ ] **Configure Facebook App:** Create a Facebook App, request necessary Marketing API permissions (e.g., `ads_read`). Generate a non-expiring System User Access Token or manage User Tokens. (Credentials added to .env)
 - [ ] **Develop Fetching Script/Function:**
-    - Create a scheduled task (e.g., daily Supabase Edge Function via `pg_cron`, or external service).
+    - **Technology Choice:** Create a scheduled **Supabase Edge Function** (e.g., `fetch-facebook-ads-data`) triggered via `pg_cron` (e.g., daily).
+    - **API Interaction Method:** Use standard `fetch` calls to the Facebook Graph API endpoints. 
+        - *Rationale:* While the official SDK (`facebook-nodejs-business-sdk`) is generally best practice, potential compatibility issues with the Deno runtime in Supabase Edge Functions make direct `fetch` calls a more reliable approach in this specific environment. We will manually handle endpoint calls, pagination, and rate limiting.
     - Implement logic to call Marketing API endpoints to fetch:
         - Active/paused Campaigns (`/act_{ad_account_id}/campaigns`)
         - Active/paused Ad Sets (`/act_{ad_account_id}/adsets`)
@@ -254,23 +254,18 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
 
 ## Completion Status
 
-This phase is **In Progress**.
+This phase is **In Progress**. CAPI events for ViewContent, InitiateCheckout, and Purchase are implemented and validated.
 
-**2024-06-03 Update:**
-- The frontend now reliably captures and passes Facebook attribution cookies (`_fbp`, `_fbc`) to the backend during checkout. This enables accurate CAPI Purchase event attribution in the next backend step.
+**2024-06-03 Updates:**
+- Frontend captures `_fbp`/`_fbc` and sends `InitiateCheckout` to CAPI Edge Function.
+- Backend webhook sends `Purchase` event to CAPI Edge Function using stored metadata.
+- Edge Function validates `_fbp`/`_fbc` format, resolving Facebook API errors.
 
-Challenges anticipated:
-- Technical complexity of correctly implementing server-side CAPI with user data hashing.
-- Debugging event matching issues within Facebook Events Manager.
-- Reliably extracting correct ad attribution identifiers (`fbc` parsing or API lookups).
-- Handling Facebook API rate limits, errors, and potential changes.
+## Next Steps
 
-## Next Steps After Completion
-With the Facebook Ads data pipeline and schema established, the next logical step is Phase 4-2: Shopify Data Integration, focusing on bringing in sales and customer data from Shopify.
-
-1. Integrate backend logic in the payment webhook handler to send the Facebook CAPI `Purchase` event after payment confirmation, using the captured `fbp` and `fbc` from transaction metadata.
-2. Test end-to-end: confirm CAPI `Purchase` events appear in Facebook Events Manager after successful payments.
-3. Continue with Marketing API integration for campaign/ad metadata and spend ingestion.
+1.  **Continue with Marketing API integration** for campaign/ad metadata and spend ingestion (Step 3 in Implementation Plan).
+2.  **Develop Attribution Data Processing Logic** (Step 4 in Implementation Plan) to link CAPI events/transactions to ad campaigns/adsets/ads in the `ad_attributions` table.
+3.  **Perform Initial Data Backfill & Validation** (Step 5 in Implementation Plan) for Marketing API data and verify the full pipeline.
 
 ---
 
