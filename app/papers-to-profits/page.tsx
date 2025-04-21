@@ -114,8 +114,12 @@ export default function PapersToProfit() {
     })
       .then(res => res.json())
       .then(data => {
-        // Optionally log for debugging
-        // console.log('Facebook CAPI event sent:', data);
+        // TEMP LOGS: Output captured fbp and fbc cookies for debugging
+        // Remove these logs after confirming correct capture
+        console.log('[DEBUG] Facebook _fbp cookie:', getCookie('_fbp'));
+        console.log('[DEBUG] Facebook _fbc cookie:', getCookie('_fbc'));
+      
+        // ------------------------------------------------------------------------
       })
       .catch(err => {
         // Optionally log errors
@@ -167,7 +171,51 @@ export default function PapersToProfit() {
       const planPrice = selectedPlan === "full" 
         ? courseDetails.fullPrice 
         : courseDetails.monthlyPrice;
-      
+
+      // --- Facebook Attribution: Capture fbp/fbc cookies for CAPI attribution ---
+      function getCookie(name: string) {
+        const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? match[2] : undefined;
+      }
+      const fbp = getCookie('_fbp');
+      const fbc = getCookie('_fbc');
+      // ------------------------------------------------------------------------
+
+      // --- Facebook CAPI: Send InitiateCheckout event ---
+      // This is best practice: fire when user starts checkout (form submit)
+      try {
+        const capiPayload = {
+          eventName: 'InitiateCheckout',
+          eventSourceUrl: window.location.href,
+          userData: {
+            email: formData.email,
+            phone: formData.phone,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            clientUserAgent: navigator.userAgent,
+            fbp,
+            fbc,
+          },
+          customData: {
+            currency: process.env.PAYMENT_CURRENCY || 'PHP',
+            value: planPrice / 100,
+            plan: selectedPlan,
+            course_id: '7e386720-8839-4252-bd5f-09a33c3e1afb',
+          },
+        };
+        const functionUrl = 'https://cidenjydokpzpsnpywcf.functions.supabase.co/send-facebook-capi-event';
+        fetch(functionUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(capiPayload),
+        })
+        // No need to await; fire-and-forget for tracking
+      } catch (capiErr) {
+        // Log but do not block checkout
+        console.error('[CAPI] Failed to send InitiateCheckout event:', capiErr);
+      }
+      // ------------------------------------------------------------------------
+
       // Call the server action to create a payment intent with Xendit
       const response = await createPaymentIntent({
         amount: planPrice,
@@ -182,6 +230,8 @@ export default function PapersToProfit() {
           plan: selectedPlan,
           source: "website",
           course_id: "7e386720-8839-4252-bd5f-09a33c3e1afb",
+          ...(fbp && { fbp }),
+          ...(fbc && { fbc }),
         },
       })
 

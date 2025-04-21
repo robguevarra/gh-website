@@ -93,6 +93,8 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
     - **Custom Data Parameters (`custom_data` object):**
         - **`Purchase` Event:** Must include `currency` (e.g., 'USD') and `value` (e.g., 99.99).
         - *(Potentially add custom parameters if needed, e.g., product SKU)*.
+    - **Frontend Integration Update (2024-06-03):**
+        - The landing page payment form now captures Facebook `_fbp` and `_fbc` cookies and includes them in the payment intent metadata. This ensures these values are available to the backend for CAPI attribution after payment confirmation.
 - [ ] **Security:** Store `FB_CAPI_ACCESS_TOKEN` securely using Supabase Vault in production (environment variables acceptable for local development). Ensure the Edge Function handling CAPI calls is properly secured.
 - [ ] **Validation:** Use Facebook's Events Manager -> Test Events tool *during development* to send test events from the Edge Function and verify they are received correctly by Facebook, checking parameter matching and hashing.
 - [ ] **Error Handling & Logging:** Implement robust logging within the Edge Function. Log successful event sends (with `event_id`) and detailed error messages (including Facebook API response if available) for failed requests. Consider retries for transient network errors.
@@ -254,6 +256,9 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
 
 This phase is **In Progress**.
 
+**2024-06-03 Update:**
+- The frontend now reliably captures and passes Facebook attribution cookies (`_fbp`, `_fbc`) to the backend during checkout. This enables accurate CAPI Purchase event attribution in the next backend step.
+
 Challenges anticipated:
 - Technical complexity of correctly implementing server-side CAPI with user data hashing.
 - Debugging event matching issues within Facebook Events Manager.
@@ -262,6 +267,10 @@ Challenges anticipated:
 
 ## Next Steps After Completion
 With the Facebook Ads data pipeline and schema established, the next logical step is Phase 4-2: Shopify Data Integration, focusing on bringing in sales and customer data from Shopify.
+
+1. Integrate backend logic in the payment webhook handler to send the Facebook CAPI `Purchase` event after payment confirmation, using the captured `fbp` and `fbc` from transaction metadata.
+2. Test end-to-end: confirm CAPI `Purchase` events appear in Facebook Events Manager after successful payments.
+3. Continue with Marketing API integration for campaign/ad metadata and spend ingestion.
 
 ---
 

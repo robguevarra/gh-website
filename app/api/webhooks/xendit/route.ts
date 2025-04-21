@@ -8,6 +8,8 @@ import {
   upgradeEbookBuyerToCourse,
 } from "@/app/actions/payment-utils"
 import { getAdminClient } from "@/lib/supabase/admin"
+import { buildUserData, sendFacebookEvent } from '@/lib/facebook-capi'
+import { v4 as uuidv4 } from 'uuid'
 
 // Define a type for the expected transaction data
 interface Transaction {
@@ -358,6 +360,83 @@ export async function POST(request: NextRequest) {
             } catch (err) {
               console.error("[Webhook] Failed to store ebook contact info:", err)
             }
+          }
+        }
+
+        // After updating transaction status to completed/paid, send Facebook CAPI Purchase event
+        if (event === 'invoice.paid') {
+          try {
+            // Fetch the updated transaction (including metadata)
+            const { data: transaction, error: txError } = await supabase
+              .from('transactions')
+              .select('id, user_id, amount, currency, status, metadata, paid_at, external_id')
+              .eq('external_id', data.external_id)
+              .maybeSingle();
+            if (txError || !transaction) {
+              console.error('[CAPI] Could not fetch transaction for CAPI event:', txError || 'Not found');
+            } else {
+              // Fetch user profile for PII (if available)
+              let userProfile = null;
+              if (transaction.user_id) {
+                const { data: profile, error: profileError } = await supabase
+                  .from('unified_profiles')
+                  .select('email, phone, first_name, last_name')
+                  .eq('id', transaction.user_id)
+                  .maybeSingle();
+                if (profileError) {
+                  console.error('[CAPI] Could not fetch user profile:', profileError);
+                } else {
+                  userProfile = profile;
+                }
+              }
+              // Prepare user data for CAPI
+              const meta = transaction.metadata || {};
+              const userDataRaw = {
+                email: userProfile?.email,
+                phone: userProfile?.phone,
+                firstName: meta.firstName || userProfile?.first_name,
+                lastName: meta.lastName || userProfile?.last_name,
+                fbp: meta.fbp,
+                fbc: meta.fbc,
+                // Optionally add more fields if available
+                clientIpAddress: undefined,
+                clientUserAgent: undefined,
+              };
+              // Build user data for CAPI
+              const userData = buildUserData(userDataRaw);
+              // Prepare event payload
+              const eventPayload = {
+                event_name: 'Purchase',
+                event_time: Math.floor(new Date(transaction.paid_at || new Date()).getTime() / 1000),
+                event_id: transaction.external_id || uuidv4(),
+                event_source_url: undefined, // Optionally set if you have a canonical thank-you page
+                action_source: 'website',
+                userData,
+                custom_data: {
+                  currency: transaction.currency,
+                  value: transaction.amount,
+                },
+              };
+              // Log before sending the Facebook event
+              console.log('[CAPI] Sending Facebook Purchase event:', {
+                event_id: eventPayload.event_id,
+                event_name: eventPayload.event_name,
+                fbp: userData.fbp,
+                fbc: userData.fbc,
+              });
+              // Send the event
+              try {
+                const fbRes = await sendFacebookEvent(eventPayload);
+                console.log('[CAPI] Facebook Purchase event sent:', {
+                  event_id: eventPayload.event_id,
+                  fbRes,
+                });
+              } catch (fbErr) {
+                console.error('[CAPI] Failed to send Facebook Purchase event:', fbErr);
+              }
+            }
+          } catch (capiErr) {
+            console.error('[CAPI] Unexpected error in CAPI event logic:', capiErr);
           }
         }
 
