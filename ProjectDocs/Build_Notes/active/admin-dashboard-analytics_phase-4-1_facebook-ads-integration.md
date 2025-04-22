@@ -271,7 +271,7 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
 *Goal: Populate historical data where possible and verify the pipeline is working.* 
 
 - [ ] **Backfill Metadata/Spend:** Run the Marketing API fetching script (Step 3) to populate `ad_` tables with historical data for a defined period (e.g., 90 days).
-- [ ] **Check Foreign Keys & Data:** Ensure all FK relationships populated by Step 3 (`ad_adsets.campaign_id`, `ad_ads.adset_id`, `ad_spend` FKs) are valid and data looks correct in `ad_campaigns`, `ad_adsets`, `ad_ads`, `ad_spend`.
+- [x] **Check Foreign Keys & Data:** Ensure all FK relationships populated by Step 3 (`ad_adsets.campaign_id`, `ad_ads.adset_id`, `ad_spend` FKs) are valid and data looks correct in `ad_campaigns`, `ad_adsets`, `ad_ads`, `ad_spend`. *(Validation confirmed post-function fix in Step 3.1)*.
 - [ ] **Monitor CAPI Events:** Use Facebook Events Manager to confirm `PageView`, `InitiateCheckout`, `Purchase` events are being received and matched (relevant for CAPI health, even if Step 4 is paused).
 - [ ] **Validate `ad_attributions`:** **[PAUSED]** This sub-step is paused as Step 4 (populating this table) is paused.
 
