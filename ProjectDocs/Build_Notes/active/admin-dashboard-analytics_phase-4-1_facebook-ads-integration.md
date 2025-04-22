@@ -93,9 +93,9 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
     - **Custom Data Parameters (`custom_data` object):**
         - **`Purchase` Event:** Must include `currency` (e.g., 'USD') and `value` (e.g., 99.99).
         - *(Potentially add custom parameters if needed, e.g., product SKU)*.
-- [ ] **Security:** Store `FB_CAPI_ACCESS_TOKEN` securely using Supabase Vault in production (environment variables acceptable for local development). Ensure the Edge Function handling CAPI calls is properly secured.
-- [ ] **Validation:** Use Facebook's Events Manager -> Test Events tool *during development* to send test events from the Edge Function and verify they are received correctly by Facebook, checking parameter matching and hashing.
-- [ ] **Error Handling & Logging:** Implement robust logging within the Edge Function. Log successful event sends (with `event_id`) and detailed error messages (including Facebook API response if available) for failed requests. Consider retries for transient network errors.
+- [x] **Security:** Store `FB_CAPI_ACCESS_TOKEN` securely using Supabase Vault in production (environment variables acceptable for local development). Ensure the Edge Function handling CAPI calls is properly secured.
+- [x] **Validation:** Use Facebook's Events Manager -> Test Events tool *during development* to send test events from the Edge Function and verify they are received correctly by Facebook, checking parameter matching and hashing.
+- [x] **Error Handling & Logging:** Implement robust logging within the Edge Function. Log successful event sends (with `event_id`) and detailed error messages (including Facebook API response if available) for failed requests. Consider retries for transient network errors.
 
 #### 2.1 Facebook CAPI Edge Function Deployment (2024-04-20)
 
@@ -190,8 +190,8 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
 *Goal: Periodically fetch campaign structure and spend data to enrich our database.* 
 *Best Practice: Use scheduled tasks, handle pagination/rate limits, store credentials securely.* 
 
-- [ ] **Configure Facebook App:** Create a Facebook App, request necessary Marketing API permissions (e.g., `ads_read`). Generate a non-expiring System User Access Token or manage User Tokens. (Credentials added to .env)
-- [ ] **Develop Fetching Script/Function:**
+- [x] **Configure Facebook App:** Create a Facebook App, request necessary Marketing API permissions (e.g., `ads_read`). Generate a non-expiring System User Access Token or manage User Tokens. (Credentials added to .env)
+- [x] **Develop Fetching Script/Function:**
     - **Technology Choice:** Create a scheduled **Supabase Edge Function** (e.g., `fetch-facebook-ads-data`) triggered via `pg_cron` (e.g., daily).
     - **API Interaction Method:** Use standard `fetch` calls to the Facebook Graph API endpoints. 
         - *Rationale:* While the official SDK (`facebook-nodejs-business-sdk`) is generally best practice, potential compatibility issues with the Deno runtime in Supabase Edge Functions make direct `fetch` calls a more reliable approach in this specific environment. We will manually handle endpoint calls, pagination, and rate limiting.
@@ -203,34 +203,77 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
     - **Pagination:** Handle paginated responses from the API.
     - **Rate Limiting:** Implement basic delays or checks to avoid hitting API rate limits.
     - **Error Handling:** Log API errors and implement retry logic if appropriate.
-- [ ] **Database Upsert Logic:**
+- [x] **Database Upsert Logic:**
     - For fetched campaigns, ad sets, ads: `UPSERT` into `ad_campaigns`, `ad_adsets`, `ad_ads` tables based on `fb_campaign_id`, `fb_adset_id`, `fb_ad_id`, updating names, statuses, etc.
     - For fetched insights: `UPSERT` into `ad_spend` table based on `date` and `ad_id` (or relevant granularity).
-- [ ] **Security:** Store Marketing API Access Token securely.
+- [x] **Security:** Store Marketing API Access Token securely.
 
-### 4. Attribution Data Processing Logic
-*Goal: Link successful `Purchase` events (sent via CAPI) to the corresponding ad identifiers and store in `ad_attributions`.* 
-*Best Practice: Focus on reliable matching between CAPI events and internal transactions.* 
+#### 3.1 Facebook Marketing API Edge Function Implementation (2024-06-04)
 
-- [ ] **Identify Conversion Source:** Determine how to get the associated `campaign_id`, `adset_id`, `ad_id` for a conversion. This might involve:
-    - Parsing the `fbc` (click ID) cookie passed with the CAPI event (requires complex parsing logic or potentially another API call).
-    - Relying on Facebook's matching via the user parameters sent.
-    - Potentially querying the Marketing API based on the user/time if click IDs aren't available (less reliable).
-- [ ] **Develop Processing Logic:**
-    - Trigger this logic after a `Purchase` event is successfully sent via CAPI *and* the corresponding `transactions` record is confirmed as `completed`.
-    - Match the CAPI event (e.g., using `event_id` or user/time proximity) to the `transactions` record.
-    - Extract or look up the relevant Facebook ad IDs (campaign, adset, ad).
-    - Look up the internal UUIDs for these ads/adsets/campaigns in the `ad_` tables.
-    - `INSERT` a new record into `ad_attributions`, linking `transaction_id` to the internal ad UUIDs, storing `event_time`, `conversion_event`='Purchase', `conversion_value`, `currency`.
-- [ ] **Error Handling:** Log cases where attribution data cannot be found or linked.
+- **Function Name:** `fetch-facebook-ads-data`
+- **Location:** `supabase/functions/fetch-facebook-ads-data/index.ts`
+- **Stack:** TypeScript, Deno (Supabase Edge Functions)
+- **Purpose:** Fetches Facebook ad campaigns, ad sets, ads, and daily spend/insights from the Facebook Marketing API and upserts them into the normalized Supabase tables (`ad_campaigns`, `ad_adsets`, `ad_ads`, `ad_spend`).
+- **Implementation Details:**
+  - Reads credentials (`FB_ADS_TOKEN`, `FB_AD_ACCOUNT_ID`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) from environment variables for secure access.
+  - Fetches all entities (campaigns, ad sets, ads, insights) using the Facebook Graph API, handling pagination and errors robustly.
+  - Upserts each entity into the appropriate Supabase table using the Supabase REST API, with clear mapping and merge-duplicate resolution.
+  - Returns a summary of records fetched and upserted for each entity, plus any errors, for easy monitoring and debugging.
+  - Modular, well-documented code with clear separation of fetch and upsert logic for maintainability.
+- **Refinements & Troubleshooting (2024-06-04 / 2024-06-05):**
+  - **Sequential Processing:** Refactored the main handler to process entities sequentially (Campaigns -> Ad Sets -> Ads -> Spend) instead of in parallel. This is crucial for correctly resolving foreign key UUIDs (e.g., linking `ad_adsets.campaign_id` to the correct `ad_campaigns.id`) during the upsert stage.
+  - **Currency Field Limitation:** Removed the `currency` field from the `fetchInsights` API call (`level=ad`). The Facebook API does not support fetching currency at this level, resulting in a `400 Bad Request` error. The `ad_spend.currency` column will remain `NULL`.
+  - **Unified Attribution Setting:** Added `use_unified_attribution_setting=true` parameter to the `/insights` API call based on Facebook documentation best practices to better align results with Ads Manager reporting.
+  - **Upsert Header Fix:** Corrected the Supabase upsert calls by explicitly adding the `Prefer: resolution=merge-duplicates` header. This header was missing after refactoring, causing `duplicate key value` errors (code `23505`) instead of updating existing records. This fixed the upsert logic for campaigns, ad sets, and ads.
+- **Testing Instructions:**
+  1. Ensure all required environment variables are set in your Supabase project and local `.env` file.
+  2. Deploy the function using `npx supabase functions deploy fetch-facebook-ads-data`.
+  3. Trigger the function via the Supabase dashboard or CLI (or `curl -X POST <FUNCTION_URL>`).
+  4. Check the returned summary (`{"success": true, "results": {...}}`) for fetched/upserted counts and ensure no errors are reported.
+  5. Verify data in Supabase tables (`ad_campaigns`, `ad_adsets`, `ad_ads`, `ad_spend`), confirming foreign keys are populated and records are updated correctly.
+  6. Review function logs (via Supabase dashboard) for detailed execution flow and troubleshooting if needed.
+- **Rationale:**
+  - This approach follows industry best practice for data pipeline modularity, security, and maintainability.
+  - Using upserts ensures data freshness and avoids duplicates, and the modular structure allows for easy extension (e.g., resolving foreign keys, adding new metrics).
+
+**Next Steps:**
+- Monitor and validate data quality and completeness in the Supabase tables.
+- Proceed to Step 4: Attribution Data Processing Logic, once data ingestion is validated.
+
+### 4. Attribution Data Processing Logic **[PAUSED]**
+*Goal: Link successful `Purchase` events (sent via CAPI) to the corresponding ad identifiers and store in `ad_attributions`.*
+*Best Practice: Leverage automated tracking signals (Facebook Ad `ref` parameter passed through ManyChat) and store captured UTM parameters and click identifiers.*
+
+*Note: Implementation of this step is paused. The plan below outlines the intended approach using the automated `ref` parameter strategy.* 
+
+- [ ] **Configure Facebook Ad `ref` Parameter:**
+    - In Facebook Ads Manager, for ads linking to Messenger, set the `ref` parameter dynamically using placeholders like `{{campaign.id}}` and `{{ad.id}}`. Example: `ref=cid_{{campaign.id}}__aid_{{ad.id}}`.
+- [ ] **Configure ManyChat Flow:**
+    - Capture the incoming `ref` parameter (e.g., into a Custom User Field `fb_ad_ref`).
+    - Dynamically construct website links using this captured `ref`. Recommended approach: `https://.../?...&utm_ref={{fb_ad_ref}}`.
+- [ ] **Enhance `ad_attributions` Table:**
+    - Add columns via migration: `utm_source` (TEXT), `utm_medium` (TEXT), `utm_campaign` (TEXT), `utm_content` (TEXT), `utm_term` (TEXT), `utm_ref` (TEXT).
+    - Ensure `fb_click_id` (TEXT) exists.
+- [ ] **Implement Client-Side UTM/Ref Capture:**
+    - On landing pages (e.g., `/papers-to-profits`), use JavaScript to capture all UTM parameters (including `utm_ref`) and `_fbc` cookie value from the URL/browser.
+    - Store these values in user session storage (`sessionStorage`).
+- [ ] **Pass Captured Data Backend:**
+    - When initiating purchase/checkout, retrieve stored UTMs/ref/fbc from session storage.
+    - Include this data in the payload sent to the backend endpoint responsible for confirming the purchase (e.g., payment webhook handler).
+- [ ] **Implement Backend Processing Logic:**
+    - **Trigger:** On successful transaction confirmation.
+    - **Logic:** Retrieve transaction details (`transaction_id`, `user_id`, value, etc.) and the captured attribution data (UTMs, ref, fbc) passed from the frontend.
+    - `INSERT` into `ad_attributions`: Populate `transaction_id`, `user_id`, `conversion_event`='Purchase', `event_time`, `conversion_value`, etc., along with all captured `utm_*`, `utm_ref`, and `fb_click_id` values.
+    - Leave `campaign_id`, `adset_id`, `ad_id` as `NULL` (these would require a separate, complex offline matching process against the stored `utm_ref` or Facebook API reporting data).
+- [ ] **Error Handling:** Log cases where attribution data (UTMs, ref, fbc) is missing or cannot be linked during the insert.
 
 ### 5. Initial Data Backfill & Validation
 *Goal: Populate historical data where possible and verify the pipeline is working.* 
 
 - [ ] **Backfill Metadata/Spend:** Run the Marketing API fetching script (Step 3) to populate `ad_` tables with historical data for a defined period (e.g., 90 days).
-- [ ] **Monitor CAPI Events:** Use Facebook Events Manager to confirm `PageView`, `InitiateCheckout`, `Purchase` events are being received and matched.
-- [ ] **Validate `ad_attributions`:** After some conversions have occurred post-CAPI implementation, run queries to verify that records are being created in `ad_attributions` and correctly linked to `transactions` and the `ad_` hierarchy tables.
-- [ ] **Check Foreign Keys:** Ensure all FK relationships in the `ad_` tables are valid.
+- [ ] **Check Foreign Keys & Data:** Ensure all FK relationships populated by Step 3 (`ad_adsets.campaign_id`, `ad_ads.adset_id`, `ad_spend` FKs) are valid and data looks correct in `ad_campaigns`, `ad_adsets`, `ad_ads`, `ad_spend`.
+- [ ] **Monitor CAPI Events:** Use Facebook Events Manager to confirm `PageView`, `InitiateCheckout`, `Purchase` events are being received and matched (relevant for CAPI health, even if Step 4 is paused).
+- [ ] **Validate `ad_attributions`:** **[PAUSED]** This sub-step is paused as Step 4 (populating this table) is paused.
 
 ## Technical Considerations
 
@@ -254,18 +297,18 @@ Following the completion of Phase 3-4 (Overview Dashboard), a strategic decision
 
 ## Completion Status
 
-This phase is **In Progress**. CAPI events for ViewContent, InitiateCheckout, and Purchase are implemented and validated.
+This phase is **In Progress**. CAPI events for ViewContent, InitiateCheckout, and Purchase are implemented and validated. The Marketing API data fetching function (`fetch-facebook-ads-data`) is implemented and validated.
 
-**2024-06-03 Updates:**
+**2024-06-05 Updates:**
 - Frontend captures `_fbp`/`_fbc` and sends `InitiateCheckout` to CAPI Edge Function.
 - Backend webhook sends `Purchase` event to CAPI Edge Function using stored metadata.
 - Edge Function validates `_fbp`/`_fbc` format, resolving Facebook API errors.
+- Marketing API function (`fetch-facebook-ads-data`) successfully fetches and upserts campaigns, ad sets, ads, and spend data sequentially, correctly populating foreign keys and handling API limitations (currency) and upsert logic (`Prefer` header).
 
 ## Next Steps
 
-1.  **Continue with Marketing API integration** for campaign/ad metadata and spend ingestion (Step 3 in Implementation Plan).
-2.  **Develop Attribution Data Processing Logic** (Step 4 in Implementation Plan) to link CAPI events/transactions to ad campaigns/adsets/ads in the `ad_attributions` table.
-3.  **Perform Initial Data Backfill & Validation** (Step 5 in Implementation Plan) for Marketing API data and verify the full pipeline.
+1.  **Develop Attribution Data Processing Logic** (Step 4 in Implementation Plan) to link CAPI events/transactions to ad campaigns/adsets/ads in the `ad_attributions` table.
+2.  **Perform Initial Data Backfill & Validation** (Step 5 in Implementation Plan) for Marketing API data and verify the full pipeline.
 
 ---
 
