@@ -42,24 +42,26 @@ This phase (4-2) is part of the prioritized effort in Phase 4 to integrate key e
 *Goal: Create necessary tables to store core Shopify entities.* 
 *Best Practice: Normalize data, use specific types, clear naming, FKs, and indexing.* 
 
-- [ ] **Design `shopify_products` Table:**
-    - Fields: `id` (UUID, PK), `shopify_product_id` (BIGINT, UNIQUE, NOT NULL), `title` (TEXT), `handle` (TEXT), `product_type` (TEXT), `status` (TEXT), `created_at` (TIMESTAMPTZ), `updated_at` (TIMESTAMPTZ), `published_at` (TIMESTAMPTZ), `vendor` (TEXT), `tags` (TEXT[]).
-    - Index: `shopify_product_id`, `handle`.
-    - Note: Stores core product catalog information.
-- [ ] **Design `shopify_product_variants` Table:**
-    - Fields: `id` (UUID, PK), `shopify_variant_id` (BIGINT, UNIQUE, NOT NULL), `product_id` (UUID, FK to `shopify_products.id`), `title` (TEXT), `sku` (TEXT), `price` (NUMERIC), `compare_at_price` (NUMERIC), `created_at` (TIMESTAMPTZ), `updated_at` (TIMESTAMPTZ).
-    - Index: `shopify_variant_id`, `product_id`, `sku`.
-- [ ] **Design `shopify_customers` Table:**
-    - Fields: `id` (UUID, PK), `unified_profile_id` (UUID, FK to `unified_profiles.id`, NULLABLE), `shopify_customer_id` (BIGINT, UNIQUE, NOT NULL), `email` (TEXT), `first_name` (TEXT), `last_name` (TEXT), `phone` (TEXT), `accepts_marketing` (BOOLEAN), `orders_count` (INTEGER), `total_spent` (NUMERIC), `state` (TEXT), `tags` (TEXT[]), `created_at` (TIMESTAMPTZ), `updated_at` (TIMESTAMPTZ).
-    - Indexes: `shopify_customer_id`, `unified_profile_id`, `email`.
-    - Note: Links Shopify customer data to our central user profile.
-- [ ] **Design `shopify_orders` Table:**
-    - Fields: `id` (UUID, PK), `customer_id` (UUID, FK to `shopify_customers.id`, NULLABLE), `shopify_order_id` (BIGINT, UNIQUE, NOT NULL), `order_number` (TEXT), `email` (TEXT), `phone` (TEXT), `total_price` (NUMERIC), `subtotal_price` (NUMERIC), `total_tax` (NUMERIC), `total_discounts` (NUMERIC), `currency` (TEXT), `financial_status` (TEXT), `fulfillment_status` (TEXT, NULLABLE), `landing_site` (TEXT), `referring_site` (TEXT), `source_name` (TEXT), `tags` (TEXT[]), `created_at` (TIMESTAMPTZ), `updated_at` (TIMESTAMPTZ), `processed_at` (TIMESTAMPTZ), `closed_at` (TIMESTAMPTZ, NULLABLE), `cancelled_at` (TIMESTAMPTZ, NULLABLE).
-    - Indexes: `shopify_order_id`, `customer_id`, `email`, `financial_status`, `created_at`.
-- [ ] **Design `shopify_order_items` Table:**
-    - Fields: `id` (UUID, PK), `order_id` (UUID, FK to `shopify_orders.id`), `shopify_line_item_id` (BIGINT, UNIQUE, NOT NULL), `product_id` (UUID, FK to `shopify_products.id`, NULLABLE), `variant_id` (UUID, FK to `shopify_product_variants.id`, NULLABLE), `shopify_product_id` (BIGINT), `shopify_variant_id` (BIGINT), `title` (TEXT), `variant_title` (TEXT), `sku` (TEXT), `quantity` (INTEGER), `price` (NUMERIC), `total_discount` (NUMERIC), `vendor` (TEXT).
-    - Indexes: `shopify_line_item_id`, `order_id`, `product_id`, `variant_id`.
-- [ ] **Implement Migrations:** Create versioned SQL migration scripts to create these tables, constraints, and indexes.
+- [x] **Design `shopify_products` Table:**
+    - Table created in Supabase with all specified fields, unique constraints, and indexes.
+- [x] **Design `shopify_product_variants` Table:**
+    - Table created in Supabase with all specified fields, foreign keys, and indexes.
+- [x] **Design `shopify_customers` Table:**
+    - Table created in Supabase with all specified fields, foreign keys, and indexes.
+- [x] **Design `shopify_orders` Table:**
+    - Table created in Supabase with all specified fields, foreign keys, and indexes.
+- [x] **Design `shopify_order_items` Table:**
+    - Table created in Supabase with all specified fields, foreign keys, and indexes.
+- [x] **Implement Migrations:**
+    - All tables, constraints, and indexes created directly in Supabase using MCP. Schema matches build note specifications.
+
+**Schema Implementation Summary:**
+All foundational Shopify analytics tables are now present in the database, normalized and indexed for analytics. Foreign keys and unique constraints ensure data integrity and efficient lookups. Ready for data ingestion pipeline.
+
+**Next Steps:**
+- Implement secure webhook handler for Shopify events (orders, customers, products)
+- Develop upsert logic and data normalization in the handler
+- Begin testing with sample payloads and real Shopify webhooks
 
 ### 2. Shopify App & API Configuration
 *Goal: Securely connect to the Shopify store to receive webhooks and make API calls.* 
@@ -141,6 +143,22 @@ This phase (4-2) is part of the prioritized effort in Phase 4 to integrate key e
 ### Scalability
 - **Asynchronous Processing:** Use background jobs/queues for webhook processing to handle bursts of events and prevent timeouts.
 - **Database Performance:** Ensure efficient indexing on `shopify_` tables, especially on IDs used for lookups and foreign keys.
+
+### Shopify Environment Variables
+
+To support secure Shopify integration, ensure the following environment variables are set in `.env`:
+
+- `SHOPIFY_API_KEY`: Used for app authentication (OAuth/private app)
+- `SHOPIFY_SECRET_KEY`: Used for app authentication (OAuth/private app)
+- `SHOPIFY_ADMIN_API_KEY`: Used for privileged Admin API access (API polling, backfills)
+- `SHOPIFY_WEBHOOK_SECRET`: **Required for webhook verification**. This must match the "webhook signing secret" from your Shopify app settings. Used by the webhook handler to verify HMAC signatures.
+
+**Checklist:**
+- [ ] Ensure `SHOPIFY_WEBHOOK_SECRET` is set in `.env` and matches the value from Shopify app settings
+- [x] Webhook handler uses `SHOPIFY_WEBHOOK_SECRET` for HMAC verification
+- [x] Other keys (`SHOPIFY_API_KEY`, `SHOPIFY_SECRET_KEY`, `SHOPIFY_ADMIN_API_KEY`) will be used for API polling/backfill logic
+
+**Note:** No changes to the webhook route are needed unless you want to use a different env variable name for the webhook secret. The current handler expects `SHOPIFY_WEBHOOK_SECRET`.
 
 ## Completion Status
 
