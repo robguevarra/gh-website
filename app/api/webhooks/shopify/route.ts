@@ -35,8 +35,8 @@ async function findUnifiedProfileIdByEmail(supabase: any, email: string) {
   return data?.id || null;
 }
 
-// Upsert customer
-async function upsertCustomer(supabase: any, payload: any) {
+// Enhanced upsert with structured logging and idempotency comments
+async function upsertCustomer(supabase: any, payload: any, topic: string) {
   const email = payload.email?.toLowerCase() || null;
   const unified_profile_id = email ? await findUnifiedProfileIdByEmail(supabase, email) : null;
   const upsertData = {
@@ -54,12 +54,27 @@ async function upsertCustomer(supabase: any, payload: any) {
     updated_at: payload.updated_at ? new Date(payload.updated_at).toISOString() : null,
     unified_profile_id,
   };
-  const { error } = await supabase.from('shopify_customers').upsert(upsertData, { onConflict: 'shopify_customer_id' });
-  if (error) console.error('Customer upsert error:', error, upsertData);
+  const { data, error } = await supabase.from('shopify_customers').upsert(upsertData, { onConflict: 'shopify_customer_id' }).select('id');
+  if (error) {
+    console.error(`[Shopify Webhook][${topic}] Customer upsert error`, {
+      shopify_customer_id: payload.id,
+      error,
+      upsertData,
+    });
+  } else if (data && data.length === 0) {
+    // No new row inserted/updated (idempotent duplicate)
+    console.info(`[Shopify Webhook][${topic}] Customer upsert idempotent (duplicate)`, {
+      shopify_customer_id: payload.id,
+    });
+  } else {
+    console.info(`[Shopify Webhook][${topic}] Customer upserted`, {
+      shopify_customer_id: payload.id,
+    });
+  }
 }
 
-// Upsert product and variants
-async function upsertProduct(supabase: any, payload: any) {
+// Enhanced upsert with structured logging and idempotency comments
+async function upsertProduct(supabase: any, payload: any, topic: string) {
   const productData = {
     shopify_product_id: payload.id,
     title: payload.title,
@@ -75,18 +90,29 @@ async function upsertProduct(supabase: any, payload: any) {
   const { data: product, error: productError } = await supabase
     .from('shopify_products')
     .upsert(productData, { onConflict: 'shopify_product_id' })
-    .select('id')
-    .maybeSingle();
+    .select('id');
   if (productError) {
-    console.error('Product upsert error:', productError, productData);
+    console.error(`[Shopify Webhook][${topic}] Product upsert error`, {
+      shopify_product_id: payload.id,
+      error: productError,
+      productData,
+    });
     return;
+  } else if (product && product.length === 0) {
+    console.info(`[Shopify Webhook][${topic}] Product upsert idempotent (duplicate)`, {
+      shopify_product_id: payload.id,
+    });
+  } else {
+    console.info(`[Shopify Webhook][${topic}] Product upserted`, {
+      shopify_product_id: payload.id,
+    });
   }
   // Upsert variants
   if (Array.isArray(payload.variants)) {
     for (const variant of payload.variants) {
       const variantData = {
         shopify_variant_id: variant.id,
-        product_id: product?.id,
+        product_id: product?.[0]?.id,
         title: variant.title,
         sku: variant.sku,
         price: variant.price ? Number(variant.price) : null,
@@ -94,17 +120,31 @@ async function upsertProduct(supabase: any, payload: any) {
         created_at: variant.created_at ? new Date(variant.created_at).toISOString() : null,
         updated_at: variant.updated_at ? new Date(variant.updated_at).toISOString() : null,
       };
-      const { error: variantError } = await supabase
+      const { data: variantResult, error: variantError } = await supabase
         .from('shopify_product_variants')
-        .upsert(variantData, { onConflict: 'shopify_variant_id' });
-      if (variantError) console.error('Variant upsert error:', variantError, variantData);
+        .upsert(variantData, { onConflict: 'shopify_variant_id' })
+        .select('id');
+      if (variantError) {
+        console.error(`[Shopify Webhook][${topic}] Variant upsert error`, {
+          shopify_variant_id: variant.id,
+          error: variantError,
+          variantData,
+        });
+      } else if (variantResult && variantResult.length === 0) {
+        console.info(`[Shopify Webhook][${topic}] Variant upsert idempotent (duplicate)`, {
+          shopify_variant_id: variant.id,
+        });
+      } else {
+        console.info(`[Shopify Webhook][${topic}] Variant upserted`, {
+          shopify_variant_id: variant.id,
+        });
+      }
     }
   }
 }
 
-// Upsert order and items
-async function upsertOrder(supabase: any, payload: any) {
-  // Find customer by shopify_customer_id
+// Enhanced upsert with structured logging and idempotency comments
+async function upsertOrder(supabase: any, payload: any, topic: string) {
   let customer_id = null;
   if (payload.customer && payload.customer.id) {
     const { data: customer } = await supabase
@@ -140,20 +180,30 @@ async function upsertOrder(supabase: any, payload: any) {
   const { data: order, error: orderError } = await supabase
     .from('shopify_orders')
     .upsert(orderData, { onConflict: 'shopify_order_id' })
-    .select('id')
-    .maybeSingle();
+    .select('id');
   if (orderError) {
-    console.error('Order upsert error:', orderError, orderData);
+    console.error(`[Shopify Webhook][${topic}] Order upsert error`, {
+      shopify_order_id: payload.id,
+      error: orderError,
+      orderData,
+    });
     return;
+  } else if (order && order.length === 0) {
+    console.info(`[Shopify Webhook][${topic}] Order upsert idempotent (duplicate)`, {
+      shopify_order_id: payload.id,
+    });
+  } else {
+    console.info(`[Shopify Webhook][${topic}] Order upserted`, {
+      shopify_order_id: payload.id,
+    });
   }
-  // Upsert line items
   if (Array.isArray(payload.line_items)) {
     for (const item of payload.line_items) {
       const itemData = {
         shopify_line_item_id: item.id,
-        order_id: order?.id,
-        product_id: null, // Optionally resolve by shopify_product_id if needed
-        variant_id: null, // Optionally resolve by shopify_variant_id if needed
+        order_id: order?.[0]?.id,
+        product_id: null,
+        variant_id: null,
         shopify_product_id: item.product_id,
         shopify_variant_id: item.variant_id,
         title: item.title,
@@ -164,10 +214,25 @@ async function upsertOrder(supabase: any, payload: any) {
         total_discount: item.total_discount ? Number(item.total_discount) : null,
         vendor: item.vendor,
       };
-      const { error: itemError } = await supabase
+      const { data: itemResult, error: itemError } = await supabase
         .from('shopify_order_items')
-        .upsert(itemData, { onConflict: 'shopify_line_item_id' });
-      if (itemError) console.error('Order item upsert error:', itemError, itemData);
+        .upsert(itemData, { onConflict: 'shopify_line_item_id' })
+        .select('id');
+      if (itemError) {
+        console.error(`[Shopify Webhook][${topic}] Order item upsert error`, {
+          shopify_line_item_id: item.id,
+          error: itemError,
+          itemData,
+        });
+      } else if (itemResult && itemResult.length === 0) {
+        console.info(`[Shopify Webhook][${topic}] Order item upsert idempotent (duplicate)`, {
+          shopify_line_item_id: item.id,
+        });
+      } else {
+        console.info(`[Shopify Webhook][${topic}] Order item upserted`, {
+          shopify_line_item_id: item.id,
+        });
+      }
     }
   }
 }
@@ -211,16 +276,16 @@ export async function POST(req: NextRequest) {
   const supabase = await createServiceRoleClient();
   try {
     if (topic.startsWith('customers/')) {
-      await upsertCustomer(supabase, payload);
+      await upsertCustomer(supabase, payload, topic);
     } else if (topic.startsWith('products/')) {
-      await upsertProduct(supabase, payload);
+      await upsertProduct(supabase, payload, topic);
     } else if (topic.startsWith('orders/')) {
-      await upsertOrder(supabase, payload);
+      await upsertOrder(supabase, payload, topic);
     } else {
       console.log(`[Shopify Webhook] Unhandled topic: ${topic}`);
     }
   } catch (err) {
-    console.error('Webhook upsert error:', err);
+    console.error('Webhook upsert error:', err, { topic, payload });
     return NextResponse.json({ error: 'Upsert error' }, { status: 500 });
   }
 
