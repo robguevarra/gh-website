@@ -1,7 +1,9 @@
 # Shopify Integration - Phase 4-2: Data Pipeline and Schema
 
 ## Task Objective
-Establish the foundational database schema and a reliable data ingestion pipeline required to capture Shopify data (customers, products, orders). This phase focuses solely on getting the necessary data structures and pipelines in place to provide a complete view of revenue and customer interactions, enabling accurate analysis in subsequent phases (Phase 4-4, 4-5).
+Establish the foundational database schema and a reliable data ingestion pipeline required to capture Shopify data (customers, products, orders) **solely for the purpose of backend analytics within the Admin Dashboard**. This phase focuses only on getting the necessary data structures and pipelines in place to provide a complete view of revenue and customer interactions, enabling accurate analysis in subsequent phases (Phase 4-4, 4-5).
+
+**IMPORTANT SCOPE NOTE:** This build note (`Phase 4-2`) deals exclusively with pulling data *from* an existing Shopify store *for analytics*. The implementation of the user-facing e-commerce storefront, custom checkout flow using Xendit, and payment processing is a separate initiative detailed in the **Phase 5 Build Notes (`shopify-ecommerce-integration_phase-5-*`)**. The schemas defined here are for analytical purposes and may differ from those used for the live e-commerce functionality.
 
 ## Current State Assessment
 - The platform utilizes a unified data model (Phases 3-0 to 3-2) with `unified_profiles`, `transactions` (currently from Xendit), and `enrollments`.
