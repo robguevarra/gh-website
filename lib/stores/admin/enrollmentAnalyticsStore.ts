@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { formatISO } from 'date-fns';
 import { useSharedDashboardFiltersStore } from './sharedDashboardFiltersStore';
+import { isEqual } from 'lodash';
+import type { DateRange } from 'react-day-picker'; // Needed for filter types
 
 // --- Types --- (Copied/adapted from component and API routes)
 type Granularity = 'day' | 'week' | 'month';
@@ -60,8 +62,25 @@ interface CheckResult {
   paymentDate: string | null;
 }
 
+// --- Filter Structure Types ---
+interface BaseFilters {
+  dateRange: DateRange | undefined;
+}
+interface TrendFilters extends BaseFilters {
+  granularity: Granularity;
+}
+interface FunnelFilters extends BaseFilters {
+  funnelSource: FunnelSource;
+}
+interface DetailsFilters extends BaseFilters {
+  detailsPage: number;
+  detailsPageSize: number;
+  detailsSearchTerm: string;
+}
+
 // --- State Interface ---
 interface EnrollmentAnalyticsState {
+  // Filters (Local to this section)
   granularity: Granularity;
   funnelSource: FunnelSource;
   detailsSearchTerm: string;
@@ -69,6 +88,7 @@ interface EnrollmentAnalyticsState {
   detailsPageSize: number;
   checkEmail: string;
 
+  // Data
   summaryData: EnrollmentSummaryData | null;
   trendsData: TrendDataPoint[] | null;
   funnelData: EnrollmentFunnelData | null;
@@ -77,6 +97,7 @@ interface EnrollmentAnalyticsState {
   detailsTotalCount: number;
   checkResult: CheckResult | null;
 
+  // Loading States (Granular)
   isLoadingSummary: boolean;
   isLoadingTrends: boolean;
   isLoadingFunnel: boolean;
@@ -84,16 +105,25 @@ interface EnrollmentAnalyticsState {
   isLoadingDetails: boolean;
   isLoadingCheck: boolean;
 
+  // Error States (Granular)
   summaryError: string | null;
   trendsError: string | null;
   funnelError: string | null;
   segmentationError: string | null;
   detailsError: string | null;
   checkError: string | null;
+  
+  // Last Fetched Filters State
+  lastFetchedSummaryFilters: BaseFilters | null;
+  lastFetchedTrendsFilters: TrendFilters | null;
+  lastFetchedFunnelFilters: FunnelFilters | null;
+  lastFetchedSegmentationFilters: BaseFilters | null; // Only depends on date for now
+  lastFetchedDetailsFilters: DetailsFilters | null;
 }
 
 // --- Actions Interface ---
 interface EnrollmentAnalyticsActions {
+  // Filter Setters (These now primarily just update state, fetch is triggered by component effect)
   setGranularity: (granularity: Granularity) => void;
   setFunnelSource: (source: FunnelSource) => void;
   setDetailsSearchTerm: (term: string) => void;
@@ -101,6 +131,7 @@ interface EnrollmentAnalyticsActions {
   setDetailsPageSize: (size: number) => void;
   setCheckEmail: (email: string) => void;
 
+  // Fetch Actions (Now smarter with filter checks)
   fetchSummary: () => Promise<void>;
   fetchTrends: () => Promise<void>;
   fetchFunnel: () => Promise<void>;
@@ -108,11 +139,12 @@ interface EnrollmentAnalyticsActions {
   fetchDetails: () => Promise<void>;
   performCheck: () => Promise<void>;
 
-  initialize: () => void;
+  // Removed initialize, component effect triggers specific fetches
 }
 
 // --- Store Implementation ---
 export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & EnrollmentAnalyticsActions>()((set, get) => ({
+  // Initial State
   granularity: 'day',
   funnelSource: 'all',
   detailsSearchTerm: '',
@@ -128,11 +160,12 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
   detailsTotalCount: 0,
   checkResult: null,
 
-  isLoadingSummary: true,
-  isLoadingTrends: true,
-  isLoadingFunnel: true,
-  isLoadingSegmentation: true,
-  isLoadingDetails: true,
+  // Set initial loading to false
+  isLoadingSummary: false,
+  isLoadingTrends: false,
+  isLoadingFunnel: false,
+  isLoadingSegmentation: false,
+  isLoadingDetails: false,
   isLoadingCheck: false,
 
   summaryError: null,
@@ -142,33 +175,50 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
   detailsError: null,
   checkError: null,
 
-  setGranularity: (granularity) => {
-      set({ granularity });
-  },
-  setFunnelSource: (source) => {
-      set({ funnelSource: source });
-  },
+  // Initialize last fetched filters to null
+  lastFetchedSummaryFilters: null,
+  lastFetchedTrendsFilters: null,
+  lastFetchedFunnelFilters: null,
+  lastFetchedSegmentationFilters: null,
+  lastFetchedDetailsFilters: null,
+
+  // Actions
+  setGranularity: (granularity) => set({ granularity }), // Just update state
+  setFunnelSource: (source) => set({ funnelSource: source }), // Just update state
   setDetailsSearchTerm: (term) => {
       set({ detailsSearchTerm: term, detailsPage: 1 }); 
-      get().fetchDetails();
+      get().fetchDetails(); // Fetch details immediately on search change
   },
   setDetailsPage: (page) => {
       set({ detailsPage: page });
-      get().fetchDetails();
+      get().fetchDetails(); // Fetch details immediately on page change
   },
   setDetailsPageSize: (size) => {
       set({ detailsPageSize: size, detailsPage: 1 });
-      get().fetchDetails();
+      get().fetchDetails(); // Fetch details immediately on size change
   },
   setCheckEmail: (email) => set({ checkEmail: email, checkError: null, checkResult: null }),
 
+  // --- Smart Fetch Actions ---
+
   fetchSummary: async () => {
-    set({ isLoadingSummary: true, summaryError: null });
     const { dateRange } = useSharedDashboardFiltersStore.getState();
+    const currentFilters: BaseFilters = { dateRange };
+    const { lastFetchedSummaryFilters, isLoadingSummary } = get();
+
+    if (isLoadingSummary) return; // Already loading
+    if (lastFetchedSummaryFilters && isEqual(currentFilters, lastFetchedSummaryFilters)) {
+        console.log("EnrollmentStore: Summary filters unchanged, skipping fetch.");
+        return; // Filters match, skip fetch
+    }
     if (!dateRange?.from) {
-        set({ isLoadingSummary: false, summaryError: 'Date range start date is missing.' });
+        console.warn("EnrollmentStore: Skipping summary fetch, date range missing.");
+        // Maybe clear error state if needed: set({ summaryError: null }); 
         return;
     }
+
+    console.log("EnrollmentStore: Fetching summary...");
+    set({ isLoadingSummary: true, summaryError: null });
     const startDate = dateRange.from;
     const endDate = dateRange.to || startDate;
 
@@ -179,21 +229,31 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
       const response = await fetch(`/api/admin/enrollments/summary?${params.toString()}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to fetch summary');
-      set({ summaryData: data, isLoadingSummary: false });
+      set({ summaryData: data, isLoadingSummary: false, lastFetchedSummaryFilters: currentFilters });
     } catch (error) {
       console.error("Error fetching enrollment summary:", error);
-      set({ summaryError: error instanceof Error ? error.message : 'Unknown error', isLoadingSummary: false });
+      set({ summaryError: error instanceof Error ? error.message : 'Unknown error', isLoadingSummary: false, lastFetchedSummaryFilters: null });
     }
   },
 
   fetchTrends: async () => {
-    set({ isLoadingTrends: true, trendsError: null });
     const { dateRange } = useSharedDashboardFiltersStore.getState();
-    const { granularity } = get();
-    if (!dateRange?.from) {
-        set({ isLoadingTrends: false, trendsError: 'Date range start date is missing.' });
+    const { granularity } = get(); // Get local granularity
+    const currentFilters: TrendFilters = { dateRange, granularity };
+    const { lastFetchedTrendsFilters, isLoadingTrends } = get();
+
+    if (isLoadingTrends) return;
+    if (lastFetchedTrendsFilters && isEqual(currentFilters, lastFetchedTrendsFilters)) {
+        console.log("EnrollmentStore: Trend filters unchanged, skipping fetch.");
         return;
     }
+     if (!dateRange?.from) {
+        console.warn("EnrollmentStore: Skipping trends fetch, date range missing.");
+        return;
+    }
+
+    console.log("EnrollmentStore: Fetching trends...");
+    set({ isLoadingTrends: true, trendsError: null });
     const startDate = dateRange.from;
     const endDate = dateRange.to || startDate;
 
@@ -205,21 +265,31 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
       const response = await fetch(`/api/admin/enrollments/trends?${params.toString()}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to fetch trends');
-      set({ trendsData: data, isLoadingTrends: false });
+      set({ trendsData: data, isLoadingTrends: false, lastFetchedTrendsFilters: currentFilters });
     } catch (error) {
       console.error("Error fetching enrollment trends:", error);
-      set({ trendsError: error instanceof Error ? error.message : 'Unknown error', isLoadingTrends: false });
+      set({ trendsError: error instanceof Error ? error.message : 'Unknown error', isLoadingTrends: false, lastFetchedTrendsFilters: null });
     }
   },
 
   fetchFunnel: async () => {
-      set({ isLoadingFunnel: true, funnelError: null });
       const { dateRange } = useSharedDashboardFiltersStore.getState();
-      const { funnelSource } = get();
-      if (!dateRange?.from) {
-          set({ isLoadingFunnel: false, funnelError: 'Date range start date is missing.' });
+      const { funnelSource } = get(); // Get local funnel source
+      const currentFilters: FunnelFilters = { dateRange, funnelSource };
+      const { lastFetchedFunnelFilters, isLoadingFunnel } = get();
+
+      if (isLoadingFunnel) return;
+      if (lastFetchedFunnelFilters && isEqual(currentFilters, lastFetchedFunnelFilters)) {
+          console.log("EnrollmentStore: Funnel filters unchanged, skipping fetch.");
           return;
       }
+       if (!dateRange?.from) {
+          console.warn("EnrollmentStore: Skipping funnel fetch, date range missing.");
+          return;
+      }
+
+      console.log("EnrollmentStore: Fetching funnel...");
+      set({ isLoadingFunnel: true, funnelError: null });
       const startDate = dateRange.from;
       const endDate = dateRange.to || startDate;
 
@@ -231,20 +301,30 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
           const response = await fetch(`/api/admin/enrollments/funnel?${params.toString()}`);
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || 'Failed to fetch funnel');
-          set({ funnelData: data, isLoadingFunnel: false });
+          set({ funnelData: data, isLoadingFunnel: false, lastFetchedFunnelFilters: currentFilters });
       } catch (error) {
           console.error("Error fetching enrollment funnel:", error);
-          set({ funnelError: error instanceof Error ? error.message : 'Unknown error', isLoadingFunnel: false });
+          set({ funnelError: error instanceof Error ? error.message : 'Unknown error', isLoadingFunnel: false, lastFetchedFunnelFilters: null });
       }
   },
 
   fetchSegmentation: async () => {
-      set({ isLoadingSegmentation: true, segmentationError: null });
       const { dateRange } = useSharedDashboardFiltersStore.getState();
-      if (!dateRange?.from) {
-          set({ isLoadingSegmentation: false, segmentationError: 'Date range start date is missing.' });
+      const currentFilters: BaseFilters = { dateRange }; // Depends only on date for now
+      const { lastFetchedSegmentationFilters, isLoadingSegmentation } = get();
+
+      if (isLoadingSegmentation) return;
+      if (lastFetchedSegmentationFilters && isEqual(currentFilters, lastFetchedSegmentationFilters)) {
+          console.log("EnrollmentStore: Segmentation filters unchanged, skipping fetch.");
           return;
       }
+       if (!dateRange?.from) {
+          console.warn("EnrollmentStore: Skipping segmentation fetch, date range missing.");
+          return;
+      }
+
+      console.log("EnrollmentStore: Fetching segmentation...");
+      set({ isLoadingSegmentation: true, segmentationError: null });
       const startDate = dateRange.from;
       const endDate = dateRange.to || startDate;
 
@@ -255,21 +335,32 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
           const response = await fetch(`/api/admin/enrollments/segmentation?${params.toString()}`);
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || 'Failed to fetch segmentation');
-          set({ segmentationData: data, isLoadingSegmentation: false });
+          set({ segmentationData: data, isLoadingSegmentation: false, lastFetchedSegmentationFilters: currentFilters });
       } catch (error) {
           console.error("Error fetching enrollment segmentation:", error);
-          set({ segmentationError: error instanceof Error ? error.message : 'Unknown error', isLoadingSegmentation: false });
+          set({ segmentationError: error instanceof Error ? error.message : 'Unknown error', isLoadingSegmentation: false, lastFetchedSegmentationFilters: null });
       }
   },
 
   fetchDetails: async () => {
-      set({ isLoadingDetails: true, detailsError: null });
       const { dateRange } = useSharedDashboardFiltersStore.getState();
       const { detailsPage, detailsPageSize, detailsSearchTerm } = get();
-      if (!dateRange?.from) {
-          set({ isLoadingDetails: false, detailsError: 'Date range start date is missing.' });
+      const currentFilters: DetailsFilters = { dateRange, detailsPage, detailsPageSize, detailsSearchTerm };
+      const { lastFetchedDetailsFilters, isLoadingDetails } = get();
+
+      if (isLoadingDetails) return;
+      // Skip if details filters are exactly the same
+      if (lastFetchedDetailsFilters && isEqual(currentFilters, lastFetchedDetailsFilters)) {
+         console.log("EnrollmentStore: Details filters unchanged, skipping fetch.");
+         return;
+      }
+       if (!dateRange?.from) {
+          console.warn("EnrollmentStore: Skipping details fetch, date range missing.");
           return;
       }
+
+      console.log("EnrollmentStore: Fetching details...");
+      set({ isLoadingDetails: true, detailsError: null });
       const startDate = dateRange.from;
       const endDate = dateRange.to || startDate;
 
@@ -288,11 +379,12 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
               detailsData: data.enrollments,
               detailsTotalCount: data.totalCount,
               isLoadingDetails: false,
-              detailsError: null
+              detailsError: null,
+              lastFetchedDetailsFilters: currentFilters // Store filters on success
           });
       } catch (error) {
           console.error("Error fetching enrollment details:", error);
-          set({ detailsError: error instanceof Error ? error.message : 'Unknown error', isLoadingDetails: false });
+          set({ detailsError: error instanceof Error ? error.message : 'Unknown error', isLoadingDetails: false, lastFetchedDetailsFilters: null });
       }
   },
   
@@ -315,11 +407,4 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
       }
   },
 
-  initialize: () => {
-    get().fetchSummary();
-    get().fetchTrends();
-    get().fetchFunnel();
-    get().fetchSegmentation();
-    get().fetchDetails(); 
-  }
 })); 

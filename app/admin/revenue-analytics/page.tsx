@@ -34,17 +34,36 @@ export default function RevenueAnalyticsPage() {
   // GET: Date range state and setter from the SHARED store
   const { dateRange: sharedDateRange, setDateRange: setSharedDateRange } = useSharedDashboardFiltersStore();
 
-  // Fetch data on initial load and when SHARED date range or local filters change
+  // Fetch data: Check if data exists before fetching
   useEffect(() => {
-    // Check if the shared date range is valid before fetching
     if (sharedDateRange?.from) {
-      console.log('Revenue filters or shared date changed, fetching...', { sharedDateRange, granularity, sourcePlatform });
-      fetchAllRevenueData();
+        // Get current data state
+        const state = useRevenueAnalyticsStore.getState();
+        // Check if any essential data is missing
+        if (
+            state.summary === null ||
+            state.trends.length === 0 ||
+            state.byProduct.length === 0 ||
+            state.byPaymentMethod.length === 0
+        ) {
+            console.log('Revenue filters/date changed, fetching missing data...', { sharedDateRange, granularity, sourcePlatform });
+            fetchAllRevenueData();
+        } else {
+            console.log('Revenue filters/date changed, but data exists. Consider adding staleness logic.');
+            // Potentially still need to fetch if granularity/sourcePlatform changed, 
+            // even if *some* data exists. The current fetchAllRevenueData fetches everything.
+            // For simplicity now, we only fetch if *any* data is missing.
+            // A more complex approach would track filters per data slice.
+            // Let's add a specific check: if granularity or sourcePlatform actually changed, refetch.
+            if (state.granularity !== granularity || state.sourcePlatform !== sourcePlatform) {
+                console.log('Revenue granularity or sourcePlatform changed, refetching all data...');
+                fetchAllRevenueData();
+            }
+        }
     } else {
       console.log('Skipping revenue fetch: Shared date range is invalid.', sharedDateRange);
     }
-    // Dependency array includes shared date range AND local filters
-  }, [sharedDateRange, granularity, sourcePlatform, fetchAllRevenueData]);
+  }, [sharedDateRange, granularity, sourcePlatform, fetchAllRevenueData]); // Keep dependencies
 
   // UPDATE: handleFiltersChange no longer includes dateRange
   const handleFiltersChange = (filters: {

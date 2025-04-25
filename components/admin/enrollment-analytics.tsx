@@ -85,112 +85,91 @@ const formatPercent = (value: number | null) => {
 
 // Main component for Enrollment Analytics section
 export function EnrollmentAnalytics() {
-  // Use the Zustand store exclusively for state and actions
   const {
+    // Filters
     granularity,
     funnelSource,
+    // RESTORE: Destructure necessary state for rendering and local logic
     detailsSearchTerm,
     detailsPage,
     detailsPageSize,
     checkEmail,
-    summaryData,
-    trendsData,
-    funnelData,
+    summaryData, 
+    trendsData, 
+    funnelData, 
     segmentationData,
     detailsData,
-    detailsTotalCount,
-    checkResult,
+    detailsTotalCount, // Needed for pagination calculation
+    checkResult, // Needed for check tool UI
+    // Loading states are needed for UI
     isLoadingSummary,
     isLoadingTrends,
     isLoadingFunnel,
     isLoadingSegmentation,
-    isLoadingDetails,
-    isLoadingCheck,
+    isLoadingDetails, 
+    isLoadingCheck, 
+    // Error states are needed for UI
     summaryError,
     trendsError,
     funnelError,
     segmentationError,
     detailsError,
     checkError,
+    // Actions
     setGranularity,
     setFunnelSource,
+    // RESTORE: Setters needed for inputs/pagination
     setDetailsSearchTerm,
     setDetailsPage,
     setDetailsPageSize,
     setCheckEmail,
-    performCheck,
-    initialize, // Use initialize action from store
-    fetchSummary, // Need fetch actions to trigger them
+    performCheck, // Needed for check tool button
+    // Fetch actions needed for main effect
+    fetchSummary,
     fetchTrends,
     fetchFunnel,
     fetchSegmentation,
-    fetchDetails,
+    // fetchDetails // Still not called from the main effect
   } = useEnrollmentAnalyticsStore();
 
-  // GET: Date range state and setter from the SHARED store
   const { dateRange: sharedDateRange, setDateRange: setSharedDateRange } = useSharedDashboardFiltersStore();
 
-  // Local state ONLY for debouncing search input to avoid excessive API calls
-  const [localSearchTerm, setLocalSearchTerm] = useState(detailsSearchTerm);
+  // Local state ONLY for debouncing search input 
+  const [localSearchTerm, setLocalSearchTerm] = useState(detailsSearchTerm); // Needs initial value
 
   // Debounce handler that calls the store action
   const debouncedSetStoreSearch = useCallback(debounce((value: string) => {
-      // This action in the store handles resetting the page and fetching data
+      // Uses setDetailsSearchTerm from store
       setDetailsSearchTerm(value);
     }, 500),
-    [setDetailsSearchTerm] // Dependency ensures debounce uses the latest store action
+    [setDetailsSearchTerm] 
   );
 
-  // Sync local search input state with store state ONLY if they differ
-  // This handles cases like initial load or external state changes
+  // Sync local search input state with store state 
    useEffect(() => {
+      // Needs detailsSearchTerm from store
       if (localSearchTerm !== detailsSearchTerm) {
           setLocalSearchTerm(detailsSearchTerm);
       }
-   }, [detailsSearchTerm]); // Only run when the store's search term changes
+   }, [detailsSearchTerm]); 
 
-  // Effect to call the debounced function when local term changes
+  // Primary Effect: Call fetch actions when relevant filters change.
+  // The store actions themselves will decide if an API call is needed.
   useEffect(() => {
-    // Call the debounced function whenever the local input value changes
-    debouncedSetStoreSearch(localSearchTerm);
-    // Cleanup function to cancel any pending debounced calls on unmount
-    return () => debouncedSetStoreSearch.cancel();
-  }, [localSearchTerm, debouncedSetStoreSearch]); // Re-run if local term or debounced function changes
-
-  // Initialize data fetching on component mount using the store's initialize action
-  useEffect(() => {
-    // Call the initialize action once when the component mounts
-    // This will fetch data using the default date range from the shared store
-    initialize();
-    // No cleanup needed here as fetching logic is managed within the store
-  }, [initialize]); // Dependency on initialize ensures it runs once
-
-  // EFFECT: Fetch data whenever the SHARED date range changes
-  useEffect(() => {
-    // Check if the shared date range is valid before fetching
+    // Ensure shared date range is valid before calling fetches that depend on it
     if (sharedDateRange?.from) {
-      console.log('Shared date range changed, fetching enrollment data...', sharedDateRange);
-      fetchSummary();
-      fetchTrends();
-      fetchFunnel();
-      fetchSegmentation();
-      fetchDetails();
+        console.log("EnrollmentAnalytics: Filters changed, triggering store fetch actions...");
+        fetchSummary();
+        fetchTrends();
+        fetchFunnel();
+        fetchSegmentation();
+        // fetchDetails is triggered by pagination/search setters in the store directly
     } else {
-      console.log('Shared date range changed, but it is invalid. Skipping fetch.', sharedDateRange);
+        console.warn("EnrollmentAnalytics: Skipping primary fetches, date range invalid.");
     }
-    // Run this effect when the shared date range changes
-  }, [sharedDateRange, fetchSummary, fetchTrends, fetchFunnel, fetchSegmentation, fetchDetails]);
-
-  // EFFECT: Fetch data when granularity or funnel source changes (independent of date)
-  useEffect(() => {
-    console.log('Granularity changed, fetching trends...', granularity);
-    fetchTrends();
-  }, [granularity, fetchTrends]);
-
-  useEffect(() => {
-    console.log('Funnel source changed, fetching funnel...', funnelSource);
-    fetchFunnel();
-  }, [funnelSource, fetchFunnel]);
+    // Depend on the filters this component controls/uses + shared date range
+  }, [sharedDateRange, granularity, funnelSource, 
+      fetchSummary, fetchTrends, fetchFunnel, fetchSegmentation]); // Include fetch actions in deps array
 
   // Calculate total pages based on store state
   const totalPages = Math.ceil(detailsTotalCount / detailsPageSize);
