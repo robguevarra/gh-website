@@ -46,7 +46,6 @@ export async function GET(request: NextRequest) {
   const startDateParam = searchParams.get('startDate') || defaultStartDate;
   const endDateParam = searchParams.get('endDate') || defaultEndDate;
 
-  // Validate date parameters (basic validation)
   const startDate = new Date(startDateParam);
   const endDate = new Date(endDateParam);
 
@@ -54,12 +53,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid date format' }, { status: 400 });
   }
 
-  // Ensure end date includes the whole day
-  endDate.setHours(23, 59, 59, 999);
+  // **Use UTC hours to ensure end date includes the whole day consistently**
+  endDate.setUTCHours(23, 59, 59, 999);
 
   // Calculate previous period dates (assuming same duration ending before start date)
   const duration = endDate.getTime() - startDate.getTime();
   const prevEndDate = new Date(startDate.getTime() - 1); // Day before start date
+  // **Use UTC hours for previous end date as well**
+  prevEndDate.setUTCHours(23, 59, 59, 999);
   const prevStartDate = new Date(prevEndDate.getTime() - duration);
 
   // Use hardcoded P2P Course ID
@@ -67,8 +68,6 @@ export async function GET(request: NextRequest) {
 
   try {
     // 3. Fetch enrollment counts for the current and previous periods
-    // We need total enrollments (based on enrolled_at) and active enrollments (based on status = 'active')
-
     const fetchEnrollments = async (start: Date, end: Date) => {
       const { data, error, count } = await supabase
         .from('enrollments')
@@ -80,12 +79,7 @@ export async function GET(request: NextRequest) {
       if (error) throw error;
       
       const total = count ?? 0;
-      // Calculate active based on the status field for enrollments within the period
-      const active = data?.filter(e => e.status === 'active').length ?? 0; 
-      // Note: This 'active' counts *new* enrollments within the period that are active.
-      // A different query would be needed for *currently* active users regardless of enrollment date.
-      // Clarify requirement if needed. Assuming active enrollments *within* the period for now.
-      
+      const active = data?.filter(e => e.status === 'active').length ?? 0;
       return { total, active };
     };
 

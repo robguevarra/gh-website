@@ -59,6 +59,16 @@ The unified schema is in place, and the migration process is now modularized and
       updated_at = now();
     ```
 - This step is also idempotent and can be safely re-run.
+- [x] Log upserted, skipped, and error emails; return detailed change logs and error samples in response
+// **Troubleshooting Note (YYYY-MM-DD):** Investigated sync issues where new transactions were skipped.
+// Root cause identified: The batch insert for NEW profiles in this endpoint was failing silently
+// due to the use of an invalid `{ skipDuplicates: true }` option in the `.insert()` call (not supported by Supabase JS client for standard tables).
+// This prevented `unified_profiles` from being created for users newly added by the `/sync` endpoint.
+// **Resolution:** Removed the invalid `skipDuplicates` option. The logic correctly identifies new profiles, and the primary key constraint prevents duplicates.
+// **Follow-up Issue (YYYY-MM-DD):** The batch insert still failed with a `duplicate key value violates unique constraint "unified_profiles_pkey"` error.
+// This indicated the logic classifying profiles as "new" (because they weren't in the initially fetched `existingMap`) was flawed, as the profile ID actually *did* exist in the database.
+// **Resolution 2:** Changed the batch insert (`.insert()`) to a batch upsert (`.upsert(..., { onConflict: 'id' })`). This allows the database to handle the conflict gracefully by updating the existing record instead of throwing an error, ensuring profiles for new Auth users are created or updated reliably.
+// This fix allows `/update-profiles` to successfully insert/update new records, enabling subsequent steps (`/update-transactions`) to find the necessary `user_id`.
 
 ### 3. Transactions Migration (normalization, upsert, trigger for enrollments)
 - All payment records from Xendit are migrated to the `transactions` table:
@@ -673,8 +683,17 @@ Implement robust, idempotent API endpoints for `/update-transactions` and `/upda
 - [x] Fetch all existing unified_profiles into a map by user ID
 - [x] For each Auth user, merge systemeio and existing data, preserving phone and acquisition_source
 - [x] Diff each profile: only insert or update if fields have changed (field-level diffing)
-- [x] Batch-insert new profiles (skip duplicates); individually update changed profiles
+- [x] Batch-insert new profiles; individually update changed profiles
 - [x] Log upserted, skipped, and error emails; return detailed change logs and error samples in response
+// **Troubleshooting Note (YYYY-MM-DD):** Investigated sync issues where new transactions were skipped.
+// Root cause identified: The batch insert for NEW profiles in this endpoint was failing silently
+// due to the use of an invalid `{ skipDuplicates: true }` option in the `.insert()` call (not supported by Supabase JS client for standard tables).
+// This prevented `unified_profiles` from being created for users newly added by the `/sync` endpoint.
+// **Resolution:** Removed the invalid `skipDuplicates` option. The logic correctly identifies new profiles, and the primary key constraint prevents duplicates.
+// **Follow-up Issue (YYYY-MM-DD):** The batch insert still failed with a `duplicate key value violates unique constraint "unified_profiles_pkey"` error.
+// This indicated the logic classifying profiles as "new" (because they weren't in the initially fetched `existingMap`) was flawed, as the profile ID actually *did* exist in the database.
+// **Resolution 2:** Changed the batch insert (`.insert()`) to a batch upsert (`.upsert(..., { onConflict: 'id' })`). This allows the database to handle the conflict gracefully by updating the existing record instead of throwing an error, ensuring profiles for new Auth users are created or updated reliably.
+// This fix allows `/update-profiles` to successfully insert/update new records, enabling subsequent steps (`/update-transactions`) to find the necessary `user_id`.
 
 3. **Implement /update-transactions Logic**
 - [x] Load all unified profiles and existing transactions in 1000-row batches (pagination)

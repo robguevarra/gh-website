@@ -132,7 +132,16 @@ async function fetchSummaryMetrics(
   admin: SupabaseClient,
   dr: DateRange
 ): Promise<SummaryMetrics> {
-  // Parallel enrollments
+  // Use the same hardcoded P2P Course ID as the enrollment summary API
+  const p2pCourseId = '7e386720-8839-4252-bd5f-09a33c3e1afb';
+
+  // Adjust end dates to include the full day for consistency
+  const currentEndDate = new Date(dr.current.end);
+  currentEndDate.setUTCHours(23, 59, 59, 999);
+  const previousEndDate = new Date(dr.previous.end);
+  previousEndDate.setUTCHours(23, 59, 59, 999);
+
+  // Parallel enrollments - **Filtered for P2P and using adjusted end date**
   const [
     { count: totalEnrollments = 0, error: errE1 },
     { count: prevEnrollments = 0, error: errE2 }
@@ -140,13 +149,15 @@ async function fetchSummaryMetrics(
     admin
       .from('enrollments')
       .select('id', { count: 'exact', head: true })
+      .eq('course_id', p2pCourseId) // <-- Filter for P2P Course
       .gte('enrolled_at', dr.current.start.toISOString())
-      .lte('enrolled_at', dr.current.end.toISOString()),
+      .lte('enrolled_at', currentEndDate.toISOString()), // <-- Use adjusted end date
     admin
       .from('enrollments')
       .select('id', { count: 'exact', head: true })
+      .eq('course_id', p2pCourseId) // <-- Filter for P2P Course
       .gte('enrolled_at', dr.previous.start.toISOString())
-      .lte('enrolled_at', dr.previous.end.toISOString())
+      .lte('enrolled_at', previousEndDate.toISOString()) // <-- Use adjusted end date
   ]);
   if (errE1 || errE2) throw errE1 || errE2;
 
@@ -159,14 +170,16 @@ async function fetchSummaryMetrics(
       .from('transactions')
       .select('amount')
       .eq('status', 'completed')
+      // Adjust transaction date filter as well for consistency?
+      // For now, keeping original logic unless specified
       .gte('created_at', dr.current.start.toISOString())
-      .lte('created_at', dr.current.end.toISOString()),
+      .lte('created_at', dr.current.end.toISOString()), // Original end date for revenue
     admin
       .from('transactions')
       .select('amount')
       .eq('status', 'completed')
       .gte('created_at', dr.previous.start.toISOString())
-      .lte('created_at', dr.previous.end.toISOString())
+      .lte('created_at', dr.previous.end.toISOString()) // Original end date for revenue
   ]);
   if (errR1 || errR2) throw errR1 || errR2;
 
@@ -191,19 +204,28 @@ async function fetchSummaryMetrics(
   ] = await Promise.all([
     admin
       .from('enrollments')
+      // Select distinct users for active count, still filtered by P2P and adjusted date
       .select('user_id', { count: 'exact', head: true })
+      .eq('course_id', p2pCourseId) // <-- Filter for P2P Course
       .gte('enrolled_at', dr.current.start.toISOString())
-      .lte('enrolled_at', dr.current.end.toISOString()),
+      .lte('enrolled_at', currentEndDate.toISOString()), // <-- Use adjusted end date
     admin
       .from('enrollments')
       .select('user_id', { count: 'exact', head: true })
+      .eq('course_id', p2pCourseId) // <-- Filter for P2P Course
       .gte('enrolled_at', dr.previous.start.toISOString())
-      .lte('enrolled_at', dr.previous.end.toISOString())
+      .lte('enrolled_at', previousEndDate.toISOString()) // <-- Use adjusted end date
   ]);
   if (errA1 || errA2) throw errA1 || errA2;
 
+  // Calculate percent changes, ensuring inputs are numbers
+  const enrollmentChange = percentChange(totalEnrollments ?? 0, prevEnrollments ?? 0);
+  const revenueChange = percentChange(totalRevenue ?? 0, previousRevenue ?? 0);
+  const conversionChange = percentChange(conversionRate ?? 0, prevConversionRate ?? 0);
+  const activeUsersChange = percentChange(activeUsers ?? 0, prevActive ?? 0);
+
   return {
-    totalEnrollments: totalEnrollments ?? 0,
+    totalEnrollments: totalEnrollments ?? 0, // Ensure returned values are also numbers
     totalRevenue: totalRevenue ?? 0,
     conversionRate: conversionRate ?? 0,
     activeUsers: activeUsers ?? 0,
@@ -211,14 +233,14 @@ async function fetchSummaryMetrics(
       totalEnrollments: prevEnrollments ?? 0,
       totalRevenue: previousRevenue ?? 0,
       conversionRate: prevConversionRate ?? 0,
-      activeUsers: prevActive ?? 0
+      activeUsers: prevActive ?? 0,
     },
     percentChange: {
-      totalEnrollments: percentChange(totalEnrollments ?? 0, prevEnrollments ?? 0),
-      totalRevenue: percentChange(totalRevenue ?? 0, previousRevenue ?? 0),
-      conversionRate: percentChange(conversionRate ?? 0, prevConversionRate ?? 0),
-      activeUsers: percentChange(activeUsers ?? 0, prevActive ?? 0)
-    }
+      totalEnrollments: enrollmentChange,
+      totalRevenue: revenueChange,
+      conversionRate: conversionChange,
+      activeUsers: activeUsersChange,
+    },
   };
 }
 

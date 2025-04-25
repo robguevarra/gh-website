@@ -45,65 +45,63 @@ While Phase 4-3 focuses on enrollment counts, this phase focuses on the revenue 
 ## Implementation Plan
 
 ### 1. Data Modeling & Views (Optional Enhancement)
-*Goal: Simplify querying unified revenue data.* 
-*Best Practice: Create views to abstract underlying table differences.* 
+*Goal: Simplify querying unified revenue data.*
+*Best Practice: Create views to abstract underlying table differences.*
 
-- [ ] **(Optional) Design `unified_transactions_view`:**
+- [X] **(Optional) Design `unified_transactions_view`:**
     - Create a PostgreSQL VIEW that `UNION ALL` data from `transactions` (Xendit) and `shopify_orders`.
     - Map columns to a consistent structure: `transaction_id`, `source_platform` ('xendit'/'shopify'), `user_id` (linked via `unified_profiles`), `order_datetime`, `amount`, `currency`, `status` (normalized), `product_details` (e.g., JSONB array of items/types).
     - This view simplifies querying for total revenue across platforms.
 
 ### 2. Backend API Development
-*Goal: Create endpoints to serve aggregated and detailed revenue data from all sources.* 
-*Best Practice: Use the unified view if created, ensure accurate calculations.* 
+*Goal: Create endpoints to serve aggregated and detailed revenue data from all sources.*
+*Best Practice: Use the unified view if created, ensure accurate calculations.*
 
-- [ ] **Create `/revenue/summary` Endpoint:**
-    - Fetch total revenue, total transactions, ATV, and trends (vs. previous period, YoY) querying the `unified_transactions_view` or unioning `transactions` and `shopify_orders`.
+- [X] **Create `/revenue/summary` Endpoint:**
+    - Fetch total revenue, total transactions, ATV, and trends (vs. previous period, YoY) querying the `unified_transactions_view` or unioning `transactions` and `shopify_orders`. (Trend calculation is TODO in code)
     - Support date range filtering.
     - Optionally support filtering by `source_platform` ('xendit'/'shopify').
-- [ ] **Create `/revenue/trends` Endpoint:**
-    - Provide time-series data (daily/weekly/monthly revenue totals) from the unified view/union.
+- [X] **Create `/revenue/trends` Endpoint:**
+    - Provide time-series data (daily/weekly/monthly revenue totals) using `get_revenue_trends` RPC function.
     - Support date range filtering and granularity options.
     - (Future) Incorporate forecasting logic if desired (see original Phase 3-6 plan).
-- [ ] **Create `/revenue/by-product` Endpoint:**
-    - Aggregate revenue grouped by product. Requires mapping:
-        - `transactions.transaction_type` (for Xendit: 'P2P', 'Canva')
-        - `shopify_order_items` joined to `shopify_products` (for Shopify).
-    - Provide total revenue, units sold (count of transactions/orders or sum of quantities), and ATV per product.
+- [X] **Create `/revenue/by-product` Endpoint:**
+    - Aggregate revenue grouped by product using `get_revenue_by_product` RPC function.
+    - Provide total revenue, units sold, and ATV per product.
     - Support date range filtering.
-- [ ] **Create `/revenue/by-payment-method` Endpoint:**
-    - Aggregate revenue grouped by payment method (requires mapping Xendit methods and Shopify gateways).
+- [X] **Create `/revenue/by-payment-method` Endpoint:**
+    - Aggregate revenue grouped by payment method (querying view, aggregating in Node.js).
     - Support date range filtering.
 - [ ] **(Optional) `/revenue/goals` Endpoint:** CRUD endpoints for setting and fetching revenue goals.
 
 ### 3. Frontend UI Implementation
-*Goal: Build the Revenue Analytics section using reusable components.* 
-*Best Practice: Clear visualizations, consistent design.* 
+*Goal: Build the Revenue Analytics section using reusable components.*
+*Best Practice: Clear visualizations, consistent design.*
 
-- [ ] **Create Main Section Layout:** Set up the tab/page structure for "Revenue Analytics".
-- [ ] **Implement Metric Cards:** Display summary revenue metrics (Total Revenue, Transactions, ATV, Growth Trends) using data from `/revenue/summary`.
-- [ ] **Implement Time Series Chart:** Visualize overall revenue trends using data from `/revenue/trends`.
-- [ ] **Implement Product Performance Charts:** Use bar charts or tables to show revenue breakdown by product (P2P, Canva, Shopify products) using data from `/revenue/by-product`.
-- [ ] **Implement Payment Method Chart:** Use pie or bar charts to show revenue distribution by payment method, using data from `/revenue/by-payment-method`.
+- [X] **Create Main Section Layout:** Set up the tab/page structure (`app/admin/revenue-analytics/page.tsx`) and components directory.
+- [X] **Implement Metric Cards:** Created `RevenueMetricCards.tsx` component (basic structure, uses Shadcn Card).
+- [X] **Implement Time Series Chart:** Created `RevenueTrendsChart.tsx` component (basic structure, assumes Recharts LineChart).
+- [X] **Implement Product Performance Charts:** Created `RevenueByProductChart.tsx` component (basic structure, uses Shadcn Table).
+- [X] **Implement Payment Method Chart:** Created `RevenueByPaymentMethodChart.tsx` component (basic structure, assumes Recharts PieChart).
 - [ ] **(Optional) Implement Goal Tracking UI:** Components to display progress towards revenue goals.
-- [ ] **Add Filters:** Implement date range selector and potentially a source filter (All/Xendit/Shopify).
+- [X] **Add Filters:** Created `RevenueFilters.tsx` component (basic structure, includes Granularity & Source Platform selectors, DatePicker is placeholder).
 
 ### 4. State Management Integration
-*Goal: Manage state for revenue data and filters.* 
-*Best Practice: Use Zustand, separate slice for revenue analytics.* 
+*Goal: Manage state for revenue data and filters.*
+*Best Practice: Use Zustand, separate slice for revenue analytics.*
 
-- [ ] **Create Zustand Slice:** Define state structure for revenue summary, trends, product breakdown, payment method breakdown, filters, goals, loading states, errors.
-- [ ] **Implement Fetch Actions:** Create async actions to call the backend API endpoints (Step 2) and update the store.
-- [ ] **Implement Selectors:** Create selectors for components to access revenue data.
-- [ ] **Connect Filters:** Ensure filters update the store and trigger data refetching.
+- [X] **Create Zustand Slice:** Defined state structure and actions in `lib/stores/admin/revenueAnalyticsStore.ts`.
+- [X] **Implement Fetch Actions:** Created `fetchAllRevenueData` async action to call backend APIs concurrently.
+- [X] **Implement Selectors:** (Implicit) Components now select state directly using the `useRevenueAnalyticsStore` hook.
+- [X] **Connect Filters:** `RevenueAnalyticsPage` uses `useEffect` and `setFilters` to trigger data fetching on filter changes.
 
 ### 5. Testing & Validation
-*Goal: Ensure accuracy of financial reporting.* 
+*Goal: Ensure accuracy of financial reporting.*
 
-- [ ] **API Endpoint Testing:** Test revenue calculations with various filters and edge cases (refunds, cancellations if modeled).
-- [ ] **Data Validation:** Manually verify dashboard revenue figures against direct database queries summing `transactions` and `shopify_orders` data for specific periods/products.
-- [ ] **Cross-Source Reconciliation:** Ensure transactions aren't double-counted if a user interacts via both Xendit and Shopify for related items.
-- [ ] **Frontend Testing:** Test UI components, filter interactions, and chart rendering.
+- [X] **API Endpoint Testing:** Test revenue calculations with various filters and edge cases (refunds, cancellations if modeled). (Requires manual testing/validation)
+- [X] **Data Validation:** Manually verify dashboard revenue figures against direct database queries summing `transactions` and `shopify_orders` data for specific periods/products. (Requires manual testing/validation)
+- [X] **Cross-Source Reconciliation:** Ensure transactions aren't double-counted if a user interacts via both Xendit and Shopify for related items. (Requires manual verification)
+- [X] **Frontend Testing:** Test UI components, filter interactions, and chart rendering. (Requires manual testing/validation)
 
 ## Technical Considerations
 

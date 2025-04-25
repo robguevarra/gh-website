@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { MetricCard } from './metric-card';
 import { ChartContainer } from './chart-container';
 import { DataTable } from './data-table';
-import { DateRangePicker, DateRange } from './date-range-picker';
+import { DateRange } from 'react-day-picker';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { FilterDropdown } from './filter-dropdown';
-import { CreditCard } from 'lucide-react';
+import { DollarSign } from 'lucide-react';
 
 /**
  * RevenueSection - Placeholder for dashboard revenue analytics.
@@ -13,7 +14,7 @@ import { CreditCard } from 'lucide-react';
  */
 export function RevenueSection() {
   // Example state for filters
-  const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [product, setProduct] = useState('all');
 
   // Example columns and data for DataTable
@@ -30,7 +31,7 @@ export function RevenueSection() {
       {/* Example metric card */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricCard
-          icon={<CreditCard className="h-4 w-4 text-muted-foreground" />}
+          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
           title="Total Revenue"
           value={0}
           description="Demo only"

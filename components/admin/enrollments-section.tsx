@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { MetricCard } from './metric-card';
 import { ChartContainer } from './chart-container';
 import { DataTable } from './data-table';
-import { DateRangePicker, DateRange } from './date-range-picker';
+import { DateRange } from 'react-day-picker';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { FilterDropdown } from './filter-dropdown';
 import { Users } from 'lucide-react';
 
@@ -12,8 +13,8 @@ import { Users } from 'lucide-react';
  * Ready for future expansion.
  */
 export function EnrollmentsSection() {
-  // Example state for filters
-  const [dateRange, setDateRange] = useState<DateRange>({ start: null, end: null });
+  // Update state to use DateRange from react-day-picker
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [status, setStatus] = useState('all');
 
   // Example columns and data for DataTable

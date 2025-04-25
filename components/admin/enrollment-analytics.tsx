@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { DateRangePicker, DateRange } from '@/components/admin/date-range-picker';
+// Import the standard shadcn date range picker and type
+import { DateRange } from 'react-day-picker';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { MetricCard } from '@/components/admin/metric-card';
 import { Users, TrendingUp, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -84,7 +86,7 @@ const formatPercent = (value: number | null) => {
 export function EnrollmentAnalytics() {
   // Use the Zustand store exclusively for state and actions
   const {
-    // Filters - Directly use store state for controlled components
+    // Filters - Use the react-day-picker DateRange type from the store
     dateRange,
     granularity,
     funnelSource,
@@ -183,7 +185,7 @@ export function EnrollmentAnalytics() {
 
   return (
     <div className="space-y-8">
-      {/* Top Controls: Use store actions for onChange handlers */}
+      {/* Top Controls: Use the standard DateRangePicker */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <h3 className="text-xl font-semibold">Enrollment Overview</h3>
         <div className="flex items-center gap-2 flex-wrap">
@@ -211,10 +213,10 @@ export function EnrollmentAnalytics() {
             </SelectContent>
           </Select>
 
-          {/* Date Range Picker */} 
-          <DateRangePicker 
-             value={dateRange} 
-             onChange={setDateRange}
+          {/* Date Range Picker - Use the standard one */}
+          <DateRangePicker
+             value={dateRange} // Pass the DateRange | undefined from the store
+             onChange={setDateRange} // Pass the store action directly
           />
         </div>
       </div>

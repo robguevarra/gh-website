@@ -168,22 +168,28 @@ export async function POST(req: NextRequest) {
       changeLogs.push({ email: user.email, fields: changed });
     }
 
-    // 5a. Batch-insert new profiles; skip duplicates
+    // 5a. Batch-upsert new/conflicting profiles based on ID
     if (newProfiles.length > 0) {
-      const { data: inserted, error: insertError } = await admin
+      const { data: upsertedData, error: upsertError } = await admin
         .from('unified_profiles')
-        .insert(newProfiles, { skipDuplicates: true });
-      if (insertError) {
-        insertError.message
-          .split(';')
-          .forEach(msg => errors.push({ email: 'insert batch', error: msg }));
+        .upsert(newProfiles, { onConflict: 'id' }); // Use upsert on id conflict
+
+      if (upsertError) {
+        console.error('[update-profiles] Batch upsert error:', upsertError);
+        const messages = upsertError.message?.split(';') || ['Batch upsert failed'];
+        messages.forEach(msg => errors.push({ email: 'upsert batch', error: msg }));
       } else {
-        upserted += inserted.length;
-        upsertedEmails.push(...inserted.slice(0, 10).map(p => p.email));
+        // Safely handle potentially null 'upsertedData' data
+        const data = upsertedData || [];
+        upserted += data.length;
+        // Add type to map parameter
+        upsertedEmails.push(...data.slice(0, 10).map((p: { email: string }) => p.email));
       }
     }
 
-    // 5b. Individually update only profiles with diffs
+    // 5b. Individually update profiles identified as needing specific field updates
+    // Note: Some of these might have already been handled by the upsert, but this ensures
+    // any specific logic in the update path is still applied if needed.
     for (const p of updateProfiles) {
       const { error: updateError } = await admin
         .from('unified_profiles')

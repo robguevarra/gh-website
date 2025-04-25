@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { BookOpen, Users, BarChart2, TrendingUp, UserPlus, Activity } from "lucide-react";
 import { toast } from "sonner";
+import { DateRange } from "react-day-picker";
+import { endOfMonth, startOfMonth, subDays, subMonths } from "date-fns";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +18,7 @@ import { MetricCard } from './metric-card';
 import { ChartContainer } from './chart-container';
 import { EnrollmentTrendsChart } from './enrollment-trends-chart';
 import { RevenueTrendsChart } from './revenue-trends-chart';
-import { DateRangePicker, DateRange } from './date-range-picker';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 
 // --- Types matching the new API response ---
 type SummaryMetrics = {
@@ -71,45 +73,47 @@ type OverviewData = {
   trendGranularity?: string;
 };
 
-// Helper to get default date ranges
+// Helper to get default date ranges using the {from, to} structure
 const getDefaultDateRange = (preset: 'last30' | 'thisMonth' | 'last12mo'): DateRange => {
   const now = new Date();
+  let fromDate: Date;
+  let toDate: Date = now;
+
   if (preset === 'last30') {
-    const start = new Date(now);
-    start.setDate(now.getDate() - 29);
-    return { start, end: now };
+    fromDate = subDays(now, 29);
+  } else if (preset === 'thisMonth') {
+    fromDate = startOfMonth(now);
+  } else { // last 12 months
+    fromDate = startOfMonth(subMonths(now, 11));
   }
-  if (preset === 'thisMonth') {
-    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    return { start, end: now };
-  }
-  // last 12 months
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1));
-  return { start, end: now };
+  // Ensure time is start of day for 'from'
+  fromDate.setHours(0, 0, 0, 0);
+
+  return { from: fromDate, to: toDate };
 };
 
 export function DashboardOverview() {
   const router = useRouter();
   const [data, setData] = useState<OverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  // Date range state for the slicer
-  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange('last12mo'));
-
-  // Presets for quick selection
-  const datePresets = [
-    { label: 'Last 30 days', range: getDefaultDateRange('last30') },
-    { label: 'This month', range: getDefaultDateRange('thisMonth') },
-    { label: 'Last 12 months', range: getDefaultDateRange('last12mo') },
-  ];
+  // Use the DateRange type from react-day-picker { from?, to? }
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(
+    getDefaultDateRange('last12mo')
+  );
 
   // Fetch overview data with date range
   useEffect(() => {
     const fetchOverview = async () => {
+      if (!dateRange?.from) return; // Don't fetch if range is incomplete
       try {
         setIsLoading(true);
         const params = new URLSearchParams();
-        if (dateRange.start) params.append('startDate', dateRange.start.toISOString());
-        if (dateRange.end) params.append('endDate', dateRange.end.toISOString());
+        // Use dateRange.from and dateRange.to
+        params.append('startDate', dateRange.from.toISOString());
+        // Use dateRange.to or default to 'from' date if 'to' is missing (though range mode usually sets both)
+        const endDate = dateRange.to || dateRange.from;
+        params.append('endDate', endDate.toISOString());
+
         const response = await fetch(`/api/admin/dashboard/overview?${params.toString()}`);
         if (!response.ok) throw new Error("Failed to fetch dashboard overview");
         const json = await response.json();
@@ -176,11 +180,8 @@ export function DashboardOverview() {
           <h1 className="text-3xl font-bold">Dashboard</h1>
           <p className="text-muted-foreground">Overview of your business performance</p>
         </div>
-        {/* Date Slicer UI */}
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold">Date Range:</span>
-          <DateRangePicker value={dateRange} onChange={setDateRange} presets={datePresets} />
-        </div>
+        {/* Date Slicer UI - Use the standard DateRangePicker */}
+        <DateRangePicker value={dateRange} onChange={setDateRange} />
         {/* Temporary Admin Buttons for Data Migration/QA */}
         <div className="flex gap-2">
           <Button

@@ -7,8 +7,8 @@ import { getAdminClient } from '@/lib/supabase/admin';
 type TransactionUpsert = {
   user_id: string;
   external_id: string;
-  amount: number | null;
-  currency: string | null;
+  amount: number;
+  currency: string;
   status: string;
   transaction_type: string;
   payment_method: string | null;
@@ -57,7 +57,9 @@ export async function POST(req: NextRequest) {
         if (error) throw error;
         if (!batch || batch.length === 0) break;
         for (const p of batch) {
-          profileMap.set(String(p.email).trim().toLowerCase(), p.id);
+          if (p.email && p.id) {
+            profileMap.set(p.email!.trim().toLowerCase(), p.id!);
+          }
         }
         if (batch.length < batchSize) break;
       }
@@ -89,7 +91,7 @@ export async function POST(req: NextRequest) {
         .select(
           'Email, "External ID", Amount, Currency, Status, Description, "Payment Method", "Created Timestamp", "Paid Timestamp", "Settled Timestamp", "Expiry Date"'
         )
-        .gte('Created Timestamp', since)
+        .gt('Created Timestamp', since)
         .order('Created Timestamp', { ascending: true })
         .range(offset, offset + perPage - 1);
       if (xError) throw xError;
@@ -118,8 +120,8 @@ export async function POST(req: NextRequest) {
         const record: TransactionUpsert = {
           user_id,
           external_id,
-          amount: row["Amount"] ?? null,
-          currency: row["Currency"] ?? null,
+          amount: row["Amount"] ?? 0,
+          currency: row["Currency"] ?? 'USD',
           status,
           transaction_type,
           payment_method: row["Payment Method"] ?? null,
@@ -170,11 +172,12 @@ export async function POST(req: NextRequest) {
       console.log(`[update-transactions] Inserting ${toInsert.length} new transactions`);
       const { data: inserted, error: insertError } = await admin
         .from('transactions')
-        .insert(toInsert, { skipDuplicates: true });
+        .insert(toInsert);
       if (insertError) {
         toInsert.forEach(r => errors.push({ external_id: r.external_id, error: insertError.message }));
       } else {
-        insertedCount = inserted.length;
+        const { count } = await admin.from('transactions').select('id', { count: 'exact', head: true }).in('external_id', toInsert.map(t => t.external_id));
+        insertedCount = count ?? 0;
       }
     }
     // Update changed transactions
@@ -183,8 +186,8 @@ export async function POST(req: NextRequest) {
         .from('transactions')
         .update({
           user_id: rec.user_id,
-          amount: rec.amount,
-          currency: rec.currency,
+          amount: rec.amount ?? 0,
+          currency: rec.currency ?? 'USD',
           status: rec.status,
           transaction_type: rec.transaction_type,
           payment_method: rec.payment_method,
