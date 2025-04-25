@@ -22,6 +22,7 @@ import {
     selectCartTotalQuantity // Import quantity selector too
 } from '@/stores/cartStore';
 import { ShoppingBag } from 'lucide-react'; // Added ShoppingBag icon
+import { useToast } from '@/components/ui/use-toast';
 
 // Helper to format currency
 const formatPrice = (price: number): string => {
@@ -40,6 +41,28 @@ const CartView = () => {
   const totalQuantity = useCartStore(selectCartTotalQuantity);
   const removeItem = useCartStore((state) => state.removeItem);
   const clearCart = useCartStore((state) => state.clearCart);
+  
+  // Add toast for user feedback
+  const { toast } = useToast();
+
+  // Handle remove item with toast feedback
+  const handleRemoveItem = (productId: string, title: string) => {
+    removeItem(productId);
+    toast({
+      title: "Item Removed",
+      description: `${title} has been removed from your cart.`,
+    });
+  };
+
+  // Handle clear cart with toast feedback
+  const handleClearCart = () => {
+    clearCart();
+    toast({
+      title: "Cart Cleared",
+      description: "All items have been removed from your cart.",
+      variant: "destructive",
+    });
+  };
 
   return (
     <SheetContent className="flex flex-col w-full sm:max-w-lg bg-background">
@@ -89,7 +112,7 @@ const CartView = () => {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-neutral-400 hover:text-destructive hover:bg-destructive/10 shrink-0"
-                    onClick={() => removeItem(item.productId)}
+                    onClick={() => handleRemoveItem(item.productId, item.title)}
                     aria-label={`Remove ${item.title} from cart`}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -109,7 +132,7 @@ const CartView = () => {
             <div className="flex flex-col sm:flex-row justify-between gap-2">
               <Button 
                 variant="outline" 
-                onClick={clearCart}
+                onClick={handleClearCart}
                 className="border-destructive text-destructive hover:bg-destructive/10"
                 >Clear Cart
                </Button>

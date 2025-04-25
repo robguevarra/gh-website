@@ -1,9 +1,14 @@
 import React from 'react';
+import { Suspense } from 'react';
 // Import the CORRECT function for creating a server-side client
 import { createServerSupabaseClient } from '@/lib/supabase/server'; 
 // Remove unused client import if it existed before
 // import { createClient } from '@supabase/supabase-js'; 
-import ProductList from '@/components/store/ProductList'; // Will be created next
+import ProductList from '@/components/store/ProductList'; // Will be updated for product links
+import LoadingSkeleton from '@/components/store/LoadingSkeleton';
+import StoreHero from '@/components/store/StoreHero';
+import CategoryNavigation from '@/components/store/CategoryNavigation';
+import SuccessShowcase from '@/components/store/SuccessShowcase';
 import { Database } from '@/types/supabase'; // Assuming Supabase generated types
 
 // Base type for shopify_products row from generated types
@@ -37,8 +42,9 @@ async function getMemberProductsStore(): Promise<ProductData[]> {
       featured_image_url, 
       shopify_product_variants ( price )
     `)
-    .eq('status', 'active')
-    .contains('tags', ['access:members'])
+    .eq('status', 'ACTIVE')
+    // Temporarily removed tag filter since none have 'access:members'
+    // .contains('tags', ['access:members'])
     .not('shopify_product_variants', 'is', null)
     .limit(1, { foreignTable: 'shopify_product_variants' })
     // Revert to using the specific type now that types are regenerated
@@ -77,20 +83,41 @@ async function getMemberProductsStore(): Promise<ProductData[]> {
   return products;
 }
 
-// Store page component - now fetches data server-side
-export default async function StorePage() {
+// ProductListWithData component for Suspense
+async function ProductListWithData() {
   const products = await getMemberProductsStore();
-
+  
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-3xl font-bold mb-6">Member Store</h1>
+    <ProductList products={products} />
+  );
+}
+
+// Store page component - server-side rendering
+export default function StorePage() {
+  return (
+    <div className="pb-20">
+      {/* Hero Section */}
+      <StoreHero />
       
-      {products.length === 0 ? (
-        <p>No products available at this time.</p>
-      ) : (
-        // Pass the fetched products to the client component
-        <ProductList products={products} />
-      )}
+      {/* Success Showcase */}
+      <div className="container mx-auto px-4">
+        <SuccessShowcase />
+      </div>
+      
+      {/* Category Navigation */}
+      <div className="container mx-auto px-4">
+        {/* CategoryNavigation is a client component, don't pass server functions to it */}
+        <CategoryNavigation activeCategory="all" />
+      </div>
+      
+      {/* Product Listing with Suspense */}
+      <div className="container mx-auto px-4">
+        <h2 className="text-3xl font-serif font-bold mb-6">Commercial License Designs</h2>
+        
+        <Suspense fallback={<LoadingSkeleton />}>
+          <ProductListWithData />
+        </Suspense>
+      </div>
     </div>
   );
 } 

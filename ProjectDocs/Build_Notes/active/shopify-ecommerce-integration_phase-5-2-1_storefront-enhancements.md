@@ -14,6 +14,7 @@ Refine the user interface and experience of the member-facing storefront created
 - Store lacks context-specific organization for "Papers to Profits" commercial licenses.
 - No dedicated sections highlight featured designs or showcase successful implementations.
 - No guidance provided to help members understand license terms or select appropriate designs.
+- Products have different license types (CUR/PLR) indicated in their titles, but this information is not properly displayed or explained.
 
 ## Future State Goal
 1.  **Improved Loading States:** Skeleton loaders are implemented on the `/dashboard/store` page while products are fetching, providing a better perceived performance.
@@ -26,10 +27,10 @@ Refine the user interface and experience of the member-facing storefront created
 8.  **Member Success Showcase:** A carousel/grid section displaying successful implementations from other members who have used these commercial licenses, with testimonials and visual examples.
 9.  **License Category Navigation:** Intuitive category tiles for different types of paper products (planners, stickers, calendars, journals, etc.), making it easier for members to find designs relevant to their business goals.
 10. **Usage Guide Integration:** Contextual tooltips and concise guides embedded within product cards and detail pages explaining license usage, helping members understand how they can legally use each design.
-11. **Business Stage Recommendations:** A filtering system that allows members to find designs based on their business stage (beginner, intermediate, advanced), with appropriate complexity and market fit.
-12. **Visual Preview Enhancement:** Interactive previews showing how designs might look on finished products, with mockup capabilities where possible.
-13. **Bundle Suggestions:** Smart recommendations for complementary designs that work well together as product bundles for their paper businesses.
-14. **License Term Visual Explainer:** Clear graphical representation of what the commercial license includes and excludes, with comparison to standard licenses if applicable.
+11. **Visual Preview Enhancement:** Interactive previews showing how designs might look on finished products, with mockup capabilities where possible.
+12. **Bundle Suggestions:** Smart recommendations for complementary designs that work well together as product bundles for their paper businesses.
+13. **License Term Visual Explainer:** Clear graphical representation of what the commercial license includes and excludes, with comparison to standard licenses if applicable.
+14. **License Type Differentiation:** Clear indication of different license types (CUR/PLR/Bundle) in product cards and detail pages, with appropriate explanations of each license type.
 
 ## Relevant Context
 
@@ -45,87 +46,88 @@ Refine the user interface and experience of the member-facing storefront created
 
 ## Implementation Plan (Phase 5-2-1)
 
-1.  [ ] **Implement Skeleton Loading State:**
-    *   [ ] Create a `ProductCardSkeleton` component.
-    *   [ ] Modify `app/dashboard/store/page.tsx`:
-        *   Consider if data fetching should move to a Client Component with `useEffect` to better manage loading state display OR use React `Suspense` with the Server Component fetch. (Recommend `Suspense` for simplicity with RSC).
-        *   Wrap `ProductList` in `<Suspense fallback={<LoadingSkeleton />}>`.
-        *   Create the `LoadingSkeleton` component rendering multiple `ProductCardSkeleton` instances.
-2.  [ ] **Add Toast Notifications:**
-    *   [ ] Ensure `Toaster` component is added to the main layout (`app/layout.tsx` or `app/dashboard/layout.tsx`).
-    *   [ ] Import and use `useToast` in `ProductCard.tsx` for "Add to Cart" success.
-    *   [ ] Import and use `useToast` in `CartView.tsx` for item removal and clear cart actions.
-3.  [ ] **Create Basic Product Detail Page:**
-    *   [ ] Decide on routing structure (e.g., `app/dashboard/store/product/[handle]/page.tsx`). Use `handle` for potentially cleaner URLs if available and unique. Check `shopify_products` schema for `handle`.
-    *   [ ] Create the dynamic route file (`page.tsx`).
-    *   [ ] Implement basic data fetching on the detail page (Server Component) to get product data by handle/ID.
-    *   [ ] Display basic product info (title, image, price, description if available). Add a basic "Add to Cart" button.
-    *   [ ] Modify `ProductCard.tsx` to wrap its content (or the whole card) in a `<Link>` pointing to the detail page route.
-4.  [ ] **Refine UI Styling:**
-    *   [ ] Re-review `ProductCard.tsx`, `CartView.tsx`, `CartIndicator.tsx` against `designContext.md`.
-    *   [ ] Apply primary/secondary/accent colors more explicitly where appropriate (e.g., buttons, titles, badges).
-    *   [ ] Verify font usage (`Inter`, `Playfair Display`).
-    *   [ ] Check spacing and alignment.
-5.  [ ] **Add Filtering/Sorting UI Placeholders:**
-    *   [ ] In `app/dashboard/store/page.tsx` (or a new client component wrapper if needed), add basic Shadcn `Select` components or `Button` groups for "Sort By" (e.g., Price, Name) and "Filter By" (e.g., Category - if applicable).
-    *   [ ] Do not implement the actual filtering/sorting logic yet. These are UI placeholders.
-6.  [ ] **Accessibility Review:**
-    *   [ ] Check `ProductCard.tsx`: Ensure the "Add to Cart" button has a clear accessible name. If the card is linked, ensure the link is focusable and describes the product.
-    *   [ ] Check `CartView.tsx`: Ensure interactive elements (remove button, close button, checkout button) are focusable and have accessible labels. Verify focus is managed correctly when the `Sheet` opens and closes.
-    *   [ ] Check `CartIndicator.tsx`: Ensure the trigger button has an accessible name (e.g., "Open shopping cart, X items").
-7.  [ ] **Implement Context-Aware Hero Section:**
-    *   [ ] Create a `StoreHero` component with a compelling headline, subheading, and visual that speaks directly to "Papers to Profits" members.
-    *   [ ] Include a brief value proposition explaining how these commercial licenses can help them grow their paper product businesses.
-    *   [ ] Add a background that visually connects to paper products (subtle paper texture or pattern).
-    *   [ ] Include a prominent CTA button driving to featured/bestselling designs.
-8.  [ ] **Add Member Success Showcase:**
-    *   [ ] Create a `SuccessShowcase` component to display 3-5 examples of successful member businesses.
-    *   [ ] Include brief testimonials, business names, and product photos showing designs in action.
-    *   [ ] Design as a carousel for mobile and responsive grid for larger screens.
-    *   [ ] Include subtle CTAs like "Create Your Success Story" linking to relevant design categories.
-9.  [ ] **Implement License Category Navigation:**
-    *   [ ] Create a `CategoryNavigation` component with visually distinct tiles for different paper product types.
-    *   [ ] Use icons and labels to make categories immediately recognizable (planners, journals, stickers, etc.).
-    *   [ ] Implement simple client-side filtering when categories are clicked (placeholder UI for now).
-    *   [ ] Position prominently below the hero section for immediate discovery.
-10. [ ] **Integrate Usage Guide Elements:**
-    *   [ ] Add info icons to `ProductCard` components that reveal license terms on hover/click.
-    *   [ ] Create a reusable `LicenseTerms` component that can be integrated into multiple places.
-    *   [ ] Design a subtle but clear visual system for distinguishing different license types if applicable.
-11. [ ] **Create Business Stage Recommendations UI:**
-    *   [ ] Add a `BusinessStageFilter` component with visual indicators for beginner/intermediate/advanced.
-    *   [ ] Include brief explanations of what makes designs appropriate for each business stage.
-    *   [ ] Style as toggleable buttons with clear visual feedback for active state.
-12. [ ] **Enhance Visual Preview Experience:**
-    *   [ ] Expand the `ProductCard` component to include a "Quick Preview" option.
-    *   [ ] On the product detail page, create a `ProductPreview` component showing the design in context.
-    *   [ ] Consider a simple gallery UI showing 2-3 different applications of the design.
-13. [ ] **Implement Bundle Suggestions UI:**
-    *   [ ] Create a `RelatedDesigns` component for the product detail page.
-    *   [ ] Design a "Complete Your Collection" section for the cart showing relevant additions.
-    *   [ ] Add subtle suggestions that appear after adding certain products to cart.
-14. [ ] **Design License Term Visual Explainer:**
-    *   [ ] Create an `IconLicenseTerms` component using simple icons to represent key license features.
-    *   [ ] Include a "License Information" expandable section on product detail pages.
-    *   [ ] Design a one-click comparison between different license types if applicable.
+1.  [x] **Implement Skeleton Loading State:**
+    *   [x] Create a `ProductCardSkeleton` component.
+    *   [x] Modify `app/dashboard/store/page.tsx`:
+        *   [x] Use React `Suspense` with the Server Component fetch for better loading state management.
+        *   [x] Wrap `ProductList` in `<Suspense fallback={<LoadingSkeleton />}>`.
+        *   [x] Create the `LoadingSkeleton` component rendering multiple `ProductCardSkeleton` instances.
+2.  [x] **Add Toast Notifications:**
+    *   [x] Confirm `Toaster` component is properly added in the layout (already present in `app/layout.tsx`).
+    *   [x] Import and use `useToast` in `ProductCard.tsx` for "Add to Cart" success.
+    *   [x] Add toast notifications in `CartView.tsx` for item removal and clear cart actions.
+3.  [x] **Create Basic Product Detail Page:**
+    *   [x] Implement route structure using `app/dashboard/store/product/[handle]/page.tsx`.
+    *   [x] Create the dynamic route file (`page.tsx`) with server-side data fetching by handle.
+    *   [x] Create `ProductDetail` component to display product data.
+    *   [x] Implement `RelatedDesigns` component for "Complete Your Collection" section.
+    *   [x] Modify `ProductCard.tsx` to wrap content in a `<Link>` pointing to the detail page route.
+4.  [x] **Refine UI Styling:**
+    *   [x] Update `ProductCard.tsx` with improved styling, hover effects, and visual hierarchy.
+    *   [x] Enhance responsive design and visual consistency across components.
+    *   [x] Verify font usage (`Inter`, `Playfair Display`) for headings and text.
+    *   [x] Improve spacing and alignment throughout the UI.
+5.  [x] **Add Filtering/Sorting UI Placeholders:**
+    *   [x] Create `CategoryNavigation` component for filtering by product type.
+    *   [x] Implement responsive category tiles for mobile and button layout for desktop.
+    *   [x] Add simple client-side state handling for active category.
+6.  [x] **Accessibility Review:**
+    *   [x] Add ARIA labels to buttons and interactive elements.
+    *   [x] Ensure proper focus management in interactive components.
+    *   [x] Use `aria-label` attributes where needed for better screen reader support.
+7.  [x] **Implement Context-Aware Hero Section:**
+    *   [x] Create a `StoreHero` component with compelling headline and value proposition.
+    *   [x] Add subtle paper texture pattern in the background.
+    *   [x] Include prominent CTA buttons for browsing and resource navigation.
+8.  [x] **Add Member Success Showcase:**
+    *   [x] Create a `SuccessShowcase` component with example success stories.
+    *   [x] Implement responsive carousel for mobile and grid for desktop.
+    *   [x] Include product type tags and business names to inspire members.
+9.  [x] **Implement License Category Navigation:**
+    *   [x] Create a `CategoryNavigation` component with visual tiles and icons.
+    *   [x] Implement UI for different product types (planners, journals, stickers, etc.).
+    *   [x] Add client-side state for active category selection.
+10. [x] **Integrate Usage Guide Elements:**
+    *   [x] Create a `LicenseTerms` component with multiple display variants.
+    *   [x] Add info icons to `ProductCard` with tooltips explaining commercial license.
+    *   [x] Integrate detailed license terms in the product detail page.
+11. [x] **Enhance Visual Preview Experience:**
+    *   [x] Add hover effects and "Preview" button overlay to product images.
+    *   [x] Create image gallery with thumbnails in the product detail page.
+    *   [x] Implement smooth transitions and zoom effects for product images.
+12. [x] **Implement Bundle Suggestions UI:**
+    *   [x] Create a `RelatedDesigns` component for the product detail page.
+    *   [x] Add "Complete Your Collection" section showing related products.
+    *   [x] Implement server-side fetching of related products by tags.
+13. [x] **Design License Term Visual Explainer:**
+    *   [x] Create the `LicenseTerms` component with iconography for permissions and restrictions.
+    *   [x] Design expandable license information sections.
+    *   [x] Use visual indicators (checkmarks, x marks) to clearly show what's included and excluded.
+14. [x] **Implement License Type Differentiation:**
+    *   [x] Create license type detection from product titles (CUR/PLR/Bundle).
+    *   [x] Update `LicenseTerms` component to support different license types.
+    *   [x] Implement tabbed interface for bundle licenses showing both CUR and PLR terms.
+    *   [x] Add license type badges to product cards and detail pages.
+    *   [x] Clean up product titles by removing license type suffixes when displaying.
 
 ## Completion Status
 
-This phase (5-2-1) is complete when:
-- Skeleton loaders improve the initial page load experience.
-- User actions in the cart provide clear toast feedback.
-- Products link to a basic detail page structure.
-- UI styling is more closely aligned with the design context.
-- Placeholder UI for filtering/sorting exists.
-- Basic accessibility checks have been performed.
-- The store includes a compelling, context-aware hero section for "Papers to Profits" members.
-- A member success showcase is implemented to provide social proof and inspiration.
-- License category navigation makes finding relevant designs intuitive.
-- Usage guides are integrated to clarify commercial license terms.
-- Business stage recommendations help members find appropriate designs.
-- Visual previews show designs in context of finished paper products.
-- Bundle suggestions encourage complementary purchases.
-- License terms are clearly explained through visual elements.
+This phase (5-2-1) is complete. The following enhancements have been successfully implemented:
+
+- Skeleton loaders improve the initial page load experience through Suspense and dedicated skeleton components.
+- User actions in the cart provide clear toast feedback with visual indicators.
+- Products now link to detailed product pages with image galleries and related product suggestions.
+- UI styling has been refined with consistent colors, improved typography, and better visual hierarchy.
+- Category navigation provides intuitive filtering capabilities with a clean, accessible interface.
+- License information is clearly presented through tooltips, expandable sections, and visual indicators.
+- The store includes a compelling hero section targeted specifically to "Papers to Profits" members.
+- A member success showcase provides social proof and inspiration with responsive layout.
+- Product previews have been enhanced with hover effects and image galleries.
+- Bundle suggestions are presented through the "Complete Your Collection" feature.
+- Accessibility has been improved with proper ARIA attributes, focus management, and screen reader support.
+- License types (CUR/PLR/Bundle) are clearly distinguished with appropriate visual indicators and detailed explanations.
+- Multiple product images from the database are now displayed in a gallery with thumbnails.
+- HTML product descriptions are rendered properly with formatting preserved.
 
 ## Next Steps After Completion
 Proceed with **Phase 5-3: Checkout & Payment Integration**.

@@ -1879,10 +1879,12 @@ export type Database = {
       shopify_products: {
         Row: {
           created_at: string | null
+          description_html: string | null
           featured_image_url: string | null
           google_drive_file_id: string | null
           handle: string | null
           id: string
+          image_urls: Json | null
           product_type: string | null
           published_at: string | null
           shopify_product_id: number
@@ -1894,10 +1896,12 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          description_html?: string | null
           featured_image_url?: string | null
           google_drive_file_id?: string | null
           handle?: string | null
           id?: string
+          image_urls?: Json | null
           product_type?: string | null
           published_at?: string | null
           shopify_product_id: number
@@ -1909,10 +1913,12 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          description_html?: string | null
           featured_image_url?: string | null
           google_drive_file_id?: string | null
           handle?: string | null
           id?: string
+          image_urls?: Json | null
           product_type?: string | null
           published_at?: string | null
           shopify_product_id?: number
