@@ -99,23 +99,29 @@ All foundational Shopify analytics tables are now present in the database, norma
 
 - [x] **Develop Fetching Script/Function:**
     - Created Supabase Edge Function `shopify-sync` (`supabase/functions/shopify-sync/index.ts` and `utils.ts`).
-    - Function accepts `startDate`, `endDate`, and `syncType` parameters.
-    - Implements logic to call Shopify Admin API endpoints for customers, products, orders.
-    - Uses `created_at_min/max` for historical backfill and `updated_at_min` for incremental sync.
-    - Handles Shopify's Link header pagination.
-    - Includes basic rate limiting (delay between requests).
+    - **Hybrid API Approach:**
+        - **Products:** Fetched via **GraphQL Admin API** (v2025-04) using a dedicated `PRODUCTS_QUERY`. This leverages GraphQL's ability to fetch nested variant data efficiently. No date filters are applied; the full product catalog is synced on each run.
+        - **Customers & Orders:** Fetched via **REST Admin API** (v2024-04). This approach was adopted due to limitations in the GraphQL API (v2025-04) restricting access to necessary PII fields (like customer email) without a higher Shopify plan.
+    - Function accepts `startDate`, `endDate` parameters to control the date range for REST API calls (Customers/Orders).
+    - Uses `created_at_min/max` for historical backfill and `updated_at_min` for incremental sync on REST API calls.
+    - Handles Shopify's Link header pagination for REST API calls.
+    - Implements pagination logic for GraphQL API calls.
+    - Includes basic rate limiting (delay between requests) for both API types.
 - [x] **Database Upsert Logic:**
     - Reuses and enhances the upsert logic from the webhook handler (`upsertCustomer`, `upsertProduct`, `upsertOrder`) in `utils.ts`.
+    - **Hybrid Upsert Logic:**
+        - `upsertProduct` and its helper `upsertVariant` expect **GraphQL node** payloads.
+        - `upsertCustomer`, `upsertOrder`, and `upsertOrderItem` expect **REST API object** payloads.
     - Upserts data idempotently using Shopify IDs.
-    - Links customers to `unified_profiles` by email.
+    - Links customers to `unified_profiles` by email (using data from REST API).
 - [x] **Logging & Error Handling:**
-    - Includes structured logging for fetches, upserts, progress, and errors.
+    - Includes structured logging for fetches (specifying API type), upserts, progress, and errors.
 - [ ] **Schedule Regular Runs:**
-    - Function is ready to be scheduled using Supabase Dashboard Scheduler or `pg_cron` for daily incremental sync.
+    - Function is ready to be scheduled using Supabase Dashboard Scheduler or `pg_cron` for daily incremental sync (fetching recent C/O via REST, all products via GQL).
     - Historical backfill can be triggered manually via function invocation.
 
 **Polling/Backfill Implementation Summary:**
-A robust Supabase Edge Function (`shopify-sync`) is implemented to handle both historical data backfills and daily incremental synchronization from the Shopify Admin API. It uses best practices for pagination, rate limiting, and idempotent upserts, ensuring data completeness for analytics.
+A robust Supabase Edge Function (`shopify-sync`) is implemented using a **hybrid API strategy**. It fetches **products via GraphQL** for rich data and **customers/orders via REST** to overcome PII access limitations. The function handles both historical data backfills and daily incremental synchronization, using best practices for pagination, rate limiting, and idempotent upserts, ensuring data completeness for analytics.
 
 **Next Steps:**
 - Securely set environment variables for the Edge Function.
@@ -143,78 +149,31 @@ A robust Supabase Edge Function (`shopify-sync`) is implemented to handle both h
 *Goal: Populate historical data and verify the pipeline.* 
 
 - [x] **Run Backfill Script:**
-    - Manually invoked the `shopify-sync` Edge Function in chunks (e.g., month-by-month) for the historical period (Sept 2024 - April 2025).
+    - Manually invoked the `shopify-sync` Edge Function (using the **hybrid API approach**) in chunks (e.g., month-by-month) for the historical period (Sept 2024 - April 2025).
     - Monitored logs to ensure completion without timeouts.
 - [x] **Test Webhooks:** 
     - Create/update test orders, customers, and products in Shopify and verify that the corresponding webhooks are received, processed, and data appears correctly in the Supabase tables.
 - [x] **Validate Data:** 
     - Run queries to check data integrity:
-    - [x] Row counts between Shopify (via API) and local tables for the backfilled period (Counts: 468 customers, 716 orders, 1026 items, **0 products** - Product count needs review if unexpected).
+    - [x] Row counts between Shopify (via API) and local tables for the backfilled period (Counts: 468 customers, 716 orders, 1026 items, **~60 products** - Product count corrected after switching to GraphQL).
     - [x] Correct linking between `shopify_orders`, `shopify_order_items`, `shopify_customers`, `shopify_product_variants` (Verified via LEFT JOIN checks).
-    - [x] Successful linking of `shopify_customers` to `unified_profiles` where expected (Verified 303 links via script and SQL checks).
+    - [x] Successful linking of `shopify_customers` to `unified_profiles` where expected (Verified 303 links via script and SQL checks, enabled by REST API access to emails).
 - [x] **Check Foreign Keys:** 
     - Ensured all FK relationships tested above are valid (returned 0 rows on mismatch checks).
 
 **Backfill Summary:**
-Historical data from Sept 2024 to April 2025 has been successfully backfilled into the `shopify_*` analytics tables using the `shopify-sync` Edge Function. Manual linking via CSV was performed for customer profiles.
+Historical data from Sept 2024 to April 2025 has been successfully backfilled into the `shopify_*` analytics tables using the hybrid `shopify-sync` Edge Function (GraphQL for products, REST for customers/orders). Manual linking via CSV was performed for customer profiles to supplement REST data. Product data is now correctly populated.
 
 **Next Steps:**
 - [x] Schedule the `shopify-sync` function for daily incremental runs.
-- [x] Validate the User Profile Linking logic.
-- [x] Perform overall data validation and integrity checks.
-- [x] Test webhook processing end-to-end.
-- **Review Product Sync:** Investigate why `shopify_products` table has 0 rows if products were expected.
+- [x] Validate the User Profile Linking logic (completed via script).
+- [x] Perform overall data validation and integrity checks (completed via queries).
+- [ ] Test webhook processing end-to-end (pending).
+- [x] Mark product sync review as complete (resolved by switching to GraphQL).
 
-## Technical Considerations
-
-### API Limits & Reliability
-- **Shopify API Limits:** Be aware of and respect Shopify's Admin API rate limits (leaky bucket algorithm). Implement appropriate delays or use libraries that handle retries.
-- **Webhook Reliability:** While generally reliable, webhooks can occasionally fail or be delayed. Consider implementing reconciliation logic (using API polling) if near-perfect data synchronicity is critical.
-- **Webhook Security:** Always verify webhook signatures to prevent processing malicious requests.
-
-### Data Consistency & Normalization
-- **Timestamps:** Ensure all Shopify timestamps are consistently converted and stored in UTC (TIMESTAMPTZ) in the database.
-- **Currency:** Store currency codes alongside monetary values. Handle multiple currencies if applicable.
-- **Status Mapping:** Understand and potentially normalize Shopify status fields (e.g., `financial_status`, `fulfillment_status`) if needed for consistent reporting across different sources.
-
-### Scalability
-- **Asynchronous Processing:** Use background jobs/queues for webhook processing to handle bursts of events and prevent timeouts.
-- **Database Performance:** Ensure efficient indexing on `shopify_` tables, especially on IDs used for lookups and foreign keys.
-
-### Shopify Environment Variables
-
-To support secure Shopify integration, ensure the following environment variables are set in `.env`:
-
-- `SHOPIFY_API_KEY`: Used for app authentication (OAuth/private app)
-- `SHOPIFY_SECRET_KEY`: Used for app authentication (OAuth/private app)
-- `SHOPIFY_ADMIN_API_KEY`: Used for privileged Admin API access (API polling, backfills)
-- `SHOPIFY_WEBHOOK_SECRET`: **Required for webhook verification**. This must match the "webhook signing secret" from your Shopify app settings. Used by the webhook handler to verify HMAC signatures.
-
-**Checklist:**
-- [ ] Ensure `SHOPIFY_WEBHOOK_SECRET` is set in `.env` and matches the value from Shopify app settings
-- [x] Webhook handler uses `SHOPIFY_WEBHOOK_SECRET` for HMAC verification
-- [x] Other keys (`SHOPIFY_API_KEY`, `SHOPIFY_SECRET_KEY`, `SHOPIFY_ADMIN_API_KEY`) will be used for API polling/backfill logic
-
-**Note:** No changes to the webhook route are needed unless you want to use a different env variable name for the webhook secret. The current handler expects `SHOPIFY_WEBHOOK_SECRET`.
-
-## Completion Status
-
-This phase is **In Progress**. Key components (schema, webhook handler, backfill function) are implemented. Focus shifts to validation, scheduling, and testing.
-
-Challenges anticipated:
-- Handling Shopify API rate limits during backfills or high volume periods.
-- Ensuring robust and secure webhook verification and processing.
-- Reliably matching Shopify customers to existing unified profiles, especially if emails differ slightly.
-- Managing potential data discrepancies between webhook events and API polling.
-
-## Next Steps After Completion
-With both Facebook Ads (Phase 4-1) and Shopify (Phase 4-2) data pipelines established, the subsequent phases will focus on building the analytics dashboards using this newly integrated data: Phase 4-3 (Enrollment Analytics), Phase 4-4 (Revenue Analytics), and Phase 4-5 (Marketing & Advertising Performance).
-
----
-
-> **Note to AI Developers**: When working with this project, always ensure that you:
-> 1.  Review previously completed build notes for context and established patterns (esp. Phases 3-0 to 3-4, Phase 4-1).
-> 2.  Consult the implementation strategy and architecture planning documents.
-> 3.  Align your work with the project context (`ProjectContext.md`) and design context (`designContext.md`) guidelines.
-> 4.  Follow the established folder structure, naming conventions, and coding standards.
-> 5.  Include this reminder in all future build notes to maintain consistency. 
+**Next Steps:**
+- [x] Schedule the `shopify-sync` function for daily incremental runs.
+- [x] Validate the User Profile Linking logic (completed via script).
+- [x] Perform overall data validation and integrity checks (completed via queries).
+- [ ] Test webhook processing end-to-end (pending).
+- [x] Mark product sync review as complete (resolved by switching to GraphQL).

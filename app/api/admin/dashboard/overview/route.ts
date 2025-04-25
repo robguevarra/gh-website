@@ -170,8 +170,9 @@ async function fetchSummaryMetrics(
   ]);
   if (errR1 || errR2) throw errR1 || errR2;
 
-  const totalRevenue = revThis.reduce((sum, r) => sum + (r.amount || 0), 0);
-  const previousRevenue = revPrev.reduce((sum, r) => sum + (r.amount || 0), 0);
+  // Explicitly handle null case for data before reducing
+  const totalRevenue = (revThis || []).reduce((sum, r) => sum + (r.amount || 0), 0);
+  const previousRevenue = (revPrev || []).reduce((sum, r) => sum + (r.amount || 0), 0);
 
   // Conversion rate
   const { data: msArr = [], error: errM } = await admin
@@ -226,78 +227,112 @@ async function fetchEnrollmentTrends(
   dr: DateRange,
   granularity: 'day' | 'week' | 'month'
 ): Promise<TrendPoint[]> {
-  console.log('[fetchEnrollmentTrends] parameters:', {
-    start: dr.current.start.toISOString(),
-    end: dr.current.end.toISOString(),
-    granularity
-  });
+  // console.log('[fetchEnrollmentTrends] parameters:', {
+  //   start: dr.current.start.toISOString(),
+  //   end: dr.current.end.toISOString(),
+  //   granularity
+  // });
 
   const periods = generatePeriods(dr.current.start, dr.current.end, granularity);
-  const periodMapKeyFormat = granularity === 'month' ? 'YYYY-MM-01' : 'YYYY-MM-DD';
-
-  if (granularity === 'month') {
-    // --- Use Database RPC for Monthly Aggregation ---
-    const { data: monthlyData = [], error: rpcError } = await admin.rpc(
-      'get_monthly_enrollment_trends',
-      {
-        p_start_date: dr.current.start.toISOString(),
-        p_end_date: dr.current.end.toISOString()
+  // Determine the format needed to map DB results back to the generated periods
+  const periodMapKeyFormat = granularity === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD';
+  // Helper function to format date from DB result to match the key format
+  const formatDbDateForKey = (dateStr: string): string => {
+      try {
+          const date = new Date(dateStr);
+          if (granularity === 'month') {
+             return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+          }
+          return date.toISOString().slice(0, 10);
+      } catch (e) {
+          console.error("Error formatting DB date:", dateStr, e);
+          return dateStr; // fallback
       }
-    );
-
-    if (rpcError) {
-      console.error('RPC get_monthly_enrollment_trends error:', rpcError);
-      throw rpcError;
-    }
-    console.log('[fetchEnrollmentTrends] RPC result count:', monthlyData?.length ?? 0);
-
-    const counts: Record<string, number> = (monthlyData || []).reduce(
-      (acc: Record<string, number>, row: any) => {
-        // Ensure month_start is treated as UTC date string 'YYYY-MM-DD'
-        const monthKey = row.month_start.slice(0, 10);
-        acc[monthKey] = Number(row.enrollment_count || 0);
-        return acc;
-      },
-      {}
-    );
-    console.log('[fetchEnrollmentTrends] monthly counts map:', counts);
-
-    // Map generated periods to the RPC results
-    return periods.map((p) => {
-      const dateKey = `${p}-01`; // Format period to match RPC output key 'YYYY-MM-01'
-      return { date: dateKey, count: counts[dateKey] || 0 };
-    });
-  } else {
-    // --- Keep original logic for Day/Week Granularity ---
-    const { data = [] as any[], error } = await admin
-      .from('enrollments')
-      .select('enrolled_at')
-      .gte('enrolled_at', dr.current.start.toISOString())
-      .lte('enrolled_at', dr.current.end.toISOString());
-    if (error) throw error;
-
-    console.log('[fetchEnrollmentTrends] fetched rows count:', data?.length ?? 0);
-
-    const counts: Record<string, number> = {};
-    (data || []).forEach(({ enrolled_at }) => {
-      const dt = new Date(enrolled_at);
-      let key: string;
-      if (granularity === 'week') {
-        const monday = new Date(dt);
-        const wd = monday.getUTCDay();
-        monday.setUTCDate(monday.getUTCDate() + ((wd === 0 ? -6 : 1) - wd));
-        key = formatISODate(monday);
-      } else { // day
-        key = formatISODate(dt);
-      }
-      counts[key] = (counts[key] || 0) + 1;
-    });
-
-    console.log('[fetchEnrollmentTrends] counts map:', counts);
-    console.log('[fetchEnrollmentTrends] generated periods:', periods);
-
-    return periods.map((date) => ({ date, count: counts[date] || 0 }));
   }
+
+  let dbResults: { dateKey: string; count: number }[] = [];
+
+  const p2pCourseId = '7e386720-8839-4252-bd5f-09a33c3e1afb'; // P2P Course ID
+
+  try {
+    if (granularity === 'month') {
+      // --- Use Correct Database RPC for Monthly P2P Aggregation ---
+      const { data: monthlyData = [], error: rpcError } = await admin.rpc(
+        'get_monthly_p2p_enrollment_trends', // Correct function name
+        {
+          start_date: dr.current.start.toISOString(), // Correct parameter name
+          end_date: dr.current.end.toISOString(),     // Correct parameter name
+          target_course_id: p2pCourseId               // Added required parameter
+        }
+      );
+
+      if (rpcError) {
+        console.error('RPC get_monthly_p2p_enrollment_trends error:', rpcError);
+        throw rpcError;
+      }
+      dbResults = monthlyData.map((item: any) => ({
+          // Use the correct column name from the function's return type
+          dateKey: formatDbDateForKey(item.month_start_date),
+          count: Number(item.count || 0)
+      }));
+
+    } else if (granularity === 'week') {
+        // --- Use Correct Database RPC for Weekly P2P Aggregation ---
+        const { data: weeklyData = [], error: rpcError } = await admin.rpc(
+            'get_weekly_p2p_enrollment_trends', // Correct function name
+            {
+                start_date: dr.current.start.toISOString(),
+                end_date: dr.current.end.toISOString(),
+                target_course_id: p2pCourseId
+            }
+        );
+        if (rpcError) {
+            console.error('RPC get_weekly_p2p_enrollment_trends error:', rpcError);
+            throw rpcError;
+        }
+        dbResults = weeklyData.map((item: any) => ({
+            dateKey: formatDbDateForKey(item.week_start_date), // Correct column name
+            count: Number(item.count || 0)
+        }));
+
+    } else { // granularity === 'day'
+        // --- Use Correct Database RPC for Daily P2P Aggregation ---
+        const { data: dailyData = [], error: rpcError } = await admin.rpc(
+            'get_daily_p2p_enrollment_trends', // Correct function name
+            {
+                start_date: dr.current.start.toISOString(),
+                end_date: dr.current.end.toISOString(),
+                target_course_id: p2pCourseId
+            }
+        );
+        if (rpcError) {
+            console.error('RPC get_daily_p2p_enrollment_trends error:', rpcError);
+            throw rpcError;
+        }
+         dbResults = dailyData.map((item: any) => ({
+            dateKey: formatDbDateForKey(item.date), // Correct column name
+            count: Number(item.count || 0)
+        }));
+    }
+
+  } catch (error) {
+      // Log the specific error but allow the function to return potentially partial data
+      // (or an empty array if the first query failed)
+      console.error(`Error fetching ${granularity} enrollment trends:`, error);
+      // Depending on requirements, you might want to re-throw or return a specific error structure
+  }
+
+
+  // Map DB results to the generated periods
+  const trendsMap = new Map(dbResults.map(item => [item.dateKey, item.count]));
+
+  // Ensure all periods have a value (0 if no data)
+  const trends: TrendPoint[] = periods.map(periodKey => ({
+    date: periodKey, // Use the generated period key as the date
+    count: trendsMap.get(periodKey) || 0
+  }));
+
+  return trends;
 }
 
 async function fetchRevenueTrends(

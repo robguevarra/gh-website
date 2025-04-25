@@ -18,7 +18,7 @@ import {
 // Dashboard Sections
 //import { AdminHeader } from '@/components/admin/admin-header';
 import { DashboardOverview } from '@/components/admin/dashboard-overview';
-//import { EnrollmentAnalytics } from '@/components/admin/enrollment-analytics';
+import { EnrollmentAnalytics } from '@/components/admin/enrollment-analytics';
 //import { RevenueAnalysis } from '@/components/admin/revenue-analysis';
 //import { MarketingInsights } from '@/components/admin/marketing-insights';
 
@@ -65,12 +65,12 @@ export default async function AdminDashboardPage() {
             <DashboardOverview />
           </Suspense>
         </TabsContent>
-        {/*
         <TabsContent value="enrollments" className="m-0">
           <Suspense fallback={<DashboardSkeleton />}>
             <EnrollmentAnalytics />
           </Suspense>
         </TabsContent>
+        {/*
         <TabsContent value="revenue" className="m-0">
           <Suspense fallback={<DashboardSkeleton />}>
             <RevenueAnalysis />
