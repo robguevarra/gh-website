@@ -33,34 +33,34 @@ Establish the necessary backend database schema modifications and verify/adapt t
 
 ## Implementation Plan (Phase 5-1)
 
-1.  [ ] **Enhance `shopify_products` Schema:**
-    *   [ ] Create a new Supabase migration file (`supabase/migrations/<timestamp>_enhance_shopify_products_for_ecommerce.sql`).
-    *   [ ] Add SQL `ALTER TABLE public.shopify_products ADD COLUMN featured_image_url TEXT NULL;` to the migration.
-    *   [ ] Add SQL `ALTER TABLE public.shopify_products ADD COLUMN google_drive_file_id TEXT NULL;` to the migration.
-    *   [ ] Add SQL `COMMENT ON COLUMN public.shopify_products.featured_image_url IS 'URL for the main product image, synced from Shopify.';`
-    *   [ ] Add SQL `COMMENT ON COLUMN public.shopify_products.google_drive_file_id IS 'Google Drive File/Folder ID for the associated digital product asset.';`
-    *   [ ] Apply the migration (`supabase db push` or apply via dashboard).
-2.  [ ] **Update Shopify Sync GraphQL Query:**
-    *   [ ] Edit `supabase/functions/shopify-sync/index.ts`.
-    *   [ ] Locate the `PRODUCTS_QUERY` constant.
-    *   [ ] Modify the `node` fields within the query to include image data. Choose one appropriate field (consult Shopify GraphQL API docs if needed):
+1.  [x] **Enhance `shopify_products` Schema:**
+    *   [x] Create a new Supabase migration file (`supabase/migrations/<timestamp>_enhance_shopify_products_for_ecommerce.sql`).
+    *   [x] Add SQL `ALTER TABLE public.shopify_products ADD COLUMN featured_image_url TEXT NULL;` to the migration.
+    *   [x] Add SQL `ALTER TABLE public.shopify_products ADD COLUMN google_drive_file_id TEXT NULL;` to the migration.
+    *   [x] Add SQL `COMMENT ON COLUMN public.shopify_products.featured_image_url IS 'URL for the main product image, synced from Shopify.';`
+    *   [x] Add SQL `COMMENT ON COLUMN public.shopify_products.google_drive_file_id IS 'Google Drive File/Folder ID for the associated digital product asset.';`
+    *   [x] Apply the migration (`supabase db push` or apply via dashboard).
+2.  [x] **Update Shopify Sync GraphQL Query:**
+    *   [x] Edit `supabase/functions/shopify-sync/index.ts`.
+    *   [x] Locate the `PRODUCTS_QUERY` constant.
+    *   [x] Modify the `node` fields within the query to include image data. Choose one appropriate field (consult Shopify GraphQL API docs if needed):
         *   Option A (Featured Image): Add `featuredImage { url }`
         *   Option B (First Image): Add `images(first: 1) { edges { node { url } } }`
     *   *Self-Correction:* Use `featuredImage` as it's simpler and likely sufficient.
-3.  [ ] **Update Shopify Sync Upsert Logic:**
-    *   [ ] Edit `supabase/functions/shopify-sync/utils.ts`.
-    *   [ ] Locate the `upsertProduct` function.
-    *   [ ] Modify the `ShopifyProductInsert` type definition (or the inline object) to include `featured_image_url?: string | null;`.
-    *   [ ] In the `productData` object assignment, extract the image URL from the GraphQL `payload` (e.g., `payload.featuredImage?.url` or `payload.images?.edges?.[0]?.node?.url`) and assign it to `featured_image_url`. Handle potential null values.
-    *   [ ] Ensure the `upsert` call correctly includes the new field.
-4.  [ ] **Deploy Updated Sync Function:**
-    *   [ ] Deploy the modified `shopify-sync` function to Supabase Edge Functions (`supabase functions deploy shopify-sync --no-verify-jwt`).
-5.  [ ] **Test Product Sync:**
-    *   [ ] Manually invoke the updated `shopify-sync` function (e.g., via Supabase dashboard or CLI) for a specific product or date range known to have images.
-    *   [ ] Verify that the `featured_image_url` column in the `shopify_products` table is populated correctly for the tested products.
-6.  [ ] **Create New E-commerce Order Tables Schema:**
-    *   [ ] Create a new Supabase migration file (`supabase/migrations/<timestamp>_create_ecommerce_orders.sql`).
-    *   [ ] Define `ecommerce_orders` table SQL:
+3.  [x] **Update Shopify Sync Upsert Logic:**
+    *   [x] Edit `supabase/functions/shopify-sync/utils.ts`.
+    *   [x] Locate the `upsertProduct` function.
+    *   [x] Modify the `ShopifyProductInsert` type definition (or the inline object) to include `featured_image_url?: string | null;`.
+    *   [x] In the `productData` object assignment, extract the image URL from the GraphQL `payload` (e.g., `payload.featuredImage?.url` or `payload.images?.edges?.[0]?.node?.url`) and assign it to `featured_image_url`. Handle potential null values.
+    *   [x] Ensure the `upsert` call correctly includes the new field.
+4.  [x] **Deploy Updated Sync Function:**
+    *   [x] Deploy the modified `shopify-sync` function to Supabase Edge Functions (`supabase functions deploy shopify-sync --no-verify-jwt`).
+5.  [x] **Test Product Sync:**
+    *   [x] Manually invoke the updated `shopify-sync` function (e.g., via Supabase dashboard or CLI) for a specific product or date range known to have images.
+    *   [x] Verify that the `featured_image_url` column in the `shopify_products` table is populated correctly for the tested products.
+6.  [x] **Create New E-commerce Order Tables Schema:**
+    *   [x] Create a new Supabase migration file (`supabase/migrations/<timestamp>_create_ecommerce_orders.sql`).
+    *   [x] Define `ecommerce_orders` table SQL:
         ```sql
         CREATE TABLE public.ecommerce_orders (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -90,7 +90,7 @@ Establish the necessary backend database schema modifications and verify/adapt t
         COMMENT ON COLUMN public.ecommerce_orders.xendit_payment_id IS 'Unique identifier from the Xendit payment transaction.';
         COMMENT ON COLUMN public.ecommerce_orders.transaction_id IS 'FK to the unified transactions table.';
         ```
-    *   [ ] Define `ecommerce_order_items` table SQL:
+    *   [x] Define `ecommerce_order_items` table SQL:
         ```sql
         CREATE TABLE public.ecommerce_order_items (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -117,7 +117,7 @@ Establish the necessary backend database schema modifications and verify/adapt t
         COMMENT ON COLUMN public.ecommerce_order_items.price_at_purchase IS 'Captures the price paid, in case product price changes later.';
         COMMENT ON COLUMN public.ecommerce_order_items.product_snapshot IS 'Optional JSON blob containing product details (title, sku, etc.) at the time of purchase for historical accuracy.';
         ```
-    *   [ ] Apply the migration (`supabase db push` or apply via dashboard).
+    *   [x] Apply the migration (`supabase db push` or apply via dashboard).
 7.  [ ] **(Prep for next phase) Add Product Mapping Task Reminder:**
     *   [ ] Note: The `google_drive_file_id` column in `shopify_products` needs to be populated. This mapping process (manual update, script based on SKU/name, etc.) is outside the scope of *this* build note but is a prerequisite for Phase 5-3 (access granting).
 

@@ -736,6 +736,111 @@ export type Database = {
         }
         Relationships: []
       }
+      ecommerce_order_items: {
+        Row: {
+          created_at: string
+          currency: string
+          id: string
+          order_id: string
+          price_at_purchase: number
+          product_id: string
+          product_snapshot: Json | null
+          quantity: number
+        }
+        Insert: {
+          created_at?: string
+          currency: string
+          id?: string
+          order_id: string
+          price_at_purchase: number
+          product_id: string
+          product_snapshot?: Json | null
+          quantity?: number
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          id?: string
+          order_id?: string
+          price_at_purchase?: number
+          product_id?: string
+          product_snapshot?: Json | null
+          quantity?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ecommerce_order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "ecommerce_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ecommerce_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ecommerce_orders: {
+        Row: {
+          created_at: string
+          currency: string
+          id: string
+          order_status: string
+          payment_method: string
+          total_amount: number
+          transaction_id: string | null
+          unified_profile_id: string | null
+          updated_at: string
+          user_id: string
+          xendit_payment_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          currency: string
+          id?: string
+          order_status?: string
+          payment_method?: string
+          total_amount: number
+          transaction_id?: string | null
+          unified_profile_id?: string | null
+          updated_at?: string
+          user_id: string
+          xendit_payment_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          currency?: string
+          id?: string
+          order_status?: string
+          payment_method?: string
+          total_amount?: number
+          transaction_id?: string | null
+          unified_profile_id?: string | null
+          updated_at?: string
+          user_id?: string
+          xendit_payment_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ecommerce_orders_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ecommerce_orders_unified_profile_id_fkey"
+            columns: ["unified_profile_id"]
+            isOneToOne: false
+            referencedRelation: "unified_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_automations: {
         Row: {
           created_at: string | null
@@ -1774,6 +1879,8 @@ export type Database = {
       shopify_products: {
         Row: {
           created_at: string | null
+          featured_image_url: string | null
+          google_drive_file_id: string | null
           handle: string | null
           id: string
           product_type: string | null
@@ -1787,6 +1894,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          featured_image_url?: string | null
+          google_drive_file_id?: string | null
           handle?: string | null
           id?: string
           product_type?: string | null
@@ -1800,6 +1909,8 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          featured_image_url?: string | null
+          google_drive_file_id?: string | null
           handle?: string | null
           id?: string
           product_type?: string | null

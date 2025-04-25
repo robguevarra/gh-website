@@ -14,7 +14,6 @@ import { motion } from "framer-motion"
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from "@/components/ui/breadcrumb"
 import { GoogleDriveViewer } from "@/components/dashboard/google-drive-viewer"
 import { useGoogleDriveFiles } from "@/lib/hooks/use-google-drive"
-import { StudentHeader } from "@/components/dashboard/student-header"
 import { useAuth } from "@/context/auth-context"
 import type { DriveItem, BreadcrumbSegment } from '@/lib/google-drive/driveApiUtils'
 
@@ -372,7 +371,6 @@ export default function ResourcesPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#f9f6f2]">
-        <StudentHeader />
         <main className="container py-6">
           <div className="mb-6">
             <Button
@@ -402,7 +400,6 @@ export default function ResourcesPage() {
   if (hasError) {
     return (
       <div className="min-h-screen bg-[#f9f6f2]">
-        <StudentHeader />
         <main className="container py-8">
           <div className="mb-6">
             <Button
@@ -460,7 +457,6 @@ export default function ResourcesPage() {
 
   return (
     <div className="min-h-screen bg-[#f9f6f2]" style={backgroundPattern}>
-      <StudentHeader />
       <main className="container py-8 space-y-6">  
         {/* Header with navigation */}
         <motion.div 

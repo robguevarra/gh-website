@@ -25,6 +25,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
+// Import the Cart Indicator component
+import CartIndicator from '@/components/store/CartIndicator';
+
 export default function DashboardHeader() {
   const router = useRouter();
   const { user, profile, isAdmin, logout } = useAuth();
@@ -41,7 +44,7 @@ export default function DashboardHeader() {
   };
   
   return (
-    <header className="border-b bg-background">
+    <header className="border-b bg-background sticky top-0 z-50 w-full">
       <div className="flex h-16 items-center justify-between px-4 sm:px-6">
         <div className="flex items-center">
           <Link href="/dashboard">
@@ -56,6 +59,8 @@ export default function DashboardHeader() {
             <Bell className="h-5 w-5" />
             <span className="sr-only">Notifications</span>
           </Button>
+          
+          <CartIndicator />
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

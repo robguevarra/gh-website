@@ -40,6 +40,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useStudentHeader } from '@/lib/hooks/ui/use-student-header';
 import { useAuth } from '@/context/auth-context';
 
+// Import the Cart Indicator
+import CartIndicator from '@/components/store/CartIndicator';
+
 // Import types for proper type safety
 import type { StudentDashboardStore } from '@/lib/stores/student-dashboard';
 
@@ -195,6 +198,14 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                     Resources
                   </Link>
                   <Link
+                    href="/dashboard/store"
+                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    prefetch={true}
+                  >
+                    <ShoppingBag className="h-5 w-5" />
+                    Store
+                  </Link>
+                  <Link
                     href="/dashboard/live-classes"
                     className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   >
@@ -214,14 +225,6 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                   >
                     <MessageSquare className="h-5 w-5" />
                     Support
-                  </Link>
-                  <Link
-                    href="https://gracefulhomeschooling.myshopify.com"
-                    target="_blank"
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  >
-                    <ShoppingBag className="h-5 w-5" />
-                    Shop
                   </Link>
                 </div>
 
@@ -288,6 +291,13 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
               prefetch={true}
             >
               Resources
+            </Link>
+            <Link
+              href="/dashboard/store"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              prefetch={true}
+            >
+              Store
             </Link>
             <Link
               href="/dashboard/live-classes"
@@ -371,6 +381,8 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
             </AnimatePresence>
           </div>
 
+          <CartIndicator />
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="p-0 h-auto bg-transparent hover:bg-transparent flex items-center gap-2">
@@ -426,8 +438,6 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-
         </div>
       </div>
     </header>

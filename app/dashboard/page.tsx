@@ -21,7 +21,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/context/auth-context"
 
 // Dashboard UI components
-import { StudentHeader } from "@/components/dashboard/student-header"
 import { GoogleDriveViewer } from "@/components/dashboard/google-drive-viewer"
 import { OnboardingTour } from "@/components/dashboard/onboarding-tour"
 import { WelcomeModal } from "@/components/dashboard/welcome-modal"
@@ -663,7 +662,6 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen bg-[#f9f6f2]">
-      <StudentHeader />
 
       {/* Welcome Modal for First-time Users */}
       <WelcomeModal

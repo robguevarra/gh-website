@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Skeleton } from "@/components/ui/skeleton"
 
 // Dashboard components
-import { StudentHeader } from "@/components/dashboard/student-header"
 import { CourseModuleAccordion } from "@/components/dashboard/course-module-accordion"
 import { LessonPlayer } from "@/components/dashboard/lesson-player"
 import { LessonNotes } from "@/components/dashboard/lesson-notes"
@@ -510,7 +509,6 @@ export default function CourseViewer() {
   if (courseViewerState.isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <StudentHeader />
         <main className="container px-4 py-8">
           <div className="flex items-center gap-2 mb-6">
             <Button
@@ -550,7 +548,6 @@ export default function CourseViewer() {
   if (!courseViewerState.currentCourse || !courseViewerState.currentLesson) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <StudentHeader />
         <main className="container px-4 py-8">
           <div className="flex items-center gap-2 mb-6">
             <Button
@@ -589,7 +586,6 @@ export default function CourseViewer() {
   // Main course viewer UI
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-      <StudentHeader />
 
       <main className="flex-1 container py-6">
         <div className="flex items-center gap-2 mb-6">
