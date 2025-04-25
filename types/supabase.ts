@@ -2470,6 +2470,34 @@ export type Database = {
       }
     }
     Views: {
+      marketing_performance_view: {
+        Row: {
+          ad_id: string | null
+          ad_name: string | null
+          ad_status: string | null
+          adset_id: string | null
+          adset_name: string | null
+          adset_status: string | null
+          attributed_revenue: number | null
+          campaign_id: string | null
+          campaign_name: string | null
+          campaign_objective: string | null
+          campaign_status: string | null
+          clicks: number | null
+          conversion_event: string | null
+          date: string | null
+          enrollment_id: string | null
+          fb_ad_id: string | null
+          fb_adset_id: string | null
+          fb_campaign_id: string | null
+          impressions: number | null
+          source_channel: string | null
+          spend: number | null
+          spend_currency: string | null
+          transaction_id: string | null
+        }
+        Relationships: []
+      }
       marketing_source_view: {
         Row: {
           acquisition_source: string | null
@@ -2504,6 +2532,24 @@ export type Database = {
         }
         Relationships: []
       }
+      unified_transactions_view: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          currency: string | null
+          email: string | null
+          external_reference: string | null
+          payment_method: string | null
+          product_details: Json | null
+          source_platform: string | null
+          status: string | null
+          transaction_datetime: string | null
+          transaction_id: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       calculate_enrollment_metrics: {
@@ -2526,11 +2572,18 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      get_monthly_enrollment_trends: {
-        Args: { p_start_date: string; p_end_date: string }
+      get_daily_p2p_enrollment_trends: {
+        Args: { start_date: string; end_date: string; target_course_id: string }
         Returns: {
-          month_start: string
-          enrollment_count: number
+          date: string
+          count: number
+        }[]
+      }
+      get_monthly_p2p_enrollment_trends: {
+        Args: { start_date: string; end_date: string; target_course_id: string }
+        Returns: {
+          month_start_date: string
+          count: number
         }[]
       }
       get_monthly_revenue_trends: {
@@ -2538,6 +2591,40 @@ export type Database = {
         Returns: {
           month_start: string
           total_revenue: number
+        }[]
+      }
+      get_revenue_by_product: {
+        Args: {
+          p_start_date?: string
+          p_end_date?: string
+          p_source_platform?: string
+        }
+        Returns: {
+          product_identifier: string
+          product_name: string
+          source_platform: string
+          total_revenue: number
+          units_sold: number
+          average_transaction_value: number
+        }[]
+      }
+      get_revenue_trends: {
+        Args: {
+          p_start_date: string
+          p_end_date: string
+          p_granularity?: string
+          p_source_platform?: string
+        }
+        Returns: {
+          date: string
+          revenue: number
+        }[]
+      }
+      get_weekly_p2p_enrollment_trends: {
+        Args: { start_date: string; end_date: string; target_course_id: string }
+        Returns: {
+          week_start_date: string
+          count: number
         }[]
       }
       has_permission: {

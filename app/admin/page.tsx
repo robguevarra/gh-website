@@ -21,6 +21,8 @@ import { DashboardOverview } from '@/components/admin/dashboard-overview';
 import { EnrollmentAnalytics } from '@/components/admin/enrollment-analytics';
 // Import the new Revenue Analytics page component
 import RevenueAnalyticsPage from '@/app/admin/revenue-analytics/page';
+// Import the renamed Marketing content component
+import MarketingAnalyticsContent from '@/app/admin/marketing/MarketingAnalyticsContent';
 //import { RevenueAnalysis } from '@/components/admin/revenue-analysis';
 //import { MarketingInsights } from '@/components/admin/marketing-insights';
 
@@ -79,13 +81,12 @@ export default async function AdminDashboardPage() {
             <RevenueAnalyticsPage /> {/* Use the new page component */}
           </Suspense>
         </TabsContent>
-        {/*
+        {/* Add Marketing TabsContent */}
         <TabsContent value="marketing" className="m-0">
           <Suspense fallback={<DashboardSkeleton />}>
-            <MarketingInsights />
+            <MarketingAnalyticsContent />
           </Suspense>
         </TabsContent>
-        */}
       </Tabs>
     </div>
   );
