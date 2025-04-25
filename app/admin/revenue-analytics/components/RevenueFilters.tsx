@@ -16,47 +16,60 @@ import { Label } from '@/components/ui/label';
 export type Granularity = 'daily' | 'weekly' | 'monthly';
 export type SourcePlatformFilter = 'all' | 'xendit' | 'shopify';
 
+// UPDATE: onChange only handles non-date filters
 interface Filters {
-  dateRange?: DateRange; // Keep the type for future use
   granularity?: Granularity;
   sourcePlatform?: SourcePlatformFilter;
 }
 
+// UPDATE: Add props for shared date range state 
+// REMOVE: dateRange from initialFilters
 interface Props {
-  onChange: (filters: Filters) => void;
-  // Pass initial values from the parent (Zustand store)
-  initialFilters?: Filters;
+  dateRange: DateRange | undefined; // Controlled by parent
+  onDateRangeChange: (range: DateRange | undefined) => void; // Notify parent of date change
+  granularity: Granularity; // Controlled by parent store
+  sourcePlatform: SourcePlatformFilter; // Controlled by parent store
+  onChange: (filters: Filters) => void; // Notify parent of non-date filter changes
 }
 
-const RevenueFilters: React.FC<Props> = ({ onChange, initialFilters }) => {
-  // Use initial values from props if provided, otherwise use defaults
-  const [dateRange, setDateRange] = React.useState<DateRange | undefined>(initialFilters?.dateRange);
-  const [granularity, setGranularity] = React.useState<Granularity>(initialFilters?.granularity || 'daily');
-  const [sourcePlatform, setSourcePlatform] = React.useState<SourcePlatformFilter>(initialFilters?.sourcePlatform || 'all');
+const RevenueFilters: React.FC<Props> = ({ 
+  dateRange, 
+  onDateRangeChange, 
+  granularity, 
+  sourcePlatform,
+  onChange 
+}) => {
+  // REMOVE: Local state for dateRange is replaced by props
+  // const [dateRange, setDateRange] = React.useState<DateRange | undefined>(initialFilters?.dateRange);
+  // REMOVE: Local state for granularity/platform, controlled by parent
+  // const [granularity, setGranularity] = React.useState<Granularity>(initialFilters?.granularity || 'daily');
+  // const [sourcePlatform, setSourcePlatform] = React.useState<SourcePlatformFilter>(initialFilters?.sourcePlatform || 'all');
 
-  // Update local state if initialFilters prop changes (optional, depends on desired behavior)
-  React.useEffect(() => {
-    setDateRange(initialFilters?.dateRange);
-    setGranularity(initialFilters?.granularity || 'daily');
-    setSourcePlatform(initialFilters?.sourcePlatform || 'all');
-  }, [initialFilters]);
+  // REMOVE: Effect for initialFilters is no longer needed as props control state directly
+  // React.useEffect(() => {
+  //   setDateRange(initialFilters?.dateRange);
+  //   setGranularity(initialFilters?.granularity || 'daily');
+  //   setSourcePlatform(initialFilters?.sourcePlatform || 'all');
+  // }, [initialFilters]);
 
-  // Notify parent component when any filter changes
-  const handleDateChange = (range: DateRange | undefined) => {
-    setDateRange(range); // Update local state
-    onChange({ dateRange: range, granularity, sourcePlatform }); // Notify parent
-  };
+  // REMOVE: handleDateChange is replaced by directly passing onDateRangeChange prop
+  // const handleDateChange = (range: DateRange | undefined) => {
+  //   setDateRange(range); // Update local state
+  //   onChange({ dateRange: range, granularity, sourcePlatform }); // Notify parent
+  // };
 
+  // UPDATE: handleGranularityChange only calls onChange with granularity
   const handleGranularityChange = (value: string) => {
     const newGranularity = value as Granularity;
-    setGranularity(newGranularity); // Update local state
-    onChange({ dateRange, granularity: newGranularity, sourcePlatform }); // Notify parent
+    // REMOVE: setGranularity(newGranularity); // No local state
+    onChange({ granularity: newGranularity }); // Notify parent of granularity change only
   };
 
+  // UPDATE: handlePlatformChange only calls onChange with sourcePlatform
   const handlePlatformChange = (value: string) => {
     const newPlatform = value as SourcePlatformFilter;
-    setSourcePlatform(newPlatform); // Update local state
-    onChange({ dateRange, granularity, sourcePlatform: newPlatform }); // Notify parent
+    // REMOVE: setSourcePlatform(newPlatform); // No local state
+    onChange({ sourcePlatform: newPlatform }); // Notify parent of platform change only
   };
 
   return (
@@ -64,18 +77,17 @@ const RevenueFilters: React.FC<Props> = ({ onChange, initialFilters }) => {
       {/* Date Range Picker */}
       <div>
         <Label htmlFor="date-range" className="text-sm font-medium mb-1 block">Date Range</Label>
-        {/* Use the actual DateRangePicker component */}
+        {/* Use props directly from parent (shared store) */}
         <DateRangePicker
           value={dateRange}
-          onChange={handleDateChange}
+          onChange={onDateRangeChange} // Directly use the handler passed from parent
         />
-        {/* Remove the placeholder div */}
-        {/* <div className="p-2 border rounded-md bg-muted text-muted-foreground">Date Picker Placeholder</div> */}
       </div>
 
       {/* Granularity Selector */}
       <div>
         <Label htmlFor="granularity" className="text-sm font-medium mb-1 block">Granularity</Label>
+        {/* Value comes from props, onChange calls updated handler */}
         <Select value={granularity} onValueChange={handleGranularityChange}>
           <SelectTrigger id="granularity" className="w-[180px]">
             <SelectValue placeholder="Select Granularity" />
@@ -91,6 +103,7 @@ const RevenueFilters: React.FC<Props> = ({ onChange, initialFilters }) => {
       {/* Source Platform Filter */}
       <div>
         <Label htmlFor="source-platform" className="text-sm font-medium mb-1 block">Source Platform</Label>
+        {/* Value comes from props, onChange calls updated handler */}
         <Select value={sourcePlatform} onValueChange={handlePlatformChange}>
           <SelectTrigger id="source-platform" className="w-[180px]">
             <SelectValue placeholder="Select Platform" />

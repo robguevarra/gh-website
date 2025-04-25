@@ -1,5 +1,8 @@
 import { create } from 'zustand';
-import { DateRange } from 'react-day-picker';
+// REMOVE: DateRange type import no longer needed here
+// import { DateRange } from 'react-day-picker';
+// IMPORT: Shared store to read its state
+import { useSharedDashboardFiltersStore } from './sharedDashboardFiltersStore';
 
 // Types matching API responses (adjust if API types differ)
 interface RevenueSummary {
@@ -40,7 +43,8 @@ interface RevenueAnalyticsState {
   byPaymentMethod: PaymentMethodRevenue[];
 
   // Filters
-  dateRange?: DateRange;
+  // REMOVE: dateRange filter managed by shared store
+  // dateRange?: DateRange;
   granularity: Granularity;
   sourcePlatform: SourcePlatformFilter;
 
@@ -49,7 +53,8 @@ interface RevenueAnalyticsState {
   error: string | null;
 
   // Actions
-  setFilters: (filters: Partial<{ dateRange: DateRange; granularity: Granularity; sourcePlatform: SourcePlatformFilter }>) => void;
+  // UPDATE: setFilters no longer handles dateRange
+  setFilters: (filters: Partial<{ granularity: Granularity; sourcePlatform: SourcePlatformFilter }>) => void;
   fetchAllRevenueData: () => Promise<void>;
 }
 
@@ -59,7 +64,8 @@ export const useRevenueAnalyticsStore = create<RevenueAnalyticsState>((set, get)
   trends: [],
   byProduct: [],
   byPaymentMethod: [],
-  dateRange: undefined,
+  // REMOVE: dateRange initial state
+  // dateRange: undefined, 
   granularity: 'daily',
   sourcePlatform: 'all',
   isLoading: false,
@@ -67,34 +73,55 @@ export const useRevenueAnalyticsStore = create<RevenueAnalyticsState>((set, get)
 
   // Actions
   setFilters: (filters) => {
-    set((state) => ({ ...state, ...filters }));
-    // queueMicrotask(() => get().fetchAllRevenueData()); // Trigger fetch after state update
+    // Only set granularity and sourcePlatform
+    set((state) => ({ 
+      ...state, 
+      ...(filters.granularity !== undefined && { granularity: filters.granularity }),
+      ...(filters.sourcePlatform !== undefined && { sourcePlatform: filters.sourcePlatform }),
+    }));
+    // REMOVE: Fetch trigger moved to component effect
+    // queueMicrotask(() => get().fetchAllRevenueData()); 
   },
 
   fetchAllRevenueData: async () => {
     set({ isLoading: true, error: null });
-    const { dateRange, granularity, sourcePlatform } = get();
+    // READ: Granularity/source from local state, Date range from shared store
+    const { granularity, sourcePlatform } = get();
+    const { dateRange: sharedDateRange } = useSharedDashboardFiltersStore.getState();
+
+    // VALIDATE: Ensure shared date range is valid
+    if (!sharedDateRange?.from) {
+        const errorMsg = "Cannot fetch revenue data: Shared date range is missing or invalid.";
+        console.error(errorMsg, sharedDateRange);
+        set({ isLoading: false, error: errorMsg });
+        return;
+    }
+    const effectiveStartDate = sharedDateRange.from;
+    // Use start date if end date is missing (though shared store initializes both)
+    const effectiveEndDate = sharedDateRange.to || effectiveStartDate; 
+    
+    // REMOVE: Old date range logic with default fallback
+    // try {
+    //   // --- Determine Date Range (with default) ---
+    //   let effectiveStartDate: Date;
+    //   let effectiveEndDate: Date;
+    // 
+    //   if (dateRange?.from && dateRange?.to) {
+    //     effectiveStartDate = dateRange.from;
+    //     effectiveEndDate = dateRange.to;
+    //   } else {
+    //     // Default to the last 30 days if no range is set
+    //     effectiveEndDate = new Date();
+    //     effectiveStartDate = new Date();
+    //     effectiveStartDate.setDate(effectiveEndDate.getDate() - 30);
+    //   }
+    //   // Ensure dates are at start/end of day for consistent filtering
+    //   effectiveStartDate.setHours(0, 0, 0, 0);
+    //   effectiveEndDate.setHours(23, 59, 59, 999);
+    //   // -------------------------------------------
 
     try {
-      // --- Determine Date Range (with default) ---
-      let effectiveStartDate: Date;
-      let effectiveEndDate: Date;
-
-      if (dateRange?.from && dateRange?.to) {
-        effectiveStartDate = dateRange.from;
-        effectiveEndDate = dateRange.to;
-      } else {
-        // Default to the last 30 days if no range is set
-        effectiveEndDate = new Date();
-        effectiveStartDate = new Date();
-        effectiveStartDate.setDate(effectiveEndDate.getDate() - 30);
-      }
-      // Ensure dates are at start/end of day for consistent filtering
-      effectiveStartDate.setHours(0, 0, 0, 0);
-      effectiveEndDate.setHours(23, 59, 59, 999);
-      // -------------------------------------------
-
-      // Build query parameters using effective dates
+      // Build query parameters using validated shared dates
       const params = new URLSearchParams();
       params.set('startDate', effectiveStartDate.toISOString());
       params.set('endDate', effectiveEndDate.toISOString());
@@ -107,22 +134,22 @@ export const useRevenueAnalyticsStore = create<RevenueAnalyticsState>((set, get)
 
       // Fetch all data concurrently
       const [summaryRes, trendsRes, byProductRes, byPaymentMethodRes] = await Promise.all([
-        fetch(`/api/admin/revenue/summary?${commonParams.toString()}`),
-        fetch(`/api/admin/revenue/trends?${trendsParams.toString()}`),
-        fetch(`/api/admin/revenue/by-product?${commonParams.toString()}`),
-        fetch(`/api/admin/revenue/by-payment-method?${commonParams.toString()}`),
+          fetch(`/api/admin/revenue/summary?${commonParams.toString()}`),
+          fetch(`/api/admin/revenue/trends?${trendsParams.toString()}`),
+          fetch(`/api/admin/revenue/by-product?${commonParams.toString()}`),
+          fetch(`/api/admin/revenue/by-payment-method?${commonParams.toString()}`),
       ]);
 
       // Check for errors in responses
       if (!summaryRes.ok || !trendsRes.ok || !byProductRes.ok || !byPaymentMethodRes.ok) {
         const errors = await Promise.all([
-            summaryRes.ok ? null : summaryRes.json(),
-            trendsRes.ok ? null : trendsRes.json(),
-            byProductRes.ok ? null : byProductRes.json(),
-            byPaymentMethodRes.ok ? null : byPaymentMethodRes.json(),
+            summaryRes.ok ? null : summaryRes.json().catch(() => ({ error: 'Failed to parse summary error' })),
+            trendsRes.ok ? null : trendsRes.json().catch(() => ({ error: 'Failed to parse trends error' })),
+            byProductRes.ok ? null : byProductRes.json().catch(() => ({ error: 'Failed to parse by-product error' })),
+            byPaymentMethodRes.ok ? null : byPaymentMethodRes.json().catch(() => ({ error: 'Failed to parse by-payment-method error' })),
         ]);
         const combinedError = errors.filter(e => e).map(e => e.error || 'Unknown API Error').join('; ');
-        throw new Error(`Failed to fetch revenue data: ${combinedError}`);
+        throw new Error(`Failed to fetch revenue data: ${combinedError || 'Network or parsing error'}`);
       }
 
       // Parse JSON data

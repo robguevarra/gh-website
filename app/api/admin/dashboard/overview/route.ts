@@ -96,33 +96,34 @@ function generatePeriods(
   return periods;
 }
 
-function calculateDateRanges(url: URL): {
-  range: DateRange;
-  granularity: 'day' | 'week' | 'month';
+function calculateDateRangesForComparison(url: URL): {
+  current: { start: Date; end: Date };
+  previous: { start: Date; end: Date };
 } {
   const params = url.searchParams;
   const startParam = parseDateParam(params.get('startDate') ?? '');
   const endParam = parseDateParam(params.get('endDate') ?? '');
 
-  const now = new Date();
-  const currentStart = startParam || new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const currentEnd = endParam || now;
-  const msSpan = currentEnd.getTime() - currentStart.getTime() + 1;
+  if (!startParam || !endParam) {
+      throw new Error("Start date and end date parameters are required.");
+  }
+
+  const currentStart = startParam;
+  const currentEnd = endParam;
+  // Ensure end date includes the full day for current period calculations
+  currentEnd.setUTCHours(23, 59, 59, 999);
+
+  const msSpan = currentEnd.getTime() - currentStart.getTime(); // Use adjusted end date
   const days = Math.ceil(msSpan / (1000 * 60 * 60 * 24));
 
   const prevEnd = new Date(currentStart.getTime() - 1);
-  const prevStart = new Date(prevEnd.getTime() - days * 24 * 60 * 60 * 1000 + 1);
-
-  let granularity: 'day' | 'week' | 'month' = 'month';
-  if (days <= 31) granularity = 'day';
-  else if (days <= 90) granularity = 'week';
+  prevEnd.setUTCHours(23, 59, 59, 999); // Ensure previous end date also includes full day
+  const prevStart = new Date(currentStart.getTime() - (days * 24 * 60 * 60 * 1000));
+  prevStart.setUTCHours(0, 0, 0, 0); // Ensure previous start date is at the beginning
 
   return {
-    range: {
-      current: { start: currentStart, end: currentEnd },
-      previous: { start: prevStart, end: prevEnd }
-    },
-    granularity
+    current: { start: currentStart, end: currentEnd },
+    previous: { start: prevStart, end: prevEnd }
   };
 }
 
@@ -249,16 +250,19 @@ async function fetchEnrollmentTrends(
   dr: DateRange,
   granularity: 'day' | 'week' | 'month'
 ): Promise<TrendPoint[]> {
-  // console.log('[fetchEnrollmentTrends] parameters:', {
-  //   start: dr.current.start.toISOString(),
-  //   end: dr.current.end.toISOString(),
-  //   granularity
-  // });
+  console.log('[fetchEnrollmentTrends] parameters:', {
+    start: dr.current.start.toISOString(),
+    end: dr.current.end.toISOString(),
+    granularity
+  });
+
+  // Adjust end date to include the full day for consistent trend calculation
+  const adjustedEndDate = new Date(dr.current.end);
+  adjustedEndDate.setUTCHours(23, 59, 59, 999);
+  const adjustedEndDateISO = adjustedEndDate.toISOString();
 
   const periods = generatePeriods(dr.current.start, dr.current.end, granularity);
-  // Determine the format needed to map DB results back to the generated periods
   const periodMapKeyFormat = granularity === 'month' ? 'YYYY-MM' : 'YYYY-MM-DD';
-  // Helper function to format date from DB result to match the key format
   const formatDbDateForKey = (dateStr: string): string => {
       try {
           const date = new Date(dateStr);
@@ -273,18 +277,17 @@ async function fetchEnrollmentTrends(
   }
 
   let dbResults: { dateKey: string; count: number }[] = [];
-
   const p2pCourseId = '7e386720-8839-4252-bd5f-09a33c3e1afb'; // P2P Course ID
 
   try {
     if (granularity === 'month') {
-      // --- Use Correct Database RPC for Monthly P2P Aggregation ---
       const { data: monthlyData = [], error: rpcError } = await admin.rpc(
-        'get_monthly_p2p_enrollment_trends', // Correct function name
+        'get_monthly_p2p_enrollment_trends', 
         {
-          start_date: dr.current.start.toISOString(), // Correct parameter name
-          end_date: dr.current.end.toISOString(),     // Correct parameter name
-          target_course_id: p2pCourseId               // Added required parameter
+          start_date: dr.current.start.toISOString(), 
+          // Use adjusted end date
+          end_date: adjustedEndDateISO,     
+          target_course_id: p2pCourseId               
         }
       );
 
@@ -293,18 +296,17 @@ async function fetchEnrollmentTrends(
         throw rpcError;
       }
       dbResults = monthlyData.map((item: any) => ({
-          // Use the correct column name from the function's return type
           dateKey: formatDbDateForKey(item.month_start_date),
           count: Number(item.count || 0)
       }));
 
     } else if (granularity === 'week') {
-        // --- Use Correct Database RPC for Weekly P2P Aggregation ---
         const { data: weeklyData = [], error: rpcError } = await admin.rpc(
-            'get_weekly_p2p_enrollment_trends', // Correct function name
+            'get_weekly_p2p_enrollment_trends', 
             {
                 start_date: dr.current.start.toISOString(),
-                end_date: dr.current.end.toISOString(),
+                // Use adjusted end date
+                end_date: adjustedEndDateISO,
                 target_course_id: p2pCourseId
             }
         );
@@ -313,17 +315,17 @@ async function fetchEnrollmentTrends(
             throw rpcError;
         }
         dbResults = weeklyData.map((item: any) => ({
-            dateKey: formatDbDateForKey(item.week_start_date), // Correct column name
+            dateKey: formatDbDateForKey(item.week_start_date), 
             count: Number(item.count || 0)
         }));
 
     } else { // granularity === 'day'
-        // --- Use Correct Database RPC for Daily P2P Aggregation ---
         const { data: dailyData = [], error: rpcError } = await admin.rpc(
-            'get_daily_p2p_enrollment_trends', // Correct function name
+            'get_daily_p2p_enrollment_trends', 
             {
                 start_date: dr.current.start.toISOString(),
-                end_date: dr.current.end.toISOString(),
+                // Use adjusted end date
+                end_date: adjustedEndDateISO,
                 target_course_id: p2pCourseId
             }
         );
@@ -332,25 +334,18 @@ async function fetchEnrollmentTrends(
             throw rpcError;
         }
          dbResults = dailyData.map((item: any) => ({
-            dateKey: formatDbDateForKey(item.date), // Correct column name
+            dateKey: formatDbDateForKey(item.date), 
             count: Number(item.count || 0)
         }));
     }
 
   } catch (error) {
-      // Log the specific error but allow the function to return potentially partial data
-      // (or an empty array if the first query failed)
       console.error(`Error fetching ${granularity} enrollment trends:`, error);
-      // Depending on requirements, you might want to re-throw or return a specific error structure
   }
 
-
-  // Map DB results to the generated periods
   const trendsMap = new Map(dbResults.map(item => [item.dateKey, item.count]));
-
-  // Ensure all periods have a value (0 if no data)
   const trends: TrendPoint[] = periods.map(periodKey => ({
-    date: periodKey, // Use the generated period key as the date
+    date: periodKey, 
     count: trendsMap.get(periodKey) || 0
   }));
 
@@ -501,7 +496,22 @@ async function fetchRecentActivity(
 export async function GET(req: NextRequest) {
   try {
     const admin = getAdminClient();
-    const { range, granularity } = calculateDateRanges(new URL(req.url));
+    const params = new URL(req.url).searchParams;
+    
+    // GET: Granularity from query params (default to day? or month?)
+    const granularity = (params.get('granularity') || 'day') as 'day' | 'week' | 'month';
+    if (!['day', 'week', 'month'].includes(granularity)) {
+        return NextResponse.json({ error: 'Invalid granularity specified' }, { status: 400 });
+    }
+
+    // Calculate date ranges for comparison
+    const dateRanges = calculateDateRangesForComparison(new URL(req.url));
+
+    // Use the same date range object for all fetches
+    const rangeForFetching: DateRange = {
+        current: dateRanges.current,
+        previous: dateRanges.previous
+    };
 
     const [
       summaryMetrics,
@@ -509,10 +519,10 @@ export async function GET(req: NextRequest) {
       revenueTrends,
       recentActivity
     ] = await Promise.all([
-      fetchSummaryMetrics(admin, range),
-      fetchEnrollmentTrends(admin, range, granularity),
-      fetchRevenueTrends(admin, range, granularity),
-      fetchRecentActivity(admin, range)
+      fetchSummaryMetrics(admin, rangeForFetching), // Uses dates internally
+      fetchEnrollmentTrends(admin, rangeForFetching, granularity), // Pass granularity
+      fetchRevenueTrends(admin, rangeForFetching, granularity),  // Pass granularity
+      fetchRecentActivity(admin, rangeForFetching) // Uses dates internally
     ]);
 
     const performanceSummaries = {
@@ -550,7 +560,7 @@ export async function GET(req: NextRequest) {
     console.error('Dashboard Overview API error:', error);
     return NextResponse.json(
       { error: error.message || 'Failed to fetch dashboard overview metrics' },
-      { status: 500 }
+      { status: error.message?.includes("parameters are required") ? 400 : 500 } // Return 400 if date params missing
     );
   }
 }

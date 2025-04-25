@@ -1,14 +1,15 @@
 'use client'; // This main page will coordinate fetching and display, likely needing client-side interaction
 
 import React, { useState, useEffect } from 'react';
-import { DateRange } from 'react-day-picker';
 import RevenueMetricCards from './components/RevenueMetricCards';
 import RevenueTrendsChart from './components/RevenueTrendsChart';
 import RevenueByProductChart from './components/RevenueByProductChart';
 import RevenueByPaymentMethodChart from './components/RevenueByPaymentMethodChart';
 import RevenueFilters, { Granularity, SourcePlatformFilter } from './components/RevenueFilters';
-// Import Zustand store hook
+// Import Revenue Zustand store hook
 import { useRevenueAnalyticsStore } from '@/lib/stores/admin/revenueAnalyticsStore';
+// IMPORT: Shared store for date range
+import { useSharedDashboardFiltersStore } from '@/lib/stores/admin/sharedDashboardFiltersStore';
 
 /**
  * Main page component for the Revenue Analytics section.
@@ -16,7 +17,7 @@ import { useRevenueAnalyticsStore } from '@/lib/stores/admin/revenueAnalyticsSto
  * Uses Zustand for state management.
  */
 export default function RevenueAnalyticsPage() {
-  // Get state and actions from Zustand store
+  // Get state and actions from Revenue Zustand store
   const {
     summary,
     trends,
@@ -24,29 +25,33 @@ export default function RevenueAnalyticsPage() {
     byPaymentMethod,
     isLoading,
     error,
-    dateRange,
     granularity,
     sourcePlatform,
-    setFilters,
+    setFilters, // Keep this for granularity/sourcePlatform
     fetchAllRevenueData,
   } = useRevenueAnalyticsStore();
 
-  // Fetch data on initial load and when filters change
-  useEffect(() => {
-    // Fetch immediately on mount
-    fetchAllRevenueData();
-    // Note: Dependency array includes filters. If setFilters triggered
-    // fetchAllRevenueData directly (e.g., via queueMicrotask in store),
-    // you might only need to fetch on mount.
-    // However, explicitly fetching when filters change here is clearer.
-  }, [dateRange, granularity, sourcePlatform, fetchAllRevenueData]);
+  // GET: Date range state and setter from the SHARED store
+  const { dateRange: sharedDateRange, setDateRange: setSharedDateRange } = useSharedDashboardFiltersStore();
 
-  // Handler remains simple, just calls setFilters
+  // Fetch data on initial load and when SHARED date range or local filters change
+  useEffect(() => {
+    // Check if the shared date range is valid before fetching
+    if (sharedDateRange?.from) {
+      console.log('Revenue filters or shared date changed, fetching...', { sharedDateRange, granularity, sourcePlatform });
+      fetchAllRevenueData();
+    } else {
+      console.log('Skipping revenue fetch: Shared date range is invalid.', sharedDateRange);
+    }
+    // Dependency array includes shared date range AND local filters
+  }, [sharedDateRange, granularity, sourcePlatform, fetchAllRevenueData]);
+
+  // UPDATE: handleFiltersChange no longer includes dateRange
   const handleFiltersChange = (filters: {
-    dateRange?: DateRange;
     granularity?: Granularity;
     sourcePlatform?: SourcePlatformFilter;
   }) => {
+    // Only pass granularity and sourcePlatform to setFilters
     setFilters(filters);
   };
 
@@ -54,8 +59,15 @@ export default function RevenueAnalyticsPage() {
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <h1 className="text-2xl font-semibold">Revenue Analytics</h1>
 
-      {/* Pass filter state to RevenueFilters if needed for controlled inputs */}
-      <RevenueFilters onChange={handleFiltersChange} /* initialFilters={{ dateRange, granularity, sourcePlatform }} */ />
+      {/* Pass SHARED date range and its setter to RevenueFilters 
+          Also pass local filters and the updated change handler */}
+      <RevenueFilters 
+        dateRange={sharedDateRange} 
+        onDateRangeChange={setSharedDateRange} 
+        granularity={granularity}
+        sourcePlatform={sourcePlatform}
+        onChange={handleFiltersChange} 
+      />
 
       {isLoading && <div>Loading revenue data...</div>} {/* Use isLoading from store */}
       {error && <div className="text-red-600">Error loading data: {error}</div>} {/* Use error from store */}

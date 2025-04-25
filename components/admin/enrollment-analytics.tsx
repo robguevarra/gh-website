@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { debounce } from 'lodash';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEnrollmentAnalyticsStore } from '@/lib/stores/admin/enrollmentAnalyticsStore'; // Import the store
+import { useSharedDashboardFiltersStore } from '@/lib/stores/admin/sharedDashboardFiltersStore';
 
 // Type for the summary data fetched from API
 interface EnrollmentSummaryData {
@@ -86,15 +87,12 @@ const formatPercent = (value: number | null) => {
 export function EnrollmentAnalytics() {
   // Use the Zustand store exclusively for state and actions
   const {
-    // Filters - Use the react-day-picker DateRange type from the store
-    dateRange,
     granularity,
     funnelSource,
     detailsSearchTerm,
     detailsPage,
     detailsPageSize,
     checkEmail,
-    // Data - Directly use store state for rendering
     summaryData,
     trendsData,
     funnelData,
@@ -102,22 +100,18 @@ export function EnrollmentAnalytics() {
     detailsData,
     detailsTotalCount,
     checkResult,
-    // Loading States
     isLoadingSummary,
     isLoadingTrends,
     isLoadingFunnel,
     isLoadingSegmentation,
     isLoadingDetails,
     isLoadingCheck,
-    // Error States
     summaryError,
     trendsError,
     funnelError,
     segmentationError,
     detailsError,
     checkError,
-    // Actions - Use store actions for event handlers
-    setDateRange,
     setGranularity,
     setFunnelSource,
     setDetailsSearchTerm,
@@ -126,7 +120,15 @@ export function EnrollmentAnalytics() {
     setCheckEmail,
     performCheck,
     initialize, // Use initialize action from store
+    fetchSummary, // Need fetch actions to trigger them
+    fetchTrends,
+    fetchFunnel,
+    fetchSegmentation,
+    fetchDetails,
   } = useEnrollmentAnalyticsStore();
+
+  // GET: Date range state and setter from the SHARED store
+  const { dateRange: sharedDateRange, setDateRange: setSharedDateRange } = useSharedDashboardFiltersStore();
 
   // Local state ONLY for debouncing search input to avoid excessive API calls
   const [localSearchTerm, setLocalSearchTerm] = useState(detailsSearchTerm);
@@ -158,9 +160,37 @@ export function EnrollmentAnalytics() {
   // Initialize data fetching on component mount using the store's initialize action
   useEffect(() => {
     // Call the initialize action once when the component mounts
+    // This will fetch data using the default date range from the shared store
     initialize();
     // No cleanup needed here as fetching logic is managed within the store
   }, [initialize]); // Dependency on initialize ensures it runs once
+
+  // EFFECT: Fetch data whenever the SHARED date range changes
+  useEffect(() => {
+    // Check if the shared date range is valid before fetching
+    if (sharedDateRange?.from) {
+      console.log('Shared date range changed, fetching enrollment data...', sharedDateRange);
+      fetchSummary();
+      fetchTrends();
+      fetchFunnel();
+      fetchSegmentation();
+      fetchDetails();
+    } else {
+      console.log('Shared date range changed, but it is invalid. Skipping fetch.', sharedDateRange);
+    }
+    // Run this effect when the shared date range changes
+  }, [sharedDateRange, fetchSummary, fetchTrends, fetchFunnel, fetchSegmentation, fetchDetails]);
+
+  // EFFECT: Fetch data when granularity or funnel source changes (independent of date)
+  useEffect(() => {
+    console.log('Granularity changed, fetching trends...', granularity);
+    fetchTrends();
+  }, [granularity, fetchTrends]);
+
+  useEffect(() => {
+    console.log('Funnel source changed, fetching funnel...', funnelSource);
+    fetchFunnel();
+  }, [funnelSource, fetchFunnel]);
 
   // Calculate total pages based on store state
   const totalPages = Math.ceil(detailsTotalCount / detailsPageSize);
@@ -213,10 +243,10 @@ export function EnrollmentAnalytics() {
             </SelectContent>
           </Select>
 
-          {/* Date Range Picker - Use the standard one */}
+          {/* Date Range Picker - Use the SHARED store's state and setter */}
           <DateRangePicker
-             value={dateRange} // Pass the DateRange | undefined from the store
-             onChange={setDateRange} // Pass the store action directly
+             value={sharedDateRange} // Pass the DateRange | undefined from the SHARED store
+             onChange={setSharedDateRange} // Pass the SHARED store action directly
           />
         </div>
       </div>

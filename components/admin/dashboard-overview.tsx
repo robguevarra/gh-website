@@ -19,6 +19,8 @@ import { ChartContainer } from './chart-container';
 import { EnrollmentTrendsChart } from './enrollment-trends-chart';
 import { RevenueTrendsChart } from './revenue-trends-chart';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { useSharedDashboardFiltersStore } from '@/lib/stores/admin/sharedDashboardFiltersStore';
+import { useEnrollmentAnalyticsStore } from '@/lib/stores/admin/enrollmentAnalyticsStore';
 
 // --- Types matching the new API response ---
 type SummaryMetrics = {
@@ -73,60 +75,41 @@ type OverviewData = {
   trendGranularity?: string;
 };
 
-// Helper to get default date ranges using the {from, to} structure
-const getDefaultDateRange = (preset: 'last30' | 'thisMonth' | 'last12mo'): DateRange => {
-  const now = new Date();
-  let fromDate: Date;
-  let toDate: Date = now;
-
-  if (preset === 'last30') {
-    fromDate = subDays(now, 29);
-  } else if (preset === 'thisMonth') {
-    fromDate = startOfMonth(now);
-  } else { // last 12 months
-    fromDate = startOfMonth(subMonths(now, 11));
-  }
-  // Ensure time is start of day for 'from'
-  fromDate.setHours(0, 0, 0, 0);
-
-  return { from: fromDate, to: toDate };
-};
-
 export function DashboardOverview() {
   const router = useRouter();
   const [data, setData] = useState<OverviewData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  // Use the DateRange type from react-day-picker { from?, to? }
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(
-    getDefaultDateRange('last12mo')
-  );
+  const { dateRange, setDateRange } = useSharedDashboardFiltersStore();
+  const { granularity } = useEnrollmentAnalyticsStore();
 
-  // Fetch overview data with date range
+  // Fetch overview data with date range AND granularity
   useEffect(() => {
     const fetchOverview = async () => {
-      if (!dateRange?.from) return; // Don't fetch if range is incomplete
+      if (!dateRange?.from || !granularity) return;
       try {
         setIsLoading(true);
         const params = new URLSearchParams();
-        // Use dateRange.from and dateRange.to
         params.append('startDate', dateRange.from.toISOString());
-        // Use dateRange.to or default to 'from' date if 'to' is missing (though range mode usually sets both)
         const endDate = dateRange.to || dateRange.from;
         params.append('endDate', endDate.toISOString());
+        params.append('granularity', granularity);
 
         const response = await fetch(`/api/admin/dashboard/overview?${params.toString()}`);
-        if (!response.ok) throw new Error("Failed to fetch dashboard overview");
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to fetch dashboard overview (${response.status})`);
+        }
         const json = await response.json();
         setData(json);
       } catch (error) {
         console.error("Error fetching dashboard overview:", error);
-        toast.error("Failed to load dashboard overview");
+        toast.error(error instanceof Error ? error.message : "Failed to load dashboard overview");
       } finally {
         setIsLoading(false);
       }
     };
     fetchOverview();
-  }, [dateRange]);
+  }, [dateRange, granularity]);
 
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -171,7 +154,7 @@ export function DashboardOverview() {
   }
 
   if (!data) return null;
-  const { summaryMetrics, enrollmentTrends, revenueTrends, recentActivity, performanceSummaries, trendGranularity } = data;
+  const { summaryMetrics, enrollmentTrends, revenueTrends, recentActivity, performanceSummaries } = data;
 
   return (
     <div className="space-y-6">
@@ -262,7 +245,7 @@ export function DashboardOverview() {
         {enrollmentTrends.length === 0 ? (
           <div className="h-64 flex items-center justify-center text-muted-foreground">No data</div>
         ) : (
-          <EnrollmentTrendsChart data={enrollmentTrends} granularity={trendGranularity as 'day' | 'week' | 'month' || 'month'} />
+          <EnrollmentTrendsChart data={enrollmentTrends} granularity={granularity} />
         )}
       </ChartContainer>
 
@@ -271,7 +254,7 @@ export function DashboardOverview() {
         {revenueTrends.length === 0 ? (
           <div className="h-64 flex items-center justify-center text-muted-foreground">No data</div>
         ) : (
-          <RevenueTrendsChart data={revenueTrends} granularity={trendGranularity as 'day' | 'week' | 'month' || 'month'} />
+          <RevenueTrendsChart data={revenueTrends} granularity={data.trendGranularity as 'day' | 'week' | 'month' || 'month'} />
         )}
       </ChartContainer>
 

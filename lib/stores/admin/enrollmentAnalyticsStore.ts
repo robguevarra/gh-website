@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { formatISO } from 'date-fns';
-import { DateRange } from '@/components/admin/date-range-picker'; // Assuming this path is correct
+import { useSharedDashboardFiltersStore } from './sharedDashboardFiltersStore';
 
 // --- Types --- (Copied/adapted from component and API routes)
 type Granularity = 'day' | 'week' | 'month';
@@ -62,8 +62,6 @@ interface CheckResult {
 
 // --- State Interface ---
 interface EnrollmentAnalyticsState {
-  // Filters
-  dateRange: DateRange;
   granularity: Granularity;
   funnelSource: FunnelSource;
   detailsSearchTerm: string;
@@ -71,7 +69,6 @@ interface EnrollmentAnalyticsState {
   detailsPageSize: number;
   checkEmail: string;
 
-  // Data
   summaryData: EnrollmentSummaryData | null;
   trendsData: TrendDataPoint[] | null;
   funnelData: EnrollmentFunnelData | null;
@@ -80,7 +77,6 @@ interface EnrollmentAnalyticsState {
   detailsTotalCount: number;
   checkResult: CheckResult | null;
 
-  // Loading States
   isLoadingSummary: boolean;
   isLoadingTrends: boolean;
   isLoadingFunnel: boolean;
@@ -88,7 +84,6 @@ interface EnrollmentAnalyticsState {
   isLoadingDetails: boolean;
   isLoadingCheck: boolean;
 
-  // Error States
   summaryError: string | null;
   trendsError: string | null;
   funnelError: string | null;
@@ -99,8 +94,6 @@ interface EnrollmentAnalyticsState {
 
 // --- Actions Interface ---
 interface EnrollmentAnalyticsActions {
-  // Filter Setters
-  setDateRange: (range: DateRange) => void;
   setGranularity: (granularity: Granularity) => void;
   setFunnelSource: (source: FunnelSource) => void;
   setDetailsSearchTerm: (term: string) => void;
@@ -108,7 +101,6 @@ interface EnrollmentAnalyticsActions {
   setDetailsPageSize: (size: number) => void;
   setCheckEmail: (email: string) => void;
 
-  // Fetch Actions (trigger based on filter changes)
   fetchSummary: () => Promise<void>;
   fetchTrends: () => Promise<void>;
   fetchFunnel: () => Promise<void>;
@@ -116,17 +108,11 @@ interface EnrollmentAnalyticsActions {
   fetchDetails: () => Promise<void>;
   performCheck: () => Promise<void>;
 
-  // Initialization
-  initialize: () => void; // To fetch initial data
+  initialize: () => void;
 }
 
 // --- Store Implementation ---
 export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & EnrollmentAnalyticsActions>()((set, get) => ({
-  // Initial State
-  dateRange: { 
-      start: new Date(new Date().getFullYear(), new Date().getMonth(), 1), 
-      end: new Date() 
-  },
   granularity: 'day',
   funnelSource: 'all',
   detailsSearchTerm: '',
@@ -156,26 +142,13 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
   detailsError: null,
   checkError: null,
 
-  // Actions
-  setDateRange: (range) => {
-      set({ dateRange: range, detailsPage: 1 }); // Reset page on date change
-      // Trigger fetches that depend on dateRange
-      get().fetchSummary();
-      get().fetchTrends();
-      get().fetchFunnel();
-      get().fetchSegmentation();
-      get().fetchDetails();
-  },
   setGranularity: (granularity) => {
       set({ granularity });
-      get().fetchTrends(); // Only trends depend on granularity
   },
   setFunnelSource: (source) => {
       set({ funnelSource: source });
-      get().fetchFunnel(); // Only funnel depends on source
   },
   setDetailsSearchTerm: (term) => {
-      // Debouncing should ideally happen in the component calling this
       set({ detailsSearchTerm: term, detailsPage: 1 }); 
       get().fetchDetails();
   },
@@ -184,18 +157,25 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
       get().fetchDetails();
   },
   setDetailsPageSize: (size) => {
-      set({ detailsPageSize: size, detailsPage: 1 }); // Reset to page 1 on size change
+      set({ detailsPageSize: size, detailsPage: 1 });
       get().fetchDetails();
   },
   setCheckEmail: (email) => set({ checkEmail: email, checkError: null, checkResult: null }),
 
   fetchSummary: async () => {
     set({ isLoadingSummary: true, summaryError: null });
-    const { dateRange } = get();
+    const { dateRange } = useSharedDashboardFiltersStore.getState();
+    if (!dateRange?.from) {
+        set({ isLoadingSummary: false, summaryError: 'Date range start date is missing.' });
+        return;
+    }
+    const startDate = dateRange.from;
+    const endDate = dateRange.to || startDate;
+
     try {
       const params = new URLSearchParams();
-      if (dateRange.start) params.append('startDate', formatISO(dateRange.start));
-      if (dateRange.end) params.append('endDate', formatISO(dateRange.end));
+      params.append('startDate', formatISO(startDate));
+      params.append('endDate', formatISO(endDate));
       const response = await fetch(`/api/admin/enrollments/summary?${params.toString()}`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to fetch summary');
@@ -208,11 +188,19 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
 
   fetchTrends: async () => {
     set({ isLoadingTrends: true, trendsError: null });
-    const { dateRange, granularity } = get();
+    const { dateRange } = useSharedDashboardFiltersStore.getState();
+    const { granularity } = get();
+    if (!dateRange?.from) {
+        set({ isLoadingTrends: false, trendsError: 'Date range start date is missing.' });
+        return;
+    }
+    const startDate = dateRange.from;
+    const endDate = dateRange.to || startDate;
+
     try {
       const params = new URLSearchParams();
-      if (dateRange.start) params.append('startDate', formatISO(dateRange.start));
-      if (dateRange.end) params.append('endDate', formatISO(dateRange.end));
+      params.append('startDate', formatISO(startDate));
+      params.append('endDate', formatISO(endDate));
       params.append('granularity', granularity);
       const response = await fetch(`/api/admin/enrollments/trends?${params.toString()}`);
       const data = await response.json();
@@ -226,11 +214,19 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
 
   fetchFunnel: async () => {
       set({ isLoadingFunnel: true, funnelError: null });
-      const { dateRange, funnelSource } = get();
+      const { dateRange } = useSharedDashboardFiltersStore.getState();
+      const { funnelSource } = get();
+      if (!dateRange?.from) {
+          set({ isLoadingFunnel: false, funnelError: 'Date range start date is missing.' });
+          return;
+      }
+      const startDate = dateRange.from;
+      const endDate = dateRange.to || startDate;
+
       try {
           const params = new URLSearchParams();
-          if (dateRange.start) params.append('startDate', formatISO(dateRange.start));
-          if (dateRange.end) params.append('endDate', formatISO(dateRange.end));
+          params.append('startDate', formatISO(startDate));
+          params.append('endDate', formatISO(endDate));
           params.append('source', funnelSource);
           const response = await fetch(`/api/admin/enrollments/funnel?${params.toString()}`);
           const data = await response.json();
@@ -244,12 +240,18 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
 
   fetchSegmentation: async () => {
       set({ isLoadingSegmentation: true, segmentationError: null });
-      const { dateRange } = get(); // Currently only depends on date range
+      const { dateRange } = useSharedDashboardFiltersStore.getState();
+      if (!dateRange?.from) {
+          set({ isLoadingSegmentation: false, segmentationError: 'Date range start date is missing.' });
+          return;
+      }
+      const startDate = dateRange.from;
+      const endDate = dateRange.to || startDate;
+
       try {
           const params = new URLSearchParams();
-          if (dateRange.start) params.append('startDate', formatISO(dateRange.start));
-          if (dateRange.end) params.append('endDate', formatISO(dateRange.end));
-          params.append('type', 'bySourceTag');
+          params.append('startDate', formatISO(startDate));
+          params.append('endDate', formatISO(endDate));
           const response = await fetch(`/api/admin/enrollments/segmentation?${params.toString()}`);
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || 'Failed to fetch segmentation');
@@ -262,43 +264,47 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
 
   fetchDetails: async () => {
       set({ isLoadingDetails: true, detailsError: null });
-      const { dateRange, detailsPage, detailsPageSize, detailsSearchTerm } = get();
+      const { dateRange } = useSharedDashboardFiltersStore.getState();
+      const { detailsPage, detailsPageSize, detailsSearchTerm } = get();
+      if (!dateRange?.from) {
+          set({ isLoadingDetails: false, detailsError: 'Date range start date is missing.' });
+          return;
+      }
+      const startDate = dateRange.from;
+      const endDate = dateRange.to || startDate;
+
       try {
           const params = new URLSearchParams();
-          if (dateRange.start) params.append('startDate', formatISO(dateRange.start));
-          if (dateRange.end) params.append('endDate', formatISO(dateRange.end));
+          params.append('startDate', formatISO(startDate));
+          params.append('endDate', formatISO(endDate));
           params.append('page', detailsPage.toString());
-          params.append('pageSize', detailsPageSize.toString());
+          params.append('limit', detailsPageSize.toString());
           if (detailsSearchTerm) params.append('search', detailsSearchTerm);
+
           const response = await fetch(`/api/admin/enrollments/details?${params.toString()}`);
           const data: EnrollmentDetailsApiResponse = await response.json();
           if (!response.ok) throw new Error((data as any).error || 'Failed to fetch details');
           set({
               detailsData: data.enrollments,
               detailsTotalCount: data.totalCount,
-              detailsPage: data.page, // Update page from response
-              isLoadingDetails: false
+              isLoadingDetails: false,
+              detailsError: null
           });
       } catch (error) {
           console.error("Error fetching enrollment details:", error);
-          set({ 
-              detailsError: error instanceof Error ? error.message : 'Unknown error',
-              isLoadingDetails: false,
-              detailsData: [],
-              detailsTotalCount: 0
-          });
+          set({ detailsError: error instanceof Error ? error.message : 'Unknown error', isLoadingDetails: false });
       }
   },
   
   performCheck: async () => {
-      const email = get().checkEmail;
-      if (!email) {
-          set({ checkError: 'Please enter an email address.' });
+      set({ isLoadingCheck: true, checkError: null, checkResult: null });
+      const { checkEmail } = get();
+      if (!checkEmail) {
+          set({ isLoadingCheck: false, checkError: 'Email address is required.' });
           return;
       }
-      set({ isLoadingCheck: true, checkError: null, checkResult: null });
       try {
-          const params = new URLSearchParams({ email });
+          const params = new URLSearchParams({ email: checkEmail });
           const response = await fetch(`/api/admin/enrollments/check-status?${params.toString()}`);
           const data = await response.json();
           if (!response.ok) throw new Error(data.error || 'Failed to check status');
@@ -310,11 +316,10 @@ export const useEnrollmentAnalyticsStore = create<EnrollmentAnalyticsState & Enr
   },
 
   initialize: () => {
-      // Fetch all necessary initial data
-      get().fetchSummary();
-      get().fetchTrends();
-      get().fetchFunnel();
-      get().fetchSegmentation();
-      get().fetchDetails();
+    get().fetchSummary();
+    get().fetchTrends();
+    get().fetchFunnel();
+    get().fetchSegmentation();
+    get().fetchDetails(); 
   }
 })); 
