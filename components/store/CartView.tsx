@@ -23,14 +23,15 @@ import {
 } from '@/stores/cartStore';
 import { ShoppingBag } from 'lucide-react'; // Added ShoppingBag icon
 import { useToast } from '@/components/ui/use-toast';
+import { formatCurrencyPHP } from '@/lib/utils/formatting';
 
 // Helper to format currency
-const formatPrice = (price: number): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD', // TODO: Make currency dynamic if needed
-    }).format(price);
-};
+// const formatPrice = (price: number): string => {
+//     return new Intl.NumberFormat('en-US', {
+//       style: 'currency',
+//       currency: 'USD', // TODO: Make currency dynamic if needed
+//     }).format(price);
+// };
 
 // This component will likely be triggered by a button elsewhere (e.g., in Header)
 // It assumes it's rendered within a Sheet component structure.
@@ -106,7 +107,7 @@ const CartView = () => {
                   </div>
                   <div className="flex-grow">
                     <p className="font-medium text-sm mb-1 line-clamp-2 text-neutral-800">{item.title}</p>
-                    <p className="text-sm font-semibold text-neutral-900">{formatPrice(item.price)}</p>
+                    <p className="text-sm font-semibold text-neutral-900">{formatCurrencyPHP(item.price)}</p>
                   </div>
                   <Button
                     variant="ghost"
@@ -127,7 +128,7 @@ const CartView = () => {
           <SheetFooter className="mt-auto pt-4 border-t border-neutral-200 sm:flex-col sm:items-stretch sm:gap-4">
              <div className="flex justify-between items-center mb-4">
                <span className="text-base text-neutral-600">Subtotal:</span>
-               <span className="text-xl font-semibold text-neutral-900">{formatPrice(totalPrice)}</span>
+               <span className="text-xl font-semibold text-neutral-900">{formatCurrencyPHP(totalPrice)}</span>
              </div>
             <div className="flex flex-col sm:flex-row justify-between gap-2">
               <Button 

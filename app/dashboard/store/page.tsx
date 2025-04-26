@@ -10,6 +10,8 @@ import StoreHero from '@/components/store/StoreHero';
 import CategoryNavigation from '@/components/store/CategoryNavigation';
 import SuccessShowcase from '@/components/store/SuccessShowcase';
 import { Database } from '@/types/supabase'; // Assuming Supabase generated types
+// Import the new SaleSection component
+import SaleSection from '@/components/store/SaleSection';
 
 // Base type for shopify_products row from generated types
 type ShopifyProductRow = Database['public']['Tables']['shopify_products']['Row'];
@@ -21,12 +23,16 @@ export type ProductData = {
   handle: string | null;
   featured_image_url: string | null;
   price: number; // Price is now guaranteed by filter
+  compare_at_price?: number | null;
 };
 
 // Type definition for the raw data structure returned by Supabase query
 // It includes the base product row AND the nested variant price
 type ProductWithVariantPrice = ShopifyProductRow & {
-  shopify_product_variants: { price: number | string | null }[];
+  shopify_product_variants: { 
+    price: number | string | null;
+    compare_at_price?: number | string | null; 
+  }[];
 };
 
 // Fetch products intended for members from Supabase
@@ -40,7 +46,10 @@ async function getMemberProductsStore(): Promise<ProductData[]> {
       title,
       handle,
       featured_image_url, 
-      shopify_product_variants ( price )
+      shopify_product_variants (
+        price,
+        compare_at_price 
+      )
     `)
     .eq('status', 'ACTIVE')
     // Temporarily removed tag filter since none have 'access:members'
@@ -69,6 +78,15 @@ async function getMemberProductsStore(): Promise<ProductData[]> {
         return null; 
       }
       
+      // Extract compare_at_price, ensuring it's a number or null
+      let compareAtPrice: number | null = null;
+      if (variant.compare_at_price !== null && variant.compare_at_price !== undefined) {
+        const parsedCompareAtPrice = Number(variant.compare_at_price);
+        if (!isNaN(parsedCompareAtPrice)) {
+          compareAtPrice = parsedCompareAtPrice;
+        }
+      }
+      
       // Access properties directly from the correctly typed 'product' parameter
       return {
         id: product.id,
@@ -76,6 +94,7 @@ async function getMemberProductsStore(): Promise<ProductData[]> {
         handle: product.handle,
         featured_image_url: product.featured_image_url, 
         price: Number(variant.price),
+        compare_at_price: compareAtPrice,
       };
     })
     .filter((product): product is ProductData => product !== null);
@@ -103,6 +122,10 @@ export default function StorePage() {
       <div className="container mx-auto px-4">
         <SuccessShowcase />
       </div>
+
+      {/* Render the Sale Section */}
+      {/* Suspense isn't strictly needed here as SaleSection fetches its own data */}
+      <SaleSection />
       
       {/* Category Navigation */}
       <div className="container mx-auto px-4">

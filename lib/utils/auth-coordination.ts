@@ -46,8 +46,19 @@ export async function coordinateTokenRefresh(): Promise<boolean> {
   
   // If broadcast is supported, coordinate with other tabs
   if (broadcastSupported && authChannel) {
-    // Notify other tabs we're about to refresh
-    authChannel.postMessage({ type: 'refresh-started', timestamp: now });
+    try {
+      // Notify other tabs we're about to refresh
+      authChannel.postMessage({ type: 'refresh-started', timestamp: now });
+    } catch (error: any) {
+      // Handle potential error if channel is closed unexpectedly
+      if (error.name === 'InvalidStateError') {
+        console.warn('[Auth] BroadcastChannel was closed when trying to post refresh-started.');
+        authChannel = null; // Mark channel as unusable
+      } else {
+        console.error('[Auth] Error posting to BroadcastChannel:', error);
+      }
+      // Proceed without broadcast if channel failed
+    }
     
     // Set the last refresh time
     lastTokenRefresh = now;
@@ -90,7 +101,17 @@ export function notifyTokenRefreshComplete(): void {
   
   // If broadcast is supported, notify other tabs
   if (broadcastSupported && authChannel) {
-    authChannel.postMessage({ type: 'refresh-completed', timestamp: Date.now() });
+    try {
+      authChannel.postMessage({ type: 'refresh-completed', timestamp: Date.now() });
+    } catch (error: any) {
+      // Handle potential error if channel is closed unexpectedly
+      if (error.name === 'InvalidStateError') {
+        console.warn('[Auth] BroadcastChannel was closed when trying to post refresh-completed.');
+        authChannel = null; // Mark channel as unusable
+      } else {
+        console.error('[Auth] Error posting to BroadcastChannel:', error);
+      }
+    }
   }
   
   // Update localStorage
@@ -128,6 +149,12 @@ export function initAuthCoordination(): () => void {
   // Return cleanup function
   return () => {
     authChannel?.removeEventListener('message', handleMessage);
-    authChannel?.close();
+    // Safely attempt to close the channel
+    try {
+      authChannel?.close();
+    } catch (error) {
+      console.warn('[Auth] Error closing BroadcastChannel:', error);
+    }
+    authChannel = null; // Ensure reference is cleared
   };
 }

@@ -57,8 +57,8 @@ export default function RootLayout({
       <body className={`${inter.variable} ${playfair.variable} font-sans`}>
         <SkipLink href="#main-content">Skip to main content</SkipLink>
         <SupabaseProvider>
-          <AuthCoordinationProvider>
-            <AuthProvider>
+          <AuthProvider>
+            <AuthCoordinationProvider>
               <ThemeProvider>
                 <main id="main-content" tabIndex={-1}>
                   {children}
@@ -66,8 +66,8 @@ export default function RootLayout({
                 <CustomCursorToggle />
                 <Toaster />
               </ThemeProvider>
-            </AuthProvider>
-          </AuthCoordinationProvider>
+            </AuthCoordinationProvider>
+          </AuthProvider>
         </SupabaseProvider>
 
         <Script

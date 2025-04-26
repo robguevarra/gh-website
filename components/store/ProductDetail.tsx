@@ -9,6 +9,7 @@ import { ChevronLeft, Loader2, ShoppingCart } from 'lucide-react';
 import { useCartStore } from '@/stores/cartStore';
 import LicenseTerms, { getLicenseTypeFromTitle } from './LicenseTerms';
 import RelatedDesigns from './RelatedDesigns';
+import { formatPriceDisplayPHP } from '@/lib/utils/formatting';
 
 interface ProductVariant {
   id: string;
@@ -35,15 +36,6 @@ interface ProductDetailProps {
   relatedProducts: any[]; // Type this more strictly as needed
 }
 
-// Helper to format currency
-const formatPrice = (price: number | null): string => {
-  if (price === null) return 'N/A';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(price);
-};
-
 const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts }) => {
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -51,16 +43,15 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
   const addItem = useCartStore((state) => state.addItem);
   const { toast } = useToast();
 
-  const price = product.shopify_product_variants?.[0]?.price || null;
+  const variant = product.shopify_product_variants?.[0];
+  const price = variant?.price || null;
+  const compareAtPrice = (variant as any)?.compare_at_price || null;
   
-  // Process images from image_urls field
   let displayImages: string[] = [];
   
   if (product.image_urls && Array.isArray(product.image_urls)) {
-    // Extract URLs from the image_urls array
     displayImages = product.image_urls.map(img => img.url);
   } else if (product.featured_image_url) {
-    // Fallback to the featured image if image_urls is not available
     displayImages = [product.featured_image_url];
   }
   
@@ -69,10 +60,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
   const productType = product.product_type || '';
   const tags = product.tags || [];
   
-  // Determine license type from the product title
   const licenseType = getLicenseTypeFromTitle(product.title);
 
-  // Format license badge text
   const getLicenseBadgeText = () => {
     switch(licenseType) {
       case 'CUR': return 'Commercial Use Rights';
@@ -85,10 +74,12 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
   const handleAddToCart = () => {
     setIsAddingToCart(true);
     
+    const numericPrice = typeof price === 'number' ? price : 0;
+    
     addItem({
       productId: product.id,
       title: product.title || 'Untitled Product',
-      price: price || 0,
+      price: numericPrice,
       imageUrl: displayImages[0] || '',
     });
 
@@ -102,7 +93,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
 
   return (
     <div className="container mx-auto py-8">
-      {/* Navigation */}
       <div className="mb-8">
         <Link href="/dashboard/store" className="inline-flex items-center text-primary hover:text-primary/80 transition-colors">
           <ChevronLeft className="h-4 w-4 mr-1" />
@@ -110,9 +100,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
         </Link>
       </div>
 
-      {/* Product Display */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-        {/* Image Gallery */}
         <div className="space-y-4">
           <div className="relative aspect-square bg-muted/20 rounded-lg overflow-hidden">
             {selectedImage ? (
@@ -132,7 +120,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
             )}
           </div>
 
-          {/* Thumbnail Gallery */}
           {displayImages.length > 1 && (
             <div className="flex overflow-x-auto gap-2 pb-2">
               {displayImages.map((image, index) => (
@@ -159,7 +146,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
           )}
         </div>
 
-        {/* Product Info */}
         <div className="flex flex-col h-full">
           <div className="space-y-4">
             <h1 className="text-3xl font-serif font-bold text-primary">
@@ -167,13 +153,29 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
             </h1>
             
             <div className="flex items-center">
-              <span className="text-2xl font-semibold">{formatPrice(price)}</span>
+              {(() => {
+                const { formattedPrice, formattedCompareAtPrice } = formatPriceDisplayPHP({
+                  price: price, 
+                  compareAtPrice: compareAtPrice 
+                });
+                
+                return (
+                  <div className="flex items-baseline gap-3">
+                    {formattedCompareAtPrice && (
+                      <span className="text-xl text-muted-foreground line-through">
+                        {formattedCompareAtPrice}
+                      </span>
+                    )}
+                    <span className="text-2xl font-semibold">{formattedPrice || 'N/A'}</span>
+                  </div>
+                );
+              })()}
+              
               <span className="ml-3 inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
                 {getLicenseBadgeText()}
               </span>
             </div>
 
-            {/* Product Description - Render description_html as HTML */}
             {product.description_html && (
               <div 
                 className="prose prose-sm max-w-none"
@@ -181,7 +183,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
               />
             )}
 
-            {/* Product Meta */}
             <div className="space-y-2 py-4 border-t border-b">
               {productType && (
                 <div className="flex justify-between text-sm">
@@ -210,12 +211,10 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
               )}
             </div>
 
-            {/* License Information */}
             <div className="bg-muted/30 p-4 rounded-lg border">
               <LicenseTerms variant="inline" licenseType={licenseType} />
             </div>
 
-            {/* Add to Cart Button */}
             <div className="mt-auto pt-4">
               <Button 
                 onClick={handleAddToCart} 
@@ -234,7 +233,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
         </div>
       </div>
 
-      {/* Related Products */}
       {relatedProducts.length > 0 && (
         <RelatedDesigns products={relatedProducts} />
       )}

@@ -22,20 +22,22 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 import LicenseTerms, { getLicenseTypeFromTitle, LicenseType } from './LicenseTerms';
+import { formatPriceDisplayPHP } from '@/lib/utils/formatting';
 
 interface ProductCardProps {
   product: ProductData;
 }
 
 // Helper to format currency
-const formatPrice = (price: number | null): string => {
-  if (price === null) return 'N/A';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD', // TODO: Make currency dynamic if needed
-  }).format(price);
-};
+// const formatPrice = (price: number | null): string => {
+//   if (price === null) return 'N/A';
+//   return new Intl.NumberFormat('en-US', {
+//     style: 'currency',
+//     currency: 'USD', // TODO: Make currency dynamic if needed
+//   }).format(price);
+// };
 
 // Helper to format license label text
 const getLicenseBadgeText = (licenseType: LicenseType): string => {
@@ -60,15 +62,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   // Determine license type from title
   const licenseType = getLicenseTypeFromTitle(product.title);
 
+  // Determine if the product is on sale
+  const isOnSale = typeof product.compare_at_price === 'number' && product.compare_at_price > (product.price ?? 0);
+
   const handleAddToCart = () => {
     // Set loading state
     setIsAddingToCart(true);
+
+    // Extract the numeric price for adding to cart
+    const numericPrice = typeof product.price === 'number' ? product.price : 0;
 
     // Call the addItem action from the cart store
     addItem({
       productId: product.id,
       title: product.title || 'Untitled Product', 
-      price: product.price,
+      price: numericPrice, // Use the extracted numeric price
       imageUrl: product.featured_image_url || '',
     });
 
@@ -88,6 +96,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   return (
     <Card className="flex flex-col overflow-hidden border border-neutral-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 h-full">
       <CardHeader className="p-0 group relative">
+        {/* Add Sale Badge conditionally */}
+        {isOnSale && (
+          <Badge 
+            variant="destructive" 
+            className="absolute top-2 right-2 z-10"
+          >
+            Sale
+          </Badge>
+        )}
         <Link href={`/dashboard/store/product/${product.handle}`} className="block">
           <div className="aspect-video relative w-full overflow-hidden">
             {product.featured_image_url ? (
@@ -153,8 +170,31 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </div>
       </CardContent>
       
+      {/* Step 1.4: Handle Sale Pricing Display */}
       <CardFooter className="p-4 flex justify-between items-center bg-neutral-50 rounded-b-lg border-t border-neutral-100">
-        <span className="text-lg font-semibold text-neutral-800">{formatPrice(product.price)}</span>
+        {(() => {
+          // Use the formatting utility which handles sale logic
+          const { formattedPrice, formattedCompareAtPrice } = formatPriceDisplayPHP({
+            price: product.price,
+            compareAtPrice: product.compare_at_price // Pass compare_at_price
+          });
+
+          return (
+            <div className="flex items-baseline gap-2">
+              {/* Display compare-at price if it exists */}
+              {formattedCompareAtPrice && (
+                <span className="text-sm text-muted-foreground line-through">
+                  {formattedCompareAtPrice}
+                </span>
+              )}
+              {/* Display the final price */}
+              <span className="text-lg font-semibold text-neutral-800">
+                {formattedPrice || 'N/A'} { /* Fallback if formatting fails */ }
+              </span>
+            </div>
+          );
+        })()}
+        
         <Button 
           onClick={handleAddToCart} 
           className="bg-primary text-primary-foreground hover:bg-primary/90"
