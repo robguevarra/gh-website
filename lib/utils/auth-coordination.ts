@@ -47,8 +47,8 @@ export async function coordinateTokenRefresh(): Promise<boolean> {
   // If broadcast is supported, coordinate with other tabs
   if (broadcastSupported && authChannel) {
     try {
-      // Notify other tabs we're about to refresh
-      authChannel.postMessage({ type: 'refresh-started', timestamp: now });
+    // Notify other tabs we're about to refresh
+    authChannel.postMessage({ type: 'refresh-started', timestamp: now });
     } catch (error: any) {
       // Handle potential error if channel is closed unexpectedly
       if (error.name === 'InvalidStateError') {
@@ -102,7 +102,7 @@ export function notifyTokenRefreshComplete(): void {
   // If broadcast is supported, notify other tabs
   if (broadcastSupported && authChannel) {
     try {
-      authChannel.postMessage({ type: 'refresh-completed', timestamp: Date.now() });
+    authChannel.postMessage({ type: 'refresh-completed', timestamp: Date.now() });
     } catch (error: any) {
       // Handle potential error if channel is closed unexpectedly
       if (error.name === 'InvalidStateError') {
@@ -151,7 +151,7 @@ export function initAuthCoordination(): () => void {
     authChannel?.removeEventListener('message', handleMessage);
     // Safely attempt to close the channel
     try {
-      authChannel?.close();
+    authChannel?.close();
     } catch (error) {
       console.warn('[Auth] Error closing BroadcastChannel:', error);
     }

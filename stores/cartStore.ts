@@ -252,7 +252,7 @@ export const useCartStore = create<CartState>()(
       openCartSheet: () => set({ isSheetOpen: true }),
       closeCartSheet: () => set({ isSheetOpen: false }),
       toggleCartSheet: () => set((state) => ({ isSheetOpen: !state.isSheetOpen })),
-
+      
       // Utility selectors
       getTotalItems: () => {
         return get().items.reduce((total, item) => total + item.quantity, 0);
@@ -279,5 +279,5 @@ export const selectCartItems = (state: CartState) => state.items;
 export const selectCartTotalQuantity = (state: CartState) => state.getTotalItems();
 export const selectCartTotalPrice = (state: CartState) => state.getTotalPrice();
 export const selectIsCartSyncing = (state: CartState) => state.isSyncing;
-export const selectCartUserId = (state: CartState) => state.userId;
+export const selectCartUserId = (state: CartState) => state.userId; 
 export const selectIsCartSheetOpen = (state: CartState) => state.isSheetOpen; 

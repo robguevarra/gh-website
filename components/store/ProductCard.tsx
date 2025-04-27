@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useTransition } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, Eye, Info } from 'lucide-react';
+import { Loader2, Eye, Info, Heart } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -25,9 +25,12 @@ import {
 import { Badge } from "@/components/ui/badge";
 import LicenseTerms, { getLicenseTypeFromTitle, LicenseType } from './LicenseTerms';
 import { formatPriceDisplayPHP } from '@/lib/utils/formatting';
+import { addToWishlist, removeFromWishlist } from '@/app/actions/store-actions';
 
 interface ProductCardProps {
   product: ProductData;
+  isInitiallyWishlisted: boolean;
+  onOpenQuickView: (product: ProductData) => void;
 }
 
 // Helper to format currency
@@ -49,9 +52,12 @@ const getLicenseBadgeText = (licenseType: LicenseType): string => {
   }
 };
 
-const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, isInitiallyWishlisted, onOpenQuickView }) => {
   // State for loading when adding to cart
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  // State for wishlist status and transition
+  const [isWishlisted, setIsWishlisted] = useState(isInitiallyWishlisted);
+  const [isWishlistPending, startWishlistTransition] = useTransition();
   
   // Get addItem action from cart store
   const addItem = useCartStore((state) => state.addItem); 
@@ -90,6 +96,50 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     setTimeout(() => setIsAddingToCart(false), 500);
   };
 
+  // Handle wishlist button click
+  const handleWishlistToggle = () => {
+    startWishlistTransition(async () => {
+      const currentWishlistedState = isWishlisted;
+      // Optimistically update UI
+      setIsWishlisted(!currentWishlistedState);
+
+      try {
+        let result;
+        if (currentWishlistedState) {
+          // Currently wishlisted, so remove
+          result = await removeFromWishlist(product.id);
+        } else {
+          // Not wishlisted, so add
+          result = await addToWishlist(product.id);
+        }
+
+        if (!result.success) {
+          // Revert UI on error
+          setIsWishlisted(currentWishlistedState);
+          toast({
+            title: "Wishlist Error",
+            description: result.error || "Could not update wishlist.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: currentWishlistedState ? "Removed from Wishlist" : "Added to Wishlist",
+            description: `${product.title || 'Product'} has been ${currentWishlistedState ? 'removed from' : 'added to'} your wishlist.`,
+          });
+        }
+      } catch (error) {
+        // Revert UI on unexpected error
+        setIsWishlisted(currentWishlistedState);
+        toast({
+          title: "Wishlist Error",
+          description: "An unexpected error occurred.",
+          variant: "destructive",
+        });
+        console.error("Wishlist toggle error:", error);
+      }
+    });
+  };
+
   // Clean title by removing license type suffix
   const cleanTitle = product.title?.replace(/ \((CUR|PLR)\)/, '') || 'Untitled Product';
 
@@ -117,9 +167,22 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                   sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
                   className="transition-transform duration-500 group-hover:scale-105"
                 />
-                {/* Quick preview overlay */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                  <Button variant="secondary" size="sm" className="gap-1.5">
+                {/* Quick preview overlay - trigger callback */}
+                <div 
+                  className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer"
+                  onClick={(e) => {
+                    e.preventDefault(); // Prevent Link navigation
+                    e.stopPropagation(); // Prevent event bubbling
+                    onOpenQuickView(product); // Call the passed handler
+                  }}
+                  role="button"
+                  aria-label={`Quick view ${cleanTitle}`}
+                >
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    className="gap-1.5 pointer-events-none" // Prevent button intercepting click
+                  >
                     <Eye className="h-3.5 w-3.5" />
                     <span>Preview</span>
                   </Button>
@@ -142,6 +205,20 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </CardTitle>
           </Link>
           
+          {/* Wishlist Button */}
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className={`h-8 w-8 ml-1 shrink-0 group ${isWishlistPending ? 'opacity-50 cursor-not-allowed' : ''}`} 
+            onClick={handleWishlistToggle}
+            disabled={isWishlistPending}
+            aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          >
+            <Heart 
+              className={`h-5 w-5 transition-all ${isWishlisted ? 'text-red-500 fill-red-500' : 'text-muted-foreground group-hover:text-red-500'}`}
+            />
+          </Button>
+
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

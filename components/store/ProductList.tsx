@@ -6,9 +6,11 @@ import { ProductData } from '@/app/dashboard/store/page'; // Import type from pa
 
 interface ProductListProps {
   products: ProductData[];
+  wishlistedIds: Set<string>;
+  onOpenQuickView: (product: ProductData) => void; // Add callback prop
 }
 
-const ProductList: React.FC<ProductListProps> = ({ products }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, wishlistedIds, onOpenQuickView }) => {
   if (!products || products.length === 0) {
     // This case should ideally be handled by the parent component (StorePage)
     // but added here for robustness.
@@ -18,7 +20,12 @@ const ProductList: React.FC<ProductListProps> = ({ products }) => {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {products.map((product) => (
-        <ProductCard key={product.id} product={product} />
+        <ProductCard 
+          key={product.id} 
+          product={product} 
+          isInitiallyWishlisted={wishlistedIds.has(product.id)} // Pass initial state
+          onOpenQuickView={onOpenQuickView} // Pass callback down
+        />
       ))}
     </div>
   );

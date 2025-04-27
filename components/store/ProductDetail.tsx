@@ -10,6 +10,9 @@ import { useCartStore } from '@/stores/cartStore';
 import LicenseTerms, { getLicenseTypeFromTitle } from './LicenseTerms';
 import RelatedDesigns from './RelatedDesigns';
 import { formatPriceDisplayPHP } from '@/lib/utils/formatting';
+import { ProductReviewWithProfile } from '@/app/actions/store-actions';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Star } from 'lucide-react';
 
 interface ProductVariant {
   id: string;
@@ -34,9 +37,10 @@ interface ProductDetailProps {
     product_type: string | null;
   };
   relatedProducts: any[]; // Type this more strictly as needed
+  reviews: ProductReviewWithProfile[]; // Add reviews prop
 }
 
-const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts }) => {
+const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts, reviews }) => {
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   
@@ -236,6 +240,46 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts 
       {relatedProducts.length > 0 && (
         <RelatedDesigns products={relatedProducts} />
       )}
+
+      {/* Reviews Section */}
+      <div className="mt-12">
+        <h2 className="text-2xl font-semibold mb-6">Customer Reviews</h2>
+        {reviews.length > 0 ? (
+          <div className="space-y-6">
+            {reviews.map((review) => (
+              <div key={review.id} className="flex items-start gap-4 border-b pb-6 last:border-b-0">
+                <Avatar>
+                  <AvatarImage src={review.profiles?.avatar_url || undefined} alt={review.profiles?.first_name || 'User'} />
+                  <AvatarFallback>
+                    {review.profiles?.first_name?.charAt(0) || 'U'}
+                    {review.profiles?.last_name?.charAt(0) || ''}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-grow">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium">
+                        {review.profiles?.first_name || 'Anonymous'} {review.profiles?.last_name || ''}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                        {new Date(review.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                  {/* Render Stars based on rating */}
+                  <div className="flex items-center gap-1 mb-2">
+                    {[...Array(5)].map((_, i) => (
+                        <Star key={i} className={`h-4 w-4 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`} />
+                    ))}
+                  </div>
+                  {review.comment && <p className="text-sm text-muted-foreground">{review.comment}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-center py-6 border rounded-lg">No reviews yet for this product.</p>
+        )}
+        {/* TODO: Add Review Submission Form Here (Blocked by Phase 5-3) */}
+      </div>
     </div>
   );
 };

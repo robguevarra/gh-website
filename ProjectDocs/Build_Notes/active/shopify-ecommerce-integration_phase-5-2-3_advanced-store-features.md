@@ -47,39 +47,40 @@ Implement advanced e-commerce features to significantly enhance the member-facin
 ## Implementation Plan (High-Level)
 
 ### 1. Implement Store Search
-    *   [ ] **UI:** Add a search input component (using Shadcn `Input`) to the `/dashboard/store` page.
-    *   [ ] **Backend/Data Fetching:** Implement a server action or API route that takes a search query and performs a search against the Supabase `products` table (e.g., using `fts` or `ilike` on relevant text fields like `title`, `description`, `tags`).
-    *   [ ] **Frontend Logic:** Update the store page to trigger the search on input change (debounced) or submission, display results (potentially replacing the main product list or in a dedicated results view), and handle loading/no-results states.
-    *   [ ] **Indexing (If needed):** Configure appropriate full-text search indexing on Supabase `products` table columns for performance.
+    *   [x] **UI:** Add a search input component (using Shadcn `Input`) to the `/dashboard/store` page (Implemented within `StoreSearchHandler`).
+    *   [x] **Backend/Data Fetching:** Implement a server action (`searchProductsStore`) that takes a search query and performs a search against the Supabase `products` table (using `ilike` on `title`, `description`).
+    *   [x] **Frontend Logic:** Created `StoreSearchHandler` client component to manage input state, trigger the debounced search action (`startSearchTransition`), display results (replacing initial list), and handle loading/no-results states.
+    *   [ ] **Indexing (If needed):** Configure appropriate full-text search indexing on Supabase `products` table columns for performance. (Skipped for now, using `ilike`).
 
 ### 2. Implement Wishlist/Favorites
-    *   [ ] **Database Schema:** Define and create a `wishlist_items` table in Supabase (e.g., `user_id`, `product_id`, `created_at`). Apply RLS policies.
-    *   [ ] **UI:** Add a "heart" or "add to wishlist" button/icon to `ProductCard` and `ProductDetail`.
-    *   [ ] **Backend Logic:** Create server actions/API routes to add/remove items from the `wishlist_items` table for the logged-in user.
-    *   [ ] **Frontend Logic:** Implement client-side logic to call add/remove actions, update the UI state of the wishlist button (e.g., filled vs. outline heart), and potentially display a toast notification.
-    *   [ ] **Wishlist View:** Create a dedicated page or section (e.g., `/dashboard/wishlist` or part of the account) to display the user's saved items, fetching data from the `wishlist_items` table.
+    *   [x] **Database Schema:** Defined and created a `wishlist_items` table in Supabase (user_id, product_id, created_at) with unique constraint and RLS policies.
+    *   [x] **UI:** Added a "heart" icon button to `ProductCard`.
+    *   [x] **Backend Logic:** Created server actions (`addToWishlist`, `removeFromWishlist`, `getWishlistedProductIds`) in `store-actions.ts`.
+    *   [x] **Frontend Logic:** Updated `ProductCard` to be a client component, manage optimistic state for the heart icon, and call add/remove actions. Fetched initial wishlist state on store page load and passed down.
+    *   [x] **Wishlist View:** Created a placeholder page at `/dashboard/wishlist`. (Full display implementation deferred).
 
 ### 3. Implement Purchase History (Store Context)
     *   [ ] **Data Fetching:** Create logic (likely server-side) to fetch the logged-in user's past orders/order items related to commercial licenses from the Supabase `orders` and `order_items` tables (requires Phase 5-3 completion).
     *   [ ] **UI:** Design and implement a component or page (e.g., `/dashboard/purchase-history` or within account) to display the fetched purchase history, including product name, date, price paid, and potentially a link to the product or related resources.
     *   [ ] **Accessibility:** Ensure the history is easily navigable and accessible from the main store or user account area.
+    *   **Status:** Blocked - Requires completion of Phase 5-3 (Checkout & Payment Integration) to populate order data.
 
 ### 4. Implement Quick View Modal
-    *   [ ] **UI - Button:** Add a "Quick View" button overlay or icon to `ProductCard`.
-    *   [ ] **UI - Modal:** Create a new component `QuickViewModal` (using Shadcn `Dialog`) that displays essential product info (image carousel, title, price, short description, license type summary, add-to-cart button).
-    *   [ ] **State Management:** Use client-side state (e.g., Zustand slice or simple `useState` in the store page) to manage the modal's open/closed state and the product data being displayed.
-    *   [ ] **Data Fetching:** When the Quick View button is clicked, fetch the necessary detailed product data (if not already available on the client) or pass existing data to the modal.
-    *   [ ] **Interaction:** Ensure the "Add to Cart" button within the modal correctly adds the item using the existing `useCartStore` logic and provides feedback (e.g., closes modal, shows toast).
+    *   [x] **UI - Button:** Added a "Quick View" button overlay to `ProductCard` (using existing preview button logic).
+    *   [x] **UI - Modal:** Created a new component `QuickViewModal` using Shadcn `Dialog` displaying essential product info and actions.
+    *   [x] **State Management:** Used client-side state (`useState`) in `StoreSearchHandler` to manage the modal's open state and selected product.
+    *   [x] **Data Fetching:** Clicking Quick View button passes existing `ProductData` from the card to the modal via `StoreSearchHandler` state.
+    *   [x] **Interaction:** Ensured the "Add to Cart" button within the modal works and the modal can be closed. Added "View Full Details" link.
 
 ### 5. Implement Product Reviews/Ratings
-    *   [ ] **Database Schema:** Define and create a `product_reviews` table (e.g., `id`, `user_id`, `product_id`, `rating`, `comment`, `created_at`, `is_approved`). Apply RLS policies.
-    *   [ ] **UI - Submission:** On the `ProductDetail` page, add a form for users who have purchased the product (check against purchase history) to submit a rating and review.
-    *   [ ] **Backend - Submission:** Create a server action/API route to validate and save the submitted review to the `product_reviews` table.
-    *   [ ] **UI - Display:**
-        *   Modify `ProductCard` to display the average rating (e.g., star icons) if reviews exist.
-        *   Modify `ProductDetail` page to display the average rating prominently and list individual reviews (fetched from Supabase).
-    *   [ ] **Data Fetching:** Implement logic to fetch reviews and calculate average ratings for products.
-    *   [ ] **Moderation (Optional):** Consider adding an `is_approved` flag and an admin interface step for review moderation if needed.
+    *   [x] **Database Schema:** Defined and created a `product_reviews` table with RLS. Added FK constraint to `profiles` table.
+    *   [ ] **UI - Submission:** On the `ProductDetail` page, add a form for users who have purchased the product (check against purchase history) to submit a rating and review. (Blocked by Phase 5-3)
+    *   [ ] **Backend - Submission:** Create a server action/API route to validate and save the submitted review to the `product_reviews` table. (Blocked by Phase 5-3)
+    *   [x] **UI - Display:**
+        *   [ ] Modify `ProductCard` to display the average rating (e.g., star icons) if reviews exist. (Deferred)
+        *   [x] Modify `ProductDetail` page to display the average rating prominently and list individual reviews (fetched from Supabase).
+    *   [x] **Data Fetching:** Implemented logic (`getProductReviews`) to fetch approved reviews and associated profile data.
+    *   [ ] **Moderation (Optional):** Consider adding an `is_approved` flag and an admin interface step for review moderation if needed. (Implemented `is_approved` flag, admin interface deferred).
 
 ## Technical Considerations
 
@@ -101,10 +102,20 @@ Implement advanced e-commerce features to significantly enhance the member-facin
 - Handle edge cases (e.g., user not logged in attempting wishlist action, user trying to review unpurchased product).
 
 ## Completion Status
-Not Started.
+Tasks implemented:
+  - Store Search (Server Action + Client Handler w/ Debounce)
+  - Wishlist (Database Table, Add/Remove Actions, Client Button Logic, Placeholder View Page)
+  - Quick View (Modal Component, Trigger Button, State Management)
+  - Review Display (Database Table, Fetch Action, Display UI on Product Detail)
+Tasks Blocked/Deferred:
+  - Purchase History display (Blocked by Phase 5-3 order data)
+  - Review Submission (Blocked by Phase 5-3 purchase verification)
+  - Wishlist View page (Full implementation deferred)
+  - Average rating display on Product Card (Deferred)
+  - Search Indexing (Deferred)
 
 ## Next Steps After Completion
-Begin implementation of the features outlined above, likely prioritizing based on perceived user value or technical dependencies (e.g., Purchase History depends on Phase 5-3). This phase represents significant enhancements and may be broken down further into sub-phases if needed.
+Proceed with **Phase 5-3: Checkout & Payment Integration** to unblock dependent features (Purchase History, Review Submission). Alternatively, implement deferred UI features from this phase (Wishlist View, Avg Rating on Card).
 
 ---
 

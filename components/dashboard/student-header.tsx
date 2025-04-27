@@ -9,7 +9,6 @@ import {
   ChevronDown,
   Home,
   Menu,
-  Search,
   BookOpen,
   ShoppingBag,
   Download,
@@ -30,7 +29,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
@@ -39,13 +37,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 // Import our store hook and specific selectors/actions
 import { useStudentHeader } from '@/lib/hooks/ui/use-student-header';
 import { useAuth } from '@/context/auth-context';
-import { useCartStore } from '@/stores/cartStore'; // Import cart store
-
-// Import the Cart Indicator
-import CartIndicator from '@/components/store/CartIndicator';
-
-// Import types for proper type safety
-import type { StudentDashboardStore } from '@/lib/stores/student-dashboard';
 
 // We're now using the useStudentHeader hook which provides optimized access to the store
 
@@ -57,9 +48,6 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
 
   // Use the auth context to get the authenticated user and logout function
   const { user, profile, logout, isLoading: isLoadingAuth } = useAuth()
-
-  // Get cart sheet toggle action
-  const toggleCartSheet = useCartStore((state) => state.toggleCartSheet);
 
   // Use our optimized hook for the student header
   const {
@@ -209,14 +197,6 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                     <ShoppingBag className="h-5 w-5" />
                     Store
                   </Link>
-                  <Button
-                    variant="ghost"
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50 w-full justify-start font-normal"
-                    onClick={toggleCartSheet}
-                  >
-                    <ShoppingBag className="h-5 w-5" />
-                    Shopping Cart
-                  </Button>
                   <Link
                     href="/dashboard/live-classes"
                     className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -311,13 +291,6 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
             >
               Store
             </Link>
-            <Button
-              variant="link" // Use link variant for styling
-              className="text-sm font-medium text-muted-foreground hover:text-foreground h-auto p-0"
-              onClick={toggleCartSheet}
-            >
-              Cart
-            </Button>
             <Link
               href="/dashboard/live-classes"
               className="text-sm font-medium text-muted-foreground hover:text-foreground"
@@ -328,15 +301,6 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="hidden sm:flex relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search..."
-              className="w-[200px] pl-8 bg-white/50 border-gray-200 focus:bg-white transition-colors"
-            />
-          </div>
-
           <div className="relative">
             <Button
               variant="ghost"
@@ -399,8 +363,6 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
               )}
             </AnimatePresence>
           </div>
-
-          <CartIndicator />
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

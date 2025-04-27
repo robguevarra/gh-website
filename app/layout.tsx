@@ -58,7 +58,7 @@ export default function RootLayout({
         <SkipLink href="#main-content">Skip to main content</SkipLink>
         <SupabaseProvider>
           <AuthProvider>
-            <AuthCoordinationProvider>
+          <AuthCoordinationProvider>
               <ThemeProvider>
                 <main id="main-content" tabIndex={-1}>
                   {children}
@@ -67,7 +67,7 @@ export default function RootLayout({
                 <Toaster />
               </ThemeProvider>
             </AuthCoordinationProvider>
-          </AuthProvider>
+            </AuthProvider>
         </SupabaseProvider>
 
         <Script

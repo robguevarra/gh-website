@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { notFound } from 'next/navigation';
 import ProductDetail from '@/components/store/ProductDetail';
 import { Database } from '@/types/supabase';
+import { getProductReviews, ProductReviewWithProfile } from '@/app/actions/store-actions';
 
 // Define the type for a product with all details
 type ProductWithDetails = Database['public']['Tables']['shopify_products']['Row'] & {
@@ -80,7 +81,10 @@ export default async function ProductPage({ params }: { params: { handle: string
   const tags = product.tags || [];
   const relatedProducts = await getRelatedProducts(product.id, tags);
 
+  // Fetch reviews for the product
+  const reviews = await getProductReviews(product.id);
+
   return (
-    <ProductDetail product={product} relatedProducts={relatedProducts} />
+    <ProductDetail product={product} relatedProducts={relatedProducts} reviews={reviews} />
   );
 } 
