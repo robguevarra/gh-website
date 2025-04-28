@@ -189,50 +189,192 @@ export async function getFolderPath(
     // Determine the effective root ID to stop the recursion
     const effectiveRootId = rootFolderId || process.env[ROOT_FOLDER_ID_ENV_VAR] || 'root';
 
-    const pathSegments: BreadcrumbSegment[] = []; // Initialize outside the loop
+    const pathSegments: BreadcrumbSegment[] = [];
     let currentFolderId: string | null | undefined = folderId;
 
+    // Limit loop iterations to prevent infinite loops in case of cyclic paths (unlikely but safe)
+    let iteration = 0;
+    const maxIterations = 10; // Adjust as needed
+
     // Stop if we somehow reach the absolute Drive root or the configured root
-    while (currentFolderId && currentFolderId !== effectiveRootId) {
-      // Add explicit type for the API response
-      const response: drive_v3.Schema$File | any = await drive.files.get({
-        fileId: currentFolderId,
-        fields: 'id, name, parents', // Request ID, name, and parent IDs
-      });
+    while (currentFolderId && currentFolderId !== effectiveRootId && iteration < maxIterations) {
+      iteration++;
+      try {
+        // Fetch details for the current folder
+        const response = await drive.files.get({
+          fileId: currentFolderId,
+          fields: 'id, name, parents', // Request ID, name, and parent IDs
+        });
 
-      // Add explicit type for the file data
-      const file: drive_v3.Schema$File = response.data;
-      if (!file || !file.id || !file.name) {
-        // Decide if we should throw or return partial path
-        // Returning partial path might be more user-friendly
-        break; // Stop building the path if a folder is missing
-      }
-
-      // Add the current folder to the start of the path array
-      pathSegments.unshift({ id: file.id, name: file.name }); // Correctly add to the beginning
-
-      // Move to the parent folder
-      if (file.parents && file.parents.length > 0) {
-        currentFolderId = file.parents[0]; // Assume single parent
-         // Check if the parent is the effective root, if so, add root and stop
-        if (currentFolderId === effectiveRootId) {
-          // Optional: Add the root folder itself if needed, depending on requirements
-          // const rootResponse = await drive.files.get({ fileId: effectiveRootId, fields: 'id, name'});
-          // if (rootResponse.data.id && rootResponse.data.name) {
-          //   pathSegments.unshift({ id: rootResponse.data.id, name: rootResponse.data.name });
-          // }
-          break;
+        // Add explicit type for the file data
+        const file: drive_v3.Schema$File = response.data;
+        if (!file || !file.id || !file.name) {
+          // Decide if we should throw or return partial path
+          // Returning partial path might be more user-friendly
+          break; // Stop building the path if a folder is missing
         }
-      } else {
-        // No parents found, implies this might be the root or an orphaned folder
-        currentFolderId = null; // Stop the loop
+
+        // Add the current folder to the start of the path array
+        pathSegments.unshift({ id: file.id, name: file.name }); // Correctly add to the beginning
+
+        // Move to the parent folder
+        if (file.parents && file.parents.length > 0) {
+          // currentFolderId = file.parents[0]; // Assume single parent
+          // Explicitly handle undefined case by assigning null
+          currentFolderId = file.parents[0] ?? null;
+           // Check if the parent is the effective root, if so, add root and stop
+          if (currentFolderId === effectiveRootId) {
+            // Optional: Add the root folder itself if needed, depending on requirements
+            // const rootResponse = await drive.files.get({ fileId: effectiveRootId, fields: 'id, name'});
+            // if (rootResponse.data.id && rootResponse.data.name) {
+            //   pathSegments.unshift({ id: rootResponse.data.id, name: rootResponse.data.name });
+            // }
+            break;
+          }
+        } else {
+          // No parents found, implies this might be the root or an orphaned folder
+          currentFolderId = null; // Stop the loop
+        }
+      } catch (loopError: any) {
+        // If getting a specific folder fails (e.g., permissions), stop and return the path found so far
+        console.error(`Error fetching folder details for ID ${currentFolderId} during path construction: ${loopError.message}`);
+        break;
       }
     } // end while
+
+    if (iteration >= maxIterations) {
+      console.warn(`[getFolderPath] Reached maximum iterations (${maxIterations}) for folder ID ${folderId}. Path might be incomplete.`);
+    }
 
     return pathSegments;
 
   } catch (error: any) {
     throw new Error(`Failed to retrieve folder path from Google Drive. ${error.message}`);
+  }
+}
+
+// --- File Metadata & Download Logic ---
+
+/**
+ * Fetches metadata for a specific file from Google Drive.
+ *
+ * @param fileId The ID of the file to fetch metadata for.
+ * @returns A promise that resolves to an object containing the file's name and mimeType.
+ * @throws {Error} If authentication fails, the file is not found, or the API call fails.
+ */
+export async function getFileMetadata(fileId: string): Promise<{ name: string; mimeType: string }> {
+  if (!fileId) {
+    throw new Error('File ID cannot be empty.');
+  }
+  try {
+    const auth = await getGoogleAuthClient();
+    const drive = google.drive({ version: 'v3', auth });
+
+    const response = await drive.files.get({
+      fileId: fileId,
+      fields: 'id, name, mimeType', // Request only necessary fields
+    });
+
+    const file = response.data;
+
+    if (!file || !file.name || !file.mimeType) {
+      throw new Error(`File metadata incomplete or file not found for ID: ${fileId}`);
+    }
+
+    return {
+      name: file.name,
+      mimeType: file.mimeType,
+    };
+  } catch (error: any) {
+    // Add more specific error checking if needed (e.g., 404 Not Found)
+    console.error(`Failed to retrieve file metadata from Google Drive for ID ${fileId}.`, error);
+    throw new Error(`Failed to retrieve file metadata from Google Drive. ${error.message}`);
+  }
+}
+
+/**
+ * Fetches the content stream for a specific file from Google Drive.
+ *
+ * @param fileId The ID of the file to download.
+ * @returns A promise that resolves to a readable stream of the file content.
+ * @throws {Error} If authentication fails, the file is not found, or the API call fails.
+ */
+export async function getFileStream(fileId: string): Promise<NodeJS.ReadableStream> {
+   if (!fileId) {
+    throw new Error('File ID cannot be empty.');
+  }
+  try {
+    const auth = await getGoogleAuthClient();
+    const drive = google.drive({ version: 'v3', auth });
+
+    console.log(`[Drive] Attempting to get binary file stream for ID: ${fileId}`);
+    const response = await drive.files.get(
+      {
+        fileId: fileId,
+        alt: 'media', // Specify 'media' to download file content
+      },
+      { responseType: 'stream' } // Ensure the response type is a stream
+    );
+
+    console.log(`[Drive] Successfully obtained binary file stream for ID: ${fileId}`);
+    // The data property will be a readable stream
+    return response.data as NodeJS.ReadableStream;
+
+  } catch (error: any) {
+     // Add more specific error checking if needed (e.g., 404 Not Found)
+     // Log the specific Google API error if available
+    const googleError = error.response?.data || error.errors || error;
+    console.error(`[Drive] Failed to download binary file content for ID ${fileId}.`, JSON.stringify(googleError, null, 2));
+    throw new Error(`Failed to download file content from Google Drive. ${error.message}`);
+  }
+}
+
+/**
+ * Exports a Google Workspace file (Docs, Sheets, Slides) to a specified format.
+ *
+ * @param fileId The ID of the Google Workspace file to export.
+ * @param exportMimeType The target MIME type for the export (e.g., 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document').
+ * @returns A promise that resolves to a readable stream of the exported file content.
+ * @throws {Error} If authentication fails, the file is not found, export fails, or the MIME type is unsupported for the file.
+ */
+export async function exportFileStream(
+  fileId: string,
+  exportMimeType: string
+): Promise<NodeJS.ReadableStream> {
+  if (!fileId) {
+    throw new Error('File ID cannot be empty for export.');
+  }
+  if (!exportMimeType) {
+    throw new Error('Export MIME type cannot be empty.');
+  }
+
+  try {
+    const auth = await getGoogleAuthClient();
+    const drive = google.drive({ version: 'v3', auth });
+
+    console.log(`[Drive] Attempting to export file ID ${fileId} to MIME type ${exportMimeType}`);
+    const response = await drive.files.export(
+      {
+        fileId: fileId,
+        mimeType: exportMimeType,
+      },
+      { responseType: 'stream' } // Ensure the response type is a stream
+    );
+
+    console.log(`[Drive] Successfully obtained exported file stream for ID ${fileId} as ${exportMimeType}`);
+    // The data property will be a readable stream
+    return response.data as NodeJS.ReadableStream;
+
+  } catch (error: any) {
+    // Log the specific Google API error if available
+    const googleError = error.response?.data || error.errors || error;
+    console.error(`[Drive] Failed to export file ID ${fileId} to ${exportMimeType}.`, JSON.stringify(googleError, null, 2));
+    // Provide a more specific error message if possible
+    let message = `Failed to export file from Google Drive. ${error.message}`;
+    if (googleError?.error?.message) {
+        message = `Failed to export file from Google Drive: ${googleError.error.message}`;
+    }
+    throw new Error(message);
   }
 }
 

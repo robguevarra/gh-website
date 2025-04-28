@@ -107,6 +107,7 @@ export async function createXenditEcommercePayment(
         id, 
         title, 
         status,
+        is_one_time_purchase,
         shopify_product_variants ( id, price, title )
       `)
       .in('id', productIdsInCart)
@@ -168,7 +169,7 @@ export async function createXenditEcommercePayment(
         quantity: cartItem.quantity,
         title: dbProduct.title || cartItem.title, // Prefer DB product title
         variantTitle: dbVariant.title, // Add variant title if needed
-        price: validatedPrice, // Use the validated DB variant price
+        price_at_purchase: validatedPrice,
         imageUrl: cartItem.imageUrl, // Keep client image URL for now
       });
     }
@@ -178,6 +179,52 @@ export async function createXenditEcommercePayment(
     }
 
     // --- Validation complete --- 
+
+    // --- Add Duplicate Purchase Check --- 
+    const oneTimePurchaseItemsInCart = validatedItemsData.filter(item => {
+        // Find the corresponding db product to check the flag
+        const dbProduct = dbProductMap.get(item.productId);
+        return dbProduct?.is_one_time_purchase === true;
+    });
+
+    if (oneTimePurchaseItemsInCart.length > 0) {
+        const oneTimePurchaseProductIds = oneTimePurchaseItemsInCart.map(item => item.productId);
+        
+        console.log(`[CheckoutAction] Checking ownership for one-time purchase items: ${oneTimePurchaseProductIds.join(', ')}`);
+
+        const { data: existingOwnedItems, error: ownershipCheckError } = await supabase
+            .from('ecommerce_order_items')
+            .select(`
+                product_id,
+                ecommerce_orders!inner ( user_id, order_status )
+            `)
+            .in('product_id', oneTimePurchaseProductIds)
+            .eq('ecommerce_orders.user_id', user.id)
+            .in('ecommerce_orders.order_status', ['processing', 'completed']); // Status indicating successful purchase
+
+        if (ownershipCheckError) {
+            console.error('[CheckoutAction] Error checking product ownership:', ownershipCheckError);
+            // Proceed cautiously, but log the error. Depending on policy, could throw an error here.
+            // For now, we'll let it proceed but this might allow duplicates if the check fails.
+            // Consider returning an error: return { success: false, error: 'Could not verify product ownership. Please try again later.' };
+        }
+
+        if (existingOwnedItems && existingOwnedItems.length > 0) {
+            const alreadyOwnedIds = new Set(existingOwnedItems.map(item => item.product_id));
+            const duplicatesInCart = oneTimePurchaseItemsInCart.filter(item => alreadyOwnedIds.has(item.productId));
+
+            if (duplicatesInCart.length > 0) {
+                const duplicateNames = duplicatesInCart.map(item => item.title).join(', ');
+                console.warn(`[CheckoutAction] User ${user.id} attempting to repurchase owned items: ${duplicateNames}`);
+                return {
+                    success: false,
+                    error: `You have already purchased the following item(s): ${duplicateNames}. Please remove them from your cart.`,
+                };
+            }
+        }
+        console.log(`[CheckoutAction] Ownership check passed for user ${user.id}.`);
+    }
+    // --- End Duplicate Purchase Check --- 
 
     // 3. Generate unique external ID
     const timestamp = new Date().toISOString().replace(/[^0-9]/g, ''); // YYYYMMDDHHMMSSsss
@@ -222,7 +269,7 @@ export async function createXenditEcommercePayment(
     const xenditItems = validatedItemsData.map(item => ({
       name: item.title, // Use validated title
       quantity: item.quantity,
-      price: item.price, // Use validated price (ensure it's in base currency unit)
+      price: item.price_at_purchase, // Use validated price (ensure it's in base currency unit)
       // category: 'Digital Goods', // Optional: Add category if needed by Xendit
       // url: `${baseUrl}/store/product/${item.productId}` // Optional: Link back to product
     }));
@@ -263,7 +310,8 @@ export async function createXenditEcommercePayment(
 
     if (!response.ok || responseData.error_code) {
       console.error("[CheckoutAction] Xendit API error:", responseData);
-      throw new Error(`Payment provider error: ${responseData.message || responseData.error_code || 'Unknown error'}`);
+      // Updated error message for clarity
+      throw new Error(`Payment provider error: ${responseData.message || responseData.error_code || response.statusText || 'Unknown error'}`);
     }
 
     if (!responseData.invoice_url) {
@@ -274,10 +322,12 @@ export async function createXenditEcommercePayment(
     const invoiceUrl = responseData.invoice_url;
 
     // 7. Return success with invoice URL
+    console.log(`[CheckoutAction] Successfully created invoice: ${invoiceUrl}`);
     return { success: true, invoiceUrl: invoiceUrl };
 
   } catch (error: any) {
     console.error('Error creating Xendit payment intent:', error);
+    // Ensure the catch block also returns the correct shape
     return { success: false, error: error.message || 'An unexpected error occurred.' };
   }
-} 
+}

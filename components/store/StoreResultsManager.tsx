@@ -16,6 +16,7 @@ interface StoreResultsManagerProps {
   isLoading: boolean; 
   searchTerm: string | null; // Receive current search term for empty state message
   initialWishlistedIds: string[];
+  ownedProductIds: string[];
 }
 
 const StoreResultsManager: React.FC<StoreResultsManagerProps> = ({
@@ -23,6 +24,7 @@ const StoreResultsManager: React.FC<StoreResultsManagerProps> = ({
   isLoading,
   searchTerm,
   initialWishlistedIds,
+  ownedProductIds,
 }) => {
   // State for interactions within this component
   const [wishlistedIds, setWishlistedIds] = useState<Set<string>>(new Set(initialWishlistedIds));
@@ -53,6 +55,7 @@ const StoreResultsManager: React.FC<StoreResultsManagerProps> = ({
             products={products}
             wishlistedIds={wishlistedIds}
             onOpenQuickView={handleOpenQuickView}
+            ownedProductIds={ownedProductIds}
           />
         ) : (
           <div className="text-center text-muted-foreground py-10">

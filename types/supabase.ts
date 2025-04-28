@@ -1938,6 +1938,7 @@ export type Database = {
           handle: string | null
           id: string
           image_urls: Json | null
+          is_one_time_purchase: boolean | null
           product_type: string | null
           published_at: string | null
           shopify_product_id: number
@@ -1956,6 +1957,7 @@ export type Database = {
           handle?: string | null
           id?: string
           image_urls?: Json | null
+          is_one_time_purchase?: boolean | null
           product_type?: string | null
           published_at?: string | null
           shopify_product_id: number
@@ -1974,6 +1976,7 @@ export type Database = {
           handle?: string | null
           id?: string
           image_urls?: Json | null
+          is_one_time_purchase?: boolean | null
           product_type?: string | null
           published_at?: string | null
           shopify_product_id?: number

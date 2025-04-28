@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import ProductDetail from '@/components/store/ProductDetail';
 import { Database } from '@/types/supabase';
 import { getProductReviews, ProductReviewWithProfile } from '@/app/actions/store-actions';
+import { getOwnedProductIds } from '@/app/actions/userActions';
 
 // Define the type for a product with all details
 type ProductWithDetails = Database['public']['Tables']['shopify_products']['Row'] & {
@@ -32,7 +33,7 @@ async function getProductByHandle(handle: string): Promise<ProductWithDetails | 
       )
     `)
     .eq('handle', handle)
-    .eq('status', 'ACTIVE')
+    .or('status.eq.ACTIVE,status.eq.active')
     .single();
 
   if (error || !data) {
@@ -58,7 +59,7 @@ async function getRelatedProducts(productId: string, tags: string[]): Promise<Pr
       )
     `)
     .neq('id', productId)
-    .eq('status', 'ACTIVE')
+    .or('status.eq.ACTIVE,status.eq.active')
     .limit(4);
 
   if (error || !data) {
@@ -71,20 +72,29 @@ async function getRelatedProducts(productId: string, tags: string[]): Promise<Pr
 
 // Product detail page component
 export default async function ProductPage({ params }: { params: { handle: string } }) {
-  const product = await getProductByHandle(params.handle);
+  // Await params before accessing properties
+  const resolvedParams = await Promise.resolve(params);
+  
+  // Fetch the main product first using the resolved handle
+  const product = await getProductByHandle(resolvedParams.handle);
   
   if (!product) {
-    notFound();
+    notFound(); // Exit early if product not found
   }
 
-  // Get related products
-  const tags = product.tags || [];
-  const relatedProducts = await getRelatedProducts(product.id, tags);
-
-  // Fetch reviews for the product
-  const reviews = await getProductReviews(product.id);
+  // Now that we have the product, fetch related data concurrently
+  const [relatedProducts, reviews, ownedProductIds] = await Promise.all([
+    getRelatedProducts(product.id, product.tags || []),
+    getProductReviews(product.id), // Use product ID for consistency
+    getOwnedProductIds()
+  ]);
 
   return (
-    <ProductDetail product={product} relatedProducts={relatedProducts} reviews={reviews} />
+    <ProductDetail 
+        product={product} 
+        relatedProducts={relatedProducts} 
+        reviews={reviews} 
+        ownedProductIds={ownedProductIds} // <-- Pass prop
+    />
   );
 } 

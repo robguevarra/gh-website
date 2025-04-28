@@ -13,6 +13,7 @@ import { formatPriceDisplayPHP } from '@/lib/utils/formatting';
 import { ProductReviewWithProfile } from '@/app/actions/store-actions';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Star } from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
 
 interface ProductVariant {
   id: string;
@@ -38,14 +39,23 @@ interface ProductDetailProps {
   };
   relatedProducts: any[]; // Type this more strictly as needed
   reviews: ProductReviewWithProfile[]; // Add reviews prop
+  ownedProductIds: string[]; // <-- Add owned IDs prop
 }
 
-const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts, reviews }) => {
+const ProductDetail: React.FC<ProductDetailProps> = ({ 
+    product, 
+    relatedProducts, 
+    reviews, 
+    ownedProductIds // <-- Destructure prop
+}) => {
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   
   const addItem = useCartStore((state) => state.addItem);
   const { toast } = useToast();
+
+  // Determine if the user owns this product
+  const isOwned = ownedProductIds.includes(product.id);
 
   const variant = product.shopify_product_variants?.[0];
   const price = variant?.price || null;
@@ -76,6 +86,11 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts,
   };
 
   const handleAddToCart = () => {
+    // Prevent adding if owned
+    if (isOwned) {
+        toast({ title: "Already Owned", description: "You already own this product.", variant: "destructive" });
+        return;
+    }
     setIsAddingToCart(true);
     
     const numericPrice = typeof price === 'number' ? price : 0;
@@ -220,18 +235,25 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts,
             </div>
 
             <div className="mt-auto pt-4">
-              <Button 
-                onClick={handleAddToCart} 
-                className="w-full py-6 text-lg bg-primary hover:bg-primary/90"
-                disabled={isAddingToCart}
-              >
-                {isAddingToCart ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                ) : (
-                  <ShoppingCart className="mr-2 h-5 w-5" />
-                )}
-                Add to Cart
-              </Button>
+              {/* Conditional Add to Cart Button / Owned Indicator */}
+              {isOwned ? (
+                  <Badge variant="secondary" className="w-full justify-center px-3 py-3 text-base bg-green-100 text-green-800 border-green-200">
+                    Purchased
+                  </Badge>
+              ) : (
+                  <Button 
+                    onClick={handleAddToCart} 
+                    className="w-full py-6 text-lg bg-primary hover:bg-primary/90"
+                    disabled={isAddingToCart}
+                  >
+                    {isAddingToCart ? (
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    ) : (
+                      <ShoppingCart className="mr-2 h-5 w-5" />
+                    )}
+                    Add to Cart
+                  </Button>
+              )}
             </div>
           </div>
         </div>
@@ -241,7 +263,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts,
         <RelatedDesigns products={relatedProducts} />
       )}
 
-      {/* Reviews Section */}
+      {/* Reviews Section - FIXING PROFILE ACCESS */}
       <div className="mt-12">
         <h2 className="text-2xl font-semibold mb-6">Customer Reviews</h2>
         {reviews.length > 0 ? (
@@ -249,22 +271,24 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ product, relatedProducts,
             {reviews.map((review) => (
               <div key={review.id} className="flex items-start gap-4 border-b pb-6 last:border-b-0">
                 <Avatar>
-                  <AvatarImage src={review.profiles?.avatar_url || undefined} alt={review.profiles?.first_name || 'User'} />
+                  {/* Access profile data via the nested unified_profiles object */}
+                  {/* Note: avatar_url is not included in the ProductReviewWithProfile type */}
+                  <AvatarImage src={undefined} alt={review.unified_profiles?.first_name || 'User'} />
                   <AvatarFallback>
-                    {review.profiles?.first_name?.charAt(0) || 'U'}
-                    {review.profiles?.last_name?.charAt(0) || ''}
+                    {review.unified_profiles?.first_name?.charAt(0) || 'U'}
+                    {review.unified_profiles?.last_name?.charAt(0) || ''}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-grow">
                   <div className="flex justify-between items-center mb-1">
                     <span className="font-medium">
-                        {review.profiles?.first_name || 'Anonymous'} {review.profiles?.last_name || ''}
+                        {review.unified_profiles?.first_name || 'Anonymous'} {review.unified_profiles?.last_name || ''}
                     </span>
                     <span className="text-xs text-muted-foreground">
                         {new Date(review.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  {/* Render Stars based on rating */}
+                   {/* Render Stars based on rating */}
                   <div className="flex items-center gap-1 mb-2">
                     {[...Array(5)].map((_, i) => (
                         <Star key={i} className={`h-4 w-4 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`} />

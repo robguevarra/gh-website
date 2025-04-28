@@ -18,23 +18,16 @@ interface Transaction {
   id: string
   user_id: string | null
   transaction_type: string
-  contact_email: string
-  email: string // Assuming email might also be a direct column
-  // Define expected metadata structure more explicitly
-  metadata: {
-    course_id?: string;
-    firstName?: string; // Changed from name to match form
-    lastName?: string; // Added lastName
-    name?: string; // Keep original name field for potential fallback/other uses
-    promo_code?: string;
-    source?: string;
-    phone?: string;
-    [key: string]: any; // Allow other keys
-  } | null
+  contact_email: string | null
+  // email: string // REMOVED - Column does not exist in table
+  // Revert metadata type to Json | null as union caused issues
+  metadata: Json | null 
   status: string
   payment_method: string | null
   paid_at: string | null
-  // Add other relevant transaction fields here...
+  amount?: number; // Add amount as optional, might be needed
+  currency?: string; // Add currency as optional
+  external_id?: string | null; // Add external_id
 }
 
 // Define a type for the Xendit webhook payload (invoice.paid)
@@ -95,9 +88,10 @@ export async function POST(request: NextRequest) {
         let userId: string | null = null; // Also declare userId here
 
         // 1. Fetch the transaction by external_id
+        // Explicitly select all fields needed by the Transaction type (excluding the non-existent 'email')
         const { data: fetchedTransaction, error: txFetchError } = await supabase
           .from("transactions")
-          .select<string, Transaction>("*") // Use defined type
+          .select<string, Omit<Transaction, 'email'>>("id, user_id, transaction_type, contact_email, metadata, status, payment_method, paid_at, amount, currency, external_id") // Use Omit<Transaction, 'email'>
           .eq("external_id", data.external_id)
           .maybeSingle()
 
@@ -112,11 +106,12 @@ export async function POST(request: NextRequest) {
 
         // 2. If not found, create user first for course, then log transaction
         if (!tx) {
-          console.log("[Webhook] Transaction not found for external_id. Attempting to log new transaction.")
+          console.log("[Webhook] Transaction not found for external_id. Attempting to log new transaction (likely P2P/Canva).")
           // Reset userId for this block
           userId = null;
-          // Determine transaction type based on description or metadata
-          const transactionType = data.description?.includes("Course") ? 'course' : 'ebook'
+          // Determine transaction type based on description or metadata (less reliable for SHOPIFY_ECOM)
+          // Defaulting to 'course' or 'ebook' based on description seems reasonable for this fallback scenario.
+          const transactionType = data.description?.includes("Course") ? 'course' : 'ebook' 
           // Always use payer_email/contact_email for email
           const payerEmail = data.payer_email || data.customer?.email || data.contact_email || ""
           const paymentMethod = data.payment_method // Extract payment method
@@ -207,61 +202,70 @@ export async function POST(request: NextRequest) {
             const paidAtValue = data.paid_at || new Date().toISOString();
             console.log(`[Webhook] Attempting to update transaction ${tx.id} with paid_at = ${paidAtValue}`); // Log the value
 
-            const { data: updatedTx, error: updateError } = await supabase
+            // Update status, paid_at, and payment_method. 
+            // Select the fields again and cast the result.
+            const { data: updatedTxData, error: updateError } = await supabase
               .from("transactions")
               .update({ 
-                status: "paid", // Or map to "completed" if that's your standard
-                paid_at: paidAtValue, // Use variable
-                payment_method: data.payment_method || tx.payment_method // Update payment method if not already set
+                status: "paid", 
+                paid_at: paidAtValue, 
+                payment_method: data.payment_method || tx.payment_method 
               })
               .eq("id", tx.id)
-              .select<string, Transaction>("*") // Select updated transaction
-              .single(); // Expect a single result
+              // Select fields excluding the non-existent 'email'
+              .select("id, user_id, transaction_type, contact_email, metadata, status, payment_method, paid_at, amount, currency, external_id")
+              .single();
 
             if (updateError) {
               console.error("[Webhook] Error updating transaction status:", updateError)
+              // If update fails, don't update local tx variable
+            } else if (updatedTxData) {
+              // Explicitly cast the returned data to Transaction type (without email)
+              tx = updatedTxData as Omit<Transaction, 'email'>; 
+              console.log("[Webhook] Transaction status updated successfully for:", tx.id)
             } else {
-              tx = updatedTx; // Update local tx variable with updated data
-              console.log("[Webhook] Transaction status updated to 'paid' for:", tx.id)
+               console.warn("[Webhook] Transaction update seemed successful but no data returned.");
             }
           } catch (err) {
             console.error("[Webhook] Failed to update payment status:", err)
           }
         }
 
-        // 5. Handle post-payment actions (Enrollment/Upgrade/Contact storage)
+        // 5. Handle post-payment actions (Enrollment/Upgrade/Contact storage/Order Creation)
         // Only proceed if the transaction is now marked as paid/completed
         if (tx.status === "paid" || tx.status === "completed") {
           // Handle by transaction type (use the type from the transaction record)
           if (tx.transaction_type === "P2P") {
-            // Course Transaction
+            // --- P2P COURSE TRANSACTION LOGIC ---
+            console.log(`[Webhook][P2P] Processing P2P transaction: ${tx.id}`);
             let currentUserId = tx.user_id; // Get initial userId from transaction
 
             // If user_id is not yet associated with the transaction, ensure user exists and link it
             if (!currentUserId) {
               console.log(`[Webhook] Transaction ${tx.id} is P2P but has no user_id. Ensuring user and linking.`);
-              const email = tx.contact_email || tx.email; // Prioritize contact_email if available
-              const firstName = tx.metadata?.firstName || tx.metadata?.name?.split(' ')[0];
-              const lastName = tx.metadata?.lastName || tx.metadata?.name?.split(' ').slice(1).join(' ') || null;
+              // Use contact_email only
+              const email = tx.contact_email; 
+              // Access metadata properties with optional chaining and direct casting if necessary
+              const firstName = (tx.metadata as any)?.firstName || (tx.metadata as any)?.name?.split(' ')[0];
+              const lastName = (tx.metadata as any)?.lastName || (tx.metadata as any)?.name?.split(' ').slice(1).join(' ') || null;
 
-              if (!email) {
-                console.error("[Webhook] CRITICAL: Cannot ensure user for P2P transaction - email missing from transaction record/metadata.");
-                // Skip further P2P processing for this transaction if email is missing
+              // Add null check for email before ensuring user
+              if (!email) { 
+                console.error("[Webhook] CRITICAL: Cannot ensure user for P2P transaction - contact_email is null.");
                 break; 
               }
               if (!firstName) {
                 console.error("[Webhook] CRITICAL: Cannot ensure user profile for P2P transaction - firstName missing from transaction metadata.");
-                // Optionally proceed without profile update or break
                 break; 
               }
 
               try {
                 // Ensure user and profile exist based on transaction details
                 const { userId: ensuredUserId } = await ensureAuthUserAndProfile({
-                  email: email,
+                  email: email, // Now guaranteed non-null
                   firstName: firstName,
                   lastName: lastName,
-                  phone: tx.metadata?.phone // Pass phone from metadata
+                  phone: (tx.metadata as any)?.phone // Pass phone from metadata
                 });
                 currentUserId = ensuredUserId; // Assign the obtained userId
                 console.log(`[Webhook] User ensured/found: ${currentUserId}. Updating transaction record.`);
@@ -289,15 +293,16 @@ export async function POST(request: NextRequest) {
 
             // Proceed with enrollment and upgrade ONLY if we have a valid userId
             if (!currentUserId) {
-              console.error("[Webhook] CRITICAL: No user_id available for P2P transaction after ensure/link step. Aborting enrollment and upgrade.")
+              console.error("[Webhook][P2P] CRITICAL: No user_id available for P2P transaction after ensure/link step. Aborting enrollment and upgrade.")
             } else {
               // Ensure courseId is present and valid
-              const courseId = tx.metadata?.course_id
+              // Access metadata property with casting
+              const courseId = (tx.metadata as any)?.course_id
               if (!courseId) {
-                console.error("[Webhook] No course_id found in transaction metadata. Aborting enrollment.")
+                console.error("[Webhook][P2P] No course_id found in transaction metadata. Aborting enrollment.")
                 // Decide if this is critical enough to stop
               } else {
-                // Check if enrollment already exists for this transaction_id
+                // Check if enrollment already exists for this transaction_id (Idempotency)
                 const { data: existingEnrollment, error: checkError } = await supabase
                   .from('enrollments')
                   .select('id')
@@ -305,9 +310,9 @@ export async function POST(request: NextRequest) {
                   .maybeSingle();
 
                 if (checkError) {
-                   console.error("[Webhook] Error checking for existing enrollment:", checkError);
+                   console.error("[Webhook][P2P] Error checking for existing enrollment:", checkError);
                 } else if (existingEnrollment) {
-                   console.log("[Webhook] Enrollment already exists for transaction:", tx.id);
+                   console.log("[Webhook][P2P] Enrollment already exists for transaction:", tx.id);
                 } else {
                   // Create enrollment (idempotency check passed)
                   try {
@@ -318,16 +323,13 @@ export async function POST(request: NextRequest) {
                     })
                     // Log is handled inside createEnrollment
                   } catch (err) {
-                    console.error("[Webhook] Failed to create enrollment:", err)
+                    console.error("[Webhook][P2P] Failed to create enrollment:", err)
                   }
                 }
               }
 
-              // --- Upgrade Ebook Buyer - Consider if this should run every time or only once ---
-              // If this user previously bought an ebook, upgrade their transactions
-              // This might be better handled elsewhere or need idempotency checks
-              // TODO: Implement proper check - e.g., check for previous 'Canva' transactions with null user_id for this email.
-              console.log("[Webhook] INFO: Checking if ebook buyer upgrade is needed (Current logic runs unconditionally). Consider adding idempotency.");
+              // --- Upgrade Ebook Buyer (Optional - for P2P buyers who might have bought ebook before) ---
+              console.log("[Webhook][P2P] INFO: Checking if ebook buyer upgrade is needed (Current logic runs unconditionally). Consider adding idempotency.");
               try {
                 // Get name details from profile if possible, fallback needed
                 const { data: profileData } = await supabase
@@ -336,199 +338,379 @@ export async function POST(request: NextRequest) {
                   .eq('id', currentUserId) // Use determined user ID
                   .maybeSingle();
                   
-                const profileFirstName = profileData?.first_name || tx.metadata?.name?.split(' ')[0] || 'Course';
-                const profileLastName = profileData?.last_name || tx.metadata?.name?.split(' ').slice(1).join(' ') || 'Buyer';
+                // Access metadata properties with optional chaining and direct casting
+                const metaFirstName = (tx.metadata as any)?.name?.split(' ')[0];
+                const metaLastNameRest = (tx.metadata as any)?.name?.split(' ').slice(1).join(' ');
 
-                await upgradeEbookBuyerToCourse({
-                  email: tx.contact_email || tx.email, // Ensure correct email source
-                  firstName: profileFirstName,
-                  lastName: profileLastName,
-                })
-                console.log("[Webhook] Triggered upgrade ebook buyer to course for user:", currentUserId)
+                const profileFirstName = profileData?.first_name || metaFirstName || 'Course';
+                const profileLastName = profileData?.last_name || (metaLastNameRest ? metaLastNameRest : null) || 'Buyer';
+
+                // Add null check before calling upgrade function
+                const emailForUpgrade = tx.contact_email;
+                if (emailForUpgrade) {
+                    await upgradeEbookBuyerToCourse({
+                      email: emailForUpgrade, // Use checked email
+                      firstName: profileFirstName,
+                      lastName: profileLastName,
+                    })
+                    console.log("[Webhook][P2P] Triggered upgrade ebook buyer to course for user:", currentUserId)
+                } else {
+                    console.warn("[Webhook][P2P] Skipping ebook buyer upgrade because contact_email is null.");
+                }
               } catch (err) {
-                console.error("[Webhook] Failed to trigger upgrade ebook buyer to course:", err)
+                console.error("[Webhook][P2P] Failed to trigger upgrade ebook buyer to course:", err)
               }
               // --- End Upgrade Ebook Buyer ---
             }
 
-            // Step 7 & 8 combined in one try block for atomicity (or handle errors granularly)
+          } else if (tx.transaction_type === 'SHOPIFY_ECOM') {
+            // --- SHOPIFY E-COMMERCE TRANSACTION LOGIC ---
+            console.log(`[Webhook][ECOM] Processing SHOPIFY_ECOM transaction: ${tx.id}`);
+
+            // 1. Ensure User ID exists (SHOPIFY_ECOM tx SHOULD have user_id from server action)
+            const currentUserId = tx.user_id;
+            if (!currentUserId) {
+               console.error(`[Webhook][ECOM] CRITICAL: Transaction ${tx.id} is SHOPIFY_ECOM but has no user_id. This indicates an issue in the payment initiation server action. Aborting order creation.`);
+               break; // Stop processing this transaction type
+            }
+
+            // 2. Get user email (needed for Drive permissions)
+            const userEmail = tx.contact_email; // Rely solely on contact_email from the transaction record
+            if (!userEmail) {
+              console.error(`[Webhook][ECOM] CRITICAL: Cannot grant permissions for transaction ${tx.id} - contact_email missing.`);
+              // We might still create the order but skip permissions, or abort entirely. 
+              // For now, let's try to create the order but log this error.
+            }
+
+            // 3. Extract Cart Items from Metadata
+            // Perform type checking on metadata and items array
+            // Access metadata.cartItems instead of metadata.items
+            const specificMetadata = tx.metadata as { cartItems?: any[] } | null;
+            const cartItems = (specificMetadata && Array.isArray(specificMetadata.cartItems)) 
+                ? specificMetadata.cartItems 
+                : null;
+
+            if (!cartItems || cartItems.length === 0) {
+                console.error(`[Webhook][ECOM] CRITICAL: No valid 'cartItems' array found in transaction metadata for ${tx.id}. Cannot create order items.`);
+                break; // Stop processing this transaction type
+            }
+
+            // 4. Idempotency Check & Order Creation (Steps 7 from build note)
+            let newOrderId: string | null = null;
+            let orderItemsCreated = false; // Flag to track if items were successfully inserted
+
             try {
-              // --- Step 7: Order Creation Logic --- 
-              console.log(`[Webhook] Starting Step 7 - Create ecommerce orders/items for transaction ${tx.id}`);
-              // Idempotency Check:
-              const { data: existingOrder, error: checkOrderError } = await supabase
-                .from('ecommerce_orders')
-                .select('id')
-                .eq('transaction_id', tx.id)
-                .maybeSingle();
+                console.log(`[Webhook][ECOM] Checking/Creating ecommerce order for transaction ${tx.id}`);
+                // Idempotency Check:
+                const { data: existingOrder, error: checkOrderError } = await supabase
+                  .from('ecommerce_orders')
+                  .select('id')
+                  .eq('transaction_id', tx.id)
+                  .maybeSingle();
 
-              if (checkOrderError) {
-                throw new Error(`Error checking for existing ecommerce order: ${checkOrderError.message}`);
-              }
+                if (checkOrderError) {
+                    throw new Error(`Error checking for existing ecommerce order: ${checkOrderError.message}`);
+                }
 
-              let newOrderId: string | null = null;
-              let orderItemsCreated = false; // Flag to track if items were inserted
+                if (existingOrder) {
+                    console.log(`[Webhook][ECOM] Ecommerce order already exists for transaction ${tx.id} (Order ID: ${existingOrder.id}). Skipping order creation.`);
+                    newOrderId = existingOrder.id;
+                    // Assume items were also created if order exists for idempotency
+                    orderItemsCreated = true; 
+                } else {
+                    // Fetch Unified Profile ID (needed for ecommerce_orders table)
+                    const { data: profileData, error: profileError } = await supabase
+                      .from('unified_profiles')
+                      .select('id')
+                      .eq('id', currentUserId) // Use the confirmed user ID
+                      .single(); // Expect exactly one profile for the user
 
-              if (existingOrder) {
-                console.log(`[Webhook] Ecommerce order already exists for transaction ${tx.id}. Skipping order creation.`);
-                newOrderId = existingOrder.id; 
-                // Assume items were also created if order exists, or add check if needed
-                orderItemsCreated = true; 
-              } else {
-                // ... (Fetch profile, Insert Order) ...
-                // ... (Insert Order Items logic) ...
-                 if (cartMetadata.length > 0) {
-                     // ... map orderItemsData ...
-                     const { error: insertItemsError } = await supabase
-                         .from('ecommerce_order_items')
-                         .insert(orderItemsData);
-                     if (insertItemsError) {
-                         throw new Error(`Failed to insert order items: ${insertItemsError.message}`);
-                     } else {
-                         console.log(`[Webhook] Successfully inserted ${orderItemsData.length} ecommerce_order_items for order ${newOrderId}`);
-                         orderItemsCreated = true; // Set flag on successful insert
-                     }
-                 }
-              } // End if !existingOrder
-              
-              // --- Step 8: Access Granting Logic --- 
-              console.log(`[Webhook] Starting Step 8 - Grant Google Drive permissions for transaction ${tx.id}`);
-              // Only proceed if order items were successfully created/found and email exists
-              if (orderItemsCreated && cartMetadata.length > 0 && tx.contact_email) { 
-                const userEmail = tx.contact_email;
-                for (const item of cartMetadata) {
-                  let product: { id: string; title: string | null; google_drive_file_id: string | null; } | null = null; // Define product variable here
+                    if (profileError || !profileData) {
+                       throw new Error(`Failed to fetch unified_profile_id for user ${currentUserId}: ${profileError?.message || 'Not found'}`);
+                    }
+                    const unifiedProfileId = profileData.id;
+
+                    // Create Order
+                    console.log(`[Webhook][ECOM] Creating new ecommerce_order for tx ${tx.id}`);
+                    const { data: newOrder, error: insertOrderError } = await supabase
+                      .from('ecommerce_orders')
+                      .insert({
+                          user_id: currentUserId,
+                          unified_profile_id: unifiedProfileId,
+                          transaction_id: tx.id,
+                          xendit_payment_id: data.id, // Xendit Invoice ID from webhook payload
+                          order_status: 'processing', // Use 'processing' (lowercase) as payment is confirmed
+                          total_amount: tx.amount || data.amount, // Use amount from tx or webhook
+                          currency: tx.currency || data.metadata?.currency || 'PHP', // Get currency
+                          // Add other relevant fields if needed
+                      })
+                      .select('id')
+                      .single();
+
+                    if (insertOrderError || !newOrder) {
+                        throw new Error(`Failed to insert ecommerce order: ${insertOrderError?.message || 'No ID returned'}`);
+                    }
+                    newOrderId = newOrder.id;
+                    console.log(`[Webhook][ECOM] Successfully created ecommerce_order ${newOrderId}`);
+
+                    // --- Create Order Items (only if newOrderId is valid) ---
+                    if (newOrderId) { 
+                        console.log(`[Webhook][ECOM] Creating ecommerce_order_items for order ${newOrderId}`);
+                        // Map items from metadata, adding explicit type to item
+                        const orderItemsData = cartItems.map((item: { 
+                                productId: string; 
+                                quantity: number; 
+                                price_at_purchase: number; 
+                                title?: string 
+                            }) => ({
+                            order_id: newOrderId, // Guaranteed string here
+                            product_id: item.productId, // From metadata
+                            quantity: item.quantity,
+                            price_at_purchase: item.price_at_purchase,
+                            currency: tx.currency || data.metadata?.currency || 'PHP',
+                        }));
+
+                        // Ensure we cast the filtered array correctly to match expected insert type
+                        const validOrderItemsData = orderItemsData.filter(Boolean) as { 
+                            order_id: string; // Explicitly string
+                            product_id: string; 
+                            quantity: number; 
+                            price_at_purchase: number; 
+                            currency: string; // Use string or a more specific currency type if available
+                        }[];
+
+                        if (validOrderItemsData.length > 0) {
+                            const { error: insertItemsError } = await supabase
+                                .from('ecommerce_order_items')
+                                .insert(validOrderItemsData); // Use the filtered & typed array
+
+                            if (insertItemsError) {
+                                // Attempt to delete the order if items fail? Or log and handle manually.
+                                console.error(`[Webhook][ECOM] Failed to insert order items for order ${newOrderId}. Order exists but items are missing! Error: ${insertItemsError.message}`);
+                                // Consider cleanup or alternative handling
+                                throw new Error(`Failed to insert order items: ${insertItemsError.message}`);
+                            } else {
+                                console.log(`[Webhook][ECOM] Successfully inserted ${validOrderItemsData.length} ecommerce_order_items for order ${newOrderId}`);
+                                orderItemsCreated = true; // Set flag on successful insert
+                            }
+                        } else {
+                            console.warn(`[Webhook][ECOM] No items processed from metadata for order ${newOrderId}.`); 
+                        }
+                    } else {
+                       console.error(`[Webhook][ECOM] Cannot create order items because newOrderId is null after order creation attempt.`);
+                    }
+                    // --- End Order Item Creation ---
+                } // End if !existingOrder (order creation block)
+
+            } catch (orderCreationError) {
+                console.error(`[Webhook][ECOM] Error during Step 7 (Order Creation) for transaction ${tx.id}:`, orderCreationError);
+                // If order creation failed, we cannot grant permissions. Stop processing ECOM for this tx.
+                break; 
+            }
+
+            // 5. Access Granting Logic (Steps 8 from build note)
+            // Only proceed if order items were successfully created/found and email exists
+            if (orderItemsCreated && userEmail && cartItems && cartItems.length > 0) {
+                console.log(`[Webhook][ECOM] Starting Step 8 - Grant Google Drive permissions for order ${newOrderId}`);
+                for (const item of cartItems) {
+                  // Define product variable within the loop scope
+                  let product: { id: string; title: string | null; google_drive_file_id: string | null; } | null = null; 
                   try {
-                    // Fetch the parent product 
+                    // Fetch the shopify_product record to get the Drive File ID
                     const { data: fetchedProduct, error: productError } = await supabase
                       .from('shopify_products')
                       .select('id, title, google_drive_file_id')
-                      .eq('id', item.productId)
-                      .single(); // Use single() if productId should be unique
+                      .eq('id', item.productId) // Use productId from the item metadata
+                      .maybeSingle(); // Use maybeSingle as product might not exist (handle defensively)
 
                     if (productError) {
-                      console.error(`[Webhook][Drive] Error fetching product ${item.productId} for item ${item.title}:`, productError);
+                      console.error(`[Webhook][ECOM][Drive] Error fetching product ${item.productId} for item ${item.title || 'N/A'}:`, productError);
                       continue; // Skip this item
                     }
+                    
+                    if (!fetchedProduct) {
+                        console.warn(`[Webhook][ECOM][Drive] Product not found in shopify_products table for ID: ${item.productId}. Skipping permission grant for this item.`);
+                        continue; // Skip this item
+                    }
+
                     product = fetchedProduct; // Assign fetched product
                     
                     const fileId = product.google_drive_file_id;
                     if (fileId) {
-                      console.log(`[Webhook][Drive] Granting access for ${product.title} (File ID: ${fileId}) to ${userEmail}.`);
+                      console.log(`[Webhook][ECOM][Drive] Granting access for ${product.title || item.productId} (File ID: ${fileId}) to ${userEmail}.`);
+                      // Call the utility function
                       await grantFilePermission(fileId, userEmail, 'reader'); 
+                      console.log(`[Webhook][ECOM][Drive] Successfully granted access for File ID: ${fileId} to ${userEmail}.`);
                     } else {
-                      console.warn(`[Webhook][Drive] No google_drive_file_id for product ${product.title}. Skipping.`);
+                      // Log if the product exists but has no associated Drive file ID
+                      console.warn(`[Webhook][ECOM][Drive] No google_drive_file_id found for product ${product.title || item.productId}. Skipping permission grant.`);
                     }
-                  } catch (grantError) {
-                    console.error(`[Webhook][Drive] Error granting permission for product ${item.title} (ID: ${item.productId}, File: ${product?.google_drive_file_id || 'N/A'}) to ${userEmail}:`, grantError);
-                    // Continue to next item even if one fails
+                  } catch (grantError: any) { // Catch specific error type if possible
+                    // Log detailed error for permission granting failure
+                    console.error(`[Webhook][ECOM][Drive] Error granting permission for product ${item.title || item.productId} (File: ${product?.google_drive_file_id || 'N/A'}) to ${userEmail}:`, grantError.message || grantError);
+                    // Continue to the next item even if one fails
                   }
-                } // End loop
-              } else {
-                 // Log why access grant is skipped
-                 if (!orderItemsCreated) console.log(`[Webhook] Skipping access grant: Order items not confirmed created for tx ${tx.id}.`);
-                 else if (cartMetadata.length === 0) console.log(`[Webhook] Skipping access grant: No items in cart metadata for tx ${tx.id}.`);
-                 else if (!tx.contact_email) console.warn(`[Webhook] Skipping access grant: contact_email missing for tx ${tx.id}.`);
-              }
-              // --- End Step 8 --- 
-
-            } catch (error) {
-              console.error(`[Webhook] Error during Step 7/8 (Order/Access) for transaction ${tx.id}:`, error);
-              // Decide if we should break or continue to CAPI etc.
+                } // End loop through cartItems for permission granting
+            } else {
+                 // Log why access grant is skipped more clearly
+                 if (!orderItemsCreated) console.log(`[Webhook][ECOM] Skipping access grant: Order items not confirmed created/found for tx ${tx.id}.`);
+                 else if (!userEmail) console.warn(`[Webhook][ECOM] Skipping access grant: userEmail is missing for tx ${tx.id}.`);
+                 else if (!cartItems || cartItems.length === 0) console.log(`[Webhook][ECOM] Skipping access grant: No valid items found in metadata for tx ${tx.id}.`);
             }
+            // --- End Step 8 (Access Granting) ---
+
+            // --- Step 9: Update Order Status to Completed ---
+            // After attempting permissions, mark the order as completed in our system
+            // Only do this if we successfully created the order in the first place (newOrderId is not null)
+            if (newOrderId) {
+                try {
+                    console.log(`[Webhook][ECOM] Updating order ${newOrderId} status to 'completed'.`);
+                    const { error: updateStatusError } = await supabase
+                        .from('ecommerce_orders')
+                        .update({ order_status: 'completed', updated_at: new Date().toISOString() })
+                        .eq('id', newOrderId);
+                    
+                    if (updateStatusError) {
+                        // Log error but don't throw, as primary processing succeeded
+                        console.error(`[Webhook][ECOM] Failed to update order ${newOrderId} status to 'completed':`, updateStatusError);
+                    } else {
+                        console.log(`[Webhook][ECOM] Successfully updated order ${newOrderId} status to 'completed'.`);
+                    }
+                } catch (statusUpdateErr) {
+                     console.error(`[Webhook][ECOM] Unexpected error updating order ${newOrderId} status:`, statusUpdateErr);
+                }
+            }
+            // --- End Step 9 ---
+
           } else if (tx.transaction_type === "Canva") {
-            // Ebook Transaction
+            // --- CANVA EBOOK TRANSACTION LOGIC ---
+            console.log(`[Webhook][Canva] Processing Canva transaction: ${tx.id}`);
             // Store ebook contact info
             try {
-              await storeEbookContactInfo({
-                email: tx.contact_email || tx.email, // Ensure correct email source
-                metadata: tx.metadata || {},
-              })
-              console.log("[Webhook] Ebook contact info stored for:", tx.contact_email || tx.email)
+              const emailToStore = tx.contact_email;
+              if (emailToStore && typeof emailToStore === 'string') { // Ensure it's a non-null string
+                  // Define new variable inside block, guaranteed to be string
+                  const validatedEmail = emailToStore; 
+                  await storeEbookContactInfo({
+                    email: validatedEmail, // Use the validated, non-null email
+                    // Ensure metadata is an object before passing
+                    metadata: (typeof tx.metadata === 'object' && tx.metadata !== null) ? tx.metadata : {}, 
+                  })
+                  console.log("[Webhook][Canva] Ebook contact info stored for:", validatedEmail)
+              } else {
+                  console.warn("[Webhook][Canva] Skipping ebook contact storage because contact_email is null or not a string.");
+              }
             } catch (err) {
-              console.error("[Webhook] Failed to store ebook contact info:", err)
+              console.error("[Webhook][Canva] Failed to store ebook contact info:", err)
             }
+          } else {
+             // Log if transaction type is unknown or not handled
+             console.warn(`[Webhook] Unhandled transaction_type encountered: ${tx.transaction_type} for transaction ID: ${tx.id}`);
           }
+        } else {
+           // Log if transaction status is not 'paid' or 'completed' after update attempt
+           console.warn(`[Webhook] Transaction ${tx.id} status is '${tx.status}'. Skipping post-payment actions.`);
         }
 
-        // After updating transaction status to completed/paid, send Facebook CAPI Purchase event
-        if (event === 'invoice.paid') {
-          try {
-            // Fetch the updated transaction (including metadata)
-            const { data: transaction, error: txError } = await supabase
-              .from('transactions')
-              .select('id, user_id, amount, currency, status, metadata, paid_at, external_id')
-              .eq('external_id', data.external_id)
-              .maybeSingle();
-            if (txError || !transaction) {
-              console.error('[CAPI] Could not fetch transaction for CAPI event:', txError || 'Not found');
+        // --- Facebook CAPI Event (Run conditionally based on Transaction Type) ---
+        console.log(`[Webhook][CAPI] Checking if CAPI event should be sent for tx ${tx.id}`);
+        // Check if event is 'invoice.paid', transaction exists, AND transaction type is NOT SHOPIFY_ECOM
+        if (event === 'invoice.paid' && tx && tx.transaction_type !== 'SHOPIFY_ECOM') { 
+            console.log(`[Webhook][CAPI] Sending CAPI event for ${tx.transaction_type} transaction: ${tx.id}`);
+            try {
+            // We already have the transaction 'tx' which should be updated
+            // Fetch user profile for PII (if available) using tx.user_id
+            let userProfile = null;
+            if (tx.user_id) {
+              const { data: profile, error: profileError } = await supabase
+                .from('unified_profiles')
+                .select('email, phone, first_name, last_name')
+                .eq('id', tx.user_id)
+                .maybeSingle();
+              if (profileError) {
+                console.error('[Webhook][CAPI] Could not fetch user profile:', profileError);
+              } else {
+                userProfile = profile;
+                console.log('[Webhook][CAPI] Fetched profile data for CAPI:', userProfile);
+              }
             } else {
-              // Fetch user profile for PII (if available)
-              let userProfile = null;
-              if (transaction.user_id) {
-                const { data: profile, error: profileError } = await supabase
-                  .from('unified_profiles')
-                  .select('email, phone, first_name, last_name')
-                  .eq('id', transaction.user_id)
-                  .maybeSingle();
-                if (profileError) {
-                  console.error('[CAPI] Could not fetch user profile:', profileError);
-                } else {
-                  userProfile = profile;
-                }
-              }
-              // Prepare user data for CAPI
-              const meta = transaction.metadata || {};
-              const userDataRaw = {
-                email: userProfile?.email,
-                phone: userProfile?.phone,
-                firstName: meta.firstName || userProfile?.first_name,
-                lastName: meta.lastName || userProfile?.last_name,
-                fbp: meta.fbp,
-                fbc: meta.fbc,
-                // Optionally add more fields if available
-                clientIpAddress: undefined,
-                clientUserAgent: undefined,
-              };
-              // Build user data for CAPI
-              const userData = buildUserData(userDataRaw);
-              // Prepare event payload
-              const eventPayload = {
-                event_name: 'Purchase',
-                event_time: Math.floor(new Date(transaction.paid_at || new Date()).getTime() / 1000),
-                event_id: transaction.external_id || uuidv4(),
-                event_source_url: undefined, // Optionally set if you have a canonical thank-you page
-                action_source: 'website',
-                userData,
-                custom_data: {
-                  currency: transaction.currency,
-                  value: transaction.amount,
-                },
-              };
-              // Log before sending the Facebook event
-              console.log('[CAPI] Sending Facebook Purchase event:', {
-                event_id: eventPayload.event_id,
-                event_name: eventPayload.event_name,
-                fbp: userData.fbp,
-                fbc: userData.fbc,
-              });
-              // Send the event
-              try {
-                const fbRes = await sendFacebookEvent(eventPayload);
-                console.log('[CAPI] Facebook Purchase event sent:', {
-                  event_id: eventPayload.event_id,
-                  fbRes,
-                });
-              } catch (fbErr) {
-                console.error('[CAPI] Failed to send Facebook Purchase event:', fbErr);
-              }
+               console.log('[Webhook][CAPI] No user_id on transaction, cannot fetch profile.');
             }
-          } catch (capiErr) {
-            console.error('[CAPI] Unexpected error in CAPI event logic:', capiErr);
-          }
-        }
 
-        break
+            // Prepare user data for CAPI
+            // Remove duplicate 'meta' declaration
+            // const meta = (typeof tx.metadata === 'object' && tx.metadata !== null) ? tx.metadata as { [key: string]: any } : {}; 
+            const metaForCAPI = (typeof tx.metadata === 'object' && tx.metadata !== null) ? tx.metadata as { [key: string]: any } : {}; 
+            const userDataRaw = {
+              // Handle potential null contact_email for CAPI, ensure undefined if null
+              email: userProfile?.email || tx.contact_email || undefined, 
+              phone: metaForCAPI?.phone, // Access meta safely
+              // Explicitly handle null/undefined for CAPI types
+              firstName: metaForCAPI?.firstName || userProfile?.first_name || undefined, 
+              lastName: metaForCAPI?.lastName || userProfile?.last_name || undefined,   
+              fbp: metaForCAPI?.fbp, // Get fbp from metadata
+              fbc: metaForCAPI?.fbc, // Get fbc from metadata
+              clientIpAddress: undefined, // Typically not available in webhook
+              clientUserAgent: undefined, // Typically not available in webhook
+            };
+
+            console.log('[Webhook][CAPI] Raw user data for CAPI:', userDataRaw);
+
+            // Build structured user data for CAPI
+            const userData = buildUserData(userDataRaw);
+
+            // Prepare event payload
+            const eventPayload = {
+              event_name: 'Purchase',
+              event_time: Math.floor(new Date(tx.paid_at || data.paid_at || new Date()).getTime() / 1000), // Use tx paid_at, fallback to webhook paid_at
+              event_id: tx.external_id || data.external_id || uuidv4(), // Use tx external_id, fallback to webhook external_id
+              event_source_url: undefined, // Set if applicable
+              action_source: 'website', // Assuming webhook originates from website actions
+              userData,
+              custom_data: {
+                currency: tx.currency || data.metadata?.currency || 'PHP', // Use tx currency, fallback to webhook metadata
+                value: tx.amount || data.amount || 0, // Use tx amount, fallback to webhook amount
+                // Optionally add content IDs etc. if available from tx.metadata.items
+                // contents: tx.metadata?.items?.map(item => ({ id: item.productId, quantity: item.quantity })), 
+                // content_type: 'product', // Example
+              },
+            };
+
+            // Log before sending the Facebook event
+            console.log('[Webhook][CAPI] Sending Facebook Purchase event:', JSON.stringify({
+              event_id: eventPayload.event_id,
+              event_name: eventPayload.event_name,
+              event_time: eventPayload.event_time,
+              action_source: eventPayload.action_source,
+              fbp: userData.fbp, // Log fbp/fbc if present
+              fbc: userData.fbc,
+              // custom_data: eventPayload.custom_data // Optional: log custom data too
+            }, null, 2));
+
+            // Send the event
+            try {
+              const fbRes = await sendFacebookEvent(eventPayload);
+              // Log the response from Facebook API
+              console.log('[Webhook][CAPI] Facebook Purchase event sent successfully:', {
+                event_id: eventPayload.event_id,
+                response: fbRes, // Log the actual response
+              });
+            } catch (fbErr: any) { // Catch specific error type if possible
+              console.error('[Webhook][CAPI] Failed to send Facebook Purchase event:', fbErr.message || fbErr);
+            }
+            } catch (capiErr: any) { // Catch specific error type if possible
+                console.error('[Webhook][CAPI] Unexpected error preparing CAPI event data:', capiErr.message || capiErr);
+            }
+        } else {
+           // Log why CAPI event was skipped
+           if (event !== 'invoice.paid') console.log(`[Webhook][CAPI] Skipping CAPI event: Event type is not 'invoice.paid' (${event}).`);
+           else if (!tx) console.log(`[Webhook][CAPI] Skipping CAPI event: Transaction record 'tx' is not available.`);
+           // Add specific log for skipping SHOPIFY_ECOM
+           else if (tx.transaction_type === 'SHOPIFY_ECOM') console.log(`[Webhook][CAPI] Skipping CAPI event: Transaction type is SHOPIFY_ECOM.`);
+        }
+        // --- End Facebook CAPI ---
+
+        break // End invoice.paid case
       }
       case "invoice.expired": {
         // Payment expired

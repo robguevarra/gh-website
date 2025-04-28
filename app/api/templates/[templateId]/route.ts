@@ -49,7 +49,7 @@ export async function GET(
     .from('user_enrollments')
     .select('*')
     .eq('user_id', session.user.id)
-    .eq('status', 'active');
+    .or('status.eq.ACTIVE,status.eq.active')
   
   if (enrollmentError || !enrollments || enrollments.length === 0) {
     return NextResponse.json(

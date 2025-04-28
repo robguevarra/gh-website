@@ -1,0 +1,336 @@
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { formatPrice } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, PackageOpen } from 'lucide-react';
+import { PurchaseHistoryList } from '@/components/dashboard/purchase-history-list';
+
+// Define unified structures first
+interface UnifiedOrderItem {
+  id: string; // Use item ID
+  product_id: string | null; // e.g., shopify_products.id or shopify_order_items.product_id (if available)
+  title: string | null;
+  variant_title?: string | null; // Specific to Shopify items
+  quantity: number;
+  price_at_purchase: number;
+  image_url: string | null; // e.g., shopify_products.featured_image_url
+  google_drive_file_id?: string | null; // Make optional or required as needed
+  source: 'ecommerce' | 'shopify'; // Distinguish item source
+}
+
+interface UnifiedPurchase {
+  id: string; // Use order ID
+  order_number: string | null; // Use shopify_orders.order_number if available, maybe generate for ecommerce?
+  created_at: string;
+  order_status: string | null; // Status might differ
+  total_amount: number | null; // Use total_price from shopify_orders
+  currency: string | null;
+  items: UnifiedOrderItem[];
+  source: 'ecommerce' | 'shopify'; // Distinguish order source
+}
+
+// Helper function to fetch and combine orders
+async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | null> {
+  const cookieStore = cookies();
+  const supabase = await createServerSupabaseClient(); 
+  console.log(`[PurchaseHistory] Fetching history for userId: ${userId}`); // <-- Log 1
+
+  try {
+    // 1. Fetch Ecommerce Orders
+    const { data: ecommerceData, error: ecommerceError } = await supabase
+      .from('ecommerce_orders')
+      .select(`
+        id,
+        created_at,
+        order_status,
+        total_amount,
+        currency,
+        ecommerce_order_items (
+          id,
+          quantity,
+          price_at_purchase,
+          currency, 
+          shopify_products ( id, title, featured_image_url, google_drive_file_id )
+        )
+      `)
+      .eq('user_id', userId) 
+      .order('created_at', { ascending: false });
+
+    if (ecommerceError) {
+      console.error('[PurchaseHistory] Error fetching ecommerce orders:', JSON.stringify(ecommerceError, null, 2));
+    } else {
+       console.log(`[PurchaseHistory] Raw ecommerceData fetched (Count: ${ecommerceData?.length ?? 0}):`, JSON.stringify(ecommerceData, null, 2)); // <-- Log 2 (with count)
+    }
+
+    // 2. Fetch Shopify Orders
+    let shopifyData: any[] | null = null; // Initialize shopifyData
+    try { // Wrap shopify fetching in try/catch
+        const { data: profileData, error: profileError } = await supabase
+            .from('unified_profiles')
+            .select('id')
+            .eq('id', userId) 
+            .maybeSingle();
+
+        if (profileError) {
+            console.error('[PurchaseHistory] Error fetching unified profile:', JSON.stringify(profileError, null, 2));
+            // Don't return here, just proceed without shopify orders if profile fails
+        } else if (profileData?.id) {
+            const { data: customerData, error: customerError } = await supabase
+                .from('shopify_customers')
+                .select('id')
+                .eq('unified_profile_id', profileData.id);
+
+            if (customerError) {
+                console.error('[PurchaseHistory] Error fetching shopify customer:', JSON.stringify(customerError, null, 2));
+            } else if (customerData && customerData.length > 0) {
+                const shopifyCustomerIds = customerData.map(c => c.id);
+                const { data: fetchedShopifyData, error: shopifyOrdersError } = await supabase
+                    .from('shopify_orders')
+                    .select(`
+                        id,
+                        order_number,
+                        created_at,
+                        financial_status, 
+                        fulfillment_status,
+                        total_price,
+                        currency,
+                        shopify_order_items (
+                            id,
+                            product_id,
+                            variant_id,
+                            title,
+                            variant_title,
+                            quantity,
+                            price
+                        )
+                    `)
+                    .in('customer_id', shopifyCustomerIds)
+                    .order('created_at', { ascending: false });
+
+                if (shopifyOrdersError) {
+                    console.error('[PurchaseHistory] Error fetching shopify orders:', JSON.stringify(shopifyOrdersError, null, 2));
+                } else {
+                    shopifyData = fetchedShopifyData;
+                    console.log(`[PurchaseHistory] Raw shopifyData fetched (Count: ${shopifyData?.length ?? 0})`);
+                }
+            }
+        }
+    } catch (shopifyFetchErr) {
+         console.error('[PurchaseHistory] Unexpected error during Shopify data fetch:', shopifyFetchErr);
+    }
+
+    // 2.5 Fetch Shopify Product Images (if shopify orders exist)
+    let shopifyImageUrlMap = new Map<string, string | null>();
+    if (shopifyData && shopifyData.length > 0) {
+        const shopifyProductIds = [
+            ...new Set(
+                shopifyData
+                    .flatMap(order => order.shopify_order_items || [])
+                    .map(item => item.product_id)
+                    .filter((id): id is string => !!id) // Filter out null/undefined IDs and ensure type is string
+            )
+        ];
+
+        if (shopifyProductIds.length > 0) {
+            console.log(`[PurchaseHistory] Fetching images for Shopify product IDs: ${shopifyProductIds.join(', ')}`);
+            const { data: productImages, error: imageError } = await supabase
+                .from('shopify_products')
+                .select('id, featured_image_url')
+                .in('id', shopifyProductIds);
+
+            if (imageError) {
+                console.error('[PurchaseHistory] Error fetching Shopify product images:', imageError);
+                // Continue without images if lookup fails
+            } else if (productImages) {
+                productImages.forEach(img => {
+                    shopifyImageUrlMap.set(img.id, img.featured_image_url);
+                });
+                 console.log(`[PurchaseHistory] Successfully created image map for ${shopifyImageUrlMap.size} Shopify products.`);
+            }
+        }
+    }
+
+    // 3. Combine and Format Data
+    const unifiedPurchases: UnifiedPurchase[] = [];
+    let mappedEcommerce: UnifiedPurchase[] = []; // <-- Add intermediate variable
+
+    if (ecommerceData) {
+      try { // Wrap mapping in try/catch
+        // Pass an empty map for ecommerce as images are joined directly
+        mappedEcommerce = ecommerceData.map(order => mapEcommerceOrderToUnified(order));
+        console.log(`[PurchaseHistory] Mapped ecommerceData (Count: ${mappedEcommerce?.length ?? 0}):`); // Removed stringify for brevity
+        unifiedPurchases.push(...mappedEcommerce);
+      } catch (mapError) {
+           console.error('[PurchaseHistory] Error mapping ecommerce data:', mapError);
+      }
+    }
+
+    if (shopifyData) {
+       try { // Wrap mapping in try/catch
+           // Pass the created image map to the Shopify mapper
+           const mappedShopify = shopifyData.map(order => mapShopifyOrderToUnified(order, shopifyImageUrlMap));
+           console.log(`[PurchaseHistory] Mapped shopifyData (Count: ${mappedShopify?.length ?? 0})`);
+           unifiedPurchases.push(...mappedShopify);
+       } catch (mapError) {
+            console.error('[PurchaseHistory] Error mapping shopify data:', mapError);
+       }
+    }
+
+    // 4. Sort Combined Data
+    unifiedPurchases.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    console.log(`[PurchaseHistory] Final unifiedPurchases (Count: ${unifiedPurchases?.length ?? 0}) before return:`, JSON.stringify(unifiedPurchases, null, 2)); // <-- Log 4 (with count)
+    return unifiedPurchases;
+
+  } catch (error) {
+    console.error('[PurchaseHistory] Error in getPurchaseHistory main try/catch:', error);
+    return null;
+  }
+}
+
+// --- Helper Mappers ---
+
+function mapEcommerceOrderToUnified(order: any): UnifiedPurchase {
+   // Add checks for robustness
+   if (!order || !order.id) {
+      console.warn('[mapEcommerceOrderToUnified] Received invalid order object:', order);
+      return null as any; // Return something invalid or handle appropriately
+   }
+   return {
+    id: order.id,
+    order_number: `ECO-${order.id.substring(0, 6)}`, 
+    created_at: order.created_at,
+    order_status: order.order_status,
+    total_amount: order.total_amount,
+    currency: order.currency,
+    source: 'ecommerce',
+    items: order.ecommerce_order_items?.map((item: any): UnifiedOrderItem | null => {
+      // Add checks for robustness inside item map
+      if (!item || !item.id) {
+         console.warn('[mapEcommerceOrderToUnified] Received invalid item object within order:', item);
+         return null; 
+      }
+      return {
+        id: item.id,
+        product_id: item.shopify_products?.id ?? null,
+        title: item.shopify_products?.title ?? 'N/A',
+        quantity: item.quantity,
+        price_at_purchase: item.price_at_purchase,
+        image_url: item.shopify_products?.featured_image_url ?? null,
+        google_drive_file_id: item.shopify_products?.google_drive_file_id ?? null, // Pass through the ID
+        source: 'ecommerce',
+      };
+    }).filter(Boolean) ?? [], // Filter out any null items
+  };
+}
+
+function mapShopifyOrderToUnified(order: any, imageUrlMap: Map<string, string | null>): UnifiedPurchase {
+  // Combine financial and fulfillment status for a general status
+  let status = 'Processing'; // Default
+  if (order.financial_status === 'paid' && order.fulfillment_status === 'fulfilled') {
+    status = 'Completed';
+  } else if (order.financial_status === 'refunded' || order.financial_status === 'partially_refunded') {
+    status = 'Refunded';
+  } else if (order.fulfillment_status === 'fulfilled') {
+    status = 'Shipped'; // Or Fulfilled if you prefer
+  } else if (order.financial_status === 'paid') {
+      status = 'Paid'; // Considered processing until shipped/fulfilled maybe? Or a distinct state.
+  }
+  // Add more logic as needed based on combinations of financial/fulfillment status
+
+  return {
+    id: order.id,
+    order_number: order.order_number ? String(order.order_number) : `SHO-${order.id.substring(0,6)}`, // Use Shopify's number
+    created_at: order.created_at,
+    order_status: status, // Assign mapped status
+    total_amount: parseFloat(order.total_price) || 0, // Ensure it's a number
+    currency: order.currency,
+    source: 'shopify',
+    items: order.shopify_order_items?.map((item: any, index: number): UnifiedOrderItem => {
+      // Add detailed logging for each item
+      console.log(`[mapShopifyOrderToUnified] Processing item index ${index} for order ${order.id}:`, JSON.stringify(item, null, 2));
+
+      const productId = item.product_id ? String(item.product_id) : null;
+      const imageUrl = productId ? imageUrlMap.get(productId) ?? null : null;
+
+      // Log extracted productId and resulting imageUrl
+      console.log(`[mapShopifyOrderToUnified] Item ${index} - Extracted Product ID: ${productId}, Found Image URL: ${imageUrl}`);
+
+      return {
+          id: item.id,
+          product_id: productId,
+          title: item.title ?? 'N/A',
+          variant_title: item.variant_title,
+          quantity: item.quantity,
+          price_at_purchase: parseFloat(item.price) || 0,
+          image_url: imageUrl, // <-- Use the looked-up image URL
+          source: 'shopify',
+      };
+    }) ?? [],
+  };
+}
+
+// --- Component ---
+
+export default async function PurchaseHistoryPage() {
+  const cookieStore = cookies();
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-12">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Authentication Error</AlertTitle>
+          <AlertDescription>You must be logged in to view your purchase history.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  console.log(`[PurchaseHistoryPage] User ID from auth: ${user.id}`); // <-- Log 5
+  const purchases = await getPurchaseHistory(user.id);
+
+  if (purchases === null) {
+     return (
+      <div className="container mx-auto px-4 py-12">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>Could not fetch purchase history. Please try again later.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-10 font-sans">
+      <h1 className="font-serif text-4xl font-bold mb-6 text-brand-purple">Purchase History</h1>
+
+      {purchases.length === 0 ? (
+        <div className="flex flex-col items-center justify-center text-center py-16 px-6 bg-brand-light rounded-lg border border-brand-blue/20">
+          <PackageOpen className="h-16 w-16 text-brand-purple mb-5" />
+          <p className="text-muted-foreground mb-6 text-lg">You haven't made any purchases yet.</p>
+          <Button asChild size="lg" className="bg-brand-purple hover:bg-brand-purple/90 text-white">
+            <Link href="/dashboard/store">Start Shopping</Link>
+          </Button>
+        </div>
+      ) : (
+        <PurchaseHistoryList purchases={purchases} />
+      )}
+
+      <div className="mt-8 text-center text-sm text-muted-foreground">
+        <p>
+          Missing an order or need help with a download? 
+          <a href="mailto:support@gracefulhustle.com" className="text-brand-purple hover:underline ml-1">
+            Contact Support
+          </a>
+        </p>
+      </div>
+
+    </div>
+  );
+} 

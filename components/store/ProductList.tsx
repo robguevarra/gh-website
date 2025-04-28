@@ -8,9 +8,10 @@ interface ProductListProps {
   products: ProductData[];
   wishlistedIds: Set<string>;
   onOpenQuickView: (product: ProductData) => void; // Add callback prop
+  ownedProductIds: string[]; // <-- Add ownedProductIds prop
 }
 
-const ProductList: React.FC<ProductListProps> = ({ products, wishlistedIds, onOpenQuickView }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, wishlistedIds, onOpenQuickView, ownedProductIds }) => {
   if (!products || products.length === 0) {
     // This case should ideally be handled by the parent component (StorePage)
     // but added here for robustness.
@@ -25,6 +26,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, wishlistedIds, onOp
           product={product} 
           isInitiallyWishlisted={wishlistedIds.has(product.id)} // Pass initial state
           onOpenQuickView={onOpenQuickView} // Pass callback down
+          ownedProductIds={ownedProductIds} // <-- Pass prop down to ProductCard
         />
       ))}
     </div>

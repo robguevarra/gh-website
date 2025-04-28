@@ -48,7 +48,7 @@ async function getSaleProducts(): Promise<ProductData[]> {
         id,
         shopify_product_variants (product_id, price, compare_at_price)
       `)
-      .eq('status', 'ACTIVE')
+      .or('status.eq.ACTIVE,status.eq.active')
       .not('shopify_product_variants.compare_at_price', 'is', null)
 
     if (idError) {
@@ -98,7 +98,7 @@ async function getSaleProducts(): Promise<ProductData[]> {
           compare_at_price
         )
       `)
-      .eq('status', 'ACTIVE')
+      .or('status.eq.ACTIVE,status.eq.active')
       .in('id', productIdsWithSales)
     
     if (error) {

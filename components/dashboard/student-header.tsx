@@ -17,6 +17,8 @@ import {
   X,
   MessageSquare,
   Users,
+  Receipt,
+  ShoppingCart,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -38,6 +40,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useStudentHeader } from '@/lib/hooks/ui/use-student-header';
 import { useAuth } from '@/context/auth-context';
 
+// Import cart store
+import { useCartStore } from '@/stores/cartStore';
+
 // We're now using the useStudentHeader hook which provides optimized access to the store
 
 // We'll get data from the store directly instead of props
@@ -57,6 +62,10 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
     loadUserData,
     enrollments
   } = useStudentHeader()
+
+  // Get cart items from Zustand store
+  const cartItems = useCartStore((state) => state.items);
+  const totalCartItems = cartItems.reduce((total, item) => total + (item.quantity || 1), 0);
 
   // Initialize dashboard data when user is authenticated
   useEffect(() => {
@@ -198,6 +207,14 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                     Store
                   </Link>
                   <Link
+                    href="/dashboard/purchase-history"
+                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    prefetch={true}
+                  >
+                    <Receipt className="h-5 w-5" />
+                    Purchases
+                  </Link>
+                  <Link
                     href="/dashboard/live-classes"
                     className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   >
@@ -292,6 +309,13 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
               Store
             </Link>
             <Link
+              href="/dashboard/purchase-history"
+              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              prefetch={true}
+            >
+              Purchases
+            </Link>
+            <Link
               href="/dashboard/live-classes"
               className="text-sm font-medium text-muted-foreground hover:text-foreground"
             >
@@ -300,7 +324,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
           </nav>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <div className="relative">
             <Button
               variant="ghost"
@@ -310,7 +334,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
             >
               <Bell className="h-5 w-5" />
               {notifications.some(n => !n.read) && (
-                <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500" />
+                <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-white" />
               )}
               <span className="sr-only">Notifications</span>
             </Button>
@@ -364,6 +388,25 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
             </AnimatePresence>
           </div>
 
+          <Link href="/dashboard/checkout" aria-label={`Shopping Cart with ${totalCartItems} items`}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative"
+            >
+              <ShoppingCart className="h-5 w-5" />
+              {totalCartItems > 0 && (
+                <Badge 
+                  variant="destructive" 
+                  className="absolute -top-1 -right-1 h-4 min-w-[1rem] p-0.5 text-[10px] leading-none flex items-center justify-center rounded-full border-2 border-white"
+                 >
+                  {totalCartItems}
+                </Badge>
+              )}
+              <span className="sr-only">Shopping Cart</span>
+            </Button>
+          </Link>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="p-0 h-auto bg-transparent hover:bg-transparent flex items-center gap-2">
@@ -398,7 +441,11 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Profile Settings</DropdownMenuItem>
-              <DropdownMenuItem>Purchase History</DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/dashboard/purchase-history" prefetch={true}>
+                  <Receipt className="mr-2 h-4 w-4" /> Purchases
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 {isLoggingOut ? (

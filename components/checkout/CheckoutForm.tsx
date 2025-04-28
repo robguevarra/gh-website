@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Separator } from "@/components/ui/separator";
 import { formatPrice } from '@/lib/utils';
 import { createXenditEcommercePayment } from '@/app/actions/checkoutActions';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, ChevronLeft } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import Link from 'next/link';
 
 export default function CheckoutForm() {
   const items = useCartStore((state) => state.items);
@@ -45,8 +46,12 @@ export default function CheckoutForm() {
 
   return (
     <Card className="max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle>Order Summary</CardTitle>
+      <CardHeader className="relative">
+        <Link href="/dashboard/store" className="absolute left-0 top-0 mt-3 ml-3 sm:mt-4 sm:ml-4 text-sm text-muted-foreground hover:text-foreground inline-flex items-center">
+           <ChevronLeft className="h-4 w-4 mr-1" />
+           Back to Store
+        </Link>
+        <CardTitle className="text-center pt-2 sm:pt-0">Order Summary</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {error && (
@@ -74,7 +79,7 @@ export default function CheckoutForm() {
           <p>{formatPrice(totalPrice)}</p>
         </div>
       </CardContent>
-      <CardFooter>
+      <CardFooter className="flex-col items-stretch gap-3">
         <Button 
           onClick={handlePayment} 
           className="w-full" 

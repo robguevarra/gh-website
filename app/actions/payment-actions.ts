@@ -258,8 +258,7 @@ export async function updatePaymentStatus(paymentId: string, status: string): Pr
 
 // --- New Server Action to Fetch Transaction --- 
 
-// Define a type for the transaction details we want to return
-// Adapt fields as needed based on what you want to display
+// Update TransactionDetails interface to include order and items
 export interface TransactionDetails {
   id: string;
   external_id: string | null;
@@ -275,49 +274,93 @@ export interface TransactionDetails {
     plan?: string;
     [key: string]: any;
   } | null;
+  // Add nested structure for e-commerce orders
+  ecommerce_orders?: {
+    id: string; // orderId
+    ecommerce_order_items: {
+        id: string; // itemId
+        quantity: number;
+        price_at_purchase: number;
+        shopify_products: {
+            id: string; // productId
+            title: string | null;
+            google_drive_file_id: string | null;
+        } | null; // Product might be null if deleted?
+    }[];
+  }[] | null; // Transaction might have multiple orders? Unlikely but possible schema-wise. Usually one.
 }
 
 /**
- * Fetches transaction details from the database using the external_id.
- * To be called from Server Components (like success/failure pages).
+ * Fetches transaction details by external_id, including related e-commerce order items and product info.
+ * @param externalId The external identifier (e.g., from Xendit invoice).
+ * @returns Transaction details with nested order items or null if not found.
  */
 export async function getTransactionByExternalId(
   externalId: string
 ): Promise<TransactionDetails | null> {
   if (!externalId) {
-    console.error("[getTransactionByExternalId] External ID is required.");
+    console.warn('getTransactionByExternalId called with no externalId');
     return null;
   }
 
   const supabase = getAdminClient();
 
-  try {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('id, external_id, status, amount, currency, created_at, paid_at, metadata')
-      .eq('external_id', externalId)
-      .maybeSingle();
+  // Update query to fetch related ecommerce order data
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      id,
+      external_id,
+      status,
+      amount,
+      currency,
+      created_at,
+      paid_at,
+      metadata,
+      ecommerce_orders (
+        id,
+        ecommerce_order_items (
+          id,
+          quantity,
+          price_at_purchase,
+          shopify_products (
+            id,
+            title,
+            google_drive_file_id
+          )
+        )
+      )
+    `)
+    .eq('external_id', externalId)
+    .maybeSingle(); // Assuming one transaction per external ID
 
-    if (error) {
-      console.error(`[getTransactionByExternalId] Error fetching transaction for externalId ${externalId}:`, error);
-      return null;
-    }
-
-    if (!data) {
-      console.warn(`[getTransactionByExternalId] No transaction found for externalId ${externalId}`);
-      return null;
-    }
-
-    // Return the relevant details
-    // Ensure amount is treated as number
-    return {
-      ...data,
-      amount: typeof data.amount === 'string' ? parseFloat(data.amount) : data.amount,
-    } as TransactionDetails;
-
-  } catch (error) {
-    console.error(`[getTransactionByExternalId] Unexpected error fetching transaction for externalId ${externalId}:`, error);
+  if (error) {
+    console.error(`Error fetching transaction details for externalId ${externalId}:`, error);
     return null;
   }
+
+  if (!data) {
+    console.log(`No transaction found for externalId ${externalId}`);
+    return null;
+  }
+
+  // Cast the result to the updated interface type
+  return data as TransactionDetails;
 }
+
+// Example usage (not part of the action itself)
+/*
+async function example() {
+  const details = await getTransactionByExternalId('some-external-id');
+  if (details && details.ecommerce_orders && details.ecommerce_orders.length > 0) {
+    const order = details.ecommerce_orders[0];
+    order.ecommerce_order_items.forEach(item => {
+      console.log('Item:', item.shopify_products?.title);
+      if (item.shopify_products?.google_drive_file_id) {
+        console.log('Access Link/ID:', item.shopify_products.google_drive_file_id);
+      }
+    });
+  }
+}
+*/
 

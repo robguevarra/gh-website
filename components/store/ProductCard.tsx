@@ -31,6 +31,7 @@ interface ProductCardProps {
   product: ProductData;
   isInitiallyWishlisted: boolean;
   onOpenQuickView: (product: ProductData) => void;
+  ownedProductIds: string[];
 }
 
 // Helper to format currency
@@ -52,7 +53,12 @@ const getLicenseBadgeText = (licenseType: LicenseType): string => {
   }
 };
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, isInitiallyWishlisted, onOpenQuickView }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ 
+  product, 
+  isInitiallyWishlisted, 
+  onOpenQuickView,
+  ownedProductIds
+}) => {
   // State for loading when adding to cart
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   // State for wishlist status and transition
@@ -71,7 +77,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isInitiallyWishliste
   // Determine if the product is on sale
   const isOnSale = typeof product.compare_at_price === 'number' && product.compare_at_price > (product.price ?? 0);
 
+  // Determine if the current user owns this product
+  const isOwned = ownedProductIds.includes(product.id);
+
   const handleAddToCart = () => {
+    // Prevent adding if owned (belt-and-suspenders check)
+    if (isOwned) {
+        toast({ title: "Already Owned", description: "You already own this product.", variant: "destructive" });
+        return;
+    }
     // Set loading state
     setIsAddingToCart(true);
 
@@ -280,14 +294,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isInitiallyWishliste
           );
         })()}
         
-        <Button 
-          onClick={handleAddToCart} 
-          className="bg-primary text-primary-foreground hover:bg-primary/90"
-          disabled={isAddingToCart}
-        >
-          {isAddingToCart && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Add to Cart
-        </Button>
+        {/* Conditional Add to Cart Button / Owned Indicator */}
+        {isOwned ? (
+          <Badge variant="secondary" className="px-3 py-1.5 text-sm bg-green-100 text-green-800 border-green-200">
+            Purchased
+          </Badge>
+        ) : (
+          <Button 
+            onClick={handleAddToCart} 
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+            disabled={isAddingToCart}
+          >
+            {isAddingToCart && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Add to Cart
+          </Button>
+        )}
       </CardFooter>
     </Card>
   );

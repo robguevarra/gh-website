@@ -6,6 +6,7 @@ import SuccessShowcase from '@/components/store/SuccessShowcase';
 import { Database } from '@/types/supabase'; // Assuming Supabase generated types
 import SaleSection from '@/components/store/SaleSection';
 import { getWishlistedProductIds, searchProductsStore } from '@/app/actions/store-actions';
+import { getOwnedProductIds } from '@/app/actions/userActions';
 import StoreStickyBar from '@/components/store/StoreStickyBar';
 import StoreResultsManager from '@/components/store/StoreResultsManager';
 import WelcomeStoreWrapper from '@/components/store/WelcomeStoreWrapper';
@@ -50,7 +51,7 @@ async function getStoreProducts(filter?: { query?: string | null; collectionHand
         compare_at_price
       )
     `)
-    .eq('status', 'ACTIVE')
+    .or('status.eq.ACTIVE,status.eq.active')
     .not('shopify_product_variants', 'is', null)
     .limit(1, { foreignTable: 'shopify_product_variants' });
     // Add ordering if needed, e.g., .order('title')
@@ -171,12 +172,12 @@ export default async function StorePage({ searchParams }: PageProps) {
   const query = typeof resolvedSearchParams.q === 'string' ? resolvedSearchParams.q : null;
   const collectionHandle = typeof resolvedSearchParams.collection === 'string' ? resolvedSearchParams.collection : null; // Get collection handle
   
-  // Fetch products based on filter, wishlist IDs, AND collections concurrently
-  const [products, wishlistedIds, collections] = await Promise.all([
-    // Pass filter object to the updated function
+  // Fetch products based on filter, wishlist IDs, collections, AND owned IDs concurrently
+  const [products, wishlistedIds, collections, ownedProductIds] = await Promise.all([
     getStoreProducts({ query, collectionHandle }), 
     getWishlistedProductIds(),
-    getStoreCollections() // Fetch collections
+    getStoreCollections(),
+    getOwnedProductIds()
   ]);
   
   // Determine loading state for results manager (initially not loading on server)
@@ -212,13 +213,14 @@ export default async function StorePage({ searchParams }: PageProps) {
         />
       </div>
 
-      {/* RENDER THE RESULTS MANAGER - Passes fetched data */}
+      {/* RENDER THE RESULTS MANAGER - Passes fetched data including owned IDs*/}
       <div id="store-results">
         <StoreResultsManager 
           products={products} 
           isLoading={isLoading}
           searchTerm={query}
           initialWishlistedIds={wishlistedIds} 
+          ownedProductIds={ownedProductIds}
         />
       </div>
 

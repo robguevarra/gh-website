@@ -62,7 +62,7 @@ export async function getInitialStoreProducts(): Promise<ProductData[]> {
             compare_at_price
           )
         `)
-        .eq('status', 'ACTIVE')
+        .or('status.eq.ACTIVE,status.eq.active')
         .not('shopify_product_variants', 'is', null)
         .limit(1, { foreignTable: 'shopify_product_variants' })
         // Add ordering if desired, e.g., by creation date
@@ -122,7 +122,7 @@ export async function searchProductsStore(query: string): Promise<ProductData[]>
                     compare_at_price
                 )
             `)
-            .eq('status', 'ACTIVE')
+            .or('status.eq.ACTIVE,status.eq.active')
             // Search title OR description_html
             .or(`title.ilike.${searchTerm},description_html.ilike.${searchTerm}`)
             .not('shopify_product_variants', 'is', null)
@@ -372,7 +372,7 @@ export async function getWishlistDetails(): Promise<ProductData[]> {
                 )
             `)
             .in('id', productIds) // Filter by the fetched IDs
-            .eq('status', 'ACTIVE') // Ensure products are active
+            .or('status.eq.ACTIVE,status.eq.active')// Ensure products are active
             .not('shopify_product_variants', 'is', null)
             .limit(1, { foreignTable: 'shopify_product_variants' })
             .returns<ProductWithVariantPrice[]>(); // Use the existing type helper
