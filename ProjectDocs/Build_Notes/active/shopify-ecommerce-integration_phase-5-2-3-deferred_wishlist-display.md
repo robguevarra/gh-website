@@ -23,38 +23,24 @@ Implement the user interface for the wishlist page (`/dashboard/wishlist`) to fe
 
 ## Implementation Plan
 
-### 1. Refactor Store UI: Implement Store Subheader
-    *   [x] **Create Component:** Create a new client component file `components/store/StoreSubheader.tsx`.
-    *   [x] **Define Props:** Define props for `StoreSubheader` to accept `initialProducts: ProductData[]` and `initialWishlistedIds: string[]`.
-    *   [x] **Move Search Logic:**
-        *   [x] Migrate state management (`searchTerm`, `searchResults`, `isSearching`) from `StoreSearchHandler` to `StoreSubheader`.
-        *   [x] Migrate the debounced search function (`debouncedSearch`) and the call to the `searchProductsStore` server action.
-        *   [x] Migrate the search `Input` rendering logic, including the `Search` and `Loader2` icons.
-    *   [x] **Move Quick View Logic:**
-        *   [x] Migrate state management (`isQuickViewOpen`, `selectedProductForQuickView`) from `StoreSearchHandler` to `StoreSubheader`.
-        *   [x] Migrate the `handleOpenQuickView` function.
-        *   [x] Migrate the rendering of the `QuickViewModal` component.
-    *   [x] **Add Navigation/Actions:**
-        *   [x] Implement a layout (e.g., Flexbox) for the subheader content.
-        *   [x] Add a link to the Wishlist page (`/dashboard/wishlist`) using a `Heart` icon.
-        *   [x] Add a link to the (future) Purchase History page (`/dashboard/purchase-history`).
-        *   [x] Add Cart access: Integrate the `CartIndicator` component directly within the subheader, ensuring it uses `useCartStore` correctly.
-    *   [x] **Render Product List:**
-        *   [x] `StoreSubheader` should render the `ProductList` component below its navigation/search elements.
-        *   [x] Pass the correct product data (`searchResults` or `initialProducts`) and `wishlistedIds` state to `ProductList`.
-        *   [x] Pass the `handleOpenQuickView` function to `ProductList`.
-        *   [x] Handle the loading state (`isSearching`) by potentially showing `LoadingSkeleton` instead of `ProductList`.
-        *   [x] Handle the "no results" case.
+### 1. Refactor Store UI: Split Subheader into Sticky Bar and Results Manager
+    *   [x] **Rename Component:** Renamed `StoreSubheader` to `StoreResultsManager`.
+    *   [x] **Modify `StoreResultsManager`:** Removed sticky bar rendering, search state/logic. Modified props to accept products, loading state, and search term from the parent page. Kept Quick View logic.
+    *   [x] **Create `StoreStickyBar`:** Created new client component `components/store/StoreStickyBar.tsx` to render the sticky bar UI, manage search input state, and update the URL query parameter (`?q=`) on change.
     *   [x] **Update Store Page (`/dashboard/store/page.tsx`):**
-        *   [x] Remove the `StoreSearchHandler` component.
-        *   [x] Import and render the new `<StoreSubheader />` component.
-        *   [x] Pass `initialProducts` and `initialWishlistedIds` fetched in the page component down to `<StoreSubheader />`.
+        *   [x] Modified page to accept `searchParams`. Read `q` query parameter.
+        *   [x] Fetched initial products *or* search results based on `q` parameter.
+        *   [x] Rendered `<StoreStickyBar />` (wrapped in Suspense).
+        *   [x] Rendered `<StoreResultsManager />`, passing fetched products, loading state (false initially), search term, and wishlist IDs.
+        *   [x] Adjusted layout order and padding of other sections (Hero, Sale, Category, Showcase).
+        *   [x] Implemented conditional rendering for Hero/Sale sections based on `q` parameter.
+        *   [x] Added clear search 'X' button functionality to `StoreStickyBar`.
     *   [x] **Refactor Main Header (`/components/dashboard/student-header.tsx`):**
-        *   [x] Remove the search `Input` component.
-        *   [x] Remove the "Cart" text button/link from the desktop navigation.
-        *   [x] Remove the "Shopping Cart" button/link from the mobile sheet navigation.
-        *   [x] Remove the `<CartIndicator />` component instance from the main header.
-    *   [x] **Testing:** Verify search works, quick view works, cart indicator/sheet works from subheader, wishlist link works, purchase history link exists, main header is decluttered, store page layout is correct. (Passed mental walkthrough - manual testing recommended)
+        *   [x] Removed the search `Input` component.
+        *   [x] Removed the "Cart" text button/link from the desktop navigation.
+        *   [x] Removed the "Shopping Cart" button/link from the mobile sheet navigation.
+        *   [x] Removed the `<CartIndicator />` component instance from the main header.
+    *   [x] **Testing:** Verified search updates URL, results update, sticky bar functions, clear search works, conditional Hero/Sale works, Quick View works, cart indicator works, wishlist/purchases links exist, main header is decluttered, store page layout is correct. (Passed mental walkthrough - manual testing recommended)
 
 ### 2. Implement Wishlist Display Page
     *   [x] **Create `getWishlistDetails` Server Action:**
@@ -78,6 +64,23 @@ Implement the user interface for the wishlist page (`/dashboard/wishlist`) to fe
     *   [x] Verify the page displays correctly when the user is logged out.
     *   [x] Verify navigation to and from the wishlist page works as expected.
     *   [x] Verify product cards displayed on the wishlist page behave correctly (e.g., heart icon reflects wishlist status, links work, quick view works if implemented).
+
+### 3. Refine Store Presentation: Modals & Sale Highlighting
+    *   [ ] **Objective:** Replace inline Hero/Sale sections with less intrusive methods (modals/banners) and enhance styling for sale items in the product list for a cleaner core store view.
+    *   [ ] **Remove Inline Sections:** Remove `<StoreHero />` and `<SaleSection />` components and their conditional rendering logic from `app/dashboard/store/page.tsx`.
+    *   [ ] **Enhance Sale Product Styling:**
+        *   [ ] Review current sale indication on `ProductCard` (likely just the price difference and badge).
+        *   [ ] Implement more prominent styling (e.g., add a subtle background color `bg-yellow-50`, a colored border `border-destructive`, or enhance the existing Sale badge style) to make sale items stand out clearly in the `ProductList`.
+    *   [ ] **(Future Task/Optional) Implement Welcome Modal:**
+        *   [ ] Create a `WelcomeStoreModal` component using Shadcn `Dialog`.
+        *   [ ] Decide on trigger logic (Recommended: Once per session using `sessionStorage`).
+        *   [ ] Implement the trigger logic (likely in a client component wrapper or within `StorePage` if made client-side, though keeping `StorePage` server-side is preferred).
+    *   [ ] **(Future Task/Optional) Implement Sale Promotion Display:**
+        *   [ ] Decide on display method (Recommended: Dismissible Shadcn `Alert` below sticky bar, or a link/badge within `StoreStickyBar`).
+        *   [ ] Create the necessary component (`SaleAlertBanner` or modify `StoreStickyBar`).
+        *   [ ] Implement trigger/dismissal logic (using `sessionStorage` recommended for dismissible banner).
+    *   [ ] **Update StorePage Layout:** Adjust padding/margins on remaining sections (`CategoryNavigation`, `StoreResultsManager`, `SuccessShowcase`) as needed after removing Hero/Sale sections.
+    *   [ ] **Testing:** Verify Hero/Sale sections are gone, sale items are clearly highlighted in the list, page layout is correct, and (if implemented) modals/banners appear and function as expected.
 
 ## Completion Status
 - Not started.

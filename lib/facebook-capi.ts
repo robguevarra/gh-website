@@ -57,7 +57,7 @@ export interface EventData {
  * Send a server-side event to Facebook Conversion API.
  */
 export async function sendFacebookEvent(event: EventData) {
-  const url = `https://graph.facebook.com/v17.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`;
+  const url = `https://graph.facebook.com/v22.0/${PIXEL_ID}/events?access_token=${ACCESS_TOKEN}`;
   const payload = {
     data: [
       {
