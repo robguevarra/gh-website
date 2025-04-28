@@ -22,7 +22,9 @@ export interface BreadcrumbSegment {
 
 // --- Authentication Logic ---
 
-const SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
+// Updated scope to allow modifying permissions (e.g., granting access via drive.permissions.create)
+// Previous: 'https://www.googleapis.com/auth/drive.readonly'
+const SCOPES = ['https://www.googleapis.com/auth/drive'];
 
 /**
  * Creates and returns an authenticated Google Auth client.
@@ -147,11 +149,11 @@ export async function getFolderContents(folderId: string | null): Promise<DriveI
       id: file.id!, // Non-null assertion, assuming API always returns id
       name: file.name!, // Non-null assertion
       mimeType: file.mimeType!, // Non-null assertion
-      modifiedTime: file.modifiedTime || null,
+      modifiedTime: typeof file.modifiedTime === 'undefined' ? null : file.modifiedTime,
       isFolder: file.mimeType === 'application/vnd.google-apps.folder',
-      size: file.size || null, // Add size, default to null if undefined
-      description: file.description || null, // Add description, default to null
-      createdTime: file.createdTime || null, // Add createdTime, default to null
+      size: typeof file.size === 'undefined' ? null : file.size, // Explicit undefined check
+      description: typeof file.description === 'undefined' ? null : file.description, // Explicit undefined check
+      createdTime: typeof file.createdTime === 'undefined' ? null : file.createdTime, // Explicit undefined check
     }));
 
     // Already sorted by API using orderBy: 'folder,name'
@@ -231,5 +233,70 @@ export async function getFolderPath(
 
   } catch (error: any) {
     throw new Error(`Failed to retrieve folder path from Google Drive. ${error.message}`);
+  }
+}
+
+// --- Permission Granting Logic ---
+
+/**
+ * Grants permission for a specific user email to access a Google Drive file/folder.
+ * Requires the service account to have appropriate permissions on the target file/folder or its parent.
+ * Uses the 'drive' scope, which should have been set during client initialization.
+ *
+ * @param fileId The ID of the file or folder to grant permission to.
+ * @param userEmail The email address of the user to grant permission.
+ * @param role The role to grant ('reader' or 'writer'). Defaults to 'reader'.
+ * @param sendNotificationEmail Whether to send a notification email to the user. Defaults to false.
+ * @returns A promise that resolves when the permission is successfully created.
+ * @throws {Error} If authentication fails, the API call fails, or input is invalid.
+ */
+export async function grantFilePermission(
+  fileId: string,
+  userEmail: string,
+  role: 'reader' | 'writer' = 'reader',
+  sendNotificationEmail: boolean = false // Default to false to avoid potential spam
+): Promise<void> {
+  // Basic input validation
+  if (!fileId) {
+    throw new Error('[grantFilePermission] File ID is required.');
+  }
+  if (!userEmail) {
+    throw new Error('[grantFilePermission] User email is required.');
+  }
+  // Very basic email format check
+  if (!/\S+@\S+\.\S+/.test(userEmail)) {
+      throw new Error(`[grantFilePermission] Invalid user email format: ${userEmail}`);
+  }
+
+  console.log(`[Drive] Attempting to grant '${role}' permission for ${userEmail} on file/folder ${fileId}`);
+
+  try {
+    const auth = await getGoogleAuthClient();
+    const drive = google.drive({ version: 'v3', auth });
+
+    const permissionRequestBody: drive_v3.Schema$Permission = {
+      role: role,
+      type: 'user',
+      emailAddress: userEmail,
+    };
+
+    const response = await drive.permissions.create({
+      fileId: fileId,
+      requestBody: permissionRequestBody,
+      fields: 'id', // Request the ID of the created permission back
+      sendNotificationEmail: sendNotificationEmail,
+    });
+
+    // Log success with the permission ID
+    console.log(`[Drive] Successfully granted permission. Permission ID: ${response.data.id}`);
+
+  } catch (error: any) {
+    // Log specific details if available (e.g., error code, message)
+    const errMsg = error.response?.data?.error?.message || error.message || 'Unknown error';
+    const errCode = error.code || error.response?.data?.error?.code || 'N/A';
+    console.error(`[Drive] Failed to grant permission for ${userEmail} on ${fileId}. Code: ${errCode}, Message: ${errMsg}`, error);
+
+    // Re-throw a more informative error
+    throw new Error(`Failed to grant Google Drive permission. Error: ${errMsg} (Code: ${errCode})`);
   }
 }

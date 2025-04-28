@@ -42,54 +42,55 @@ Implement the checkout process, integrate with Xendit for payment processing, an
 
 ## Implementation Plan (Phase 5-3)
 
-1.  [ ] **(Prerequisite) Populate Google Drive Mappings:**
-    *   [ ] Ensure the `google_drive_file_id` column in `shopify_products` is populated for all purchasable products. This might involve a manual update or a separate script (outside this build note's scope but essential for testing step 8).
-2.  [ ] **Create Checkout UI:**
-    *   [ ] Create the checkout page route (e.g., `app/dashboard/checkout/page.tsx`).
-    *   [ ] Build the UI component (`components/checkout/CheckoutForm.tsx`? `use client`).
-    *   [ ] Fetch cart summary from the Zustand store (`getCartItems`, `getCartTotalPrice`).
-    *   [ ] Display order summary.
-    *   [ ] Include a "Pay Now" button.
-3.  [ ] **Implement Payment Initiation Logic (Server Action Recommended):**
-    *   [ ] Create a Server Action (`app/actions/checkoutActions.ts` or similar).
-    *   [ ] Define an action `createXenditPayment(cartItems: CartItem[])`.
-    *   [ ] Inside the action:
-        *   Get current user ID from Supabase auth.
-        *   Fetch product details (price, status) from `shopify_products` based on `cartItems` product IDs to verify price and availability.
-        *   Calculate the total amount securely on the server.
-        *   Fetch user email from `auth.users` or `unified_profiles`.
-        *   Construct the Xendit payment request payload (e.g., Invoice API) including amount, currency, user email, unique external ID (maybe link to a preliminary order record), success/failure redirect URLs.
-        *   Call the Xendit API (using secure credentials) to create the payment/invoice.
-        *   Return the Xendit invoice URL or necessary details to the client.
-4.  [ ] **Connect Checkout UI to Server Action:**
-    *   [ ] In the checkout UI component, add an `onSubmit` handler to the "Pay Now" button.
-    *   [ ] Call the `createXenditPayment` server action, passing the cart items from the Zustand store.
-    *   [ ] Handle the response: If successful, redirect the user to the Xendit invoice URL. Handle errors appropriately.
+1.  [x] **(Prerequisite) Populate Google Drive Mappings:**
+    *   [x] Ensure the `google_drive_file_id` column in `shopify_products` is populated for all purchasable products. **Decision:** Deferred creation of Admin UI. Mappings must be done manually/scripted for testing this phase. **Action:** Google Drive scope in `driveApiUtils.ts` updated to allow permission changes (`drive.readonly` -> `drive`).
+2.  [x] **Create Checkout UI:**
+    *   [x] Create the checkout page route (`app/dashboard/checkout/page.tsx`).
+    *   [x] Build the UI component (`components/checkout/CheckoutForm.tsx` - `use client`).
+    *   [x] Fetch cart summary from the Zustand store (`useCartStore`).
+    *   [x] Display order summary.
+    *   [x] Include a "Proceed to Payment" button.
+3.  [x] **Implement Payment Initiation Logic (Server Action):**
+    *   [x] Create a Server Action (`app/actions/checkoutActions.ts`).
+    *   [x] Define an action `createXenditEcommercePayment(cartItems: CartItem[])`.
+    *   [x] Inside the action:
+        *   [x] Get current user ID from Supabase auth.
+        *   [x] Fetch product variant details (price) from `shopify_product_variants` based on `cartItems` (`productId` assumed to be variant UUID). Verify existence.
+        *   [x] Calculate the total amount securely on the server.
+        *   [x] Fetch user email from `auth.users`.
+        *   [x] Create a local helper `logEcommercePendingTransaction` to log `pending` transaction in `transactions` table with `SHOPIFY_ECOM` type, `external_id`, and metadata (avoiding modification of shared `payment-utils.ts`).
+        *   [x] Construct the Xendit payment request payload (Invoice API) including amount, currency, user email, unique `external_id`, success/failure redirect URLs, items list.
+        *   [x] Call the Xendit API using `fetch` and Basic Auth (following existing patterns).
+        *   [x] Return the Xendit `invoice_url` to the client.
+4.  [x] **Connect Checkout UI to Server Action:**
+    *   [x] In the checkout UI component (`CheckoutForm.tsx`), add `handlePayment` handler to the "Proceed to Payment" button.
+    *   [x] Call the `createXenditEcommercePayment` server action, passing the cart items.
+    *   [x] Handle loading state (`useTransition`) and errors (`useState`).
+    *   [x] Redirect the user to the Xendit invoice URL on success.
 5.  [ ] **Implement Google Drive Permission Granting Utility:**
-    *   [ ] Edit `lib/google-drive/driveApiUtils.ts`.
-    *   [ ] Add a new function `async grantFilePermission(fileId: string, userEmail: string, role: 'reader' | 'writer' = 'reader'): Promise<void>`.
+    *   [x] Edit `lib/google-drive/driveApiUtils.ts`. **DONE**
+    *   [ ] Add a new function `async grantFilePermission(fileId: string, userEmail: string, role: 'reader' | 'writer' = 'reader'): Promise<void>`. **DONE**
     *   [ ] Use the authenticated `drive` API client.
     *   [ ] Call `drive.permissions.create` with the `fileId`, `requestBody: { role: role, type: 'user', emailAddress: userEmail }`, and `fields: 'id'`.
     *   [ ] Add robust error handling (e.g., file not found, invalid email, insufficient permissions for service account).
-6.  [ ] **Implement Xendit Webhook Handler:**
-    *   [ ] Create a new API route (e.g., `app/api/webhooks/xendit/ecommerce/route.ts`).
-    *   [ ] **Security:** Implement Xendit webhook signature verification using the callback verification token.
-    *   [ ] Parse the incoming webhook payload (e.g., `invoice.paid` event).
-    *   [ ] Extract relevant data: Xendit payment ID (`id`), external ID (linking back to the cart/user), amount, status, user email (if available).
-    *   [ ] **Idempotency:** Check if an `ecommerce_orders` record with this `xendit_payment_id` already exists. If so, return success (200 OK) without processing again.
-7.  [ ] **Implement Order Creation Logic (within Webhook Handler):**
-    *   [ ] On successful payment verification:
-        *   Fetch the user ID (`auth.users.id` and `unified_profiles.id`) based on the email or external ID passed during payment initiation.
-        *   Create a new record in the unified `transactions` table.
-        *   Create a new record in `ecommerce_orders`, linking the `user_id`, `unified_profile_id`, `xendit_payment_id`, and the new `transaction_id`.
-        *   Retrieve the product IDs associated with the original payment (e.g., decode from `external_id` or fetch based on it).
-        *   For each product ID:
-            *   Fetch its current details (price, `google_drive_file_id`) from `shopify_products`.
-            *   Create a corresponding record in `ecommerce_order_items`, linking to the new `ecommerce_orders.id` and `shopify_products.id`, storing `price_at_purchase`.
-8.  [ ] **Implement Access Granting Logic (within Webhook Handler):**
-    *   [ ] For each successfully created `ecommerce_order_items` record:
-        *   Get the `google_drive_file_id` associated with the `product_id`.
-        *   Get the user's email address.
+6.  [ ] **Modify Existing Xendit Webhook Handler:**
+    *   [ ] **Target:** `app/api/webhooks/xendit/route.ts` (NOT creating a new route).
+    *   [ ] **Security:** Ensure existing Xendit webhook signature verification is robust.
+    *   [ ] **Differentiation Logic:** Inside the `invoice.paid` event handler, after fetching the transaction using `external_id`, check the `transaction_type`.
+    *   [ ] **Idempotency:** Ensure existing idempotency check (e.g., checking if order/enrollment already exists for the transaction) covers all transaction types or add specific checks for e-commerce.
+7.  [ ] **Implement E-commerce Order Creation Logic (within modified Webhook Handler):**
+    *   [ ] If `transaction_type` is `SHOPIFY_ECOM`:
+        *   Fetch the user ID (`auth.users.id` and `unified_profiles.id`) associated with the confirmed transaction.
+        *   Ensure the unified `transactions` record is updated to `paid` (or `completed`).
+        *   Create a new record in `ecommerce_orders`, linking `user_id`, `unified_profile_id`, `xendit_payment_id`, and the `transaction_id`.
+        *   Retrieve product/variant details from the `transaction.metadata` (specifically `variantId` and `productId`).
+        *   For each item in the metadata:
+            *   Create a corresponding record in `ecommerce_order_items`, linking to the new `ecommerce_orders.id` and `shopify_products.id` (using `productId` from metadata), storing `price_at_purchase` (from metadata) and `variant_id` (from metadata).
+8.  [ ] **Implement Access Granting Logic (within modified Webhook Handler):**
+    *   [ ] If `transaction_type` is `SHOPIFY_ECOM`, for each successfully created `ecommerce_order_items` record:
+        *   Fetch the corresponding `shopify_products` record using the `productId`.
+        *   Get the `google_drive_file_id` from the fetched product record.
+        *   Get the user's email address (from the transaction or user profile).
         *   If `google_drive_file_id` exists, call the `grantFilePermission(google_drive_file_id, userEmail, 'reader')` utility function.
         *   Log success or failure of permission granting.
 9.  [ ] **Post-Checkout Flow:**

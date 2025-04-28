@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import {
   Sheet,
   SheetContent,
@@ -42,6 +43,10 @@ const CartView = () => {
   const totalQuantity = useCartStore(selectCartTotalQuantity);
   const removeItem = useCartStore((state) => state.removeItem);
   const clearCart = useCartStore((state) => state.clearCart);
+  const closeCartSheet = useCartStore((state) => state.closeCartSheet); // Get sheet close action
+  
+  // Get router instance
+  const router = useRouter();
   
   // Add toast for user feedback
   const { toast } = useToast();
@@ -63,6 +68,14 @@ const CartView = () => {
       description: "All items have been removed from your cart.",
       variant: "destructive",
     });
+  };
+
+  // Handle checkout navigation
+  const handleCheckout = () => {
+    // Close the sheet first
+    closeCartSheet(); 
+    // Navigate to the checkout page
+    router.push('/dashboard/checkout');
   };
 
   return (
@@ -139,7 +152,7 @@ const CartView = () => {
                </Button>
               <Button 
                 className="flex-grow bg-primary text-primary-foreground hover:bg-primary/90"
-                // onClick={handleCheckout} // TODO: Implement checkout navigation in Phase 5-3
+                onClick={handleCheckout} // Attach handleCheckout function
               >
                 Proceed to Checkout
               </Button>

@@ -112,7 +112,7 @@ export async function ensureAuthUserAndProfile({ email, firstName, lastName, pho
  * - Returns transaction record.
  */
 export async function logTransaction({ transactionType, userId, email, amount, metadata, externalId, paymentMethod, phone }: {
-  transactionType: 'course' | 'ebook';
+  transactionType: 'course' | 'ebook' | 'ecommerce';
   userId?: string | null;
   email: string;
   amount: number;
@@ -125,7 +125,22 @@ export async function logTransaction({ transactionType, userId, email, amount, m
   const supabase = getAdminClient();
 
   // Map conceptual type to database value
-  const dbTransactionType = transactionType === 'course' ? 'P2P' : 'Canva';
+  let dbTransactionType: string;
+  switch (transactionType) {
+    case 'course':
+      dbTransactionType = 'P2P';
+      break;
+    case 'ebook':
+      dbTransactionType = 'Canva';
+      break;
+    case 'ecommerce':
+      dbTransactionType = 'SHOPIFY_ECOM'; // Assign a specific DB value for e-commerce
+      break;
+    default:
+      // Handle unexpected type if necessary, or default
+      dbTransactionType = 'unknown'; 
+      console.warn(`[logTransaction] Unknown transaction type: ${transactionType}`);
+  }
 
   // Prepare transaction data
   const transactionData: Record<string, any> = {

@@ -10,6 +10,8 @@ import {
 import { getAdminClient } from "@/lib/supabase/admin"
 import { buildUserData, sendFacebookEvent } from '@/lib/facebook-capi'
 import { v4 as uuidv4 } from 'uuid'
+import { Json } from '@/types/supabase'
+import { grantFilePermission } from '@/lib/google-drive/driveApiUtils';
 
 // Define a type for the expected transaction data
 interface Transaction {
@@ -347,6 +349,92 @@ export async function POST(request: NextRequest) {
                 console.error("[Webhook] Failed to trigger upgrade ebook buyer to course:", err)
               }
               // --- End Upgrade Ebook Buyer ---
+            }
+
+            // Step 7 & 8 combined in one try block for atomicity (or handle errors granularly)
+            try {
+              // --- Step 7: Order Creation Logic --- 
+              console.log(`[Webhook] Starting Step 7 - Create ecommerce orders/items for transaction ${tx.id}`);
+              // Idempotency Check:
+              const { data: existingOrder, error: checkOrderError } = await supabase
+                .from('ecommerce_orders')
+                .select('id')
+                .eq('transaction_id', tx.id)
+                .maybeSingle();
+
+              if (checkOrderError) {
+                throw new Error(`Error checking for existing ecommerce order: ${checkOrderError.message}`);
+              }
+
+              let newOrderId: string | null = null;
+              let orderItemsCreated = false; // Flag to track if items were inserted
+
+              if (existingOrder) {
+                console.log(`[Webhook] Ecommerce order already exists for transaction ${tx.id}. Skipping order creation.`);
+                newOrderId = existingOrder.id; 
+                // Assume items were also created if order exists, or add check if needed
+                orderItemsCreated = true; 
+              } else {
+                // ... (Fetch profile, Insert Order) ...
+                // ... (Insert Order Items logic) ...
+                 if (cartMetadata.length > 0) {
+                     // ... map orderItemsData ...
+                     const { error: insertItemsError } = await supabase
+                         .from('ecommerce_order_items')
+                         .insert(orderItemsData);
+                     if (insertItemsError) {
+                         throw new Error(`Failed to insert order items: ${insertItemsError.message}`);
+                     } else {
+                         console.log(`[Webhook] Successfully inserted ${orderItemsData.length} ecommerce_order_items for order ${newOrderId}`);
+                         orderItemsCreated = true; // Set flag on successful insert
+                     }
+                 }
+              } // End if !existingOrder
+              
+              // --- Step 8: Access Granting Logic --- 
+              console.log(`[Webhook] Starting Step 8 - Grant Google Drive permissions for transaction ${tx.id}`);
+              // Only proceed if order items were successfully created/found and email exists
+              if (orderItemsCreated && cartMetadata.length > 0 && tx.contact_email) { 
+                const userEmail = tx.contact_email;
+                for (const item of cartMetadata) {
+                  let product: { id: string; title: string | null; google_drive_file_id: string | null; } | null = null; // Define product variable here
+                  try {
+                    // Fetch the parent product 
+                    const { data: fetchedProduct, error: productError } = await supabase
+                      .from('shopify_products')
+                      .select('id, title, google_drive_file_id')
+                      .eq('id', item.productId)
+                      .single(); // Use single() if productId should be unique
+
+                    if (productError) {
+                      console.error(`[Webhook][Drive] Error fetching product ${item.productId} for item ${item.title}:`, productError);
+                      continue; // Skip this item
+                    }
+                    product = fetchedProduct; // Assign fetched product
+                    
+                    const fileId = product.google_drive_file_id;
+                    if (fileId) {
+                      console.log(`[Webhook][Drive] Granting access for ${product.title} (File ID: ${fileId}) to ${userEmail}.`);
+                      await grantFilePermission(fileId, userEmail, 'reader'); 
+                    } else {
+                      console.warn(`[Webhook][Drive] No google_drive_file_id for product ${product.title}. Skipping.`);
+                    }
+                  } catch (grantError) {
+                    console.error(`[Webhook][Drive] Error granting permission for product ${item.title} (ID: ${item.productId}, File: ${product?.google_drive_file_id || 'N/A'}) to ${userEmail}:`, grantError);
+                    // Continue to next item even if one fails
+                  }
+                } // End loop
+              } else {
+                 // Log why access grant is skipped
+                 if (!orderItemsCreated) console.log(`[Webhook] Skipping access grant: Order items not confirmed created for tx ${tx.id}.`);
+                 else if (cartMetadata.length === 0) console.log(`[Webhook] Skipping access grant: No items in cart metadata for tx ${tx.id}.`);
+                 else if (!tx.contact_email) console.warn(`[Webhook] Skipping access grant: contact_email missing for tx ${tx.id}.`);
+              }
+              // --- End Step 8 --- 
+
+            } catch (error) {
+              console.error(`[Webhook] Error during Step 7/8 (Order/Access) for transaction ${tx.id}:`, error);
+              // Decide if we should break or continue to CAPI etc.
             }
           } else if (tx.transaction_type === "Canva") {
             // Ebook Transaction
