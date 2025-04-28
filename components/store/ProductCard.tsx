@@ -144,13 +144,13 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isInitiallyWishliste
   const cleanTitle = product.title?.replace(/ \((CUR|PLR)\)/, '') || 'Untitled Product';
 
   return (
-    <Card className="flex flex-col overflow-hidden border border-neutral-200 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 h-full">
+    <Card className={`flex flex-col overflow-hidden border rounded-lg shadow-sm hover:shadow-md transition-all duration-200 h-full ${isOnSale ? 'border-rose-200 bg-rose-50/30' : 'border-neutral-200'}`}>
       <CardHeader className="p-0 group relative">
-        {/* Add Sale Badge conditionally */}
+        {/* Enhanced Sale Badge conditionally */}
         {isOnSale && (
           <Badge 
             variant="destructive" 
-            className="absolute top-2 right-2 z-10"
+            className="absolute top-2 right-2 z-10 px-2.5 py-1 text-xs font-semibold shadow-sm animate-pulse"
           >
             Sale
           </Badge>
@@ -247,8 +247,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isInitiallyWishliste
         </div>
       </CardContent>
       
-      {/* Step 1.4: Handle Sale Pricing Display */}
-      <CardFooter className="p-4 flex justify-between items-center bg-neutral-50 rounded-b-lg border-t border-neutral-100">
+      {/* Enhanced Sale Pricing Display */}
+      <CardFooter className={`p-4 flex justify-between items-center rounded-b-lg border-t ${isOnSale ? 'bg-rose-50/50 border-rose-100' : 'bg-neutral-50 border-neutral-100'}`}>
         {(() => {
           // Use the formatting utility which handles sale logic
           const { formattedPrice, formattedCompareAtPrice } = formatPriceDisplayPHP({
@@ -257,15 +257,23 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, isInitiallyWishliste
           });
 
           return (
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-col items-start gap-0.5">
               {/* Display compare-at price if it exists */}
               {formattedCompareAtPrice && (
-                <span className="text-sm text-muted-foreground line-through">
-                  {formattedCompareAtPrice}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground line-through">
+                    {formattedCompareAtPrice}
+                  </span>
+                  {/* Show discount percentage when on sale */}
+                  {product.compare_at_price && (
+                    <span className="text-xs font-medium text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded">
+                      {Math.round((1 - (product.price / product.compare_at_price)) * 100)}% OFF
+                    </span>
+                  )}
+                </div>
               )}
               {/* Display the final price */}
-              <span className="text-lg font-semibold text-neutral-800">
+              <span className={`text-lg font-semibold ${isOnSale ? 'text-rose-700' : 'text-neutral-800'}`}>
                 {formattedPrice || 'N/A'} { /* Fallback if formatting fails */ }
               </span>
             </div>

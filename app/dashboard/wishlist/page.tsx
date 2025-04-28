@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { getWishlistDetails, getWishlistedProductIds } from '@/app/actions/store-actions';
-import ProductList from '@/components/store/ProductList';
 import { ProductData } from '@/app/dashboard/store/page'; // Reuse ProductData type
 import { createServerSupabaseClient } from '@/lib/supabase/server'; // Needed for auth check
+import StoreResultsManager from '@/components/store/StoreResultsManager';
+import LoadingSkeleton from '@/components/store/LoadingSkeleton';
 
 // Wishlist page component - server-side rendering
 export default async function WishlistPage() {
@@ -12,8 +13,7 @@ export default async function WishlistPage() {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-        // Optionally, you could redirect to login or show a specific message
-        // For now, showing an empty state consistent with getWishlistDetails logic
+        // Show login prompt for non-authenticated users
         return (
             <div className="container mx-auto px-4 py-8">
                 <h1 className="text-3xl font-serif font-bold mb-6">My Wishlist</h1>
@@ -28,10 +28,10 @@ export default async function WishlistPage() {
     }
 
     // Fetch wishlist details and current wishlist IDs for the logged-in user
-    const wishlistItems: ProductData[] = await getWishlistDetails();
-    const wishlistedIds: string[] = await getWishlistedProductIds();
-    // Convert to Set for efficient lookup in ProductList/ProductCard
-    const wishlistedIdsSet = new Set(wishlistedIds);
+    const [wishlistItems, wishlistedIds] = await Promise.all([
+        getWishlistDetails(),
+        getWishlistedProductIds()
+    ]);
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -45,17 +45,16 @@ export default async function WishlistPage() {
                     </Button>
                 </div>
             ) : (
-                // Display the products using ProductList
-                // Note: Quick View won't work here unless ProductList/Card is adapted
-                // or this page uses a client component wrapper similar to StoreSubheader.
-                // For now, Quick View button might appear but won't function on this page.
-                <ProductList 
-                    products={wishlistItems} 
-                    wishlistedIds={wishlistedIdsSet} 
-                    // Explicitly omit or pass a no-op for onOpenQuickView
-                    onOpenQuickView={() => { /* Quick view not implemented on this page */ }}
-                />
+                <Suspense fallback={<LoadingSkeleton />}>
+                    {/* Use StoreResultsManager with wishlist products to enable Quick View */}
+                    <StoreResultsManager 
+                        products={wishlistItems} 
+                        isLoading={false}
+                        searchTerm={null}
+                        initialWishlistedIds={wishlistedIds}
+                    />
+                </Suspense>
             )}
         </div>
     );
-} 
+}

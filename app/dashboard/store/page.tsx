@@ -1,26 +1,14 @@
 import React, { Suspense } from 'react';
-// Import the CORRECT function for creating a server-side client
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-// Remove unused client import if it existed before
-// import { createClient } from '@supabase/supabase-js';
-// Import components (ProductList is now rendered inside StoreSubheader)
-// import ProductList from '@/components/store/ProductList'; 
 import LoadingSkeleton from '@/components/store/LoadingSkeleton';
-import StoreHero from '@/components/store/StoreHero';
 import CategoryNavigation from '@/components/store/CategoryNavigation';
 import SuccessShowcase from '@/components/store/SuccessShowcase';
 import { Database } from '@/types/supabase'; // Assuming Supabase generated types
-// Import the new SaleSection component
 import SaleSection from '@/components/store/SaleSection';
-// REMOVE the old handler
-// import StoreSearchHandler from '@/components/store/StoreSearchHandler';
-// IMPORT the new subheader
-import StoreSubheader from '@/components/store/StoreSubheader';
-// Import the action to get wishlist IDs
 import { getWishlistedProductIds, searchProductsStore } from '@/app/actions/store-actions';
-// Import the new components
 import StoreStickyBar from '@/components/store/StoreStickyBar';
 import StoreResultsManager from '@/components/store/StoreResultsManager';
+import WelcomeStoreWrapper from '@/components/store/WelcomeStoreWrapper';
 
 // Base type for shopify_products row from generated types
 type ShopifyProductRow = Database['public']['Tables']['shopify_products']['Row'];
@@ -130,8 +118,10 @@ interface PageProps {
 // Store page component - server-side rendering
 // Add props to receive searchParams
 export default async function StorePage({ searchParams }: PageProps) {
-  // Get search query from URL
-  const query = typeof searchParams.q === 'string' ? searchParams.q : null;
+  // Properly await searchParams to avoid Next.js warning
+  // https://nextjs.org/docs/messages/sync-dynamic-apis
+  const resolvedSearchParams = await Promise.resolve(searchParams);
+  const query = typeof resolvedSearchParams.q === 'string' ? resolvedSearchParams.q : null;
   
   // Fetch initial/searched products AND wishlist IDs concurrently
   const [products, wishlistedIds] = await Promise.all([
@@ -142,46 +132,48 @@ export default async function StorePage({ searchParams }: PageProps) {
   // Determine loading state for results manager (initially not loading on server)
   const isLoading = false; // ResultsManager handles its own transition loading
 
+  // Determine if the page should show hero/sale sections based on URL query params for a cleaner UI
+  // Industry best practice: Hide promotional content when user is actively searching or filtering
+  const showFullExperience = !query && !resolvedSearchParams.filter;
+
   return (
-    <div className="">
+    <div className="relative">
+      {/* Render the welcome modal via client wrapper component */}
+      <WelcomeStoreWrapper hideForDays={30} />
+
       {/* RENDER THE STICKY BAR */}
-      <Suspense fallback={<div>Loading Nav...</div>}> 
+      <Suspense fallback={<div className="h-12 bg-background/80 backdrop-blur-sm"></div>}> 
         <StoreStickyBar />
       </Suspense>
 
-      {/* Conditionally render Hero and Sale sections only if NOT searching */}
-      {!query && (
-        <>
-          {/* Hero Section - Reduced top padding */}
-          <div className="pt-4 md:pt-6"> 
-            <StoreHero />
-          </div>
-
-          {/* Sale Section - Reduced vertical padding */}
-          <div className="py-4 md:py-6"> 
-            <SaleSection />
-          </div>
-        </>
+      {/* Conditionally render Sale section only for the full experience */}
+      {showFullExperience && (
+        <div className="py-5 md:py-6"> 
+          <SaleSection />
+        </div>
       )}
 
-      {/* Category Navigation - Always visible, adjust top padding if searching */}
-      {/* Add more top padding when search is active to account for removed sections */} 
-      <div className={`container mx-auto px-4 py-4 md:py-6 ${query ? 'pt-6 md:pt-8' : ''}`}> 
+      {/* Category Navigation - Always visible, with responsive spacing */}
+      <div className={`container mx-auto px-4 py-4 md:py-5 ${!showFullExperience ? 'pt-6 md:pt-8' : ''}`}> 
         <CategoryNavigation activeCategory="all" />
       </div>
 
       {/* RENDER THE RESULTS MANAGER - Passes fetched data */}
-      <StoreResultsManager 
-        products={products} 
-        isLoading={isLoading} // Pass initial loading state (false)
-        searchTerm={query} // Pass search term for context
-        initialWishlistedIds={wishlistedIds} 
-      />
-
-      {/* Success Showcase - Appears last, reduced vertical padding */}
-      <div className="container mx-auto px-4 py-8 md:py-12"> 
-        <SuccessShowcase />
+      <div id="store-results">
+        <StoreResultsManager 
+          products={products} 
+          isLoading={isLoading}
+          searchTerm={query}
+          initialWishlistedIds={wishlistedIds} 
+        />
       </div>
+
+      {/* Success Showcase - Only shown in full experience for better focus during search */}
+      {showFullExperience && (
+        <div className="container mx-auto px-4 py-8 md:py-10"> 
+          <SuccessShowcase />
+        </div>
+      )}
 
     </div>
   );

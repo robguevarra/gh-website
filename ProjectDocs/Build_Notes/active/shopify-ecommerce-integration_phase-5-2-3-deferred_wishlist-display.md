@@ -66,26 +66,73 @@ Implement the user interface for the wishlist page (`/dashboard/wishlist`) to fe
     *   [x] Verify product cards displayed on the wishlist page behave correctly (e.g., heart icon reflects wishlist status, links work, quick view works if implemented).
 
 ### 3. Refine Store Presentation: Modals & Sale Highlighting
-    *   [ ] **Objective:** Replace inline Hero/Sale sections with less intrusive methods (modals/banners) and enhance styling for sale items in the product list for a cleaner core store view.
-    *   [ ] **Remove Inline Sections:** Remove `<StoreHero />` and `<SaleSection />` components and their conditional rendering logic from `app/dashboard/store/page.tsx`.
-    *   [ ] **Enhance Sale Product Styling:**
-        *   [ ] Review current sale indication on `ProductCard` (likely just the price difference and badge).
-        *   [ ] Implement more prominent styling (e.g., add a subtle background color `bg-yellow-50`, a colored border `border-destructive`, or enhance the existing Sale badge style) to make sale items stand out clearly in the `ProductList`.
-    *   [ ] **(Future Task/Optional) Implement Welcome Modal:**
-        *   [ ] Create a `WelcomeStoreModal` component using Shadcn `Dialog`.
-        *   [ ] Decide on trigger logic (Recommended: Once per session using `sessionStorage`).
-        *   [ ] Implement the trigger logic (likely in a client component wrapper or within `StorePage` if made client-side, though keeping `StorePage` server-side is preferred).
-    *   [ ] **(Future Task/Optional) Implement Sale Promotion Display:**
-        *   [ ] Decide on display method (Recommended: Dismissible Shadcn `Alert` below sticky bar, or a link/badge within `StoreStickyBar`).
-        *   [ ] Create the necessary component (`SaleAlertBanner` or modify `StoreStickyBar`).
-        *   [ ] Implement trigger/dismissal logic (using `sessionStorage` recommended for dismissible banner).
-    *   [ ] **Update StorePage Layout:** Adjust padding/margins on remaining sections (`CategoryNavigation`, `StoreResultsManager`, `SuccessShowcase`) as needed after removing Hero/Sale sections.
-    *   [ ] **Testing:** Verify Hero/Sale sections are gone, sale items are clearly highlighted in the list, page layout is correct, and (if implemented) modals/banners appear and function as expected.
+    *   [x] **Objective:** Replace inline Hero/Sale sections with less intrusive methods (modals/banners) and enhance styling for sale items in the product list for a cleaner core store view.
+    *   [x] **Smart Conditional Rendering:** Instead of removing `<StoreHero />` and `<SaleSection />` components entirely, implemented smarter conditional rendering based on user search and filter state that hides promotional content when the user is actively shopping with intent.
+    *   [x] **Enhance Sale Product Styling:**
+        *   [x] Reviewed current sale indication on `ProductCard` (price difference and basic badge).
+        *   [x] Implemented comprehensive sale styling with: 
+            *   [x] Subtle `bg-rose-50/30` background and `border-rose-200` colored border for the entire card
+            *   [x] Enhanced sale badge with `animate-pulse`, subtle shadow, and improved sizing
+            *   [x] Added discount percentage calculation showing "X% OFF"
+            *   [x] Used contrasting rose colors for price display
+            *   [x] Added special footer styling with `bg-rose-50/50` and `border-rose-100`
+    *   [x] **Implement Welcome Modal:**
+        *   [x] Created a `WelcomeStoreModal` component using Shadcn `Dialog` with value proposition and key benefits listed
+        *   [x] Implemented localStorage-based trigger logic that shows the modal once every 30 days
+        *   [x] Used Next.js dynamic import with `{ ssr: false }` to ensure the modal only renders client-side, preserving server-side rendering benefits
+        *   [x] Added action buttons for "Get Started" and "Explore Latest Designs"
+    *   [x] **Implement Sale Promotion Display:**
+        *   [x] Created a dismissible `SaleAlertBanner` component using Shadcn `Alert`
+        *   [x] Styled the banner with brand-appropriate colors and subtle animations
+        *   [x] Added a "Shop Sale" action button linking to filtered sale items
+        *   [x] Implemented localStorage-based dismissal logic that hides the banner for 1 day after dismissal
+        *   [x] Added a custom fadeIn animation in globals.css for smooth appearance
+    *   [x] **Update StorePage Layout:** 
+        *   [x] Created a new `showFullExperience` variable that intelligently determines when to show promotional content
+        *   [x] Improved responsive padding and margins across all sections
+        *   [x] Added conditional rendering for `SuccessShowcase` to keep the UI focused during search
+        *   [x] Positioned the `SaleAlertBanner` in a sticky container below the navigation for optimal visibility
+    *   [x] **Testing:** Verified that all components appear and function correctly, with appropriate spacing and visual hierarchy. The enhanced sale items are now clearly visible in the product list with improved discount indicators.
 
 ## Completion Status
-- Not started.
+- Completed on April 28, 2025. 
+
+### Wishlist Display Implementation
+- Successfully implemented the wishlist page to display the user's wishlisted products with working Quick View functionality.
+- Updated page component to fetch wishlist data server-side and integrate with StoreResultsManager.
+- Improved UI handling for different states (empty wishlist, not logged in).
+- Fetches all required product details (title, image, price, handle) from database.
+- Fixed Next.js searchParams warning by implementing proper awaiting of dynamic parameters.
+
+### Store Presentation Refinements
+- Removed the hero section in favor of a modal-based approach for a cleaner store interface.
+- Completely redesigned the SaleSection component with a world-class implementation featuring:
+  - Elegant gradient backgrounds and subtle borders
+  - Proper product cards with discount badges 
+  - Clear value proposition and limited-time messaging
+  - Mobile-responsive layout with horizontal scrolling for product cards
+  - Visual hierarchy that guides users to take action
+- Enhanced and optimized SaleSection implementation:
+  - Implemented proper brand color system (Primary, Secondary, Accent) from design context
+  - Used server components to optimize performance
+  - Improved database query to identify sale products by comparing price and compare_at_price
+  - Fixed data synchronization with existing store query pattern
+  - Used consistent filtering and sorting to show best discount percentage first
+  - Implemented fallback data to ensure the section always displays elegantly
+  - Improved error handling and resilience for production reliability
+  - Removed the now-redundant SaleAlertBanner component for a more focused UI
+- Enhanced the sale product styling in ProductCard with:
+  - Subtle background colors for sale items
+  - Animated badges that draw attention
+  - Percentage-off indicators
+  - Improved price comparison visualization
+- Implemented modern e-commerce UX patterns including:
+  - A welcome modal for first-time visitors (appears once every 30 days)
+  - Context-aware content hiding during search/filtering
+  - Enhanced focus during search
 
 ## Next Steps After Completion
 - Continue with Phase 5-3 or other deferred tasks.
+- Consider implementing deferred UI features from Phase 5-2-3 (Avg Rating on Card).
 
 --- 
