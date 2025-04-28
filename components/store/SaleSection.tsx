@@ -36,9 +36,55 @@ const FALLBACK_SALE_PRODUCTS: ProductData[] = [
 // Fetch products with compare_at_price > price from Supabase
 async function getSaleProducts(): Promise<ProductData[]> {
   try {
+    // First, we'll perform a raw SQL query to ensure we get products where compare_at_price > price
+    // This is more accurate than filtering after the fact
     const supabase = await createServerSupabaseClient();
     
-    // Query sale products following the pattern from store-actions.ts
+    // Let's use a simpler approach to find all variants with compare_at_price > 0
+    // Following the pattern used in store-actions.ts
+    const { data: saleProductIds, error: idError } = await supabase
+      .from('shopify_products')
+      .select(`
+        id,
+        shopify_product_variants (product_id, price, compare_at_price)
+      `)
+      .eq('status', 'ACTIVE')
+      .not('shopify_product_variants.compare_at_price', 'is', null)
+
+    if (idError) {
+      console.error('Error finding sale product IDs:', idError);
+      return FALLBACK_SALE_PRODUCTS;
+    }
+
+    if (!saleProductIds || saleProductIds.length === 0) {
+      return FALLBACK_SALE_PRODUCTS;
+    }
+
+    // Process the results to find products with variants where compare_at_price > price
+    const productIdsWithSales: string[] = [];
+    
+    for (const product of saleProductIds) {
+      // Skip products with no variants
+      if (!product.shopify_product_variants || product.shopify_product_variants.length === 0) {
+        continue;
+      }
+      
+      // Check if any variant has compare_at_price > price
+      const hasSaleVariant = product.shopify_product_variants.some(variant => {
+        if (!variant.price || !variant.compare_at_price) return false;
+        
+        const price = Number(variant.price);
+        const comparePrice = Number(variant.compare_at_price);
+        
+        return !isNaN(price) && !isNaN(comparePrice) && comparePrice > price;
+      });
+      
+      if (hasSaleVariant) {
+        productIdsWithSales.push(product.id);
+      }
+    }
+
+    // Now fetch the complete product data for these IDs
     const { data, error } = await supabase
       .from('shopify_products')
       .select(`
@@ -47,15 +93,13 @@ async function getSaleProducts(): Promise<ProductData[]> {
         handle,
         featured_image_url,
         shopify_product_variants (
+          id,
           price,
           compare_at_price
         )
       `)
       .eq('status', 'ACTIVE')
-      .not('shopify_product_variants.compare_at_price', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(1, { foreignTable: 'shopify_product_variants' })
-      .limit(8);
+      .in('id', productIdsWithSales)
     
     if (error) {
       console.error('Error fetching sale products:', error);
@@ -70,35 +114,55 @@ async function getSaleProducts(): Promise<ProductData[]> {
     const products: ProductData[] = [];
     
     for (const product of data) {
-      const variant = product.shopify_product_variants?.[0];
-      
-      // Skip products without variants or where price data is invalid
-      if (!variant || 
-          variant.price === null || 
-          variant.price === undefined || 
-          isNaN(Number(variant.price)) ||
-          variant.compare_at_price === null ||
-          variant.compare_at_price === undefined ||
-          isNaN(Number(variant.compare_at_price))) {
+      // Skip products with no variants
+      if (!product.shopify_product_variants || product.shopify_product_variants.length === 0) {
         continue;
       }
+
+      // Find the variant with the best discount (highest percentage off)
+      let bestVariant = null;
+      let bestDiscountPercentage = 0;
       
-      // Only include products where compare_at_price > price (actual sale items)
-      const price = Number(variant.price);
-      const compareAtPrice = Number(variant.compare_at_price);
-      
-      if (compareAtPrice <= price) {
-        continue; // Skip if not actually on sale
+      for (const variant of product.shopify_product_variants) {
+        // Skip variants with invalid price data
+        if (variant.price === null || 
+            variant.price === undefined || 
+            isNaN(Number(variant.price)) ||
+            variant.compare_at_price === null ||
+            variant.compare_at_price === undefined ||
+            isNaN(Number(variant.compare_at_price))) {
+          continue;
+        }
+        
+        const price = Number(variant.price);
+        const compareAtPrice = Number(variant.compare_at_price);
+        
+        // Only consider variants that are actually on sale (compare_at_price > price)
+        if (compareAtPrice <= price) {
+          continue;
+        }
+        
+        // Calculate discount percentage
+        const discountPercentage = (compareAtPrice - price) / compareAtPrice;
+        
+        // Keep track of the variant with the best discount
+        if (discountPercentage > bestDiscountPercentage) {
+          bestVariant = variant;
+          bestDiscountPercentage = discountPercentage;
+        }
       }
       
-      products.push({
-        id: product.id,
-        title: product.title,
-        handle: product.handle,
-        featured_image_url: product.featured_image_url,
-        price: price,
-        compare_at_price: compareAtPrice,
-      });
+      // If we found a variant on sale, add this product to our results
+      if (bestVariant) {
+        products.push({
+          id: product.id,
+          title: product.title,
+          handle: product.handle,
+          featured_image_url: product.featured_image_url,
+          price: Number(bestVariant.price),
+          compare_at_price: Number(bestVariant.compare_at_price),
+        });
+      }
     }
     
     // Sort products by discount percentage (highest first)
@@ -110,6 +174,8 @@ async function getSaleProducts(): Promise<ProductData[]> {
       
       return discountB - discountA;
     });
+    
+
     
     return products.length > 0 ? products : FALLBACK_SALE_PRODUCTS;
   } catch (error) {

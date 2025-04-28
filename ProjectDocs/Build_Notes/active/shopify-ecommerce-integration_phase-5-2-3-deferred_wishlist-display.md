@@ -115,9 +115,13 @@ Implement the user interface for the wishlist page (`/dashboard/wishlist`) to fe
 - Enhanced and optimized SaleSection implementation:
   - Implemented proper brand color system (Primary, Secondary, Accent) from design context
   - Used server components to optimize performance
-  - Improved database query to identify sale products by comparing price and compare_at_price
-  - Fixed data synchronization with existing store query pattern
-  - Used consistent filtering and sorting to show best discount percentage first
+  - Improved architecture with separate client components for interactive elements
+  - Revamped database query for comprehensive sale detection:
+    - Two-step query process to find all variants with discounted prices
+    - Variant-level price comparison to identify any product with compare_at_price > price
+    - No reliance on specific tags, finding all actual discounted products
+    - Sorting by largest discount percentage for optimal display
+  - Changed "Shop All Sale Items" button from filtering to smooth scrolling to product section
   - Implemented fallback data to ensure the section always displays elegantly
   - Improved error handling and resilience for production reliability
   - Removed the now-redundant SaleAlertBanner component for a more focused UI

@@ -9,59 +9,84 @@ import { Search, Loader2, X } from 'lucide-react';
 import CartIndicator from './CartIndicator';
 import { debounce } from 'lodash-es';
 
-const StoreStickyBar = () => {
+// Define props if we need to receive info from parent, e.g., initial collection
+interface StoreStickyBarProps {
+  // We don't pass the handler down directly anymore
+  // onCollectionSelect: (collectionHandle: string) => void;
+}
+
+const StoreStickyBar: React.FC<StoreStickyBarProps> = () => {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const [isPending, startTransition] = useTransition();
 
-    // Initialize search term state from URL query param
+    // Initialize search term state from URL query param 'q'
     const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
+    // Get the current collection from URL param 'collection'
+    const currentCollection = searchParams.get('collection');
 
-    // Update state if URL param changes externally
+    // Update state if URL params change externally
     useEffect(() => {
         setSearchTerm(searchParams.get('q') || '');
+        // No need to set collection state, it's read directly from searchParams
     }, [searchParams]);
 
-    // Debounced function to update URL query parameter
-    const debouncedUpdateQuery = useCallback(
+    // --- URL Update Logic ---
+    const updateUrlParams = useCallback((params: { q?: string | null; collection?: string | null }) => {
+        const current = new URLSearchParams(Array.from(searchParams.entries()));
+
+        // Update or delete 'q'
+        if (params.q) {
+            current.set("q", params.q);
+        } else {
+            current.delete("q");
+        }
+        
+        // Update or delete 'collection'
+        if (params.collection && params.collection !== 'all') {
+            current.set("collection", params.collection);
+        } else {
+            current.delete("collection");
+        }
+
+        const search = current.toString();
+        const queryStr = search ? `?${search}` : "";
+
+        startTransition(() => {
+            router.replace(`${pathname}${queryStr}`);
+        });
+    }, [searchParams, pathname, router, startTransition]);
+
+    // Debounced function specifically for search input
+    const debouncedUpdateSearchQuery = useCallback(
         debounce((query: string) => {
-            const current = new URLSearchParams(Array.from(searchParams.entries()));
-
-            if (!query) {
-                current.delete("q");
-            } else {
-                current.set("q", query);
-            }
-
-            const search = current.toString();
-            const queryStr = search ? `?${search}` : "";
-
-            startTransition(() => {
-                router.replace(`${pathname}${queryStr}`);
-            });
-        }, 300), // 300ms delay
-        [searchParams, pathname, router, startTransition] // Dependencies
+            // When search is used, clear the collection filter
+            updateUrlParams({ q: query, collection: null }); 
+        }, 300), 
+        [updateUrlParams] // Dependency on the main URL updater
     );
 
+    // --- Event Handlers ---
     const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const query = event.target.value;
         setSearchTerm(query);
-        debouncedUpdateQuery(query);
+        debouncedUpdateSearchQuery(query);
     };
 
-    // Function to clear search
-    const handleClearSearch = useCallback(() => {
+    // Handler for collection selection (to be called by parent/event bus)
+    // This is now handled externally by clicking CategoryNavigation buttons
+    // which directly update the URL via router.push/replace in the parent page
+    // or by modifying CategoryNavigation to call this handler.
+    // For simplicity with server components, we'll rely on direct URL updates from CategoryNavigation clicks.
+    // We will need to modify CategoryNavigation to perform the URL update on click.
+
+    const handleClearFilters = useCallback(() => {
         setSearchTerm('');
-        const current = new URLSearchParams(Array.from(searchParams.entries()));
-        current.delete("q");
-        const search = current.toString();
-        const queryStr = search ? `?${search}` : "";
-        // Use replace and no transition needed for clearing
-        router.replace(`${pathname}${queryStr}`);
+        updateUrlParams({ q: null, collection: null });
         // Cancel any pending debounced updates
-        debouncedUpdateQuery.cancel();
-    }, [searchParams, pathname, router, debouncedUpdateQuery]);
+        debouncedUpdateSearchQuery.cancel();
+    }, [updateUrlParams, debouncedUpdateSearchQuery]);
 
     return (
         <div className="sticky top-16 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-40 border-b">
@@ -77,14 +102,14 @@ const StoreStickyBar = () => {
                         className="pl-10 pr-16 sm:pr-20 py-2 text-base h-11 rounded-full shadow-sm w-full"
                         aria-label="Search store designs"
                     />
-                    {/* Clear Button */}
-                    {searchTerm && !isPending && (
+                    {/* Clear Button - Changed condition to clear both */}
+                    {(searchTerm || currentCollection) && !isPending && (
                         <Button 
                             variant="ghost"
                             size="icon"
                             className="absolute right-10 top-1/2 transform -translate-y-1/2 h-7 w-7 rounded-full text-muted-foreground hover:text-foreground" 
-                            onClick={handleClearSearch}
-                            aria-label="Clear search"
+                            onClick={handleClearFilters} // Use the combined clear handler
+                            aria-label="Clear filters"
                         >
                             <X className="h-4 w-4" />
                         </Button>

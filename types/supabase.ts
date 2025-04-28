@@ -1485,6 +1485,13 @@ export type Database = {
             referencedRelation: "shopify_products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_reviews_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "unified_profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profiles: {
@@ -1923,6 +1930,7 @@ export type Database = {
       }
       shopify_products: {
         Row: {
+          collection_handles: string[] | null
           created_at: string | null
           description_html: string | null
           featured_image_url: string | null
@@ -1940,6 +1948,7 @@ export type Database = {
           vendor: string | null
         }
         Insert: {
+          collection_handles?: string[] | null
           created_at?: string | null
           description_html?: string | null
           featured_image_url?: string | null
@@ -1957,6 +1966,7 @@ export type Database = {
           vendor?: string | null
         }
         Update: {
+          collection_handles?: string[] | null
           created_at?: string | null
           description_html?: string | null
           featured_image_url?: string | null
@@ -2853,6 +2863,19 @@ export type Database = {
         Returns: {
           date: string
           revenue: number
+        }[]
+      }
+      get_store_products_with_ratings: {
+        Args: { search_term?: string }
+        Returns: {
+          id: string
+          title: string
+          handle: string
+          featured_image_url: string
+          price: number
+          compare_at_price: number
+          average_rating: number
+          review_count: number
         }[]
       }
       get_weekly_p2p_enrollment_trends: {

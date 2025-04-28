@@ -34,31 +34,50 @@ type ProductWithVariantPrice = ShopifyProductRow & {
 
 // Fetch products intended for members from Supabase
 // Renamed to getInitialStoreProducts as it fetches the initial set
-async function getInitialStoreProducts(): Promise<ProductData[]> {
+// Update to accept collectionHandle for filtering
+async function getStoreProducts(filter?: { query?: string | null; collectionHandle?: string | null }): Promise<ProductData[]> {
   const supabase = await createServerSupabaseClient();
-
-  const { data, error } = await supabase
+  let queryBuilder = supabase
     .from('shopify_products')
     .select(`
       id,
       title,
       handle,
       featured_image_url,
+      collection_handles, 
       shopify_product_variants (
         price,
         compare_at_price
       )
     `)
     .eq('status', 'ACTIVE')
-    // Temporarily removed tag filter since none have 'access:members'
-    // .contains('tags', ['access:members'])
     .not('shopify_product_variants', 'is', null)
-    .limit(1, { foreignTable: 'shopify_product_variants' })
-    // Revert to using the specific type now that types are regenerated
-    .returns<ProductWithVariantPrice[]>();
+    .limit(1, { foreignTable: 'shopify_product_variants' });
+    // Add ordering if needed, e.g., .order('title')
+
+  // Apply filters based on provided criteria
+  if (filter?.collectionHandle && filter.collectionHandle !== 'all') {
+    console.log(`Filtering products by collection: ${filter.collectionHandle}`);
+    // Use contains filter for array column - Reverting to 'cs' operator
+    queryBuilder = queryBuilder.filter(
+      'collection_handles', 
+      'cs', // Correct Supabase JS operator for array contains
+      `{"${filter.collectionHandle}"}` // Keep the value format for array literal
+    );
+  } else if (filter?.query) {
+    console.log(`Filtering products by search query: ${filter.query}`);
+    queryBuilder = queryBuilder.ilike('title', `%${filter.query}%`);
+    // Add more search fields if needed (e.g., description, tags)
+    // queryBuilder = queryBuilder.or(`description_html.ilike.%${filter.query}%,tags.cs.{${filter.query}}`);
+  } else {
+    console.log('Fetching all active products (no filter).');
+    // No specific filter applied, fetching initial set
+  }
+
+  const { data, error } = await queryBuilder.returns<ProductWithVariantPrice[]>();
 
   if (error) {
-    console.error('Error fetching initial store products:', error);
+    console.error('Error fetching store products:', error);
     return [];
   }
   if (!data) {
@@ -100,6 +119,34 @@ async function getInitialStoreProducts(): Promise<ProductData[]> {
   return products;
 }
 
+// Fetch distinct collection handles from products
+async function getStoreCollections(): Promise<{ handle: string }[]> {
+  const supabase = await createServerSupabaseClient();
+
+  // Query using SELECT DISTINCT unnest - Ensure column name matches migration
+  const { data, error } = await supabase
+    .from('shopify_products')
+    .select('collection_handles'); // Select the array column
+
+  if (error) {
+    console.error('Error fetching collection handles:', error);
+    return [];
+  }
+  if (!data) {
+    return [];
+  }
+
+  // Process the results to get unique handles
+  // Use 'as any' temporarily due to out-of-sync generated types
+  const allHandles = (data as any[])
+    .flatMap(item => item.collection_handles || [])
+    .filter((handle): handle is string => typeof handle === 'string' && handle.length > 0);
+  const uniqueHandles = [...new Set(allHandles)];
+
+  // Map to the desired return format
+  return uniqueHandles.map(handle => ({ handle }));
+}
+
 // ProductListWithData component - REMOVED/REPLACED by fetch within page
 // async function ProductListWithData() {
 //   const products = await getInitialStoreProducts();
@@ -122,11 +169,14 @@ export default async function StorePage({ searchParams }: PageProps) {
   // https://nextjs.org/docs/messages/sync-dynamic-apis
   const resolvedSearchParams = await Promise.resolve(searchParams);
   const query = typeof resolvedSearchParams.q === 'string' ? resolvedSearchParams.q : null;
+  const collectionHandle = typeof resolvedSearchParams.collection === 'string' ? resolvedSearchParams.collection : null; // Get collection handle
   
-  // Fetch initial/searched products AND wishlist IDs concurrently
-  const [products, wishlistedIds] = await Promise.all([
-    query ? searchProductsStore(query) : getInitialStoreProducts(),
-    getWishlistedProductIds()
+  // Fetch products based on filter, wishlist IDs, AND collections concurrently
+  const [products, wishlistedIds, collections] = await Promise.all([
+    // Pass filter object to the updated function
+    getStoreProducts({ query, collectionHandle }), 
+    getWishlistedProductIds(),
+    getStoreCollections() // Fetch collections
   ]);
   
   // Determine loading state for results manager (initially not loading on server)
@@ -155,7 +205,11 @@ export default async function StorePage({ searchParams }: PageProps) {
 
       {/* Category Navigation - Always visible, with responsive spacing */}
       <div className={`container mx-auto px-4 py-4 md:py-5 ${!showFullExperience ? 'pt-6 md:pt-8' : ''}`}> 
-        <CategoryNavigation activeCategory="all" />
+        <CategoryNavigation 
+          collections={collections} // Pass fetched collections
+          activeCollectionHandle={collectionHandle} // Correct prop name: activeCollectionHandle
+          // Add onCollectionSelect prop later (Step 3.2)
+        />
       </div>
 
       {/* RENDER THE RESULTS MANAGER - Passes fetched data */}
