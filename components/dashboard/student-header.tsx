@@ -31,10 +31,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden"
 
 // Import our store hook and specific selectors/actions
 import { useStudentHeader } from '@/lib/hooks/ui/use-student-header';
@@ -164,6 +165,10 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-[280px] p-0">
+              <VisuallyHidden>
+                <SheetTitle>Mobile Navigation Menu</SheetTitle>
+              </VisuallyHidden>
+
               <div className="h-16 flex items-center px-6 border-b">
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-md bg-brand-purple text-white flex items-center justify-center font-serif">

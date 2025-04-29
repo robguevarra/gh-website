@@ -121,8 +121,7 @@ export async function getFacebookPage(pageId = "GracefulHomeschoolingbyEmigrace"
 
     if (!response.ok) {
       const errorData = await response.json()
-      console.warn("Facebook API page fetch failed:", errorData?.error?.message || "Unknown error", 
-                  "Status:", response.status, response.statusText);
+      console.warn("Facebook API page fetch failed, using fallback");
       
       // If the error is about the page not being found, try with a numeric ID lookup
       if (response.status === 404 || (errorData?.error?.code === 803)) {
@@ -164,7 +163,7 @@ export async function getFacebookPage(pageId = "GracefulHomeschoolingbyEmigrace"
     }
 
     const data = await response.json()
-    console.log("Facebook API response:", data ? "Data received" : "No data");
+    console.log("Facebook API page fetch succeeded");
 
     return {
       id: data.id,
@@ -175,7 +174,7 @@ export async function getFacebookPage(pageId = "GracefulHomeschoolingbyEmigrace"
       profilePicture: data.picture?.data?.url || fallbackPage.profilePicture,
     }
   } catch (error) {
-    console.error("Error fetching Facebook page:", error)
+    console.error("Error fetching Facebook page, using fallback");
     return fallbackPage
   }
 }
@@ -210,11 +209,10 @@ export async function getFacebookPosts(pageId = "GracefulHomeschoolingbyEmigrace
         pageData = await pageResponse.json()
         console.log("Successfully fetched page data for posts");
       } else {
-        const errorData = await pageResponse.json();
-        console.warn("Failed to fetch page data:", errorData?.error?.message);
+        console.warn("Failed to fetch page data, using fallback");
       }
     } catch (pageError) {
-      console.warn("Could not fetch page data for posts, using fallback", pageError)
+      console.warn("Could not fetch page data for posts, using fallback");
     }
 
     // Get posts
@@ -224,9 +222,7 @@ export async function getFacebookPosts(pageId = "GracefulHomeschoolingbyEmigrace
     )
 
     if (!response.ok) {
-      const errorData = await response.json()
-      console.warn("Facebook API posts fetch failed:", errorData?.error?.message || "Unknown error", 
-                  "Status:", response.status, response.statusText);
+      console.warn("Facebook API posts fetch failed, using fallback");
       return fallbackPosts
     }
 
@@ -262,7 +258,7 @@ export async function getFacebookPosts(pageId = "GracefulHomeschoolingbyEmigrace
       },
     }))
   } catch (error) {
-    console.error("Error fetching Facebook posts:", error)
+    console.error("Error fetching Facebook posts, using fallback");
     return fallbackPosts
   }
 }

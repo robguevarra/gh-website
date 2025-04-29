@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { getWishlistDetails, getWishlistedProductIds } from '@/app/actions/store-actions';
 import { ProductData } from '@/app/dashboard/store/page'; // Reuse ProductData type
 import { createServerSupabaseClient } from '@/lib/supabase/server'; // Needed for auth check
+import { getOwnedProductIds } from '@/app/actions/userActions'; // <-- Import action
 import StoreResultsManager from '@/components/store/StoreResultsManager';
 import LoadingSkeleton from '@/components/store/LoadingSkeleton';
 
@@ -27,10 +28,11 @@ export default async function WishlistPage() {
         );
     }
 
-    // Fetch wishlist details and current wishlist IDs for the logged-in user
-    const [wishlistItems, wishlistedIds] = await Promise.all([
+    // Fetch wishlist details, current wishlist IDs, AND owned IDs concurrently
+    const [wishlistItems, wishlistedIds, ownedProductIds] = await Promise.all([
         getWishlistDetails(),
-        getWishlistedProductIds()
+        getWishlistedProductIds(),
+        getOwnedProductIds() // <-- Fetch owned IDs
     ]);
 
     return (
@@ -52,6 +54,7 @@ export default async function WishlistPage() {
                         isLoading={false}
                         searchTerm={null}
                         initialWishlistedIds={wishlistedIds}
+                        ownedProductIds={ownedProductIds} // <-- Pass prop
                     />
                 </Suspense>
             )}

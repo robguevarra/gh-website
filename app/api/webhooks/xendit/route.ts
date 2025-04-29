@@ -49,10 +49,9 @@ interface XenditInvoicePaidPayload {
 
 export async function POST(request: NextRequest) {
   try {
-    // Log incoming request
-    console.log("[Webhook] Incoming request headers:", Object.fromEntries(request.headers.entries()))
+    // Log incoming request (do NOT log headers or body for security)
+    console.log("[Webhook] Xendit webhook received");
     const body = await request.json()
-    console.log("[Webhook] Incoming request body:", JSON.stringify(body, null, 2))
     // Get the Xendit signature from headers
     const signature = request.headers.get("x-callback-token") || ""
     // Verify the webhook signature
@@ -72,11 +71,12 @@ export async function POST(request: NextRequest) {
         : data.status === "EXPIRED"
         ? "invoice.expired"
         : undefined;
+    // Log event type and key identifiers only
     console.log(`[Webhook] Inferred event: ${event}`, {
       id: data?.id,
       status: data?.status,
       external_id: data?.external_id,
-    })
+    });
     // Get Supabase admin client
     const supabase = getAdminClient()
     // Handle different event types
@@ -98,15 +98,15 @@ export async function POST(request: NextRequest) {
         let tx: Transaction | null = fetchedTransaction // Use defined type
 
         if (txFetchError) {
-          console.error("[Webhook] Error fetching transaction:", txFetchError)
-          // Potentially return error or try logging a new one
+          console.error("[Webhook] Error fetching transaction");
         } else {
-          console.log("[Webhook] Transaction fetched:", tx)
+          // Log only transaction ID and status
+          if (tx) console.log("[Webhook] Transaction fetched", { id: tx.id, status: tx.status });
         }
 
         // 2. If not found, create user first for course, then log transaction
         if (!tx) {
-          console.log("[Webhook] Transaction not found for external_id. Attempting to log new transaction (likely P2P/Canva).")
+          console.log("[Webhook] Transaction not found for external_id. Attempting to log new transaction.");
           // Reset userId for this block
           userId = null;
           // Determine transaction type based on description or metadata (less reliable for SHOPIFY_ECOM)
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
                   phone: data.metadata?.phone // Pass phone from metadata
                 })
                 userId = ensuredUserId // Assign to higher-scoped userId
-                console.log("[Webhook] User/profile ensured before logging transaction:", userId)
+                console.log("[Webhook] User/profile ensured before logging transaction");
               } else {
                 console.error("[Webhook] Could not determine valid firstName for profile creation. Skipping user/profile check.");
                 // Handle the case where profile couldn't be ensured - userId remains null
@@ -183,7 +183,7 @@ export async function POST(request: NextRequest) {
               paymentMethod: paymentMethod, // Pass payment method
             })
             tx = loggedTx // Assign the newly logged transaction
-            console.log("[Webhook] Transaction logged via logTransaction:", tx)
+            console.log("[Webhook] Transaction logged via logTransaction");
           } catch (err) {
             console.error("[Webhook] Failed to log transaction from webhook:", err)
           }
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
         if (tx.status !== "paid" && tx.status !== "completed") {
           try {
             const paidAtValue = data.paid_at || new Date().toISOString();
-            console.log(`[Webhook] Attempting to update transaction ${tx.id} with paid_at = ${paidAtValue}`); // Log the value
+            console.log(`[Webhook] Attempting to update transaction ${tx.id} with paid_at`); // Log only transaction ID
 
             // Update status, paid_at, and payment_method. 
             // Select the fields again and cast the result.
@@ -217,7 +217,7 @@ export async function POST(request: NextRequest) {
               .single();
 
             if (updateError) {
-              console.error("[Webhook] Error updating transaction status:", updateError)
+              console.error("[Webhook] Error updating transaction status:");
               // If update fails, don't update local tx variable
             } else if (updatedTxData) {
               // Explicitly cast the returned data to Transaction type (without email)
@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
                console.warn("[Webhook] Transaction update seemed successful but no data returned.");
             }
           } catch (err) {
-            console.error("[Webhook] Failed to update payment status:", err)
+            console.error("[Webhook] Failed to update payment status:");
           }
         }
 
@@ -268,7 +268,7 @@ export async function POST(request: NextRequest) {
                   phone: (tx.metadata as any)?.phone // Pass phone from metadata
                 });
                 currentUserId = ensuredUserId; // Assign the obtained userId
-                console.log(`[Webhook] User ensured/found: ${currentUserId}. Updating transaction record.`);
+                console.log(`[Webhook] User ensured/found. Updating transaction record.`);
 
                 // Update the transaction record with the user_id
                 const { error: updateUserError } = await supabase
@@ -329,7 +329,7 @@ export async function POST(request: NextRequest) {
               }
 
               // --- Upgrade Ebook Buyer (Optional - for P2P buyers who might have bought ebook before) ---
-              console.log("[Webhook][P2P] INFO: Checking if ebook buyer upgrade is needed (Current logic runs unconditionally). Consider adding idempotency.");
+              console.log(`[Webhook][P2P] INFO: Checking if ebook buyer upgrade is needed.`);
               try {
                 // Get name details from profile if possible, fallback needed
                 const { data: profileData } = await supabase
@@ -353,7 +353,7 @@ export async function POST(request: NextRequest) {
                       firstName: profileFirstName,
                       lastName: profileLastName,
                     })
-                    console.log("[Webhook][P2P] Triggered upgrade ebook buyer to course for user:", currentUserId)
+                    console.log("[Webhook][P2P] Triggered upgrade ebook buyer to course for user");
                 } else {
                     console.warn("[Webhook][P2P] Skipping ebook buyer upgrade because contact_email is null.");
                 }
@@ -413,7 +413,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 if (existingOrder) {
-                    console.log(`[Webhook][ECOM] Ecommerce order already exists for transaction ${tx.id} (Order ID: ${existingOrder.id}). Skipping order creation.`);
+                    console.log(`[Webhook][ECOM] Ecommerce order already exists for transaction ${tx.id}. Skipping order creation.`);
                     newOrderId = existingOrder.id;
                     // Assume items were also created if order exists for idempotency
                     orderItemsCreated = true; 
@@ -451,7 +451,7 @@ export async function POST(request: NextRequest) {
                         throw new Error(`Failed to insert ecommerce order: ${insertOrderError?.message || 'No ID returned'}`);
                     }
                     newOrderId = newOrder.id;
-                    console.log(`[Webhook][ECOM] Successfully created ecommerce_order ${newOrderId}`);
+                    console.log(`[Webhook][ECOM] Successfully created ecommerce_order`);
 
                     // --- Create Order Items (only if newOrderId is valid) ---
                     if (newOrderId) { 
@@ -490,7 +490,7 @@ export async function POST(request: NextRequest) {
                                 // Consider cleanup or alternative handling
                                 throw new Error(`Failed to insert order items: ${insertItemsError.message}`);
                             } else {
-                                console.log(`[Webhook][ECOM] Successfully inserted ${validOrderItemsData.length} ecommerce_order_items for order ${newOrderId}`);
+                                console.log(`[Webhook][ECOM] Successfully inserted ecommerce_order_items for order ${newOrderId}`);
                                 orderItemsCreated = true; // Set flag on successful insert
                             }
                         } else {
@@ -537,10 +537,10 @@ export async function POST(request: NextRequest) {
                     
                     const fileId = product.google_drive_file_id;
                     if (fileId) {
-                      console.log(`[Webhook][ECOM][Drive] Granting access for ${product.title || item.productId} (File ID: ${fileId}) to ${userEmail}.`);
+                      console.log(`[Webhook][ECOM][Drive] Granting access for product (File ID) to user`);
                       // Call the utility function
                       await grantFilePermission(fileId, userEmail, 'reader'); 
-                      console.log(`[Webhook][ECOM][Drive] Successfully granted access for File ID: ${fileId} to ${userEmail}.`);
+                      console.log(`[Webhook][ECOM][Drive] Successfully granted access for File ID to user.`);
                     } else {
                       // Log if the product exists but has no associated Drive file ID
                       console.warn(`[Webhook][ECOM][Drive] No google_drive_file_id found for product ${product.title || item.productId}. Skipping permission grant.`);
@@ -596,7 +596,7 @@ export async function POST(request: NextRequest) {
                     // Ensure metadata is an object before passing
                     metadata: (typeof tx.metadata === 'object' && tx.metadata !== null) ? tx.metadata : {}, 
                   })
-                  console.log("[Webhook][Canva] Ebook contact info stored for:", validatedEmail)
+                  console.log("[Webhook][Canva] Ebook contact info stored");
               } else {
                   console.warn("[Webhook][Canva] Skipping ebook contact storage because contact_email is null or not a string.");
               }
@@ -628,10 +628,10 @@ export async function POST(request: NextRequest) {
                 .eq('id', tx.user_id)
                 .maybeSingle();
               if (profileError) {
-                console.error('[Webhook][CAPI] Could not fetch user profile:', profileError);
+                console.error('[Webhook][CAPI] Could not fetch user profile:');
               } else {
                 userProfile = profile;
-                console.log('[Webhook][CAPI] Fetched profile data for CAPI:', userProfile);
+                console.log('[Webhook][CAPI] Fetched profile data for CAPI:');
               }
             } else {
                console.log('[Webhook][CAPI] No user_id on transaction, cannot fetch profile.');
@@ -654,7 +654,7 @@ export async function POST(request: NextRequest) {
               clientUserAgent: undefined, // Typically not available in webhook
             };
 
-            console.log('[Webhook][CAPI] Raw user data for CAPI:', userDataRaw);
+            console.log('[Webhook][CAPI] Raw user data for CAPI:');
 
             // Build structured user data for CAPI
             const userData = buildUserData(userDataRaw);
@@ -677,29 +677,20 @@ export async function POST(request: NextRequest) {
             };
 
             // Log before sending the Facebook event
-            console.log('[Webhook][CAPI] Sending Facebook Purchase event:', JSON.stringify({
-              event_id: eventPayload.event_id,
-              event_name: eventPayload.event_name,
-              event_time: eventPayload.event_time,
-              action_source: eventPayload.action_source,
-              fbp: userData.fbp, // Log fbp/fbc if present
-              fbc: userData.fbc,
-              // custom_data: eventPayload.custom_data // Optional: log custom data too
-            }, null, 2));
+            console.log('[Webhook][CAPI] Sending Facebook Purchase event:');
 
             // Send the event
             try {
               const fbRes = await sendFacebookEvent(eventPayload);
-              // Log the response from Facebook API
+              // Log the response from Facebook API (do NOT log full response)
               console.log('[Webhook][CAPI] Facebook Purchase event sent successfully:', {
                 event_id: eventPayload.event_id,
-                response: fbRes, // Log the actual response
               });
             } catch (fbErr: any) { // Catch specific error type if possible
               console.error('[Webhook][CAPI] Failed to send Facebook Purchase event:', fbErr.message || fbErr);
             }
             } catch (capiErr: any) { // Catch specific error type if possible
-                console.error('[Webhook][CAPI] Unexpected error preparing CAPI event data:', capiErr.message || capiErr);
+                console.error('[Webhook][CAPI] Unexpected error preparing CAPI event data:');
             }
         } else {
            // Log why CAPI event was skipped
@@ -718,7 +709,7 @@ export async function POST(request: NextRequest) {
           await updatePaymentStatus(data.external_id, "expired")
           console.log("[Webhook] Payment status updated to 'expired' for:", data.external_id)
         } catch (err) {
-          console.error("[Webhook] Failed to update payment status:", err)
+          console.error("[Webhook] Failed to update payment status:");
         }
         break
       }
@@ -727,7 +718,7 @@ export async function POST(request: NextRequest) {
         console.log(`[Webhook] Unhandled Xendit webhook event: ${event}`)
     }
     // Return a success response
-    console.log("[Webhook] Handler completed successfully.")
+    console.log("[Webhook] Handler completed successfully.");
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("[Webhook] Error processing Xendit webhook:", error)

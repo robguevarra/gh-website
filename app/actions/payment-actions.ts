@@ -90,14 +90,12 @@ export async function createPaymentIntent(params: PaymentIntentParams): Promise<
       },
     }
 
-    // Log the request for debugging (remove sensitive data in production)
-    console.log("Xendit API request payload:", {
+    // Log only non-sensitive info for debugging (do NOT log PII or secrets)
+    console.log("[PaymentAction] Xendit API request initiated", {
       external_id: payload.external_id,
       amount: payload.amount,
-      payer_email: payload.payer_email,
-      description: payload.description,
       currency: payload.currency,
-      payer_name: payload.payer_name,
+      // Do not log payer_email, payer_name, or any PII
     })
 
     // Make the API request to Xendit
@@ -113,8 +111,8 @@ export async function createPaymentIntent(params: PaymentIntentParams): Promise<
     // Get the response data
     const responseData = await response.json()
 
-    // Log the response for debugging
-    console.log("Xendit API response received:", {
+    // Log only non-sensitive info for debugging (do NOT log PII or secrets)
+    console.log("[PaymentAction] Xendit API response received", {
       id: responseData.id || "no-id",
       status: responseData.status || "unknown",
       invoice_url: responseData.invoice_url ? "URL received" : "No URL",
@@ -163,7 +161,7 @@ export async function createPaymentIntent(params: PaymentIntentParams): Promise<
       });
       console.log(`[PaymentAction] Successfully logged initial transaction for externalId: ${externalId}`);
     } catch (logError) {
-      console.error(`[PaymentAction] CRITICAL: Failed to log initial transaction for externalId ${externalId} after successful Xendit call.`, logError);
+      console.error(`[PaymentAction] CRITICAL: Failed to log initial transaction for externalId ${externalId} after successful Xendit call.`);
       // Decide how to handle this - maybe still return success to frontend but log error prominently?
       // For now, we proceed but the webhook might fail later if it can't find the transaction.
     }

@@ -58,7 +58,6 @@ async function logEcommercePendingTransaction({
     throw new Error(`Failed to log pending e-commerce transaction: ${error.message}`);
   }
 
-  console.log(`[logEcommercePendingTransaction] Successfully logged pending transaction ${data.id} for externalId: ${externalId}`);
   return data; // Return minimal data (e.g., the new transaction ID)
 }
 
@@ -190,8 +189,6 @@ export async function createXenditEcommercePayment(
     if (oneTimePurchaseItemsInCart.length > 0) {
         const oneTimePurchaseProductIds = oneTimePurchaseItemsInCart.map(item => item.productId);
         
-        console.log(`[CheckoutAction] Checking ownership for one-time purchase items: ${oneTimePurchaseProductIds.join(', ')}`);
-
         const { data: existingOwnedItems, error: ownershipCheckError } = await supabase
             .from('ecommerce_order_items')
             .select(`
@@ -222,7 +219,6 @@ export async function createXenditEcommercePayment(
                 };
             }
         }
-        console.log(`[CheckoutAction] Ownership check passed for user ${user.id}.`);
     }
     // --- End Duplicate Purchase Check --- 
 
@@ -293,8 +289,6 @@ export async function createXenditEcommercePayment(
       }
     };
 
-    console.log('[CheckoutAction] Sending Xendit Invoice Payload (excluding sensitive headers):', xenditPayload);
-
     const response = await fetch("https://api.xendit.co/v2/invoices", {
       method: "POST",
       headers: {
@@ -305,8 +299,6 @@ export async function createXenditEcommercePayment(
     });
 
     const responseData = await response.json();
-
-    console.log('[CheckoutAction] Xendit API Response:', responseData);
 
     if (!response.ok || responseData.error_code) {
       console.error("[CheckoutAction] Xendit API error:", responseData);
@@ -322,7 +314,6 @@ export async function createXenditEcommercePayment(
     const invoiceUrl = responseData.invoice_url;
 
     // 7. Return success with invoice URL
-    console.log(`[CheckoutAction] Successfully created invoice: ${invoiceUrl}`);
     return { success: true, invoiceUrl: invoiceUrl };
 
   } catch (error: any) {

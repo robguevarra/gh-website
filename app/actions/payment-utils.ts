@@ -22,14 +22,18 @@ export async function ensureAuthUserAndProfile({ email, firstName, lastName, pho
   // Get Supabase admin client
   const supabase = getAdminClient();
 
-  // 1. Check if user exists in auth.users by email
-  const { data: user, error: userFetchError } = await supabase
-    .from('auth.users')
-    .select('id, email')
-    .eq('email', email)
-    .maybeSingle();
-
-  let userId = user?.id;
+  // 1. Check if user exists in Supabase Auth by email using Auth Admin API
+  // Supabase Auth Admin API does not provide direct getUserByEmail, so we list users and filter
+  const { data: usersResponse, error: listUsersError } = await supabase.auth.admin.listUsers({ 
+    page: 1, 
+    perPage: 1000 // Adjust perPage as needed, check limits
+  });
+  if (listUsersError) {
+    throw new Error(`Failed to list users to find existing user: ${listUsersError.message}`);
+  }
+  // Find the user with the matching email from the list
+  const existingUser = usersResponse?.users?.find(u => u.email === email);
+  let userId = existingUser?.id;
 
   // 2. If not, create the user (confirmed)
   if (!userId) {
@@ -42,29 +46,24 @@ export async function ensureAuthUserAndProfile({ email, firstName, lastName, pho
     if (createUserError) {
       // If error is "already registered", fetch the user again using admin API
       if (createUserError.message && createUserError.message.includes('already been registered')) {
-        console.log(`[Auth] User already registered for ${email}. Fetching existing user ID.`);
+        // Log only non-sensitive info for debugging (do NOT log PII or secrets)
+        console.log(`[Auth] User already registered. Fetching existing user ID.`);
         // Use listUsers to find the user by email - more reliable
-        // The type for listUsers params doesn't directly take email, need to paginate or search
-        // For simplicity here, assuming low user count and filtering after getting first page
-        // Production might need search or pagination if user count is high
-        const { data: usersResponse, error: listUsersError } = await supabase.auth.admin.listUsers({ 
+        const { data: usersResponse2, error: listUsersError2 } = await supabase.auth.admin.listUsers({ 
             page: 1, 
             perPage: 1000 // Adjust perPage as needed, check limits
           });
-
-        if (listUsersError) {
-          throw new Error(`Failed to list users to find existing user after duplicate error: ${listUsersError.message}`);
+        if (listUsersError2) {
+          throw new Error(`Failed to list users to find existing user after duplicate error: ${listUsersError2.message}`);
         }
-
-        // Find the user with the matching email from the list
-        const existingUser = usersResponse?.users?.find(u => u.email === email);
-
-        if (existingUser?.id) {
-          userId = existingUser.id;
-          console.log(`[Auth] Found existing user ID: ${userId}`);
+        const existingUser2 = usersResponse2?.users?.find(u => u.email === email);
+        if (existingUser2?.id) {
+          userId = existingUser2.id;
+          // Log only that an existing user was found, not the email or ID
+          console.log(`[Auth] Found existing user.`);
         } else {
-          // This case should ideally not happen if the error was truly 'already registered'
-          console.error(`[Auth] Could not find user via listUsers despite 'already registered' error for ${email}. Response:`, usersResponse);
+          // Log only that user could not be found, do not log email or full response
+          console.error(`[Auth] Could not find user via listUsers despite 'already registered' error.`);
           throw new Error(`Failed to fetch existing user after duplicate error for ${email}.`);
         }
       } else {
@@ -142,8 +141,14 @@ export async function logTransaction({ transactionType, userId, email, amount, m
       console.warn(`[logTransaction] Unknown transaction type: ${transactionType}`);
   }
 
-  // Prepare transaction data
-  const transactionData: Record<string, any> = {
+  // Prepare transaction data (typed object, not generic Record)
+  const transactionMetadata: Record<string, any> = {
+    ...metadata,
+    ...(transactionType === 'ebook' ? { contact_email: email } : {}),
+    phone: phone ?? metadata?.phone ?? null, // Always set phone, default to null
+  };
+
+  const transactionData = {
     user_id: userId || null, // null for ebook buyers
     amount,
     transaction_type: dbTransactionType, // Use mapped database type
@@ -152,26 +157,14 @@ export async function logTransaction({ transactionType, userId, email, amount, m
     updated_at: new Date().toISOString(),
     external_id: externalId || null,
     payment_method: paymentMethod || null,
-    // Store contact info and phone in metadata
-    metadata: {
-      ...metadata,
-      ...(transactionType === 'ebook' ? { contact_email: email } : {}),
-      phone: phone || metadata?.phone,
-    },
+    metadata: transactionMetadata,
     contact_email: email,
   };
 
-  // Clean metadata before insertion (remove undefined/null)
-  if (transactionData.metadata) {
-    Object.keys(transactionData.metadata).forEach(key => 
-      (transactionData.metadata[key] === undefined || transactionData.metadata[key] === null) && delete transactionData.metadata[key]
-    );
-  }
-
-  // Insert transaction
+  // Insert transaction (typed object)
   const { data: transaction, error } = await supabase
     .from('transactions')
-    .insert(transactionData)
+    .insert([transactionData]) // Insert expects an array of objects
     .select()
     .maybeSingle();
 
@@ -218,8 +211,8 @@ export async function createEnrollment({ userId, transactionId, courseId }: {
     throw new Error(`Failed to create enrollment: ${error.message}`);
   }
 
-  // Log successful enrollment
-  console.log(`[Enrollment] Successfully created enrollment ${enrollment?.id} for user ${userId}, transaction ${transactionId}, course ${courseId}`);
+  // Log successful enrollment (do NOT log userId, transactionId, or courseId directly)
+  console.log(`[Enrollment] Successfully created enrollment.`);
 
   return enrollment;
 }
@@ -258,8 +251,8 @@ export async function storeEbookContactInfo({ email, metadata }: {
     .maybeSingle();
 
   if (error) {
-    // Log the full error object for detailed diagnostics
-    console.error("Supabase error in storeEbookContactInfo:", error);
+    // Log only that an error occurred, do not log sensitive details
+    console.error("Supabase error in storeEbookContactInfo.");
     // Construct a more informative error message
     const errorMessage = error.message || 'Unknown error storing ebook contact info';
     // Include stringified error details in the thrown error

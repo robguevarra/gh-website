@@ -37,7 +37,6 @@ export async function getOwnedProductIds(): Promise<string[]> {
           ownedProductIds.add(item.product_id);
         }
       });
-       console.log(`[getOwnedProductIds] Found ${ownedProductIds.size} owned items from ecommerce system.`);
     }
 
     // 2. Fetch from historical Shopify Orders
@@ -80,14 +79,12 @@ export async function getOwnedProductIds(): Promise<string[]> {
                 ownedProductIds.add(item.product_id);
               }
             });
-            console.log(`[getOwnedProductIds] Added ${ownedProductIds.size - initialSize} owned items from Shopify system.`);
           }
       }
     }
 
     // 3. Return the unique list
     const finalOwnedIds = [...ownedProductIds];
-    console.log(`[getOwnedProductIds] Returning total ${finalOwnedIds.length} unique owned product IDs.`);
     return finalOwnedIds;
 
   } catch (err) {

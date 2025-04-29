@@ -35,7 +35,6 @@ interface UnifiedPurchase {
 async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | null> {
   const cookieStore = cookies();
   const supabase = await createServerSupabaseClient(); 
-  console.log(`[PurchaseHistory] Fetching history for userId: ${userId}`); // <-- Log 1
 
   try {
     // 1. Fetch Ecommerce Orders
@@ -60,13 +59,11 @@ async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | n
 
     if (ecommerceError) {
       console.error('[PurchaseHistory] Error fetching ecommerce orders:', JSON.stringify(ecommerceError, null, 2));
-    } else {
-       console.log(`[PurchaseHistory] Raw ecommerceData fetched (Count: ${ecommerceData?.length ?? 0}):`, JSON.stringify(ecommerceData, null, 2)); // <-- Log 2 (with count)
     }
 
     // 2. Fetch Shopify Orders
-    let shopifyData: any[] | null = null; // Initialize shopifyData
-    try { // Wrap shopify fetching in try/catch
+    let shopifyData: any[] | null = null;
+    try {
         const { data: profileData, error: profileError } = await supabase
             .from('unified_profiles')
             .select('id')
@@ -75,7 +72,6 @@ async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | n
 
         if (profileError) {
             console.error('[PurchaseHistory] Error fetching unified profile:', JSON.stringify(profileError, null, 2));
-            // Don't return here, just proceed without shopify orders if profile fails
         } else if (profileData?.id) {
             const { data: customerData, error: customerError } = await supabase
                 .from('shopify_customers')
@@ -113,7 +109,6 @@ async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | n
                     console.error('[PurchaseHistory] Error fetching shopify orders:', JSON.stringify(shopifyOrdersError, null, 2));
                 } else {
                     shopifyData = fetchedShopifyData;
-                    console.log(`[PurchaseHistory] Raw shopifyData fetched (Count: ${shopifyData?.length ?? 0})`);
                 }
             }
         }
@@ -121,7 +116,7 @@ async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | n
          console.error('[PurchaseHistory] Unexpected error during Shopify data fetch:', shopifyFetchErr);
     }
 
-    // 2.5 Fetch Shopify Product Images (if shopify orders exist)
+    // 2.5 Fetch Shopify Product Images
     let shopifyImageUrlMap = new Map<string, string | null>();
     if (shopifyData && shopifyData.length > 0) {
         const shopifyProductIds = [
@@ -129,12 +124,11 @@ async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | n
                 shopifyData
                     .flatMap(order => order.shopify_order_items || [])
                     .map(item => item.product_id)
-                    .filter((id): id is string => !!id) // Filter out null/undefined IDs and ensure type is string
+                    .filter((id): id is string => !!id)
             )
         ];
 
         if (shopifyProductIds.length > 0) {
-            console.log(`[PurchaseHistory] Fetching images for Shopify product IDs: ${shopifyProductIds.join(', ')}`);
             const { data: productImages, error: imageError } = await supabase
                 .from('shopify_products')
                 .select('id, featured_image_url')
@@ -142,25 +136,21 @@ async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | n
 
             if (imageError) {
                 console.error('[PurchaseHistory] Error fetching Shopify product images:', imageError);
-                // Continue without images if lookup fails
             } else if (productImages) {
                 productImages.forEach(img => {
                     shopifyImageUrlMap.set(img.id, img.featured_image_url);
                 });
-                 console.log(`[PurchaseHistory] Successfully created image map for ${shopifyImageUrlMap.size} Shopify products.`);
             }
         }
     }
 
     // 3. Combine and Format Data
     const unifiedPurchases: UnifiedPurchase[] = [];
-    let mappedEcommerce: UnifiedPurchase[] = []; // <-- Add intermediate variable
+    let mappedEcommerce: UnifiedPurchase[] = [];
 
     if (ecommerceData) {
-      try { // Wrap mapping in try/catch
-        // Pass an empty map for ecommerce as images are joined directly
+      try {
         mappedEcommerce = ecommerceData.map(order => mapEcommerceOrderToUnified(order));
-        console.log(`[PurchaseHistory] Mapped ecommerceData (Count: ${mappedEcommerce?.length ?? 0}):`); // Removed stringify for brevity
         unifiedPurchases.push(...mappedEcommerce);
       } catch (mapError) {
            console.error('[PurchaseHistory] Error mapping ecommerce data:', mapError);
@@ -168,10 +158,8 @@ async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | n
     }
 
     if (shopifyData) {
-       try { // Wrap mapping in try/catch
-           // Pass the created image map to the Shopify mapper
+       try {
            const mappedShopify = shopifyData.map(order => mapShopifyOrderToUnified(order, shopifyImageUrlMap));
-           console.log(`[PurchaseHistory] Mapped shopifyData (Count: ${mappedShopify?.length ?? 0})`);
            unifiedPurchases.push(...mappedShopify);
        } catch (mapError) {
             console.error('[PurchaseHistory] Error mapping shopify data:', mapError);
@@ -181,7 +169,6 @@ async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | n
     // 4. Sort Combined Data
     unifiedPurchases.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    console.log(`[PurchaseHistory] Final unifiedPurchases (Count: ${unifiedPurchases?.length ?? 0}) before return:`, JSON.stringify(unifiedPurchases, null, 2)); // <-- Log 4 (with count)
     return unifiedPurchases;
 
   } catch (error) {
@@ -193,10 +180,9 @@ async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | n
 // --- Helper Mappers ---
 
 function mapEcommerceOrderToUnified(order: any): UnifiedPurchase {
-   // Add checks for robustness
    if (!order || !order.id) {
       console.warn('[mapEcommerceOrderToUnified] Received invalid order object:', order);
-      return null as any; // Return something invalid or handle appropriately
+      return null as any;
    }
    return {
     id: order.id,
@@ -207,7 +193,6 @@ function mapEcommerceOrderToUnified(order: any): UnifiedPurchase {
     currency: order.currency,
     source: 'ecommerce',
     items: order.ecommerce_order_items?.map((item: any): UnifiedOrderItem | null => {
-      // Add checks for robustness inside item map
       if (!item || !item.id) {
          console.warn('[mapEcommerceOrderToUnified] Received invalid item object within order:', item);
          return null; 
@@ -219,44 +204,36 @@ function mapEcommerceOrderToUnified(order: any): UnifiedPurchase {
         quantity: item.quantity,
         price_at_purchase: item.price_at_purchase,
         image_url: item.shopify_products?.featured_image_url ?? null,
-        google_drive_file_id: item.shopify_products?.google_drive_file_id ?? null, // Pass through the ID
+        google_drive_file_id: item.shopify_products?.google_drive_file_id ?? null,
         source: 'ecommerce',
       };
-    }).filter(Boolean) ?? [], // Filter out any null items
+    }).filter(Boolean) ?? [],
   };
 }
 
 function mapShopifyOrderToUnified(order: any, imageUrlMap: Map<string, string | null>): UnifiedPurchase {
-  // Combine financial and fulfillment status for a general status
-  let status = 'Processing'; // Default
+  let status = 'Processing';
   if (order.financial_status === 'paid' && order.fulfillment_status === 'fulfilled') {
     status = 'Completed';
   } else if (order.financial_status === 'refunded' || order.financial_status === 'partially_refunded') {
     status = 'Refunded';
   } else if (order.fulfillment_status === 'fulfilled') {
-    status = 'Shipped'; // Or Fulfilled if you prefer
+    status = 'Shipped';
   } else if (order.financial_status === 'paid') {
-      status = 'Paid'; // Considered processing until shipped/fulfilled maybe? Or a distinct state.
+      status = 'Paid';
   }
-  // Add more logic as needed based on combinations of financial/fulfillment status
 
   return {
     id: order.id,
-    order_number: order.order_number ? String(order.order_number) : `SHO-${order.id.substring(0,6)}`, // Use Shopify's number
+    order_number: order.order_number ? String(order.order_number) : `SHO-${order.id.substring(0,6)}`,
     created_at: order.created_at,
-    order_status: status, // Assign mapped status
-    total_amount: parseFloat(order.total_price) || 0, // Ensure it's a number
+    order_status: status,
+    total_amount: parseFloat(order.total_price) || 0,
     currency: order.currency,
     source: 'shopify',
     items: order.shopify_order_items?.map((item: any, index: number): UnifiedOrderItem => {
-      // Add detailed logging for each item
-      console.log(`[mapShopifyOrderToUnified] Processing item index ${index} for order ${order.id}:`, JSON.stringify(item, null, 2));
-
       const productId = item.product_id ? String(item.product_id) : null;
       const imageUrl = productId ? imageUrlMap.get(productId) ?? null : null;
-
-      // Log extracted productId and resulting imageUrl
-      console.log(`[mapShopifyOrderToUnified] Item ${index} - Extracted Product ID: ${productId}, Found Image URL: ${imageUrl}`);
 
       return {
           id: item.id,
@@ -265,7 +242,7 @@ function mapShopifyOrderToUnified(order: any, imageUrlMap: Map<string, string | 
           variant_title: item.variant_title,
           quantity: item.quantity,
           price_at_purchase: parseFloat(item.price) || 0,
-          image_url: imageUrl, // <-- Use the looked-up image URL
+          image_url: imageUrl,
           source: 'shopify',
       };
     }) ?? [],
@@ -291,7 +268,6 @@ export default async function PurchaseHistoryPage() {
     );
   }
 
-  console.log(`[PurchaseHistoryPage] User ID from auth: ${user.id}`); // <-- Log 5
   const purchases = await getPurchaseHistory(user.id);
 
   if (purchases === null) {
