@@ -28,6 +28,23 @@ import {
   type ContinueLearningLesson
 } from './types/index';
 
+// ADDED: Import or define ProductData type (assuming it's moved or defined globally)
+// If not moved, define it here based on app/dashboard/store/page.tsx
+export type ProductData = {
+  id: string;
+  title: string | null;
+  handle: string | null;
+  featured_image_url: string | null;
+  price: number;
+  compare_at_price?: number | null;
+};
+
+// ADDED: Define StoreCollection type
+export type StoreCollection = {
+  handle: string;
+  // title?: string; // Optional: Add title if fetched later
+};
+
 export interface StudentDashboardStore {
   // Dashboard Data Loading Actions
   loadUserDashboardData: (userId: string, force?: boolean) => Promise<void>;
@@ -148,14 +165,36 @@ export interface StudentDashboardStore {
   // Performance monitoring (dev only)
   _getSubscriberCount?: () => number;
   _getUpdateFrequency?: () => { [key: string]: number };
+
+  // ADDED: Store data loading actions
+  loadStoreProducts: (userId: string, filter?: { query?: string | null; collectionHandle?: string | null }, force?: boolean) => Promise<void>;
+  loadStoreCollections: (force?: boolean) => Promise<void>;
+
+  // ADDED: Store data
+  storeProducts: ProductData[];
+  isLoadingStoreProducts: boolean;
+  hasStoreProductsError: boolean;
+  lastStoreProductsLoadTime: number | null;
+
+  // ADDED: Collections data
+  storeCollections: StoreCollection[];
+  isLoadingStoreCollections: boolean;
+  hasStoreCollectionsError: boolean;
+  lastStoreCollectionsLoadTime: number | null;
+
+  // ADDED: Sale Products data
+  saleProducts: ProductData[];
+  isLoadingSaleProducts: boolean;
+  hasSaleProductsError: boolean;
+  lastSaleProductsLoadTime: number | null;
 }
 
 export const useStudentDashboardStore = create<StudentDashboardStore>()(
   // Apply performance monitoring middleware in development mode
   subscriptionTrackingMiddleware(
-  performanceMiddleware(
+  // performanceMiddleware( // Temporarily commented out
   batchMiddleware(
-  equalityMiddleware(
+  // equalityMiddleware( // Temporarily commented out
   persist(
     (set, get) => ({
       // Import actions from the actions module
@@ -324,6 +363,24 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
           progress: progress.progress
         };
       },
+
+      // ADDED: Store data initial state
+      storeProducts: [],
+      isLoadingStoreProducts: false, // Initialize as false
+      hasStoreProductsError: false,
+      lastStoreProductsLoadTime: null,
+
+      // ADDED: Collections data initial state
+      storeCollections: [],
+      isLoadingStoreCollections: false, // Initialize as false
+      hasStoreCollectionsError: false,
+      lastStoreCollectionsLoadTime: null,
+
+      // ADDED: Sale Products initial state
+      saleProducts: [],
+      isLoadingSaleProducts: false, // Initialize as false
+      hasSaleProductsError: false,
+      lastSaleProductsLoadTime: null,
     }),
     {
       name: 'student-dashboard-storage',
@@ -339,8 +396,8 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       }),
     }
   )
+  // ) // End equalityMiddleware
   )
-  )
-  )
+  // ) // End performanceMiddleware
   )
 );

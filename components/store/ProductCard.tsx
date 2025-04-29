@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ProductData } from '@/app/dashboard/store/page'; // Import type from page
+import { ProductData } from '@/lib/stores/student-dashboard'; // CORRECT import source
 import { useCartStore } from '@/stores/cartStore'; 
 import { 
   Tooltip,
@@ -184,11 +184,14 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 {/* Quick preview overlay - trigger callback */}
                 <div 
                   className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer"
+                  // TEMPORARILY REMOVED onClick to test navigation
+                  /*
                   onClick={(e) => {
                     e.preventDefault(); // Prevent Link navigation
                     e.stopPropagation(); // Prevent event bubbling
                     onOpenQuickView(product); // Call the passed handler
                   }}
+                  */
                   role="button"
                   aria-label={`Quick view ${cleanTitle}`}
                 >

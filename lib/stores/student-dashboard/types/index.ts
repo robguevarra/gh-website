@@ -50,7 +50,6 @@ export interface UserEnrollment {
     title: string;
     description: string;
     slug: string;
-    coverImage: string;
     modules?: Array<{
       id: string;
       title: string;

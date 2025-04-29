@@ -71,7 +71,7 @@ const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
   ];
 
   return (
-    <div className="mb-10">
+    <div>
       <h2 className="sr-only">Product Collections</h2>
       
       {/* Desktop category buttons */}
@@ -104,7 +104,7 @@ const CategoryNavigation: React.FC<CategoryNavigationProps> = ({
       </div>
 
       {/* Mobile category tiles */}
-      <div className="md:hidden grid grid-cols-2 sm:grid-cols-3 gap-3 px-4">
+      <div className="md:hidden grid grid-cols-2 sm:grid-cols-3 gap-3">
         {displayItems.map((item) => {
           const Icon = item.icon;
            // Active if handles match, or if active is null/undefined and item is 'all'

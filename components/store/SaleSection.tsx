@@ -1,9 +1,10 @@
-import React from 'react';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { ProductData } from '@/app/dashboard/store/page';
+'use client';
+
+import React, { useEffect, useState } from 'react';
 import { Sparkles, Clock } from 'lucide-react';
 import ShopSaleItemsButton from './ShopSaleItemsButton';
 import SaleProductDisplay from './SaleProductDisplay';
+import { useStudentDashboardStore, ProductData } from '@/lib/stores/student-dashboard';
 
 // Fallback sale product data (in case no products with sale tag are found)
 const FALLBACK_SALE_PRODUCTS: ProductData[] = [
@@ -33,164 +34,22 @@ const FALLBACK_SALE_PRODUCTS: ProductData[] = [
   },
 ];
 
-// Fetch products with compare_at_price > price from Supabase
-async function getSaleProducts(): Promise<ProductData[]> {
-  try {
-    // First, we'll perform a raw SQL query to ensure we get products where compare_at_price > price
-    // This is more accurate than filtering after the fact
-    const supabase = await createServerSupabaseClient();
-    
-    // Let's use a simpler approach to find all variants with compare_at_price > 0
-    // Following the pattern used in store-actions.ts
-    const { data: saleProductIds, error: idError } = await supabase
-      .from('shopify_products')
-      .select(`
-        id,
-        shopify_product_variants (product_id, price, compare_at_price)
-      `)
-      .or('status.eq.ACTIVE,status.eq.active')
-      .not('shopify_product_variants.compare_at_price', 'is', null)
+// Sale Section Client Component
+const SaleSection = () => {
+  // Get state and actions from Zustand store using individual selectors
+  const storeSaleProducts = useStudentDashboardStore(state => state.saleProducts);
+  const isLoadingSaleProducts = useStudentDashboardStore(state => state.isLoadingSaleProducts);
+  const loadSaleProducts = useStudentDashboardStore(state => state.loadSaleProducts);
 
-    if (idError) {
-      console.error('Error finding sale product IDs:', idError);
-      return FALLBACK_SALE_PRODUCTS;
-    }
+  // Fetch sale products on mount
+  useEffect(() => {
+    loadSaleProducts(); // Force = false by default
+  }, [loadSaleProducts]);
 
-    if (!saleProductIds || saleProductIds.length === 0) {
-      return FALLBACK_SALE_PRODUCTS;
-    }
-
-    // Process the results to find products with variants where compare_at_price > price
-    const productIdsWithSales: string[] = [];
-    
-    for (const product of saleProductIds) {
-      // Skip products with no variants
-      if (!product.shopify_product_variants || product.shopify_product_variants.length === 0) {
-        continue;
-      }
-      
-      // Check if any variant has compare_at_price > price
-      const hasSaleVariant = product.shopify_product_variants.some(variant => {
-        if (!variant.price || !variant.compare_at_price) return false;
-        
-        const price = Number(variant.price);
-        const comparePrice = Number(variant.compare_at_price);
-        
-        return !isNaN(price) && !isNaN(comparePrice) && comparePrice > price;
-      });
-      
-      if (hasSaleVariant) {
-        productIdsWithSales.push(product.id);
-      }
-    }
-
-    // Now fetch the complete product data for these IDs
-    const { data, error } = await supabase
-      .from('shopify_products')
-      .select(`
-        id,
-        title,
-        handle,
-        featured_image_url,
-        shopify_product_variants (
-          id,
-          price,
-          compare_at_price
-        )
-      `)
-      .or('status.eq.ACTIVE,status.eq.active')
-      .in('id', productIdsWithSales)
-    
-    if (error) {
-      console.error('Error fetching sale products:', error);
-      return FALLBACK_SALE_PRODUCTS;
-    }
-    
-    if (!data || data.length === 0) {
-      return FALLBACK_SALE_PRODUCTS;
-    }
-    
-    // Transform data to match ProductData type
-    const products: ProductData[] = [];
-    
-    for (const product of data) {
-      // Skip products with no variants
-      if (!product.shopify_product_variants || product.shopify_product_variants.length === 0) {
-        continue;
-      }
-
-      // Find the variant with the best discount (highest percentage off)
-      let bestVariant = null;
-      let bestDiscountPercentage = 0;
-      
-      for (const variant of product.shopify_product_variants) {
-        // Skip variants with invalid price data
-        if (variant.price === null || 
-            variant.price === undefined || 
-            isNaN(Number(variant.price)) ||
-            variant.compare_at_price === null ||
-            variant.compare_at_price === undefined ||
-            isNaN(Number(variant.compare_at_price))) {
-          continue;
-        }
-        
-        const price = Number(variant.price);
-        const compareAtPrice = Number(variant.compare_at_price);
-        
-        // Only consider variants that are actually on sale (compare_at_price > price)
-        if (compareAtPrice <= price) {
-          continue;
-        }
-        
-        // Calculate discount percentage
-        const discountPercentage = (compareAtPrice - price) / compareAtPrice;
-        
-        // Keep track of the variant with the best discount
-        if (discountPercentage > bestDiscountPercentage) {
-          bestVariant = variant;
-          bestDiscountPercentage = discountPercentage;
-        }
-      }
-      
-      // If we found a variant on sale, add this product to our results
-      if (bestVariant) {
-        products.push({
-          id: product.id,
-          title: product.title,
-          handle: product.handle,
-          featured_image_url: product.featured_image_url,
-          price: Number(bestVariant.price),
-          compare_at_price: Number(bestVariant.compare_at_price),
-        });
-      }
-    }
-    
-    // Sort products by discount percentage (highest first)
-    products.sort((a, b) => {
-      if (!a.compare_at_price || !b.compare_at_price) return 0;
-      
-      const discountA = (a.compare_at_price - a.price) / a.compare_at_price;
-      const discountB = (b.compare_at_price - b.price) / b.compare_at_price;
-      
-      return discountB - discountA;
-    });
-    
-
-    
-    return products.length > 0 ? products : FALLBACK_SALE_PRODUCTS;
-  } catch (error) {
-    console.error('Unexpected error fetching sale products:', error);
-    return FALLBACK_SALE_PRODUCTS; // Return fallback data on any error
-  }
-}
-
-// Sale Section Server Component
-const SaleSection = async () => {
-  // Get sale products or fallbacks
-  const saleProducts = await getSaleProducts();
+  // Determine which products to display (fetched or fallback)
+  const saleProductsToDisplay = storeSaleProducts.length > 0 ? storeSaleProducts : FALLBACK_SALE_PRODUCTS;
+  const isLoading = isLoadingSaleProducts; // Use store loading state
   
-  // Always render the section, as we now have fallback data if no actual sale products
-
   return (
     <div className="container mx-auto px-4">
       <div className="rounded-xl overflow-hidden border border-secondary relative">
@@ -199,7 +58,7 @@ const SaleSection = async () => {
         
         {/* Main content */}
         <div className="relative z-10 flex flex-col lg:flex-row p-6 md:p-8 bg-gradient-to-r from-secondary/10 to-accent/10">
-          {/* Sale info/header section */}
+          {/* Left side content */}
           <div className="lg:w-1/3 pr-0 lg:pr-8 mb-6 lg:mb-0">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="h-5 w-5 text-primary" />
@@ -221,11 +80,20 @@ const SaleSection = async () => {
               <p className="text-sm font-medium">Sale ends soon</p>
             </div>
             
-            <ShopSaleItemsButton />
+            <ShopSaleItemsButton /> 
           </div>
 
-          {/* Featured sale products showcase */}
-          <SaleProductDisplay products={saleProducts} />
+          {/* Right side content - Product Display */}
+          <div className="lg:w-2/3">
+            {isLoading ? (
+              // Simple loading indicator
+              <div className="flex justify-center items-center h-full min-h-[200px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : (
+              <SaleProductDisplay products={saleProductsToDisplay} />
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -25,69 +25,31 @@ import { isEqual } from './utils';
 export const equalityMiddleware = <T extends object>(
   config: StateCreator<T>
 ): StateCreator<T> => (set, get, api) => {
-  // Create a set function with equality checking
-  const setWithEqualityCheck = (state: T | Partial<T> | ((state: T) => T | Partial<T>), replace?: boolean) => {
-    // If state is a function, call it with the current state
-    if (typeof state === 'function') {
-      const currentState = get();
-      const newState = state(currentState);
-      
-      // Check if the new state is different from the current state
-      if (replace) {
-        // For replace, we need to check the entire state
-        if (!isEqual(currentState, newState)) {
-          return set(newState as T, true);
-        }
-      } else {
-        // For partial updates, we need to check each key
-        const hasChanges = Object.keys(newState).some(key => {
-          return !isEqual(currentState[key as keyof T], newState[key as keyof T]);
-        });
-        
-        if (hasChanges) {
-          return set(newState, false);
+  let previousState = { ...get() };
+
+  // Override the set method to detect changes
+  const newSet: typeof set = (partial, replace) => {
+    set(partial, replace);
+    const currentState = { ...get() };
+    const changedKeys: string[] = [];
+
+    // Check for changed keys
+    for (const key in currentState) {
+      if (Object.prototype.hasOwnProperty.call(currentState, key)) {
+        if (!Object.is(previousState[key as keyof T], currentState[key as keyof T])) {
+          changedKeys.push(key);
         }
       }
-      
-      // If no changes, return the current state
-      return currentState;
     }
-    
-    // If state is an object, check each key for equality
-    if (typeof state === 'object' && state !== null) {
-      const currentState = get();
-      
-      if (replace) {
-        // For replace, we need to check the entire state
-        if (!isEqual(currentState, state)) {
-          return set(state as T, true);
-        }
-      } else {
-        // For partial updates, we need to check each key
-        const hasChanges = Object.keys(state).some(key => {
-          return !isEqual(currentState[key as keyof T], state[key as keyof T]);
-        });
-        
-        if (hasChanges) {
-          // Log changed keys in development mode
-          if (process.env.NODE_ENV === 'development') {
-            const changedKeys = Object.keys(state).filter(key => {
-              return !isEqual(currentState[key as keyof T], state[key as keyof T]);
-            });
-            console.log('Changed state keys:', changedKeys);
-          }
-          
-          return set(state, false);
-        }
-      }
-      
-      // If no changes, return the current state
-      return currentState;
+
+    // Log changed keys in development mode
+    if (process.env.NODE_ENV === 'development') {
+      // *** JUST COMMENT OUT THIS LINE ***
+      // console.log('Changed state keys:', changedKeys);
     }
-    
-    // For other types, just call the original set function
-    return set(state as T, replace);
+
+    previousState = currentState;
   };
-  
-  return config(setWithEqualityCheck, get, api);
+
+  return config(newSet, get, api);
 };

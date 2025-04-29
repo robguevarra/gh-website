@@ -68,7 +68,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const shouldRefresh = await coordinateTokenRefresh();
 
         if (shouldRefresh) {
-          console.log('🔄 [Auth] Refreshing auth token');
+          // COMMENTED OUT:
+          // console.log('🔄 [Auth] Refreshing auth token');
           // Get current user - this is secure as it validates with the Supabase server
           const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
 

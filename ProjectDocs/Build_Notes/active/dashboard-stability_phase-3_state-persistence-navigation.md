@@ -64,6 +64,7 @@ The dashboard uses a combination of:
     -   Add an optional `force?: boolean` parameter to bypass staleness checks.
     -   Define a staleness threshold (e.g., 5 minutes).
     -   Implement a staleness check at the beginning of each action using the corresponding `lastLoadTime` state (e.g., `lastProgressLoadTime`). If data is present and not stale (`Date.now() - lastLoadTime < threshold`) and `force` is not true, return early.
+    -   **Important Refinement (Learned from Store Filtering Bug):** While the store handles staleness, components triggering fetches due to *parameter changes* (like filters) must explicitly pass `force: true` to ensure the action runs, even if the timestamp suggests data is fresh. The timestamp check alone is insufficient when parameters change.
     -   If fetching proceeds, update the corresponding `lastLoadTime` state variable with `Date.now()` upon successful data fetch and state update.
     -   Simplify `loadUserDashboardData` to orchestrate calls and pass `force` down.
 
@@ -88,14 +89,22 @@ The dashboard uses a combination of:
 - [ ] Add telemetry/logging to track state transitions and fetch triggers (optional but recommended).
 
 ### 5. Additional Optimizations & Fixes (Discovered Post-Phase 3)
-- [ ] **Investigate & Optimize Page Loads for /store & /purchase-history:**
-    -   Diagnose why these pages appear to reload data on navigation (likely due to being Server Components fetching data directly).
-    -   **Proposed Solution:** Convert `app/dashboard/store/page.tsx` and `app/dashboard/purchase-history/page.tsx` to Client Components.
-    -   Integrate their data requirements into `useStudentDashboardStore`, adding new state slices (e.g., `storeProducts`, `purchases`) and corresponding actions with staleness logic, mirroring the pattern used for `enrollments` and `progress`.
+- [x] **Investigate & Optimize Page Loads for /store & /purchase-history:**
+    - [x] Diagnose why these pages appear to reload data on navigation (likely due to being Server Components fetching data directly).
+    - **Proposed Solution:** Convert `app/dashboard/store/page.tsx` and `app/dashboard/purchase-history/page.tsx` to Client Components.
+    - [x] Convert `app/dashboard/store/page.tsx` to Client Component.
+    - [ ] Convert `app/dashboard/purchase-history/page.tsx` to Client Component.
+    - [x] Integrate their data requirements into `useStudentDashboardStore`, adding new state slices (e.g., `storeProducts`, `storeCollections`, `purchases`) and corresponding actions with staleness logic, mirroring the pattern used for `enrollments` and `progress`.
+        - [x] Added state/actions for `storeProducts`.
+        - [x] Added state/actions for `storeCollections`.
+        - [x] Added state/actions for `saleProducts` (for SaleSection).
+        - [ ] Add state/actions for `purchases`.
+    - [x] Update `app/dashboard/store/page.tsx` to use Zustand store.
+    - [ ] Update `app/dashboard/purchase-history/page.tsx` to use Zustand store.
 - [ ] **Implement Active Link Highlighting in `student-header.tsx`:**
-    -   Use the `usePathname` hook from `next/navigation`.
-    -   Compare the current pathname with the `href` of each navigation `Link`.
-    -   Conditionally apply distinct styles (e.g., `text-brand-purple bg-brand-purple/10`) to the active link.
+    - [ ] Use the `usePathname` hook from `next/navigation`.
+    - [ ] Compare the current pathname with the `href` of each navigation `Link`.
+    - [ ] Conditionally apply distinct styles (e.g., `text-brand-purple bg-brand-purple/10`) to the active link.
 
 ## Technical Considerations
 
@@ -106,8 +115,9 @@ The dashboard uses a combination of:
 
 ### State Management Between Routes (Store-Centric)
 1. **Centralized Staleness Logic**: Store actions are responsible for deciding when to fetch data based on timestamps (`lastLoadTime`) and a defined threshold.
-2. **Component Responsibility**: Components trigger data loading actions (on mount, on focus) but do not implement their own refresh or fallback logic.
-3. **Focus Listener**: Using `window.addEventListener('focus', ...)` is a simple way to trigger potential data refreshes when the user returns to the tab/application.
+2. **Component Responsibility**: Components trigger data loading actions (on mount, on focus, **on parameter change**) but do not implement their own refresh or fallback logic.
+3. **Forcing Fetches:** When a component triggers a fetch because its input parameters (like filters or search terms) have changed, it **must** pass `force: true` to the store action to bypass the timestamp-based staleness check. The store action cannot inherently know if the *parameters* for the last fetch match the current ones.
+4. **Focus Listener**: Using `window.addEventListener('focus', ...)` is a simple way to trigger potential data refreshes when the user returns to the tab/application (typically *without* forcing, letting the store decide based on staleness).
 
 ### Browser Storage Considerations
 1. **Zustand Persist**: The `persist` middleware primarily handles UI state persistence. Core data (`enrollments`, `progress`) is *not* persisted and must be fetched.
@@ -116,7 +126,7 @@ The dashboard uses a combination of:
 ## Proposed Solutions
 
 ### Chosen Approach: Option B - Store-Centric Refresh Logic
-This approach modifies the existing auth flow for correctness and centralizes data refresh logic within the Zustand store actions. Components trigger loads, but the store determines if a fetch is needed based on data staleness.
+This approach modifies the existing auth flow for correctness and centralizes data refresh logic within the Zustand store actions. Components trigger loads, but the store determines if a fetch is needed based on data staleness, unless explicitly forced by the component due to parameter changes.
 
 **Pros:**
 - Addresses root causes of both logout and refresh issues.
@@ -126,7 +136,7 @@ This approach modifies the existing auth flow for correctness and centralizes da
 
 **Cons:**
 - Requires modifying store actions and potentially adding a new cleanup action.
-- Needs careful implementation of staleness checks.
+- Needs careful implementation of staleness checks and coordination with component triggers.
 
 --- 
 

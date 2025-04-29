@@ -1,28 +1,23 @@
-import React, { Suspense } from 'react';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+'use client';
+
+import React, { Suspense, useEffect, useState, useCallback } from 'react';
+// import { createServerSupabaseClient } from '@/lib/supabase/server'; // REMOVED: Using client-side fetching
 import LoadingSkeleton from '@/components/store/LoadingSkeleton';
 import CategoryNavigation from '@/components/store/CategoryNavigation';
 import SuccessShowcase from '@/components/store/SuccessShowcase';
-import { Database } from '@/types/supabase'; // Assuming Supabase generated types
+import { Database } from '@/types/supabase'; // Keep types
 import SaleSection from '@/components/store/SaleSection';
-import { getWishlistedProductIds, searchProductsStore } from '@/app/actions/store-actions';
-import { getOwnedProductIds } from '@/app/actions/userActions';
+import { getWishlistedProductIds, searchProductsStore } from '@/app/actions/store-actions'; // Keep server actions for now
+// import { getOwnedProductIds } from '@/app/actions/userActions'; // Keep for now
 import StoreStickyBar from '@/components/store/StoreStickyBar';
 import StoreResultsManager from '@/components/store/StoreResultsManager';
 import WelcomeStoreWrapper from '@/components/store/WelcomeStoreWrapper';
+import { useStudentDashboardStore, ProductData, StoreCollection } from '@/lib/stores/student-dashboard'; // UPDATED import
+import { useSearchParams } from 'next/navigation'; // ADDED: Hook for client-side search params
+import { useAuth } from '@/context/auth-context'; // ADDED
 
 // Base type for shopify_products row from generated types
 type ShopifyProductRow = Database['public']['Tables']['shopify_products']['Row'];
-
-// Define the structure of the product data we need for the frontend
-export type ProductData = {
-  id: string;
-  title: string | null;
-  handle: string | null;
-  featured_image_url: string | null;
-  price: number; // Price is now guaranteed by filter
-  compare_at_price?: number | null;
-};
 
 // Type definition for the raw data structure returned by Supabase query
 // It includes the base product row AND the nested variant price
@@ -33,159 +28,105 @@ type ProductWithVariantPrice = ShopifyProductRow & {
   }[];
 };
 
-// Fetch products intended for members from Supabase
-// Renamed to getInitialStoreProducts as it fetches the initial set
-// Update to accept collectionHandle for filtering
-async function getStoreProducts(filter?: { query?: string | null; collectionHandle?: string | null }): Promise<ProductData[]> {
-  const supabase = await createServerSupabaseClient();
-  let queryBuilder = supabase
-    .from('shopify_products')
-    .select(`
-      id,
-      title,
-      handle,
-      featured_image_url,
-      collection_handles, 
-      shopify_product_variants (
-        price,
-        compare_at_price
-      )
-    `)
-    .or('status.eq.ACTIVE,status.eq.active')
-    .not('shopify_product_variants', 'is', null)
-    .limit(1, { foreignTable: 'shopify_product_variants' });
-    // Add ordering if needed, e.g., .order('title')
+// Store page component - NOW A CLIENT COMPONENT
+export default function StorePage() { // REMOVED: Props { searchParams } - use hook instead
+  const searchParams = useSearchParams(); // ADDED: Get search params client-side
+  const query = searchParams.get('q');
+  const collectionHandle = searchParams.get('collection');
 
-  // Apply filters based on provided criteria
-  if (filter?.collectionHandle && filter.collectionHandle !== 'all') {
-    console.log(`Filtering products by collection: ${filter.collectionHandle}`);
-    // Use contains filter for array column - Reverting to 'cs' operator
-    queryBuilder = queryBuilder.filter(
-      'collection_handles', 
-      'cs', // Correct Supabase JS operator for array contains
-      `{"${filter.collectionHandle}"}` // Keep the value format for array literal
-    );
-  } else if (filter?.query) {
-    console.log(`Filtering products by search query: ${filter.query}`);
-    queryBuilder = queryBuilder.ilike('title', `%${filter.query}%`);
-    // Add more search fields if needed (e.g., description, tags)
-    // queryBuilder = queryBuilder.or(`description_html.ilike.%${filter.query}%,tags.cs.{${filter.query}}`);
-  } else {
-    console.log('Fetching all active products (no filter).');
-    // No specific filter applied, fetching initial set
-  }
-
-  const { data, error } = await queryBuilder.returns<ProductWithVariantPrice[]>();
-
-  if (error) {
-    console.error('Error fetching store products:', error);
-    return [];
-  }
-  if (!data) {
-    return [];
-  }
-
-  // Transform data using the correct types
-  const products: ProductData[] = data
-    .map((product: ProductWithVariantPrice): ProductData | null => {
-      // Remove the explicit cast, use the parameter type directly
-      const variant = product.shopify_product_variants?.[0];
-
-      if (!variant || variant.price === null || variant.price === undefined || isNaN(Number(variant.price))) {
-        console.warn(`Product ${product.id} (${product.title}) skipped, missing variant or invalid price.`);
-        return null;
-      }
-
-      // Extract compare_at_price, ensuring it's a number or null
-      let compareAtPrice: number | null = null;
-      if (variant.compare_at_price !== null && variant.compare_at_price !== undefined) {
-        const parsedCompareAtPrice = Number(variant.compare_at_price);
-        if (!isNaN(parsedCompareAtPrice)) {
-          compareAtPrice = parsedCompareAtPrice;
-        }
-      }
-
-      // Access properties directly from the correctly typed 'product' parameter
-      return {
-        id: product.id,
-        title: product.title,
-        handle: product.handle,
-        featured_image_url: product.featured_image_url,
-        price: Number(variant.price),
-        compare_at_price: compareAtPrice,
-      };
-    })
-    .filter((product): product is ProductData => product !== null);
-
-  return products;
-}
-
-// Fetch distinct collection handles from products
-async function getStoreCollections(): Promise<{ handle: string }[]> {
-  const supabase = await createServerSupabaseClient();
-
-  // Query using SELECT DISTINCT unnest - Ensure column name matches migration
-  const { data, error } = await supabase
-    .from('shopify_products')
-    .select('collection_handles'); // Select the array column
-
-  if (error) {
-    console.error('Error fetching collection handles:', error);
-    return [];
-  }
-  if (!data) {
-    return [];
-  }
-
-  // Process the results to get unique handles
-  // Use 'as any' temporarily due to out-of-sync generated types
-  const allHandles = (data as any[])
-    .flatMap(item => item.collection_handles || [])
-    .filter((handle): handle is string => typeof handle === 'string' && handle.length > 0);
-  const uniqueHandles = [...new Set(allHandles)];
-
-  // Map to the desired return format
-  return uniqueHandles.map(handle => ({ handle }));
-}
-
-// ProductListWithData component - REMOVED/REPLACED by fetch within page
-// async function ProductListWithData() {
-//   const products = await getInitialStoreProducts();
-//
-//   return (
-//     <ProductList products={products} />
-//   );
-// }
-
-// Define PageProps to include searchParams
-interface PageProps {
-  params: {};
-  searchParams: { [key: string]: string | string[] | undefined };
-}
-
-// Store page component - server-side rendering
-// Add props to receive searchParams
-export default async function StorePage({ searchParams }: PageProps) {
-  // Properly await searchParams to avoid Next.js warning
-  // https://nextjs.org/docs/messages/sync-dynamic-apis
-  const resolvedSearchParams = await Promise.resolve(searchParams);
-  const query = typeof resolvedSearchParams.q === 'string' ? resolvedSearchParams.q : null;
-  const collectionHandle = typeof resolvedSearchParams.collection === 'string' ? resolvedSearchParams.collection : null; // Get collection handle
+  // Get actions and state from Zustand store using individual selectors
+  // REMOVED: userId selector
+  // const userId = useStudentDashboardStore(state => state.userId);
+  const storeProducts = useStudentDashboardStore(state => state.storeProducts);
+  const isLoadingStoreProducts = useStudentDashboardStore(state => state.isLoadingStoreProducts);
+  const hasStoreProductsError = useStudentDashboardStore(state => state.hasStoreProductsError);
+  const storeCollections = useStudentDashboardStore(state => state.storeCollections);
+  const isLoadingStoreCollections = useStudentDashboardStore(state => state.isLoadingStoreCollections); // Keep if needed for CategoryNav loading state
+  const hasStoreCollectionsError = useStudentDashboardStore(state => state.hasStoreCollectionsError); // Keep if needed for CategoryNav error state
+  const loadStoreProducts = useStudentDashboardStore(state => state.loadStoreProducts);
+  const loadStoreCollections = useStudentDashboardStore(state => state.loadStoreCollections);
   
-  // Fetch products based on filter, wishlist IDs, collections, AND owned IDs concurrently
-  const [products, wishlistedIds, collections, ownedProductIds] = await Promise.all([
-    getStoreProducts({ query, collectionHandle }), 
-    getWishlistedProductIds(),
-    getStoreCollections(),
-    getOwnedProductIds()
-  ]);
-  
-  // Determine loading state for results manager (initially not loading on server)
-  const isLoading = false; // ResultsManager handles its own transition loading
+  // Get user from Auth context
+  const { user, isLoading: isAuthLoading } = useAuth(); // ADDED
+  const userId = user?.id; // Use user ID from auth context
 
-  // Determine if the page should show hero/sale sections based on URL query params for a cleaner UI
-  // Industry best practice: Hide promotional content when user is actively searching or filtering
-  const showFullExperience = !query && !resolvedSearchParams.filter;
+  // State for data fetched via server actions (keep for now)
+  const [wishlistedIds, setWishlistedIds] = useState<string[]>([]);
+  const [ownedProductIds, setOwnedProductIds] = useState<string[]>([]);
+  // REMOVED: useState for collections - now from store
+  // const [collections, setCollections] = useState<{ handle: string }[]>([]); 
+
+  // Fetch wishlist and owned IDs on mount (server actions)
+  useEffect(() => {
+    getWishlistedProductIds().then(setWishlistedIds);
+    // getOwnedProductIds().then(setOwnedProductIds);
+  }, []); // Runs once on mount
+
+  // Fetch store products and collections using Zustand store actions
+  useEffect(() => {
+    // Fetch collections (always needed for navigation)
+    loadStoreCollections(); // Force = false by default, respects staleness
+  }, [loadStoreCollections]);
+
+  // Track previous filter values to detect actual changes - REMOVED
+  // const prevQuery = React.useRef(query);
+  // const prevCollectionHandle = React.useRef(collectionHandle);
+  const isInitialRender = React.useRef(true); // Track initial render
+
+  // REMOVED: Effect to mark initial render as done AFTER mount
+  /*
+  useEffect(() => {
+    // This runs only once after the component mounts
+    isInitialRender.current = false;
+    // Initialize refs with the initial values from props/searchParams
+    prevQuery.current = query;
+    prevCollectionHandle.current = collectionHandle;
+  }, []);
+  */
+
+  // Effect for Filter Changes: Fetch products ONLY when query or collection actually changes
+  useEffect(() => {
+    console.log(`[StorePage] Filter useEffect running. Auth UserID: ${userId}, Query: ${query}, Collection: ${collectionHandle}`);
+
+    // Skip the very first run after mount. Let initial load handle the first fetch.
+    if (isInitialRender.current) {
+      console.log("[StorePage] Filter useEffect skipped (initial render).");
+      isInitialRender.current = false; // Set flag for subsequent runs
+      return;
+    }
+
+    // Skip only if userId is not available yet.
+    if (!userId) { 
+      console.log(`[StorePage] Filter useEffect skipped (no userId).`);
+      return;
+    }
+    
+    // REMOVED: Check if filters have actually changed using refs 
+    /*
+    if (query === prevQuery.current && collectionHandle === prevCollectionHandle.current) {
+      console.log(`[StorePage] Filter useEffect skipped (filters haven't changed).`);
+      return; 
+    }
+    */
+
+    console.log(`[StorePage] Filter change detected (run > 1). Calling loadStoreProducts with filter: ${JSON.stringify({ query, collectionHandle })}`);
+    // Force the fetch when filters change, bypassing staleness check
+    loadStoreProducts(userId, { query, collectionHandle }, true); // ADDED force: true
+
+    // REMOVED: Update refs 
+    /*
+    prevQuery.current = query;
+    prevCollectionHandle.current = collectionHandle;
+    */
+
+  }, [userId, query, collectionHandle, loadStoreProducts]); // Keep dependencies
+
+  // Determine loading state (primarily for products, could add collections too if needed)
+  const isLoading = isLoadingStoreProducts; // Use store loading state
+  const error = hasStoreProductsError ? "Failed to load products." : null; // Use store error state
+
+  // Determine if the page should show hero/sale sections based on URL query params
+  const showFullExperience = !query && !collectionHandle && !searchParams.get('filter');
 
   return (
     <div className="relative">
@@ -193,41 +134,48 @@ export default async function StorePage({ searchParams }: PageProps) {
       <WelcomeStoreWrapper hideForDays={30} />
 
       {/* RENDER THE STICKY BAR */}
-      <Suspense fallback={<div className="h-12 bg-background/80 backdrop-blur-sm"></div>}> 
+      <Suspense fallback={<div className="h-12 bg-background/80 backdrop-blur-sm"></div>}>
         <StoreStickyBar />
       </Suspense>
 
-      {/* Conditionally render Sale section only for the full experience */}
+      {/* Conditionally render Sale section */}
       {showFullExperience && (
-        <div className="py-5 md:py-6"> 
+        <Suspense fallback={<div>Loading Sale Section...</div>}>
           <SaleSection />
-        </div>
+        </Suspense>
       )}
 
-      {/* Category Navigation - Always visible, with responsive spacing */}
-      <div className={`container mx-auto px-4 py-4 md:py-5 ${!showFullExperience ? 'pt-6 md:pt-8' : ''}`}> 
+      {/* Render Category Navigation */}
+      <div className="container mx-auto px-4 py-6">
         <CategoryNavigation 
-          collections={collections} // Pass fetched collections
-          activeCollectionHandle={collectionHandle} // Correct prop name: activeCollectionHandle
-          // Add onCollectionSelect prop later (Step 3.2)
+          collections={storeCollections}
+          activeCollectionHandle={collectionHandle ?? 'all'} 
         />
       </div>
 
-      {/* RENDER THE RESULTS MANAGER - Passes fetched data including owned IDs*/}
-      <div id="store-results">
-        <StoreResultsManager 
-          products={products} 
-          isLoading={isLoading}
-          searchTerm={query}
-          initialWishlistedIds={wishlistedIds} 
-          ownedProductIds={ownedProductIds}
-        />
+      {/* Main content area: Product List or Loading/Error State */}
+      <div className="container mx-auto px-4 py-8">
+        <h2 className="text-2xl font-bold mb-6">Store Products</h2>
+        {/* Display error message if needed */} 
+        {error && <div className="text-red-500 text-center mb-4">{error}</div>}
+        {/* Use StoreResultsManager to handle display based on store state */} 
+        <Suspense fallback={<LoadingSkeleton />}> 
+          <StoreResultsManager
+            products={storeProducts}
+            isLoading={isLoading}
+            initialWishlistedIds={wishlistedIds}
+            ownedProductIds={ownedProductIds}
+            searchTerm={query ?? ''} 
+          />
+        </Suspense>
       </div>
 
-      {/* Success Showcase - Only shown in full experience for better focus during search */}
+      {/* MOVED: Conditionally render Success Showcase after product list */}
       {showFullExperience && (
-        <div className="container mx-auto px-4 py-8 md:py-10"> 
-          <SuccessShowcase />
+        <div className="container mx-auto px-4 pb-12"> {/* Added padding bottom */} 
+          <Suspense fallback={<div>Loading Showcase...</div>}>
+            <SuccessShowcase />
+          </Suspense>
         </div>
       )}
 

@@ -74,7 +74,8 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
   // Initialize dashboard data when user is authenticated
   useEffect(() => {
     if (user?.id) {
-      console.log('Loading dashboard data for user:', user.id)
+      // COMMENTED OUT:
+      // console.log('Loading dashboard data for user:', user.id)
       loadUserData(user.id)
     }
   }, [user?.id, loadUserData])
