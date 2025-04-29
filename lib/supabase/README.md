@@ -18,7 +18,7 @@ The database schema is organized into several logical groups:
 - **tags**: Categories for organizing courses
 - **course_tags**: Many-to-many relationship between courses and tags
 - **user_progress**: Tracks user progress through lessons
-- **user_enrollments**: Tracks user enrollment in courses
+- **enrollments**: Tracks user enrollment in courses
 
 ### Payment System
 - **transactions**: Payment records

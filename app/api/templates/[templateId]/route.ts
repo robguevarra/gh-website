@@ -46,7 +46,7 @@ export async function GET(
   
   // Check if user has access to templates (enrolled in a course)
   const { data: enrollments, error: enrollmentError } = await supabase
-    .from('user_enrollments')
+    .from('enrollments')
     .select('*')
     .eq('user_id', session.user.id)
     .or('status.eq.ACTIVE,status.eq.active')

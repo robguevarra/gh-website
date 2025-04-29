@@ -141,7 +141,7 @@ export async function getUserEnrollments(userId: string) {
   const supabase = createServerSupabaseClient();
   
   const { data, error } = await supabase
-    .from('user_enrollments')
+    .from('enrollments')
     .select('*, courses(id, title, slug, thumbnail_url)')
     .eq('user_id', userId)
     .eq('status', 'active');
@@ -154,7 +154,7 @@ export async function enrollUserInCourse(userId: string, courseId: string, payme
   const supabase = createServerSupabaseClient();
   
   const { data, error } = await supabase
-    .from('user_enrollments')
+    .from('enrollments')
     .insert({
       user_id: userId,
       course_id: courseId,

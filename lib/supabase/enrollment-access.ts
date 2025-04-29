@@ -12,7 +12,7 @@ import { createServerSupabaseClient } from './client';
 import type { Database } from '@/types/supabase';
 
 // Types for our return values
-export type UserEnrollment = Database['public']['Tables']['user_enrollments']['Row'];
+export type UserEnrollment = Database['public']['Tables']['enrollments']['Row'];
 export type UserProgress = Database['public']['Tables']['user_progress']['Row'];
 export type UserProfile = Database['public']['Tables']['profiles']['Row'];
 export type CourseWithModules = Database['public']['Tables']['courses']['Row'] & {
@@ -43,7 +43,7 @@ export async function getUserEnrollmentsWithCourses(userId: string) {
   const supabase = createServerSupabaseClient();
   
   const { data, error } = await supabase
-    .from('user_enrollments')
+    .from('enrollments')
     .select(`
       *,
       course: courses (
@@ -68,7 +68,7 @@ export async function verifyUserCourseEnrollment(userId: string, courseId: strin
   const supabase = createServerSupabaseClient();
   
   const { data, error } = await supabase
-    .from('user_enrollments')
+    .from('enrollments')
     .select('id, status, expires_at')
     .eq('user_id', userId)
     .eq('course_id', courseId)
@@ -99,7 +99,7 @@ export async function getUserCourseProgress(userId: string) {
   
   // Get all enrollments for the user
   const { data: enrollments, error: enrollmentsError } = await supabase
-    .from('user_enrollments')
+    .from('enrollments')
     .select('course_id')
     .eq('user_id', userId)
     .eq('status', 'active');
@@ -317,7 +317,7 @@ export async function getUserAccessibleTemplates(userId: string) {
   
   // Get all active enrollments 
   const { data: enrollments, error: enrollmentsError } = await supabase
-    .from('user_enrollments')
+    .from('enrollments')
     .select('course_id')
     .eq('user_id', userId)
     .eq('status', 'active');

@@ -7,7 +7,7 @@ Develop a premium, exclusive student experience system that seamlessly manages a
 Our current enrollment implementation includes:
 
 ### Database Schema
-- ✅ `user_enrollments` table with fields:
+- ✅ `enrollments` table with fields:
   ```sql
   CREATE TABLE public.user_enrollments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -49,6 +49,7 @@ export interface StudentDashboardStore {
   // Dashboard Data Loading Actions
   loadUserDashboardData: (userId: string, force?: boolean) => Promise<void>;
   loadUserEnrollments: (userId: string, force?: boolean) => Promise<void>;
+  loadSpecificEnrollment: (userId: string, courseId: string) => Promise<UserEnrollment | undefined>;
   loadUserProgress: (userId: string, force?: boolean) => Promise<void>;
   loadUserTemplates: (userId: string, force?: boolean) => Promise<void>;
   loadContinueLearningLesson: (userId: string, force?: boolean) => Promise<void>;

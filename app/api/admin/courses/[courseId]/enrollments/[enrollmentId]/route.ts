@@ -41,7 +41,7 @@ export async function GET(request: NextRequest, props: { params: Promise<RoutePa
     
     // Fetch enrollment with user profile data
     const { data: enrollment, error: enrollmentError } = await serviceClient
-      .from('user_enrollments')
+      .from('enrollments')
       .select(`
         id, 
         user_id,
@@ -112,7 +112,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<Route
     
     // Check if enrollment exists and belongs to the course
     const { data: existingEnrollment, error: existingError } = await serviceClient
-      .from('user_enrollments')
+      .from('enrollments')
       .select('id')
       .eq('id', params.enrollmentId)
       .eq('course_id', params.id)
@@ -153,7 +153,7 @@ export async function PATCH(request: NextRequest, props: { params: Promise<Route
     
     // Update the enrollment
     const { data: updatedEnrollment, error: updateError } = await serviceClient
-      .from('user_enrollments')
+      .from('enrollments')
       .update(updateData)
       .eq('id', params.enrollmentId)
       .select()
@@ -214,7 +214,7 @@ export async function DELETE(request: NextRequest, props: { params: Promise<Rout
     
     // Check if enrollment exists
     const { data: existingEnrollment, error: existingError } = await serviceClient
-      .from('user_enrollments')
+      .from('enrollments')
       .select('id, user_id')
       .eq('id', params.enrollmentId)
       .eq('course_id', params.id)
@@ -241,7 +241,7 @@ export async function DELETE(request: NextRequest, props: { params: Promise<Rout
     
     // Delete the enrollment
     const { error: deleteError } = await serviceClient
-      .from('user_enrollments')
+      .from('enrollments')
       .delete()
       .eq('id', params.enrollmentId);
     

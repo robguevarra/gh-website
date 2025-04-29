@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { getLessonVideoId, getLessonVideoUrl } from "@/lib/stores/course/types/lesson"
 import { motion } from "framer-motion"
-import { getBrowserClient } from "@/lib/supabase/client"
 
 // UI Components
 import { Button } from "@/components/ui/button"
@@ -22,7 +20,6 @@ import { LessonComments } from "@/components/dashboard/lesson-comments"
 // Store and hooks
 import { useStudentDashboardStore } from "@/lib/stores/student-dashboard"
 import { useAuth } from "@/context/auth-context"
-import { useEnrollmentData } from "@/lib/hooks/optimized/use-enrollment-data"
 
 // Icons
 import {
@@ -86,6 +83,7 @@ type CourseViewerState = {
   activeTab: string
   videoProgress: number
   isLoading: boolean
+  error: string | null
   currentLesson: (CourseLesson & {
     videoId?: string | null
     videoUrl?: string | null
@@ -97,6 +95,9 @@ type CourseViewerState = {
   prevLesson: CourseLesson | null
 }
 
+import { getBrowserClient } from "@/lib/supabase/client";
+import { getLessonVideoId, getLessonVideoUrl } from "@/lib/stores/course/types/lesson";
+
 export default function CourseViewer() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -107,11 +108,8 @@ export default function CourseViewer() {
   const lessonId = searchParams.get("lessonId") || ""
   const moduleId = searchParams.get("moduleId") || ""
 
-  // Use optimized hooks for better performance
-  const {
-    enrollments,
-    loadEnrollments
-  } = useEnrollmentData()
+  // Get the targeted enrollment loader function
+  const loadSpecificEnrollment = useStudentDashboardStore(state => state.loadSpecificEnrollment)
 
   // Get only the specific data needed from the store to prevent unnecessary re-renders
   const courseProgress = useStudentDashboardStore(state => state.courseProgress)
@@ -126,6 +124,7 @@ export default function CourseViewer() {
     activeTab: "content",
     videoProgress: 0,
     isLoading: true,
+    error: null,
     currentLesson: null,
     currentModule: null,
     currentCourse: null,
@@ -136,68 +135,52 @@ export default function CourseViewer() {
   // Use a single state object instead of multiple state variables
   const [courseViewerState, setCourseViewerState] = useState<CourseViewerState>(initialState)
 
-  // Load course data
-  // Using a ref to prevent multiple loads
-  const dataLoadedRef = useRef(false)
+  // Define state variables
+  const [isEnrolled, setIsEnrolled] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingCourseStructure, setIsLoadingCourseStructure] = useState(false)
+  const [fullCourseData, setFullCourseData] = useState<ExtendedCourse | null>(null)
 
-  // Prepare for student view and clear any conflicting caches
+  // Load enrollment and course data via store
   useEffect(() => {
-    // Import dynamically to avoid SSR issues
-    import('@/lib/utils/view-transition').then(({ prepareForStudentView }) => {
-      prepareForStudentView();
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!user?.id || dataLoadedRef.current) return
-
-    const loadData = async () => {
-      // Set the ref to true to prevent multiple loads
-      dataLoadedRef.current = true
-
-      setCourseViewerState(prevState => ({
-        ...prevState,
-        isLoading: true
-      }))
-
-      // Load enrollments if not already loaded
-      if (enrollments.length === 0) {
-        await loadEnrollments(user.id)
-      }
-
-      // Always load the latest progress data for all lessons when viewing a course
-      // This ensures the module accordion shows the correct completion status for all lessons
-      console.log('Loading latest progress data for course view...')
-      await loadUserProgress(user.id)
-
-      setCourseViewerState(prevState => ({
-        ...prevState,
-        isLoading: false
-      }))
-    }
-
-    loadData()
-  }, [user?.id, loadEnrollments, loadUserProgress, enrollments.length])
-
-  // Use useMemo to derive course data from enrollments
-  const courseData = useMemo(() => {
-    if (enrollments.length === 0 || !courseId) return null
-
-    // Find the current course
-    const course = enrollments.find((e: any) => e.course?.id === courseId)?.course as ExtendedCourse | undefined
-    if (!course) return null
-
-    // Return the course with properly typed modules and lessons
-    return course
-  }, [enrollments, courseId])
+    if (!user?.id || !courseId) return;
+    setCourseViewerState(prev => ({ ...prev, isLoading: true }));
+    loadSpecificEnrollment(user.id, courseId)
+      .then(enrollment => {
+        if (!enrollment) {
+          setCourseViewerState(prev => ({
+            ...prev,
+            isLoading: false,
+            error: 'Course not found. You are not enrolled in this course.'
+          }));
+          return;
+        }
+        setCourseViewerState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: null,
+          currentCourse: enrollment.course
+        }));
+        if (loadUserProgress) {
+          loadUserProgress(user.id);
+        }
+      })
+      .catch(err =>
+        setCourseViewerState(prev => ({
+          ...prev,
+          isLoading: false,
+          error: err instanceof Error ? err.message : 'An unknown error occurred'
+        }))
+      );
+  }, [user?.id, courseId, loadSpecificEnrollment, loadUserProgress]);
 
   // When course data is available, ensure we load progress for all lessons
   useEffect(() => {
     // Skip if no course data or no user
-    if (!courseData?.modules || !user?.id) return
+    if (!courseViewerState.currentCourse?.modules || !user?.id) return
 
     // Find all lessons in this course
-    const allLessons = courseData.modules.flatMap(m => m.lessons || [])
+    const allLessons = courseViewerState.currentCourse.modules.flatMap(m => m.lessons || [])
     // Check if we have progress data for any lesson that's marked as complete
     // This helps detect if progress state data is stale or incomplete
     const anyCompleteLessonsMissingProgress = allLessons.some(lesson => {
@@ -211,24 +194,39 @@ export default function CourseViewer() {
     if (anyCompleteLessonsMissingProgress) {
       loadUserProgress(user.id)
     }
-  }, [courseData, user?.id, lessonProgress, loadUserProgress])
+  }, [courseViewerState.currentCourse, user?.id, lessonProgress, loadUserProgress])
 
   // Use useMemo to derive sorted modules from course data
   const sortedModules = useMemo(() => {
-    if (!courseData?.modules) return []
-    return [...courseData.modules].sort((a, b) => a.order - b.order)
-  }, [courseData])
+    if (!courseViewerState.currentCourse?.modules) return [];
+    
+    // Add some debug information
+    console.log('Course modules:', courseViewerState.currentCourse.modules);
+    
+    // Make sure all modules have the order property, default to 0 if missing
+    const modulesWithOrder = courseViewerState.currentCourse.modules.map(module => ({
+      ...module,
+      order: module.order ?? 0 // Default to 0 if order is missing
+    }));
+    
+    return [...modulesWithOrder].sort((a, b) => a.order - b.order);
+  }, [courseViewerState.currentCourse]);
 
-  // Use useMemo to find the target module
+  // Find the target module
   const targetModule = useMemo(() => {
-    if (sortedModules.length === 0) return null
-
-    // Find the current module by ID
-    const foundModule = sortedModules.find(m => m.id === moduleId)
-
-    // If no module ID is provided or not found, use the first module
-    return foundModule || sortedModules[0]
-  }, [sortedModules, moduleId])
+    if (sortedModules.length === 0) {
+      console.log('No modules available to select');
+      return null;
+    }
+    
+    // Find the module by ID
+    const foundModule = sortedModules.find(m => m.id === moduleId);
+    
+    // If no module ID is provided or the module is not found, use the first module
+    const selectedModule = foundModule || sortedModules[0];
+    console.log('Selected module:', selectedModule);
+    return selectedModule;
+  }, [sortedModules, moduleId]);
 
   // Use useMemo to derive sorted lessons from the target module
   const sortedLessons = useMemo(() => {
@@ -299,15 +297,15 @@ export default function CourseViewer() {
   // Update course viewer state when data changes
   useEffect(() => {
     // Only update state if we have valid data
-    if (courseData && targetModule && targetLesson) {
-      // Extract video metadata from the lesson
-      const videoId = targetLesson.metadata?.videoId ||
-                     (targetLesson.metadata?.type === 'video' ?
-                      getLessonVideoId(targetLesson as any) : undefined)
+    if (courseViewerState.currentCourse && targetModule && targetLesson) {
+      // Debug: inspect raw metadata to verify stored video URL and ID
+      console.log('Lesson metadata raw:', targetLesson.metadata);
+      console.log('Lesson metadata.videoUrl:', targetLesson.metadata?.videoUrl);
+      // Use helper to parse Vimeo ID or metadata videoId
+      const videoId = getLessonVideoId(targetLesson as any) || undefined
 
-      const videoUrl = targetLesson.metadata?.videoUrl ||
-                      (targetLesson.metadata?.type === 'video' ?
-                       getLessonVideoUrl(targetLesson as any) : undefined)
+      // Use helper to build embed URL or fallback to metadata
+      const videoUrl = getLessonVideoUrl(targetLesson as any) || undefined
 
       // Create an enhanced lesson with video metadata
       const enhancedLesson = {
@@ -319,14 +317,13 @@ export default function CourseViewer() {
 
       setCourseViewerState(prevState => ({
         ...prevState,
-        currentCourse: courseData,
         currentModule: targetModule,
         currentLesson: enhancedLesson,
         prevLesson,
         nextLesson
       }))
     }
-  }, [courseData, targetModule, targetLesson, prevLesson, nextLesson])
+  }, [courseViewerState.currentCourse, targetModule, targetLesson, prevLesson, nextLesson])
 
   // Initialize lesson progress when lesson changes
   // Using a ref to track which lessons we've already initialized
@@ -351,14 +348,10 @@ export default function CourseViewer() {
           .eq('user_id', user.id)
           .eq('lesson_id', targetLesson.id)
           .maybeSingle()
-          .then(({ data: existingProgress, error }: {
-            data: {
-              status: string;
-              progress_percentage: number;
-              last_position: number;
-            } | null;
-            error: any
-          }) => {
+          .then((response) => {
+            // Properly type the response using destructuring
+            const { data: existingProgress, error } = response;
+
             if (error) {
               console.error('Error checking existing progress:', error)
               return
@@ -368,9 +361,9 @@ export default function CourseViewer() {
             // Otherwise initialize with defaults
             if (existingProgress) {
               updateLessonProgress(user.id, targetLesson.id, {
-                status: existingProgress.status,
-                progress: existingProgress.progress_percentage,
-                lastPosition: existingProgress.last_position
+                status: existingProgress.status || 'not-started',
+                progress: existingProgress.progress_percentage !== null ? existingProgress.progress_percentage : 0,
+                lastPosition: existingProgress.last_position !== null ? existingProgress.last_position : 0
               })
             } else {
               // No existing progress, initialize with defaults
@@ -450,6 +443,7 @@ export default function CourseViewer() {
   const completedLessonsRef = useRef<Record<string, boolean>>({})
 
   const markLessonComplete = useCallback(() => {
+    // Safely get current lesson even if the variables aren't declared yet
     if (user?.id && courseViewerState.currentLesson?.id) {
       const lessonId = courseViewerState.currentLesson.id
 
@@ -505,8 +499,46 @@ export default function CourseViewer() {
   }, [])
   */
 
-  // Loading state
-  if (courseViewerState.isLoading) {
+  // Determine different states for better UX using simplified conditionals
+  const showInitialLoading = courseViewerState.isLoading;
+  const noCourseId = !courseId;
+  const hasError = courseViewerState.error !== null;
+  const courseNotFound = (!courseViewerState.currentCourse && !showInitialLoading && courseId) || hasError;
+
+  // Handle case where no courseId is provided
+  if (noCourseId) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <main className="container px-4 py-8">
+          <div className="flex items-center gap-2 mb-6">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+              onClick={() => router.push('/dashboard')}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Dashboard
+            </Button>
+          </div>
+
+          <div className="bg-white rounded-xl p-8 text-center shadow-sm">
+            <BookOpen className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+            <h2 className="text-2xl font-medium mb-2">Course ID Required</h2>
+            <p className="text-muted-foreground mb-6">
+              Please select a course from your dashboard to view it.
+            </p>
+            <Button onClick={() => router.push('/dashboard')}>
+              Return to Dashboard
+            </Button>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // Show loading skeletons while data is being fetched
+  if (showInitialLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <main className="container px-4 py-8">
@@ -544,8 +576,11 @@ export default function CourseViewer() {
     )
   }
 
-  // No course or lesson found
-  if (!courseViewerState.currentCourse || !courseViewerState.currentLesson) {
+  // Check if we found a course but it doesn't have modules
+  const courseFoundButNoModules = courseViewerState.currentCourse && (!courseViewerState.currentCourse.modules || courseViewerState.currentCourse.modules.length === 0);
+  
+  // Render the course not found message if no course data is found after loading
+  if (courseNotFound) {
     return (
       <div className="min-h-screen bg-gray-50">
         <main className="container px-4 py-8">
@@ -565,7 +600,25 @@ export default function CourseViewer() {
             <BookOpen className="h-16 w-16 mx-auto mb-4 text-gray-300" />
             <h2 className="text-2xl font-medium mb-2">Course Not Found</h2>
             <p className="text-muted-foreground mb-6">
-              We couldn't find the course or lesson you're looking for.
+              {courseViewerState.error ? (
+                // Show specific error message when available for better debugging
+                <>
+                  {courseViewerState.error}
+                  <br/>
+                  <code className="text-xs bg-gray-100 p-1 rounded mt-2 inline-block">{courseId}</code>
+                </>
+              ) : (
+                // Default message when no specific error is provided
+                <>
+                  We couldn't find the course with ID: <code>{courseId}</code>
+                  <br/>
+                  <span className="text-sm text-gray-500 mt-2 inline-block">
+                    {courseProgress && Object.keys(courseProgress).length > 0 
+                      ? "You're enrolled in courses, but not this specific one." 
+                      : "You don't appear to be enrolled in any courses yet."}
+                  </span>
+                </>
+              )}
             </p>
             <Button onClick={() => router.push('/dashboard')}>
               Return to Dashboard
@@ -575,9 +628,95 @@ export default function CourseViewer() {
       </div>
     )
   }
+  
+  // Render a special message for courses that don't have modules
+  if (courseFoundButNoModules) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <main className="container px-4 py-8">
+          <div className="flex items-center gap-2 mb-6">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+              onClick={() => router.push('/dashboard')}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Dashboard
+            </Button>
+          </div>
 
+          <div className="bg-white rounded-xl p-8 text-center shadow-sm">
+            <BookOpen className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+            <h2 className="text-2xl font-medium mb-2">{courseViewerState.currentCourse.title || 'Course'}</h2>
+            <p className="text-muted-foreground mb-6">
+              This course doesn't have any content modules yet.
+              <br/>
+              <span className="text-sm text-gray-500 mt-2 inline-block">
+                Content for this course is coming soon! Check back later for lessons and materials.
+              </span>
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button onClick={() => router.push('/dashboard')}>
+                Return to Dashboard
+              </Button>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+  
+  // No lesson found but course exists
+  if (courseViewerState.currentCourse && !targetLesson) {
+    // Course exists but lesson not found
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <main className="container px-4 py-8">
+          <div className="flex items-center gap-2 mb-6">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1"
+              onClick={() => router.push('/dashboard')}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Dashboard
+            </Button>
+          </div>
+
+          <div className="bg-white rounded-xl p-8 text-center shadow-sm">
+            <BookOpen className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+            <h2 className="text-2xl font-medium mb-2">Lesson Not Found</h2>
+            <p className="text-muted-foreground mb-6">
+              We found your course "{courseViewerState.currentCourse.title}", but couldn't find the specific lesson.
+              <br/>
+              <span className="text-sm text-gray-500 mt-2 inline-block">
+                Please select a lesson from the course menu.
+              </span>
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button onClick={() => router.push(`/dashboard/course?courseId=${courseViewerState.currentCourse.id}`)}>
+                View Course
+              </Button>
+              <Button variant="outline" onClick={() => router.push('/dashboard')}>
+                Return to Dashboard
+              </Button>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  // At this point in the code, we've already gone through all the null checks
+  // Both course and lesson must exist for the code to reach here
+  // We need to create the course viewer state object now that we've validated the data
+  const currentCourse = courseViewerState.currentCourse!; // Verified by previous checks
+  const currentLesson = targetLesson!; // Verified by previous checks
+  
   // Calculate progress for current lesson
-  const currentLessonProgress = lessonProgress[courseViewerState.currentLesson.id] || {
+  const currentLessonProgress = lessonProgress[currentLesson.id] || {
     progress: 0,
     lastPosition: 0,
     status: 'not-started'
@@ -605,14 +744,14 @@ export default function CourseViewer() {
           <div className="order-2 md:order-1">
             <div className="bg-white rounded-lg border shadow-sm p-4">
               <h2 className="text-lg font-medium mb-4">
-                {courseViewerState.currentCourse.title || "Course Content"}
+                {currentCourse.title || "Course Content"}
               </h2>
 
               {/* Course modules accordion */}
               <CourseModuleAccordion
-                course={courseViewerState.currentCourse}
-                currentModuleId={courseViewerState.currentModule?.id || ''}
-                currentLessonId={courseViewerState.currentLesson.id}
+                course={currentCourse}
+                currentModuleId={targetModule?.id || ''}
+                currentLessonId={currentLesson.id}
                 onLessonClick={navigateToLesson}
                 lessonProgress={lessonProgress}
               />
@@ -624,22 +763,11 @@ export default function CourseViewer() {
             <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
               {/* Video player */}
               <div className="aspect-video bg-black relative">
-                {/* Check for video in metadata first, then fallback to legacy videoUrl */}
-                {courseViewerState.currentLesson.videoId ? (
-                  <iframe
-                    src={`https://player.vimeo.com/video/${courseViewerState.currentLesson.videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479`}
+                {currentLesson.metadata?.videoUrl ? (
+                  // Render private embed snippet as-is
+                  <div
                     className="absolute inset-0 w-full h-full"
-                    style={{ border: 0 }}
-                    allow="autoplay; fullscreen; picture-in-picture"
-                    allowFullScreen
-                    title={`Video: ${courseViewerState.currentLesson.title}`}
-                  />
-                ) : courseViewerState.currentLesson.videoUrl ? (
-                  <iframe
-                    src={courseViewerState.currentLesson.videoUrl}
-                    className="absolute inset-0 w-full h-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
+                    dangerouslySetInnerHTML={{ __html: currentLesson.metadata.videoUrl as string }}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full bg-gray-800 text-white">
@@ -653,9 +781,9 @@ export default function CourseViewer() {
 
               {/* Lesson info */}
               <div className="p-4 border-b">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-4">
                   <h1 className="text-xl font-medium">
-                    {courseViewerState.currentLesson.title}
+                    {currentLesson.title}
                   </h1>
                   <div className="flex items-center gap-2">
                     <Button
@@ -673,7 +801,7 @@ export default function CourseViewer() {
                 <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Clock className="h-4 w-4" />
-                    {courseViewerState.currentLesson.duration || "10 mins"}
+                    {currentLesson.duration || "10 mins"}
                   </div>
 
                   <div className="flex items-center gap-1">
@@ -682,9 +810,9 @@ export default function CourseViewer() {
                   </div>
                 </div>
 
-                {courseViewerState.currentLesson.description && (
+                {currentLesson.description && (
                   <p className="mt-4 text-sm text-muted-foreground">
-                    {courseViewerState.currentLesson.description}
+                    {currentLesson.description}
                   </p>
                 )}
               </div>
@@ -703,11 +831,11 @@ export default function CourseViewer() {
                 <h2 className="text-xl font-semibold mb-4">Lesson Content</h2>
 
                 <div className="prose max-w-none">
-                  {courseViewerState.currentLesson.content_json?.content ? (
-                    <div className="lesson-content" dangerouslySetInnerHTML={{ __html: courseViewerState.currentLesson.content_json.content as string }} />
-                  ) : courseViewerState.currentLesson.description ? (
+                  {currentLesson.content_json?.content ? (
+                    <div className="lesson-content" dangerouslySetInnerHTML={{ __html: currentLesson.content_json.content as string }} />
+                  ) : currentLesson.description ? (
                     <div>
-                      <p className="text-base">{courseViewerState.currentLesson.description}</p>
+                      <p className="text-base">{currentLesson.description}</p>
                     </div>
                   ) : (
                     <div className="py-4 text-center">
@@ -718,11 +846,11 @@ export default function CourseViewer() {
                   )}
                 </div>
 
-                {courseViewerState.currentLesson.resources && courseViewerState.currentLesson.resources.length > 0 && (
+                {currentLesson.resources && currentLesson.resources.length > 0 && (
                   <div className="mt-8">
                     <h3 className="text-lg font-medium mb-3">Resources</h3>
                     <div className="space-y-2">
-                      {courseViewerState.currentLesson.resources.map((resource: CourseResource) => (
+                      {currentLesson.resources.map((resource: CourseResource) => (
                         <div key={resource.id} className="flex items-center p-3 border rounded-lg hover:bg-gray-50">
                           <Paperclip className="h-4 w-4 mr-3 text-muted-foreground" />
                           <div className="flex-1">
@@ -783,7 +911,7 @@ export default function CourseViewer() {
                   <div>
                     <p className="text-muted-foreground">Total Lessons</p>
                     <p className="font-medium">
-                      {courseViewerState.currentCourse.modules?.reduce(
+                      {courseViewerState.currentCourse?.modules?.reduce(
                         (total: number, module: CourseModule) => {
                           return total + (module.lessons?.length || 0)
                         }, 0
@@ -793,7 +921,7 @@ export default function CourseViewer() {
                   <div>
                     <p className="text-muted-foreground">Total Modules</p>
                     <p className="font-medium">
-                      {courseViewerState.currentCourse.modules?.length || 0}
+                      {courseViewerState.currentCourse?.modules?.length || 0}
                     </p>
                   </div>
                 </div>

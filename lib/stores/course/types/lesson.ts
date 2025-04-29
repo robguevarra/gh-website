@@ -41,25 +41,36 @@ export interface Lesson {
 }
 
 /**
- * Helper function to get the video URL from a lesson
- * @param lesson The lesson object
- * @returns The video URL or null if not found
- */
-export function getLessonVideoUrl(lesson: Lesson | null | undefined): string | null {
-  if (!lesson || !lesson.metadata) return null;
-
-  const metadata = lesson.metadata as VideoLessonMetadata;
-  return metadata.videoUrl || null;
-}
-
-/**
  * Helper function to get the video ID from a lesson
  * @param lesson The lesson object
- * @returns The video ID or null if not found
+ * @returns The Vimeo video ID or null if not found
  */
 export function getLessonVideoId(lesson: Lesson | null | undefined): string | null {
   if (!lesson || !lesson.metadata) return null;
-
   const metadata = lesson.metadata as VideoLessonMetadata;
-  return metadata.videoId || null;
+  // Return explicit videoId if provided
+  if (metadata.videoId) return metadata.videoId;
+  // Try parsing ID from videoUrl if it's a Vimeo link
+  if (metadata.videoUrl) {
+    const match = metadata.videoUrl.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (match && match[1]) return match[1];
+  }
+  return null;
+}
+
+/**
+ * Helper function to get the embed URL for a lesson video
+ * @param lesson The lesson object
+ * @returns The video embed URL or null if not found
+ */
+export function getLessonVideoUrl(lesson: Lesson | null | undefined): string | null {
+  if (!lesson || !lesson.metadata) return null;
+  const metadata = lesson.metadata as VideoLessonMetadata;
+  // Build embed URL from ID if available
+  const id = getLessonVideoId(lesson);
+  if (id) {
+    return `https://player.vimeo.com/video/${id}`;
+  }
+  // Fallback to metadata.videoUrl (may already be an embed URL)
+  return metadata.videoUrl || null;
 }

@@ -42,7 +42,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     
     // Build base query
     let query = adminClient
-      .from('user_enrollments')
+      .from('enrollments')
       .select(`
         *,
         profiles!user_id(
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     
     // Check if enrollment already exists
     const { data: existingEnrollment, error: checkError } = await adminClient
-      .from('user_enrollments')
+      .from('enrollments')
       .select('id')
       .eq('user_id', user_id)
       .eq('course_id', params.id)
@@ -176,7 +176,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     
     // Create the enrollment
     const { data: enrollment, error: createError } = await adminClient
-      .from('user_enrollments')
+      .from('enrollments')
       .insert({
         user_id,
         course_id: params.id,

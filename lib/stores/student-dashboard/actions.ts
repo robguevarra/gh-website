@@ -178,6 +178,140 @@ export const createActions = (
   },
 
   /**
+   * Load a specific course enrollment
+   * This is optimized for when we know exactly which course we need
+   * Bypasses the 1000 row limit by targeting the exact enrollment
+   */
+  loadSpecificEnrollment: async (userId: string, courseId: string) => {
+    if (!userId || !courseId) return;
+
+    set({ isLoadingEnrollments: true });
+    console.log(`[Store Action] Loading specific enrollment for user ${userId}, course ${courseId}`);
+    
+    try {
+      const supabase = getBrowserClient();
+      
+      // Direct query for the specific enrollment we need
+      const { data: enrollment, error } = await supabase
+        .from('enrollments')
+        .select(`
+          *,
+          courses (id, title, description, slug)
+        `)
+        .eq('user_id', userId)
+        .eq('course_id', courseId)
+        .single();
+        
+      if (error) {
+        console.error('Error fetching specific enrollment:', error);
+        set({ isLoadingEnrollments: false, hasEnrollmentError: true });
+        return;
+      }
+      
+      if (!enrollment) {
+        console.log(`No enrollment found for user ${userId} and course ${courseId}`);
+        set({ isLoadingEnrollments: false });
+        return;
+      }
+      
+      // Get modules for this course
+      const { data: modulesData, error: modulesError } = await supabase
+        .from('modules')
+        .select('*')
+        .eq('course_id', courseId)
+        .order('position', { ascending: true });
+      
+      if (modulesError) {
+        console.error('Error fetching modules:', modulesError);
+      }
+      
+      let lessonsData: any[] = [];
+      if (modulesData && modulesData.length > 0) {
+        console.log(`[Store Action] Found ${modulesData.length} modules, fetching lessons...`);
+        
+        const moduleIds = modulesData.map(module => module.id);
+        
+        const { data: lessons, error: lessonsError } = await supabase
+          .from('lessons')
+          .select('*')
+          .in('module_id', moduleIds)
+          .order('position', { ascending: true });
+          
+        if (lessonsError) {
+          console.error('Error fetching lessons:', lessonsError);
+        } else if (lessons) {
+          lessonsData = lessons;
+          console.log(`[Store Action] Found ${lessonsData.length} lessons for course ${courseId}`);
+        }
+      }
+      
+      // Build the course structure
+      const courseObject = enrollment.courses;
+      
+      // Get modules for this course
+      const courseModules = modulesData ? modulesData
+        .map(module => {
+          // Get lessons for this module
+          const moduleLessons = lessonsData
+            .filter(lesson => lesson.module_id === module.id)
+            .sort((a, b) => (a.position || 0) - (b.position || 0));
+              
+          return {
+            ...module,
+            lessons: moduleLessons
+          };
+        })
+        .sort((a, b) => (a.position || 0) - (b.position || 0)) : [];
+      
+      // Create the course data with full structure
+      const courseData = courseObject && typeof courseObject === 'object' 
+        ? {
+            id: courseObject.id,
+            title: courseObject.title,
+            description: courseObject.description ?? '',
+            slug: courseObject.slug,
+            modules: courseModules,
+          }
+        : undefined;
+
+      // Create a single formatted enrollment - following EXACT UserEnrollment interface
+      const formattedEnrollment: UserEnrollment = {
+        id: enrollment.id,
+        userId: enrollment.user_id,
+        courseId: enrollment.course_id,
+        enrolledAt: enrollment.enrolled_at ?? '',
+        expiresAt: enrollment.expires_at,
+        status: enrollment.status as UserEnrollment['status'],
+        paymentId: enrollment.transaction_id, // Use transaction_id instead of payment_id
+        createdAt: enrollment.enrolled_at ?? '', // Use enrolled_at as fallback for created/updated
+        updatedAt: enrollment.last_accessed_at ?? enrollment.enrolled_at ?? '',
+        course: courseData,
+      };
+
+      // Get existing enrollments
+      const existingEnrollments = get().enrollments || [];
+      
+      // Replace any existing enrollment for this course or add as new
+      const updatedEnrollments = [
+        ...existingEnrollments.filter(e => e.courseId !== courseId),
+        formattedEnrollment
+      ];
+      
+      // Update the store
+      set({
+        enrollments: updatedEnrollments,
+        isLoadingEnrollments: false,
+        lastEnrollmentsLoadTime: Date.now(),
+      });
+      
+      return formattedEnrollment;
+    } catch (err) {
+      console.error('Error in loadSpecificEnrollment:', err);
+      set({ isLoadingEnrollments: false, hasEnrollmentError: true });
+    }
+  },
+
+  /**
    * Load user enrollments
    */
   loadUserEnrollments: async (userId: string, force?: boolean) => {
@@ -210,21 +344,22 @@ export const createActions = (
       // Use browser client for client-side data fetching
       const supabase = getBrowserClient();
 
-      // Fetch user enrollments with related course data
+      // STEP 1: Fetch user enrollments with related course data - with specific user filter
+      console.log('[Store Action] Fetching enrollments from enrollments table for specific user...');
       const { data: enrollments, error } = await supabase
-        .from('user_enrollments')
-        .select(
-          `
-            *,
-            courses (
-              id,
-              title,
-              description,
-              slug
-            )
-          `,
-        )
-        .eq('user_id', userId);
+        .from('enrollments')
+        .select(`
+          *,
+          courses (
+            id,
+            title,
+            description,
+            slug
+          )
+        `)
+        .eq('user_id', userId)
+        // Use enrolled_at for sorting since created_at doesn't exist
+        .order('enrolled_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching enrollments:', error);
@@ -240,18 +375,76 @@ export const createActions = (
         return;
       }
 
-      // Format and set enrollments by explicitly mapping fields
-      const formattedEnrollments: UserEnrollment[] = enrollments.map(
-        (enrollment) => {
-          // Safely access nested course properties
-          // Removed cast 'as UserEnrollment['course']'
+      // STEP 2: For each enrolled course, fetch the course modules
+      let formattedEnrollments: UserEnrollment[] = [];
+      
+      if (enrollments && enrollments.length > 0) {
+        console.log(`[Store Action] Found ${enrollments.length} enrollments, now fetching modules...`);
+        
+        // Get all course IDs from enrollments
+        const courseIds = enrollments
+          .map(enrollment => enrollment.course_id)
+          .filter(id => id); // Filter out any null/undefined
+        
+        // Fetch modules for all enrolled courses
+        const { data: modulesData, error: modulesError } = await supabase
+          .from('modules')
+          .select('*')
+          .in('course_id', courseIds);
+        
+        if (modulesError) {
+          console.error('Error fetching modules:', modulesError);
+        }
+        
+        // STEP 3: Fetch lessons for all modules
+        let lessonsData: any[] = [];
+        if (modulesData && modulesData.length > 0) {
+          console.log(`[Store Action] Found ${modulesData.length} modules, now fetching lessons...`);
+          
+          const moduleIds = modulesData.map(module => module.id);
+          
+          const { data: lessons, error: lessonsError } = await supabase
+            .from('lessons')
+            .select('*')
+            .in('module_id', moduleIds);
+            
+          if (lessonsError) {
+            console.error('Error fetching lessons:', lessonsError);
+          } else if (lessons) {
+            lessonsData = lessons;
+            console.log(`[Store Action] Found ${lessonsData.length} lessons`);
+          }
+        }
+        
+        // Now build the full course structure with modules and lessons
+        formattedEnrollments = enrollments.map(enrollment => {
+          // Get course data from the enrollment
           const courseObject = enrollment.courses;
+          
+          // Get modules for this course
+          const courseModules = modulesData ? modulesData
+            .filter(module => module.course_id === enrollment.course_id)
+            .map(module => {
+              // Get lessons for this module
+              const moduleLessons = lessonsData
+                .filter(lesson => lesson.module_id === module.id)
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+                
+              return {
+                ...module,
+                lessons: moduleLessons
+              };
+            })
+            .sort((a, b) => (a.position || 0) - (b.position || 0)) : [];
+          
+          // Create the course data with full structure
           const courseData = courseObject && typeof courseObject === 'object' 
             ? {
                 id: courseObject.id,
                 title: courseObject.title,
                 description: courseObject.description ?? '',
                 slug: courseObject.slug,
+                modules: courseModules,
               }
             : undefined;
 
@@ -261,14 +454,14 @@ export const createActions = (
             courseId: enrollment.course_id,
             enrolledAt: enrollment.enrolled_at ?? '',
             expiresAt: enrollment.expires_at,
-            status: enrollment.status as UserEnrollment['status'], // Cast status
+            status: enrollment.status as UserEnrollment['status'],
             paymentId: enrollment.payment_id,
             createdAt: enrollment.created_at ?? '',
             updatedAt: enrollment.updated_at ?? '',
-            course: courseData, // Assign the potentially partial course data
+            course: courseData,
           };
-        },
-      );
+        });
+      }
 
       set({
         enrollments: formattedEnrollments,

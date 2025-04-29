@@ -162,7 +162,7 @@ export function useUserEnrollments(userId: string | undefined) {
       if (!userId) return [];
       
       const { data, error } = await supabase
-        .from('user_enrollments')
+        .from('enrollments')
         .select('*, courses(id, title, slug, thumbnail_url)')
         .eq('user_id', userId)
         .eq('status', 'active');

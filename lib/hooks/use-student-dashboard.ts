@@ -116,7 +116,7 @@ export const useUserEnrollments = ({ includeExpired = false }: { includeExpired?
       setHasEnrollmentError(false);
       
       const { data, error } = await supabase
-        .from('user_enrollments')
+        .from('enrollments')
         .select(`
           id,
           user_id,
