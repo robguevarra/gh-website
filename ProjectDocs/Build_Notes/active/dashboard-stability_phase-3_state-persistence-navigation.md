@@ -60,29 +60,42 @@ The dashboard uses a combination of:
     -   Handle errors appropriately, ensuring `isLoggingOut` is set to `false`.
 
 ### 2. Centralize Data Refresh Logic in Store Actions
-- [ ] **Modify Loading Actions in `lib/stores/student-dashboard/actions.ts`** (e.g., `loadUserProgress`, `loadUserEnrollments`, `loadUserDashboardData`):
+- [x] **Modify Loading Actions in `lib/stores/student-dashboard/actions.ts`** (e.g., `loadUserProgress`, `loadUserEnrollments`, `loadUserDashboardData`, `loadContinueLearningLesson`):
     -   Add an optional `force?: boolean` parameter to bypass staleness checks.
     -   Define a staleness threshold (e.g., 5 minutes).
     -   Implement a staleness check at the beginning of each action using the corresponding `lastLoadTime` state (e.g., `lastProgressLoadTime`). If data is present and not stale (`Date.now() - lastLoadTime < threshold`) and `force` is not true, return early.
     -   If fetching proceeds, update the corresponding `lastLoadTime` state variable with `Date.now()` upon successful data fetch and state update.
+    -   Simplify `loadUserDashboardData` to orchestrate calls and pass `force` down.
 
 ### 3. Simplify Component Data Fetching Logic
-- [ ] **Refactor `app/dashboard/page.tsx`:**
+- [x] **Refactor `app/dashboard/page.tsx`:**
     -   Remove the `useEffect` hook using `progressRefreshedRef` (approx. lines 180-281).
     -   Simplify the initial data loading `useEffect` (approx. lines 140-171) to just call store actions (`loadUserEnrollments`, `loadUserProgress`).
     -   Remove complex `useMemo` fallback/verification logic (approx. lines 368-463) and direct database calls within the component.
     -   Add a new `useEffect` with a `window.addEventListener('focus', handleFocus)`.
     -   Implement `handleFocus` to call relevant store loading actions (e.g., `loadUserDashboardData(userId)` or specific ones like `loadUserProgress(userId)`) to trigger potential refreshes on tab focus.
     -   Include a cleanup function to remove the focus event listener.
-- [ ] **Refactor `components/dashboard/course-progress-section.tsx`:**
+- [x] **Refactor `components/dashboard/course-progress-section.tsx`:**
     -   Remove the `useEffect` hook performing direct database verification (`verifyFromDatabase`) (approx. lines 164-409).
     -   Ensure the component relies solely on data from the store (via props or hooks).
+
+*Troubleshooting Note:* After completing Phase 3, the dashboard was stuck loading. Diagnosis revealed that initial `isLoading...` flags in the Zustand store (`index.ts`) were set to `true`, preventing the initial fetch actions from running due to their internal `if (state.isLoading...)` checks. **Fix Applied:** Corrected initial state for all `isLoading...` flags to `false`.
 
 ### 4. Implement Testing and Validation
 - [ ] Create test cases for logout scenarios (successful, errors).
 - [ ] Develop test procedures for navigation state retention (navigate away, tab away, come back).
 - [ ] Implement thorough integration tests covering auth state, store state, and component rendering.
 - [ ] Add telemetry/logging to track state transitions and fetch triggers (optional but recommended).
+
+### 5. Additional Optimizations & Fixes (Discovered Post-Phase 3)
+- [ ] **Investigate & Optimize Page Loads for /store & /purchase-history:**
+    -   Diagnose why these pages appear to reload data on navigation (likely due to being Server Components fetching data directly).
+    -   **Proposed Solution:** Convert `app/dashboard/store/page.tsx` and `app/dashboard/purchase-history/page.tsx` to Client Components.
+    -   Integrate their data requirements into `useStudentDashboardStore`, adding new state slices (e.g., `storeProducts`, `purchases`) and corresponding actions with staleness logic, mirroring the pattern used for `enrollments` and `progress`.
+- [ ] **Implement Active Link Highlighting in `student-header.tsx`:**
+    -   Use the `usePathname` hook from `next/navigation`.
+    -   Compare the current pathname with the `href` of each navigation `Link`.
+    -   Conditionally apply distinct styles (e.g., `text-brand-purple bg-brand-purple/10`) to the active link.
 
 ## Technical Considerations
 

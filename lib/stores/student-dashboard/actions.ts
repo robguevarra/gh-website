@@ -23,6 +23,9 @@ import type {
 } from './types/index';
 import { useStudentDashboardStore } from './index';
 
+// Define a threshold for how long data is considered fresh (e.g., 5 minutes)
+const STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 // Define properly typed set and get functions for Zustand
 type SetState = {
   (partial: StudentDashboardStore | Partial<StudentDashboardStore> | ((state: StudentDashboardStore) => StudentDashboardStore | Partial<StudentDashboardStore>), replace?: false): void;
@@ -131,56 +134,28 @@ export const createActions = (
   /**
    * Load all user data for the dashboard
    */
-  loadUserDashboardData: async (userId: string) => {
+  loadUserDashboardData: async (userId: string, force?: boolean) => {
     if (!userId) return;
 
+    // This action now primarily orchestrates calls to more specific loading actions,
+    // which contain their own staleness logic. We pass the 'force' parameter down.
+
     const store = get() as StudentDashboardStore;
-    const now = Date.now();
 
-    // Check if we've loaded recently (within the last 10 seconds)
-    const state = get();
-    const recentEnrollmentsLoad = state.lastEnrollmentsLoadTime && now - state.lastEnrollmentsLoadTime < 10000;
-    const recentProgressLoad = state.lastProgressLoadTime && now - state.lastProgressLoadTime < 10000;
-
-    // Only set loading flags for data that needs to be loaded
-    const loadingFlags: any = {};
-
-    if (!recentEnrollmentsLoad && !state.isLoadingEnrollments) {
-      loadingFlags.isLoadingEnrollments = true;
-    }
-
-    if (!recentProgressLoad && !state.isLoadingProgress) {
-      loadingFlags.isLoadingProgress = true;
-    }
-
-    // Set loading flags if needed
-    if (Object.keys(loadingFlags).length > 0) {
-      set(loadingFlags);
-    }
+    // Removed the internal 10-second check and loadingFlags logic.
+    // The individual actions will handle staleness and prevent concurrent fetches.
 
     try {
-      // Load data in parallel for better performance
-      const loadPromises = [];
-
-      // Load enrollments if needed
-      if (!recentEnrollmentsLoad && !state.isLoadingEnrollments) {
-        loadPromises.push(store.loadUserEnrollments(userId));
-      }
-
-      // Load progress if needed
-      if (!recentProgressLoad && !state.isLoadingProgress) {
-        loadPromises.push(store.loadUserProgress(userId));
-      }
-
-      // Note: Templates are now loaded via Google Drive integration
-      // and no longer need to be loaded here
-
-      // Wait for all data to load
-      if (loadPromises.length > 0) {
-        await Promise.all(loadPromises);
-      }
+      // Load data in parallel for better performance, passing down 'force' flag.
+      await Promise.all([
+        store.loadUserEnrollments(userId, force),
+        store.loadUserProgress(userId, force)
+        // Note: loadUserTemplates is deprecated and a no-op
+      ]);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
+      // Set general error flags if orchestration fails, though individual actions
+      // also set their specific flags.
       set({
         hasEnrollmentError: true,
         hasProgressError: true
@@ -191,26 +166,30 @@ export const createActions = (
   /**
    * Load user enrollments
    */
-  loadUserEnrollments: async (userId: string) => {
+  loadUserEnrollments: async (userId: string, force?: boolean) => {
     if (!userId) return;
 
-    // Check if we're already loading or loaded recently
+    // Check if data is fresh and user hasn't changed
     const state = get();
     const now = Date.now();
+    if (!force && 
+        state.userId === userId && 
+        state.lastEnrollmentsLoadTime && 
+        (now - state.lastEnrollmentsLoadTime < STALE_THRESHOLD)) {
+      // Data is fresh, no need to fetch
+      return;
+    }
 
+    // Prevent concurrent fetches for the same data
     if (state.isLoadingEnrollments) {
       return;
     }
 
-    // Only load if we haven't loaded recently (within the last 10 seconds)
-    if (state.lastEnrollmentsLoadTime && now - state.lastEnrollmentsLoadTime < 10000) {
-      return;
-    }
-
+    // Set loading state
     set({
       isLoadingEnrollments: true,
       hasEnrollmentError: false,
-      lastEnrollmentsLoadTime: now
+      // Do NOT update lastLoadTime here, only after successful fetch
     });
 
     try {
@@ -238,13 +217,15 @@ export const createActions = (
       // Format and set enrollments
       set({
         enrollments: enrollments || [],
-        isLoadingEnrollments: false
+        isLoadingEnrollments: false,
+        lastEnrollmentsLoadTime: Date.now() // Update timestamp on success
       });
     } catch (error) {
       console.error('Error loading enrollments:', error);
       set({
         hasEnrollmentError: true,
         isLoadingEnrollments: false
+        // Don't update timestamp on error
       });
     }
   },
@@ -252,26 +233,30 @@ export const createActions = (
   /**
    * Load user progress
    */
-  loadUserProgress: async (userId: string) => {
+  loadUserProgress: async (userId: string, force?: boolean) => {
     if (!userId) return;
 
-    // Check if we're already loading or loaded recently
+    // Check if data is fresh and user hasn't changed
     const state = get();
     const now = Date.now();
+    if (!force && 
+        state.userId === userId && 
+        state.lastProgressLoadTime && 
+        (now - state.lastProgressLoadTime < STALE_THRESHOLD)) {
+      // Data is fresh, no need to fetch
+      return;
+    }
 
+    // Prevent concurrent fetches for the same data
     if (state.isLoadingProgress) {
       return;
     }
 
-    // Only load if we haven't loaded recently (within the last 10 seconds)
-    if (state.lastProgressLoadTime && now - state.lastProgressLoadTime < 10000) {
-      return;
-    }
-
+    // Set loading state
     set({
       isLoadingProgress: true,
       hasProgressError: false,
-      lastProgressLoadTime: now
+      // Do NOT update lastLoadTime here, only after successful fetch
     });
 
     try {
@@ -471,33 +456,21 @@ export const createActions = (
         courseProgress: courseProgressMap,
         moduleProgress: moduleProgressMap,
         lessonProgress: lessonProgressMap,
-        isLoadingProgress: false
+        isLoadingProgress: false,
+        lastProgressLoadTime: Date.now() // Update timestamp on success
       });
 
-      // Load continue learning lesson with optimized version
-      // Check if we're already loading or loaded recently
-      const state = get();
-      const now = Date.now();
-
-      if (!state.isLoadingContinueLearningLesson &&
-          (!state.lastContinueLearningLessonLoadTime ||
-           now - state.lastContinueLearningLessonLoadTime > 10000)) {
-        // Set loading flag and timestamp
-        set({
-          isLoadingContinueLearningLesson: true,
-          lastContinueLearningLessonLoadTime: now
-        });
-
-        // Load continue learning lesson
-        const store = get() as StudentDashboardStore;
-        await store.loadContinueLearningLesson(userId);
-      }
+      // Load continue learning lesson after progress is loaded
+      // We can pass the force parameter down if needed, but often
+      // continue learning can use its own staleness check.
+      await get().loadContinueLearningLesson(userId, force); 
 
     } catch (error) {
       console.error('Error loading progress:', error);
       set({
         hasProgressError: true,
         isLoadingProgress: false
+        // Don't update timestamp on error
       });
     }
   },
@@ -506,7 +479,7 @@ export const createActions = (
    * Load user templates
    * @deprecated Now using direct Google Drive integration instead. This function is a no-op and is kept only for backward compatibility.
    */
-  loadUserTemplates: async () => {
+  loadUserTemplates: async (userId: string, force?: boolean) => {
     // This function is intentionally empty and no longer used
     // Templates are now loaded directly from Google Drive via useGoogleDriveFiles hook
     // loadUserTemplates is deprecated and no longer used. Use useGoogleDriveFiles hook instead.
@@ -519,7 +492,7 @@ export const createActions = (
    * This function retrieves the most recent lesson a user was working on,
    * following the database schema where lessons are linked to courses via modules.
    */
-  loadContinueLearningLesson: async (userId: string) => {
+  loadContinueLearningLesson: async (userId: string, force?: boolean) => {
     if (!userId) {
       set({
         continueLearningLesson: null,
@@ -528,8 +501,18 @@ export const createActions = (
       return;
     }
 
-    // Check if we're already loading
+    // Check if data is fresh and user hasn't changed
     const state = get();
+    const now = Date.now();
+    if (!force && 
+        state.userId === userId && 
+        state.lastContinueLearningLessonLoadTime && 
+        (now - state.lastContinueLearningLessonLoadTime < STALE_THRESHOLD)) {
+       // Data is fresh, no need to fetch
+      return;
+    }
+
+    // Prevent concurrent fetches for the same data
     if (state.isLoadingContinueLearningLesson) {
       return;
     }
@@ -599,7 +582,8 @@ export const createActions = (
         // Set the continue learning lesson in the store
         set({
           continueLearningLesson: continueLearningData,
-          isLoadingContinueLearningLesson: false
+          isLoadingContinueLearningLesson: false,
+          lastContinueLearningLessonLoadTime: Date.now() // Update timestamp on success
         });
 
         if (process.env.NODE_ENV === 'development') {
@@ -609,7 +593,8 @@ export const createActions = (
         // No recent lesson found or data structure is incomplete
         set({
           continueLearningLesson: null,
-          isLoadingContinueLearningLesson: false
+          isLoadingContinueLearningLesson: false,
+          lastContinueLearningLessonLoadTime: Date.now() // Update timestamp even if null, means we checked
         });
       }
 
@@ -618,6 +603,7 @@ export const createActions = (
       set({
         continueLearningLesson: null,
         isLoadingContinueLearningLesson: false
+        // Don't update timestamp on error
       });
     }
   },

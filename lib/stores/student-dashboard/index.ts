@@ -30,11 +30,11 @@ import {
 
 export interface StudentDashboardStore {
   // Dashboard Data Loading Actions
-  loadUserDashboardData: (userId: string) => Promise<void>;
-  loadUserEnrollments: (userId: string) => Promise<void>;
-  loadUserProgress: (userId: string) => Promise<void>;
-  loadUserTemplates: (userId: string) => Promise<void>;
-  loadContinueLearningLesson: (userId: string) => Promise<void>;
+  loadUserDashboardData: (userId: string, force?: boolean) => Promise<void>;
+  loadUserEnrollments: (userId: string, force?: boolean) => Promise<void>;
+  loadUserProgress: (userId: string, force?: boolean) => Promise<void>;
+  loadUserTemplates: (userId: string, force?: boolean) => Promise<void>;
+  loadContinueLearningLesson: (userId: string, force?: boolean) => Promise<void>;
   updateLessonProgress: (userId: string, lessonId: string, progressData: {
     status?: string;
     progress?: number;
@@ -163,7 +163,7 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       // User data
       userId: null,
       userProfile: null,
-      isLoadingProfile: true,
+      isLoadingProfile: false,
 
       // Enrollment data
       enrollments: [],
@@ -175,7 +175,7 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       courseProgress: {},
       moduleProgress: {},
       lessonProgress: {},
-      isLoadingProgress: true,
+      isLoadingProgress: false,
       hasProgressError: false,
       lastProgressLoadTime: null,
       continueLearningLesson: null,
