@@ -5,16 +5,17 @@ Resolve critical state management issues affecting the student dashboard, includ
 
 ## Current State Assessment
 The dashboard currently experiences two key issues:
-1. **Inconsistent Logout Function**: The logout functionality in the student header component sometimes works and sometimes fails without clear error messaging. This creates a poor user experience and potential security concerns.
-2. **State Persistence Problems**: When navigating from the dashboard to other pages (like /store or /resources) and then back to the dashboard, the course progress section fails to load properly, creating an incomplete dashboard view.
+1. **Inconsistent Logout Function**: The logout functionality (`handleLogout` in `student-header.tsx`) uses a fixed `setTimeout` before redirecting, which doesn't guarantee proper state cleanup and can lead to race conditions with Supabase auth state propagation.
+2. **State Persistence Problems**: Course progress data fails to reload consistently when navigating away and back to the dashboard. The current refresh logic (`useEffect` with `progressRefreshedRef` in `app/dashboard/page.tsx` and complex fallbacks/verifications) is unreliable and overly complex.
 
-These issues stem from our current state management implementation, which lacks proper coordination between Zustand stores, Supabase auth, and React navigation. The underlying problems include race conditions in the authentication flow and incomplete state refresh mechanisms when navigating between routes.
+These issues stem from a lack of proper sequencing in the logout flow and decentralized, inconsistent state refresh mechanisms.
 
 ## Future State Goal
 A robust dashboard with:
-1. **Reliable Auth Transitions**: Consistent, error-free logout functionality with proper state cleanup and navigation handling.
-2. **Persistent Yet Fresh State**: Properly maintained state across page navigations while ensuring content is refreshed appropriately when returning to previously visited pages.
-3. **Enhanced User Experience**: Smooth transitions between pages with appropriate loading states and no UI inconsistencies.
+1. **Reliable Auth Transitions**: Consistent, error-free logout functionality with proper state cleanup (clearing Zustand store before Supabase signout) and immediate navigation handling (no `setTimeout`).
+2. **Centralized & Reliable State Refresh**: State refresh logic managed centrally within Zustand store actions, using timestamp-based staleness checks and focus listeners in components to trigger refreshes appropriately.
+3. **Simplified Component Logic**: UI components (`app/dashboard/page.tsx`, `components/dashboard/course-progress-section.tsx`) relying solely on the store as the source of truth, removing complex local refresh/fallback logic.
+4. **Enhanced User Experience**: Smooth transitions between pages with appropriate loading states and no UI inconsistencies.
 
 ## Relevant Context
 
@@ -34,217 +35,93 @@ These same principles must be applied to the dashboard state management to ensur
 
 ### From Our Auth Implementation
 Our authentication system uses:
-- Supabase Auth for user authentication
-- React Context for providing auth state
-- Local storage for persisting some auth state
-- Zustand stores that depend on auth state
+- Supabase Auth for user authentication (`@supabase/ssr`)
+- React Context (`useAuth`) for providing auth state
+- Local storage for persisting *some* UI state via Zustand middleware
+- Zustand store (`useStudentDashboardStore`) for dashboard data, dependent on auth state.
 
 ### From Dashboard Architecture
 The dashboard uses a combination of:
 - Server and client components
-- Zustand stores for state management
+- Zustand store (`useStudentDashboardStore`) for state management
 - React Hooks for accessing and updating state
-- Supabase for data fetching
+- Supabase for data fetching (via store actions).
 
-## Implementation Plan
+## Implementation Plan (Option B: Store-Centric Refresh Logic)
 
-### 1. Analyze and Fix Logout Function
-- [x] Identify race conditions in the logout process
-- [x] Trace token and session cleanup during logout
-- [x] Analyze navigation timing relative to auth state changes
-- [ ] Implement improved logout flow with proper sequencing:
-  - Update `handleLogout` to properly await auth state changes
-  - Add proper local state cleanup
-  - Ensure navigation happens only after logout is complete
-  - Add appropriate error handling and retry mechanisms
+### 1. Fix Logout Sequence
+- [x] **Create `clearUserState` Action:** Add a new action to `lib/stores/student-dashboard/actions.ts` that resets user-specific state (`userId`, `userProfile`, `enrollments`, `courseProgress`, `lessonProgress`, etc.) to initial values.
+- [x] **Modify `handleLogout` in `components/dashboard/student-header.tsx`:**
+    -   Set `isLoggingOut` state to `true`.
+    -   Call the new `clearUserState()` store action (or dispatch individual reset actions).
+    -   Call `await logout()` from `useAuth` context.
+    -   Check for errors.
+    -   If no error, call `router.push('/auth/signin')` **immediately** (remove `setTimeout`).
+    -   Handle errors appropriately, ensuring `isLoggingOut` is set to `false`.
 
-### 2. Address State Persistence Between Pages
-- [x] Analyze how the student dashboard store maintains state
-- [x] Identify why course progress fails to reload on returning to dashboard
-- [x] Understand the time-based conditional load mechanism
-- [ ] Implement improved state refresh mechanisms:
-  - Add page visibility detection to trigger reloads
-  - Modify routing to properly signal state refresh needs
-  - Enhance store with route-aware refresh policies
-  - Ensure proper loading states during data refresh
+### 2. Centralize Data Refresh Logic in Store Actions
+- [ ] **Modify Loading Actions in `lib/stores/student-dashboard/actions.ts`** (e.g., `loadUserProgress`, `loadUserEnrollments`, `loadUserDashboardData`):
+    -   Add an optional `force?: boolean` parameter to bypass staleness checks.
+    -   Define a staleness threshold (e.g., 5 minutes).
+    -   Implement a staleness check at the beginning of each action using the corresponding `lastLoadTime` state (e.g., `lastProgressLoadTime`). If data is present and not stale (`Date.now() - lastLoadTime < threshold`) and `force` is not true, return early.
+    -   If fetching proceeds, update the corresponding `lastLoadTime` state variable with `Date.now()` upon successful data fetch and state update.
 
-### 3. Implement Testing and Validation
-- [ ] Create test cases for logout scenarios
-- [ ] Develop test procedures for navigation state retention
-- [ ] Implement thorough integration tests
-- [ ] Add telemetry to track state transitions
+### 3. Simplify Component Data Fetching Logic
+- [ ] **Refactor `app/dashboard/page.tsx`:**
+    -   Remove the `useEffect` hook using `progressRefreshedRef` (approx. lines 180-281).
+    -   Simplify the initial data loading `useEffect` (approx. lines 140-171) to just call store actions (`loadUserEnrollments`, `loadUserProgress`).
+    -   Remove complex `useMemo` fallback/verification logic (approx. lines 368-463) and direct database calls within the component.
+    -   Add a new `useEffect` with a `window.addEventListener('focus', handleFocus)`.
+    -   Implement `handleFocus` to call relevant store loading actions (e.g., `loadUserDashboardData(userId)` or specific ones like `loadUserProgress(userId)`) to trigger potential refreshes on tab focus.
+    -   Include a cleanup function to remove the focus event listener.
+- [ ] **Refactor `components/dashboard/course-progress-section.tsx`:**
+    -   Remove the `useEffect` hook performing direct database verification (`verifyFromDatabase`) (approx. lines 164-409).
+    -   Ensure the component relies solely on data from the store (via props or hooks).
+
+### 4. Implement Testing and Validation
+- [ ] Create test cases for logout scenarios (successful, errors).
+- [ ] Develop test procedures for navigation state retention (navigate away, tab away, come back).
+- [ ] Implement thorough integration tests covering auth state, store state, and component rendering.
+- [ ] Add telemetry/logging to track state transitions and fetch triggers (optional but recommended).
 
 ## Technical Considerations
 
 ### Logout Process Best Practices
-1. **Proper Sequence of Operations**:
-   ```typescript
-   const handleLogout = async () => {
-     try {
-       setIsLoggingOut(true);
-       
-       // Step 1: Clear local application state
-       // This avoids race conditions with state updates after auth changes
-       clearLocalState();
-       
-       // Step 2: Perform the auth signout (clear tokens)
-       const { error } = await logout();
-       if (error) throw error;
-       
-       // Step 3: Only after confirming logout, perform navigation
-       router.push('/auth/signin');
-     } catch (err) {
-       // Handle errors appropriately
-       setLogoutError('Logout failed. Please try again.');
-       setIsLoggingOut(false);
-     }
-   };
-   ```
+1. **Proper Sequence of Operations**: Clear local/UI state -> Sign out from Auth Provider -> Navigate.
+2. **State Clearing**: Ensure all relevant user-specific data in Zustand is reset to prevent stale data flashing on logout/login.
+3. **Token Invalidation**: Rely on Supabase `signOut` to handle token invalidation server-side and clear relevant cookies/storage.
 
-2. **Token Invalidation Strategy**:
-   - Ensure tokens are properly invalidated server-side
-   - Clear all local storage and cookies related to auth
-   - Implement proper error handling for network failures
-
-### State Management Between Routes
-1. **Route-Aware State Refresh**:
-   ```typescript
-   // In dashboard store
-   interface StoreState {
-     // ...other state
-     lastVisitTimestamp: Record<string, number>;
-     markPageVisit: (route: string) => void;
-     shouldRefreshData: (route: string) => boolean;
-   }
-   
-   const useDashboardStore = create<StoreState>((set, get) => ({
-     // ...other state
-     lastVisitTimestamp: {},
-     
-     markPageVisit: (route) => {
-       set((state) => ({
-         lastVisitTimestamp: {
-           ...state.lastVisitTimestamp,
-           [route]: Date.now()
-         }
-       }));
-     },
-     
-     shouldRefreshData: (route) => {
-       const timestamps = get().lastVisitTimestamp;
-       const lastVisit = timestamps[route] || 0;
-       const now = Date.now();
-       
-       // Refresh if:
-       // 1. Never visited before
-       // 2. Last visit was > 5 minutes ago
-       // 3. Coming from a different route that might affect this data
-       return !lastVisit || (now - lastVisit > 5 * 60 * 1000);
-     }
-   }));
-   ```
-
-2. **Effect-Based Data Loading**:
-   ```typescript
-   // In dashboard component
-   useEffect(() => {
-     // Track this page visit
-     dashboardStore.markPageVisit('/dashboard');
-     
-     // Check if we should refresh data
-     if (dashboardStore.shouldRefreshData('/dashboard') && user?.id) {
-       loadUserData(user.id);
-     }
-     
-     // Set up a focus listener to refresh on tab focus
-     const handleFocus = () => {
-       if (user?.id) loadUserData(user.id);
-     };
-     
-     window.addEventListener('focus', handleFocus);
-     return () => window.removeEventListener('focus', handleFocus);
-   }, [user?.id, loadUserData]);
-   ```
+### State Management Between Routes (Store-Centric)
+1. **Centralized Staleness Logic**: Store actions are responsible for deciding when to fetch data based on timestamps (`lastLoadTime`) and a defined threshold.
+2. **Component Responsibility**: Components trigger data loading actions (on mount, on focus) but do not implement their own refresh or fallback logic.
+3. **Focus Listener**: Using `window.addEventListener('focus', ...)` is a simple way to trigger potential data refreshes when the user returns to the tab/application.
 
 ### Browser Storage Considerations
-1. **Storage Invalidation**:
-   - Implement proper cleanup of local/session storage during logout
-   - Consider using storage events to coordinate between tabs
-   - Use a consistent schema for stored data to simplify cleanup
-
-2. **State Rehydration**:
-   - Ensure stores are properly rehydrated after navigation
-   - Validate data freshness before using cached data
-   - Implement proper loading states during rehydration
+1. **Zustand Persist**: The `persist` middleware primarily handles UI state persistence. Core data (`enrollments`, `progress`) is *not* persisted and must be fetched.
+2. **Logout Cleanup**: The new `clearUserState` action ensures the non-persisted parts of the store are reset. Supabase handles its own auth storage cleanup.
 
 ## Proposed Solutions
 
-### Option 1: Enhanced Auth Flow with Sequential Processing
-This approach focuses on improving the existing auth flow with proper sequencing and cleanup:
+### Chosen Approach: Option B - Store-Centric Refresh Logic
+This approach modifies the existing auth flow for correctness and centralizes data refresh logic within the Zustand store actions. Components trigger loads, but the store determines if a fetch is needed based on data staleness.
 
 **Pros:**
-- Minimal changes to the existing architecture
-- Focuses on fixing specific issues without broader refactoring
-- Easier to implement and test in isolation
-- Maintains backwards compatibility with existing components
+- Addresses root causes of both logout and refresh issues.
+- Simplifies component logic significantly.
+- Creates a more robust and maintainable pattern for data loading/refreshing.
+- Balances fixing immediate issues with architectural improvements.
 
 **Cons:**
-- Doesn't address potential underlying architectural issues
-- May require similar fixes in other components using auth
-- Doesn't fundamentally rethink state persistence strategy
+- Requires modifying store actions and potentially adding a new cleanup action.
+- Needs careful implementation of staleness checks.
 
-### Option 2: Comprehensive State Management Overhaul
-This approach restructures how state is managed throughout the application:
+--- 
 
-**Pros:**
-- Addresses root causes rather than symptoms
-- Provides a more consistent approach across the application
-- Better scalability as the application grows
-- Improved developer experience with clearer patterns
+*Previous Options (Not Chosen):*
 
-**Cons:**
-- More extensive changes required
-- Higher risk of introducing new issues
-- Requires more thorough testing
-- May require refactoring multiple components
-
-### Option 3: Hybrid Approach with Targeted Improvements
-This approach combines immediate fixes for the current issues while laying groundwork for better state management:
-
-**Pros:**
-- Resolves current issues quickly
-- Provides a path toward better architecture
-- Balances immediate needs with long-term improvements
-- Can be implemented incrementally
-
-**Cons:**
-- Requires careful planning to avoid inconsistent patterns
-- May involve some temporary solutions
-- Requires communication across team to align on approach
-
-### Recommendation
-**Option 3: Hybrid Approach** provides the best balance of immediate problem resolution and architectural improvement. We should:
-
-1. Implement immediate fixes for the logout function and state persistence issues
-2. Document a clear pattern for auth state management that can be applied consistently
-3. Gradually improve other components using these patterns
-4. Consider a more comprehensive refactor as part of a future build phase
-
-## Technical Considerations
-1. **Authentication State Management**:
-   - Ensure auth state is treated as the single source of truth
-   - Update derived state in response to auth changes, not the reverse
-   - Use proper cleanup functions in React effects
-
-2. **Routing and Navigation**:
-   - Consider using Next.js middleware for route-based state preparation
-   - Use navigation events to trigger appropriate state updates
-   - Implement proper loading states during navigation
-
-3. **Store Coordination**:
-   - Ensure Zustand stores properly coordinate with each other
-   - Use middleware for logging and debugging state transitions
-   - Consider implementing a pub/sub system for cross-store coordination
+*   *Option A (Targeted Fixes):* Fix logout sequence and add focus listener/simple refresh in component. Faster but less robust, keeps refresh logic decentralized.
+*   *Option 2 (Comprehensive State Management Overhaul):* Full refactor of state management. Too complex and high-risk for the current scope.
+*   *Option 3 (Hybrid Approach - Initial Recommendation):* Mix of immediate fixes and gradual pattern changes. Superseded by the more integrated Option B.
 
 ---
 

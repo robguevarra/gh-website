@@ -40,6 +40,10 @@ export interface StudentDashboardStore {
     progress?: number;
     lastPosition?: number;
   }) => Promise<void>;
+
+  // Clear user state action
+  clearUserState: () => void;
+
   // User data
   userId: string | null;
   userProfile: {

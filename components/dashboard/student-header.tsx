@@ -44,6 +44,9 @@ import { useAuth } from '@/context/auth-context';
 // Import cart store
 import { useCartStore } from '@/stores/cartStore';
 
+// Import student dashboard store for clearing state on logout
+import { useStudentDashboardStore } from '@/lib/stores/student-dashboard';
+
 // We're now using the useStudentHeader hook which provides optimized access to the store
 
 // We'll get data from the store directly instead of props
@@ -125,27 +128,46 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
   // State for logout loading
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  const handleLogout = async () => {
-    try {
-      // Set loading state
-      setIsLoggingOut(true)
+  // Get the clearUserState action from the store
+  const clearUserState = useStudentDashboardStore((state) => state.clearUserState);
 
-      // Use the auth context logout method
+  const handleLogout = async () => {
+    // Set loading state
+    setIsLoggingOut(true)
+    console.log('Logout initiated, clearing user state...');
+
+    try {
+      // Clear user-specific Zustand state *before* calling Supabase logout
+      // This prevents race conditions where components might react to old state
+      // after Supabase tokens are cleared but before navigation completes.
+      clearUserState();
+      console.log('User state cleared.');
+
+      // Use the auth context logout method (signs out from Supabase)
       const { error } = await logout();
+      console.log('Supabase logout completed.', error ? `Error: ${error.message}` : 'Success');
 
       if (error) {
         console.error('Error signing out:', error);
-        setIsLoggingOut(false);
+        // Optionally show an error message to the user here
+        setIsLoggingOut(false); // Reset loading state on error
         return;
       }
 
-      // Redirect to login page after a short delay to allow for UI feedback
-      setTimeout(() => {
-        router.push('/auth/signin');
-      }, 500);
+      // If logout is successful, redirect immediately to the sign-in page
+      // No need for setTimeout, navigation should happen after state is cleared and logout confirmed
+      console.log('Logout successful, redirecting to /auth/signin...');
+      router.push('/auth/signin');
+      // We might not need to set isLoggingOut back to false here,
+      // as the component might unmount upon navigation.
+      // However, setting it defensively isn't harmful.
+      // setIsLoggingOut(false); // Removed as navigation likely unmounts
+
     } catch (err) {
       console.error('Unexpected error during logout:', err);
-      setIsLoggingOut(false);
+      // Handle unexpected errors (e.g., network issues during clearUserState or logout)
+      // Optionally show an error message to the user here
+      setIsLoggingOut(false); // Reset loading state on error
     }
   }
 

@@ -21,6 +21,7 @@ import type {
   UILessonProgress,
   ContinueLearningLesson
 } from './types/index';
+import { useStudentDashboardStore } from './index';
 
 // Define properly typed set and get functions for Zustand
 type SetState = {
@@ -94,6 +95,38 @@ export const createActions = (
       console.error('Error initializing authenticated user:', error);
       set({ isLoadingProfile: false });
     }
+  },
+  /**
+   * Clear user-specific state on logout
+   */
+  clearUserState: () => {
+    // Get initial state values from the store definition itself
+    // This avoids duplicating the initial state logic here
+    const initialState = useStudentDashboardStore.getState();
+    const resetState: Partial<StudentDashboardStore> = {
+      userId: null,
+      userProfile: null,
+      isLoadingProfile: false, // Set loading to false, as there's no user to load
+      enrollments: [],
+      isLoadingEnrollments: false,
+      hasEnrollmentError: false,
+      lastEnrollmentsLoadTime: null,
+      courseProgress: {},
+      moduleProgress: {},
+      lessonProgress: {},
+      isLoadingProgress: false, // Set loading to false
+      hasProgressError: false,
+      lastProgressLoadTime: null,
+      continueLearningLesson: null,
+      isLoadingContinueLearningLesson: false,
+      lastContinueLearningLessonLoadTime: null,
+      // We might keep templates/purchases/liveClasses if they aren't strictly user-specific
+      // or clear them too if desired. For now, clearing only core user/progress data.
+    };
+
+    // Use the standard set function without replace: true
+    // We provide a partial state object containing only the fields to reset
+    set(resetState);
   },
   /**
    * Load all user data for the dashboard
