@@ -185,7 +185,7 @@ export function ProductDriveMappingTable({ products }: ProductDriveMappingTableP
                     <div className="text-xs text-muted-foreground">{product.handle}</div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={product.status === 'active' ? 'default' : 'secondary'}>
+                    <Badge variant={product.status?.toLowerCase() === 'active' ? 'default' : 'secondary'}>
                       {product.status}
                     </Badge>
                   </TableCell>
