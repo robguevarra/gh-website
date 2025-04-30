@@ -8,7 +8,7 @@ import SuccessShowcase from '@/components/store/SuccessShowcase';
 import { Database } from '@/types/supabase'; // Keep types
 import SaleSection from '@/components/store/SaleSection';
 import { getWishlistedProductIds, searchProductsStore } from '@/app/actions/store-actions'; // Keep server actions for now
-// import { getOwnedProductIds } from '@/app/actions/userActions'; // Keep for now
+import { getOwnedProductIds } from '@/app/actions/userActions';
 import StoreStickyBar from '@/components/store/StoreStickyBar';
 import StoreResultsManager from '@/components/store/StoreResultsManager';
 import WelcomeStoreWrapper from '@/components/store/WelcomeStoreWrapper';
@@ -59,7 +59,7 @@ export default function StorePage() { // REMOVED: Props { searchParams } - use h
   // Fetch wishlist and owned IDs on mount (server actions)
   useEffect(() => {
     getWishlistedProductIds().then(setWishlistedIds);
-    // getOwnedProductIds().then(setOwnedProductIds);
+    getOwnedProductIds().then(setOwnedProductIds);
   }, []); // Runs once on mount
 
   // Fetch store products and collections using Zustand store actions

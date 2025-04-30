@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import ProductDetail from '@/components/store/ProductDetail';
 import { Database } from '@/types/supabase';
 import { getProductReviews, ProductReviewWithProfile } from '@/app/actions/store-actions';
-import { getOwnedProductIds } from '@/app/actions/userActions';
+import { getOwnedProductIdsServer } from '@/app/actions/serverActions';
 
 // Define the type for a product with all details
 type ProductWithDetails = Database['public']['Tables']['shopify_products']['Row'] & {
@@ -111,7 +111,7 @@ export default async function ProductPage({ params }: { params: { handle: string
   const [relatedProducts, reviews, ownedProductIds] = await Promise.all([
     getRelatedProducts(product.id, product.tags || []),
     getProductReviews(product.id), // Use product ID for consistency
-    getOwnedProductIds()
+    getOwnedProductIdsServer()
   ]);
 
   console.log('DEBUG: Successfully fetched related data.'); // Log after Promise.all

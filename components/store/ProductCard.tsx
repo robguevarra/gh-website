@@ -78,7 +78,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const isOnSale = typeof product.compare_at_price === 'number' && product.compare_at_price > (product.price ?? 0);
 
   // Determine if the current user owns this product
-  const isOwned = ownedProductIds.includes(product.id);
+  // Use string comparison to handle potential format differences (string vs number)
+  const isOwned = ownedProductIds.some(id => String(id) === String(product.id));
 
   const handleAddToCart = () => {
     // Prevent adding if owned (belt-and-suspenders check)

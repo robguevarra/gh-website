@@ -101,12 +101,12 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
             
             // Log the first order structure to debug
             if (fetchedShopify && fetchedShopify.length > 0) {
-              console.log('[fetchPurchaseHistory] First order structure:', JSON.stringify(fetchedShopify[0], null, 2));
+              //console.log('[fetchPurchaseHistory] First order structure:', JSON.stringify(fetchedShopify[0], null, 2));
               
               // Check if order items exist
               if (fetchedShopify[0].shopify_order_items && fetchedShopify[0].shopify_order_items.length > 0) {
-                console.log('[fetchPurchaseHistory] First order item structure:', 
-                  JSON.stringify(fetchedShopify[0].shopify_order_items[0], null, 2));
+                //console.log('[fetchPurchaseHistory] First order item structure:', 
+                  //JSON.stringify(fetchedShopify[0].shopify_order_items[0], null, 2));
                   
                 // Specifically check if shopify_products is included
                 if (fetchedShopify[0].shopify_order_items[0].shopify_products) {
@@ -138,7 +138,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
       
       shopifyData.forEach(order => {
         if (!order.shopify_order_items || !Array.isArray(order.shopify_order_items)) {
-          console.log('[fetchPurchaseHistory] Order missing shopify_order_items:', order.id);
+          //console.log('[fetchPurchaseHistory] Order missing shopify_order_items:', order.id);
           return;
         }
         
@@ -147,7 +147,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
           if (item.product_id) {
             allProductIds.push(String(item.product_id));
           } else {
-            console.log('[fetchPurchaseHistory] Item missing product_id in order:', order.id);
+            //console.log('[fetchPurchaseHistory] Item missing product_id in order:', order.id);
           }
           
           // Always collect titles for fallback matching
@@ -161,7 +161,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
       const uniqueProductIds = Array.from(new Set(allProductIds));
       const uniqueProductTitles = Array.from(new Set(allProductTitles));
       
-      console.log(`[fetchPurchaseHistory] Found ${uniqueProductIds.length} unique product IDs and ${uniqueProductTitles.length} unique titles`);
+      //console.log(`[fetchPurchaseHistory] Found ${uniqueProductIds.length} unique product IDs and ${uniqueProductTitles.length} unique titles`);
       
       // Step 2: First try fetching by ID when available
       if (uniqueProductIds.length > 0) {
@@ -174,7 +174,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
           if (imgError) {
             console.error('[fetchPurchaseHistory] Image fetch by ID error:', imgError);
           } else if (imagesById && imagesById.length > 0) {
-            console.log(`[fetchPurchaseHistory] Successfully fetched ${imagesById.length} product images by ID`);
+            //console.log(`[fetchPurchaseHistory] Successfully fetched ${imagesById.length} product images by ID`);
             imagesById.forEach(img => imageMapById.set(img.id, img.featured_image_url));
           }
         } catch (imgFetchErr) {
@@ -186,7 +186,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
       // Instead of complex OR queries that might fail due to formatting issues, let's fetch products directly
       if (uniqueProductTitles.length > 0) {
         try {
-          console.log('[fetchPurchaseHistory] Attempting to fetch products by title...');
+          //console.log('[fetchPurchaseHistory] Attempting to fetch products by title...');
           
           // Get all products (simpler and more reliable than complex OR queries)
           const { data: allProducts, error: productsError } = await supabase
@@ -196,9 +196,9 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
           if (productsError) {
             console.error('[fetchPurchaseHistory] Error fetching all products:', productsError);
           } else if (!allProducts || allProducts.length === 0) {
-            console.log('[fetchPurchaseHistory] No products found in database');
+            //console.log('[fetchPurchaseHistory] No products found in database');
           } else {
-            console.log(`[fetchPurchaseHistory] Retrieved ${allProducts.length} total products from database`);
+            //console.log(`[fetchPurchaseHistory] Retrieved ${allProducts.length} total products from database`);
             
             // Find products whose titles match or contain our order item titles
             const matchingProducts = [];
@@ -206,31 +206,31 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
               // Convert to lowercase for case-insensitive matching
               const lowerOrderTitle = orderItemTitle.toLowerCase().trim();
               
-              console.log(`[fetchPurchaseHistory] Looking for matches for "${lowerOrderTitle}"`);
+              //console.log(`[fetchPurchaseHistory] Looking for matches for "${lowerOrderTitle}"`);
               
               // Find products that contain this title
               const matches = allProducts.filter(product => 
                 product.title && product.title.toLowerCase().includes(lowerOrderTitle));
               
               if (matches.length > 0) {
-                console.log(`[fetchPurchaseHistory] Found ${matches.length} matches for "${lowerOrderTitle}"`);
+                //console.log(`[fetchPurchaseHistory] Found ${matches.length} matches for "${lowerOrderTitle}"`);
                 matchingProducts.push(...matches);
                 
                 // Map the exact title for direct lookup
                 titleToImageMap.set(lowerOrderTitle, matches[0].featured_image_url);
               } else {
-                console.log(`[fetchPurchaseHistory] No product matches found for "${lowerOrderTitle}"`);
+                //console.log(`[fetchPurchaseHistory] No product matches found for "${lowerOrderTitle}"`);
               }
             });
             
-            console.log(`[fetchPurchaseHistory] Found ${matchingProducts.length} total matching products`);  
+            //console.log(`[fetchPurchaseHistory] Found ${matchingProducts.length} total matching products`);  
           }
         } catch (titleFetchErr) {
           console.error('[fetchPurchaseHistory] Exception during product title matching:', titleFetchErr);
         }
       }
     } else {
-      console.log('[fetchPurchaseHistory] No Shopify orders found, skipping image fetches');
+      //console.log('[fetchPurchaseHistory] No Shopify orders found, skipping image fetches');
     }
 
     // 4. Map to unified structures
