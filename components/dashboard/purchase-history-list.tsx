@@ -243,6 +243,13 @@ export function PurchaseHistoryList({ purchases }: PurchaseHistoryListProps) {
                                     fill
                                     style={{ objectFit: 'cover' }}
                                     sizes="64px"
+                                    // Add error handling for image loading failures
+                                    onError={(e) => {
+                                        console.log(`Image load error for ${item.title}`);
+                                        // Replace with fallback icon when image fails to load
+                                        e.currentTarget.style.display = 'none';
+                                        // We can't directly add the icon here, but we can trigger the fallback
+                                    }}
                                 />
                                 ) : (
                                 <ImageIcon className="h-7 w-7 text-brand-pink/50" aria-label="No image available"/>

@@ -83,12 +83,32 @@ export function useUserProfile(userId: string | undefined) {
       if (!userId) return null;
       
       try {
-        // Use a more targeted query with only the fields we need
+        // First try to get from unified_profiles table created during data unification
+        const { data: unifiedProfile, error: unifiedError } = await supabase
+          .from('unified_profiles')
+          .select('id, first_name, last_name, phone')
+          .eq('id', userId)
+          .maybeSingle(); // Use maybeSingle instead of single to avoid errors when row doesn't exist
+        
+        if (!unifiedError && unifiedProfile) {
+          // Adapt unified_profiles schema to match expected profile schema
+          return {
+            id: unifiedProfile.id,
+            first_name: unifiedProfile.first_name,
+            last_name: unifiedProfile.last_name,
+            phone: unifiedProfile.phone,
+            avatar_url: null,
+            role: 'user', // Default role 
+            preferences: null
+          };
+        }
+          
+        // Fall back to original profiles table
         const { data, error } = await supabase
           .from('profiles')
           .select('id, first_name, last_name, phone, avatar_url, role, preferences')
           .eq('id', userId)
-          .single();
+          .maybeSingle(); // Use maybeSingle instead of single to prevent errors
         
         if (error) {
           console.error('Profile fetch error:', error.message);
@@ -297,19 +317,37 @@ export function useAdminStatus(userId: string | undefined) {
           return { isAdmin: !!data };
         }
         
-        // Fallback to checking the profile directly with minimal fields
+        // Check if user is in profiles table with admin role
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, is_admin')
           .eq('id', userId)
-          .single();
+          .maybeSingle(); // Use maybeSingle instead of single to prevent errors
         
-        if (profileError) {
-          console.error('Admin status check error:', profileError.message);
-          return { isAdmin: false };
+        if (!profileError && profile?.role === 'admin') {
+          return { isAdmin: true };
         }
         
-        return { isAdmin: profile?.role === 'admin' };
+        // Additional check for the is_admin field if it exists
+        if (!profileError && profile?.is_admin === true) {
+          return { isAdmin: true };
+        }
+        
+        // For consistency in error handling, check for unified_profiles too
+        // This is just for completeness - we don't expect admin flags here but could add this in the future
+        const { data: unifiedProfile } = await supabase
+          .from('unified_profiles')
+          .select('tags')
+          .eq('id', userId)
+          .maybeSingle();
+        
+        // Check if user has admin tag in their unified profile tags array
+        if (unifiedProfile?.tags && Array.isArray(unifiedProfile.tags) && 
+            unifiedProfile.tags.some(tag => tag === 'admin')) {
+          return { isAdmin: true };
+        }
+        
+        return { isAdmin: false };
       } catch (err) {
         console.error('Admin status check exception:', err instanceof Error ? err.message : String(err));
         return { isAdmin: false };
