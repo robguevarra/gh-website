@@ -115,10 +115,12 @@ The dashboard uses a combination of:
     - **Diagnosis:** Our helper functions (`getLessonVideoId`/`getLessonVideoUrl`) extracted only the Vimeo ID and constructed a public embed URL, which did not support private embed tokens.
     - **Fix Implemented:** In `app/dashboard/course/page.tsx`, updated the video player logic to render the raw `metadata.videoUrl` snippet directly using `dangerouslySetInnerHTML`. Removed fallback iframe generation for private embeds to preserve original embed code.
     - **Testing:** Verified with a lesson having a private Vimeo embed; the video loads correctly and displays playback controls as expected.
-- [ ] **Implement Active Link Highlighting in `student-header.tsx`:**
-    - [ ] Use the `usePathname` hook from `next/navigation`.
-    - [ ] Compare the current pathname with the `href` of each navigation `Link`.
-    - [ ] Conditionally apply distinct styles (e.g., `text-brand-purple bg-brand-purple/10`) to the active link.
+- [x] **Implement Active Link Highlighting in `student-header.tsx`:**
+    - [x] Used the `usePathname` hook from `next/navigation`.
+    - [x] Compared the current pathname with each `Link`'s `href`.
+    - [x] Applied dynamic classes (`text-brand-purple bg-brand-purple/10` for mobile, `text-brand-purple` for desktop) for active link styling.
+    - **Implementation:** Imported `usePathname` and applied conditional class names in `student-header.tsx`.
+    - **Validation:** Confirmed active link highlights correctly on both mobile sheet and desktop nav.
 
 ## Technical Considerations
 

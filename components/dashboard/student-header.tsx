@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, memo } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Bell,
@@ -54,6 +54,7 @@ interface StudentHeaderProps {}
 
 export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps) {
   const router = useRouter()
+  const pathname = usePathname()
 
   // Use the auth context to get the authenticated user and logout function
   const { user, profile, logout, isLoading: isLoadingAuth } = useAuth()
@@ -205,14 +206,14 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                 <div className="space-y-1">
                   <Link
                     href="/dashboard"
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-brand-purple bg-brand-purple/10"
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 ${pathname === "/dashboard" ? "text-brand-purple bg-brand-purple/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
                   >
                     <Home className="h-5 w-5" />
                     Dashboard
                   </Link>
                   <Link
                     href={`/dashboard/course?courseId=${enrollments?.[0]?.course?.id || ''}`}
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 ${pathname === "/dashboard/course" ? "text-brand-purple bg-brand-purple/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
                     prefetch={true}
                   >
                     <BookOpen className="h-5 w-5" />
@@ -220,7 +221,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                   </Link>
                   <Link
                     href="/dashboard/resources"
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 ${pathname === "/dashboard/resources" ? "text-brand-purple bg-brand-purple/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
                     prefetch={true}
                   >
                     <Download className="h-5 w-5" />
@@ -228,7 +229,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                   </Link>
                   <Link
                     href="/dashboard/store"
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 ${pathname === "/dashboard/store" ? "text-brand-purple bg-brand-purple/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
                     prefetch={true}
                   >
                     <ShoppingBag className="h-5 w-5" />
@@ -236,7 +237,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                   </Link>
                   <Link
                     href="/dashboard/purchase-history"
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 ${pathname === "/dashboard/purchase-history" ? "text-brand-purple bg-brand-purple/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
                     prefetch={true}
                   >
                     <Receipt className="h-5 w-5" />
@@ -244,21 +245,21 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                   </Link>
                   <Link
                     href="/dashboard/live-classes"
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 ${pathname === "/dashboard/live-classes" ? "text-brand-purple bg-brand-purple/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
                   >
                     <Calendar className="h-5 w-5" />
                     Live Classes
                   </Link>
                   <Link
                     href="/dashboard/community"
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 ${pathname === "/dashboard/community" ? "text-brand-purple bg-brand-purple/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
                   >
                     <Users className="h-5 w-5" />
                     Community
                   </Link>
                   <Link
                     href="/dashboard/support"
-                    className="flex items-center gap-2 rounded-lg px-4 py-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 ${pathname === "/dashboard/support" ? "text-brand-purple bg-brand-purple/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
                   >
                     <MessageSquare className="h-5 w-5" />
                     Support
@@ -282,7 +283,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                           <AvatarFallback>{profile?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}</AvatarFallback>
                         </Avatar>
                         <div className="space-y-1">
-                          <p className="text-sm font-medium leading-none">{profile?.full_name || user?.email?.split('@')[0] || 'User'}</p>
+                          <p className="text-sm font-medium">{profile?.full_name || user?.email?.split('@')[0] || 'User'}</p>
                           <p className="text-xs text-muted-foreground">{user?.email || 'user@example.com'}</p>
                         </div>
                       </div>
@@ -312,40 +313,40 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
           </Link>
 
           <nav className="hidden md:flex items-center gap-6">
-            <Link href="/dashboard" className="text-sm font-medium text-brand-purple">
+            <Link href="/dashboard" className={`text-sm font-medium ${pathname === "/dashboard" ? "text-brand-purple" : "text-muted-foreground hover:text-foreground"}`}>
               Dashboard
             </Link>
             <Link
               href={`/dashboard/course?courseId=${enrollments?.[0]?.course?.id || ''}`}
-              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              className={`text-sm font-medium ${pathname === "/dashboard/course" ? "text-brand-purple" : "text-muted-foreground hover:text-foreground"}`}
               prefetch={true}
             >
               Course Content
             </Link>
             <Link
               href="/dashboard/resources"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              className={`text-sm font-medium ${pathname === "/dashboard/resources" ? "text-brand-purple" : "text-muted-foreground hover:text-foreground"}`}
               prefetch={true}
             >
               Resources
             </Link>
             <Link
               href="/dashboard/store"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              className={`text-sm font-medium ${pathname === "/dashboard/store" ? "text-brand-purple" : "text-muted-foreground hover:text-foreground"}`}
               prefetch={true}
             >
               Store
             </Link>
             <Link
               href="/dashboard/purchase-history"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              className={`text-sm font-medium ${pathname === "/dashboard/purchase-history" ? "text-brand-purple" : "text-muted-foreground hover:text-foreground"}`}
               prefetch={true}
             >
               Purchases
             </Link>
             <Link
               href="/dashboard/live-classes"
-              className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              className={`text-sm font-medium ${pathname === "/dashboard/live-classes" ? "text-brand-purple" : "text-muted-foreground hover:text-foreground"}`}
             >
               Live Classes
             </Link>
