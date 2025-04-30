@@ -1,11 +1,13 @@
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
+"use client";
+
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { formatPrice } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, PackageOpen } from 'lucide-react';
 import { PurchaseHistoryList } from '@/components/dashboard/purchase-history-list';
+import { useStudentDashboardStore } from '@/lib/stores/student-dashboard';
+import { useAuth } from '@/context/auth-context';
 
 // Define unified structures first
 interface UnifiedOrderItem {
@@ -33,8 +35,7 @@ interface UnifiedPurchase {
 
 // Helper function to fetch and combine orders
 async function getPurchaseHistory(userId: string): Promise<UnifiedPurchase[] | null> {
-  const cookieStore = cookies();
-  const supabase = await createServerSupabaseClient(); 
+  const supabase = getBrowserClient();
 
   try {
     // 1. Fetch Ecommerce Orders
@@ -251,36 +252,31 @@ function mapShopifyOrderToUnified(order: any, imageUrlMap: Map<string, string | 
 
 // --- Component ---
 
-export default async function PurchaseHistoryPage() {
-  const cookieStore = cookies();
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export default function PurchaseHistoryPage() {
+  const purchases = useStudentDashboardStore(state => state.purchases);
+  const isLoadingPurchases = useStudentDashboardStore(state => state.isLoadingPurchases);
+  const hasPurchasesError = useStudentDashboardStore(state => state.hasPurchasesError);
+  const loadPurchases = useStudentDashboardStore(state => state.loadPurchases);
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const userId = user?.id;
 
-  if (!user) {
+  useEffect(() => {
+    // Fetch purchase history when user is available
+    if (!userId || isAuthLoading) return;
+    loadPurchases(userId);
+  }, [userId, isAuthLoading, loadPurchases]);
+
+  if (isLoadingPurchases) return <div>Loading...</div>;
+  if (hasPurchasesError)
     return (
       <div className="container mx-auto px-4 py-12">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Authentication Error</AlertTitle>
-          <AlertDescription>You must be logged in to view your purchase history.</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
-  const purchases = await getPurchaseHistory(user.id);
-
-  if (purchases === null) {
-     return (
-      <div className="container mx-auto px-4 py-12">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
-          <AlertDescription>Could not fetch purchase history. Please try again later.</AlertDescription>
+          <AlertDescription>Failed to load purchase history.</AlertDescription>
         </Alert>
       </div>
     );
-  }
 
   return (
     <div className="container mx-auto px-4 py-10 font-sans">
@@ -300,7 +296,7 @@ export default async function PurchaseHistoryPage() {
 
       <div className="mt-8 text-center text-sm text-muted-foreground">
         <p>
-          Missing an order or need help with a download? 
+          Missing an order or need help with a download?
           <a href="mailto:support@gracefulhustle.com" className="text-brand-purple hover:underline ml-1">
             Contact Support
           </a>
@@ -309,4 +305,4 @@ export default async function PurchaseHistoryPage() {
 
     </div>
   );
-} 
+}

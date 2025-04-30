@@ -28,6 +28,7 @@ import { persist } from 'zustand/middleware';
 import type {
   UserEnrollment,
 } from './types/index';
+import { fetchPurchaseHistory } from '@/lib/services/purchaseHistory';
 
 // Define a threshold for how long data is considered fresh (e.g., 5 minutes)
 const STALE_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -149,30 +150,29 @@ export const createActions = (
    * Load all user data for the dashboard
    */
   loadUserDashboardData: async (userId: string, force?: boolean) => {
-    console.log(`[Store Action] loadUserDashboardData called. UserID: ${userId}, Force: ${force}`); // Log entry
+    console.log(`[Store Action] loadUserDashboardData called. UserID: ${userId}, Force: ${force}`);
     if (!userId) return;
 
     const store = get() as StudentDashboardStore;
 
     try {
-      // Load data in parallel for better performance, passing down 'force' flag.
-      // ADDED: loadStoreProducts and loadStoreCollections to the initial load
+      // Load data in parallel including purchases
       await Promise.all([
         store.loadUserEnrollments(userId, force),
         store.loadUserProgress(userId, force),
-        store.loadStoreProducts(userId, undefined, force), // Pass userId, no specific filter, respect force flag
-        store.loadStoreCollections(force) // Respect force flag
-        // Note: loadUserTemplates is deprecated and a no-op
+        store.loadStoreProducts(userId, undefined, force),
+        store.loadStoreCollections(force),
+        store.loadPurchases(userId, force)
       ]);
       console.log('[Store Action] loadUserDashboardData: All parallel fetches initiated.');
     } catch (error) {
       console.error('Error loading dashboard data:', error);
-      // Set general error flags if orchestration fails
       set({
         hasEnrollmentError: true,
         hasProgressError: true,
-        hasStoreProductsError: true, // ADDED
-        hasStoreCollectionsError: true // ADDED
+        hasStoreProductsError: true,
+        hasStoreCollectionsError: true,
+        hasPurchasesError: true
       });
     }
   },
@@ -1282,7 +1282,31 @@ export const createActions = (
     }
   },
 
-  // ----- Simple Setters ----- 
+  /**
+   * Fetch purchase history with caching based on staleness
+   */
+  loadPurchases: async (userId: string, force = false) => {
+    const { lastPurchasesLoadTime, purchases } = get() as StudentDashboardStore;
+    if (!force && purchases.length > 0 && lastPurchasesLoadTime && Date.now() - lastPurchasesLoadTime < STALE_THRESHOLD) {
+      return;
+    }
+    // trigger loading state
+    set({ isLoadingPurchases: true, hasPurchasesError: false });
+    try {
+      const data = await fetchPurchaseHistory(userId);
+      set({ purchases: data ?? [] });
+      set({ lastPurchasesLoadTime: Date.now() });
+    } catch (error) {
+      console.error('[Store Action] loadPurchases error:', error);
+      set({ hasPurchasesError: true });
+    } finally {
+      set({ isLoadingPurchases: false });
+    }
+  },
+
+  /**
+   * Simple Setters
+   */
 
   setUserId: (userId: string | null) => set({ userId }),
   setUserProfile: (profile: StudentDashboardStore['userProfile']) => set({ userProfile: profile }),

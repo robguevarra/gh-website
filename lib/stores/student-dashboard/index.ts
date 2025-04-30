@@ -102,6 +102,7 @@ export interface StudentDashboardStore {
   purchases: Purchase[];
   isLoadingPurchases: boolean;
   hasPurchasesError: boolean;
+  lastPurchasesLoadTime: number | null;
 
   // Live classes data
   liveClasses: LiveClass[];
@@ -146,6 +147,7 @@ export interface StudentDashboardStore {
   setPurchases: (purchases: Purchase[]) => void;
   setIsLoadingPurchases: (isLoading: boolean) => void;
   setHasPurchasesError: (hasError: boolean) => void;
+  loadPurchases: (userId: string, force?: boolean) => Promise<void>;
 
   // Live classes actions
   setLiveClasses: (classes: LiveClass[]) => void;
@@ -235,6 +237,7 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       purchases: [],
       isLoadingPurchases: false,
       hasPurchasesError: false,
+      lastPurchasesLoadTime: null,
 
       // Live classes data
       liveClasses: [],

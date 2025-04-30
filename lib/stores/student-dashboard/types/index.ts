@@ -202,6 +202,32 @@ export interface ContinueLearningLesson {
   lastAccessedAt?: string;
 }
 
+// ==============================
+// Dashboard Purchase Types
+// ==============================
+export interface PurchaseItem {
+  id: string;
+  product_id: string | null;
+  title: string;
+  variant_title?: string | null;
+  quantity: number;
+  price_at_purchase: number;
+  image_url: string | null;
+  google_drive_file_id?: string | null;
+  source: 'ecommerce' | 'shopify';
+}
+
+export interface Purchase {
+  id: string;
+  order_number: string | null;
+  created_at: string;
+  order_status: string | null;
+  total_amount: number | null;
+  currency: string | null;
+  items: PurchaseItem[];
+  source: 'ecommerce' | 'shopify';
+}
+
 // Template Types
 export interface Template {
   id: string;
@@ -218,24 +244,6 @@ export interface Template {
   course?: UICourseProgress;
   createdAt?: string;
   updatedAt?: string;
-}
-
-// Purchase Types
-export interface Purchase {
-  id: string;
-  date: string;
-  items: PurchaseItem[];
-  total: number;
-  status: 'pending' | 'processing' | 'completed' | 'cancelled' | 'refunded';
-  receiptUrl?: string;
-}
-
-export interface PurchaseItem {
-  name: string;
-  price: number;
-  image: string;
-  quantity?: number;
-  sku?: string;
 }
 
 // Live Class Types

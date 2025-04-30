@@ -93,14 +93,28 @@ The dashboard uses a combination of:
     - [x] Diagnose why these pages appear to reload data on navigation (likely due to being Server Components fetching data directly).
     - **Proposed Solution:** Convert `app/dashboard/store/page.tsx` and `app/dashboard/purchase-history/page.tsx` to Client Components.
     - [x] Convert `app/dashboard/store/page.tsx` to Client Component.
-    - [ ] Convert `app/dashboard/purchase-history/page.tsx` to Client Component.
+    - [x] Convert `app/dashboard/purchase-history/page.tsx` to Client Component.
+        - **Issue:** Page was server-rendered, causing full reloads on navigation and no client state control.
+        - **Implementation:** Added `"use client"`, replaced `createServerSupabaseClient` with `getBrowserClient`, moved fetch logic into `useEffect` with `loading`/`error` state management.
+        - **Validation:** Verified data loads on mount without SSR, and UI state persists across navigations.
     - [x] Integrate their data requirements into `useStudentDashboardStore`, adding new state slices (e.g., `storeProducts`, `storeCollections`, `purchases`) and corresponding actions with staleness logic, mirroring the pattern used for `enrollments` and `progress`.
         - [x] Added state/actions for `storeProducts`.
         - [x] Added state/actions for `storeCollections`.
         - [x] Added state/actions for `saleProducts` (for SaleSection).
-        - [ ] Add state/actions for `purchases`.
+        - [x] **Plan for Purchases Integration**:
+            - Extract `getPurchaseHistory` into `lib/services/purchaseHistory.ts` as `fetchPurchaseHistory(userId)`, isolating Supabase queries.
+            - Define `loadPurchases(userId: string, force?: boolean)` in `student-dashboard/actions.ts` to call `fetchPurchaseHistory`, then invoke `setPurchases`, `setIsLoadingPurchases`, and `setHasPurchasesError`.
+            - Update `StudentDashboardStore` types and initial state for `purchases`, `isLoadingPurchases`, and `hasPurchasesError` in `lib/stores/student-dashboard/index.ts`.
+            - Refactor `/dashboard/purchase-history/page.tsx` to dispatch `loadPurchases` from store and select `purchases` via Zustand hook; remove local fetch logic.
+            - Validate by navigating between dashboard pages and confirming purchase history persists without full reload.
+        - [x] Add state/actions for `purchases`.
     - [x] Update `app/dashboard/store/page.tsx` to use Zustand store.
-    - [ ] Update `app/dashboard/purchase-history/page.tsx` to use Zustand store.
+    - [x] Update `app/dashboard/purchase-history/page.tsx` to use Zustand store.
+- [x] **Fix `/dashboard/course` video embed issue:**
+    - **Issue:** Private Vimeo embeds stored as full `<iframe>` snippet in `metadata.videoUrl` were being cleaned and replaced by generic iframes, stripping necessary auth parameters and causing embed failure.
+    - **Diagnosis:** Our helper functions (`getLessonVideoId`/`getLessonVideoUrl`) extracted only the Vimeo ID and constructed a public embed URL, which did not support private embed tokens.
+    - **Fix Implemented:** In `app/dashboard/course/page.tsx`, updated the video player logic to render the raw `metadata.videoUrl` snippet directly using `dangerouslySetInnerHTML`. Removed fallback iframe generation for private embeds to preserve original embed code.
+    - **Testing:** Verified with a lesson having a private Vimeo embed; the video loads correctly and displays playback controls as expected.
 - [ ] **Implement Active Link Highlighting in `student-header.tsx`:**
     - [ ] Use the `usePathname` hook from `next/navigation`.
     - [ ] Compare the current pathname with the `href` of each navigation `Link`.
