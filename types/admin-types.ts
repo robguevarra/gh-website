@@ -2,8 +2,8 @@
 
 import { Database } from './supabase';
 
-// Extend the Database type to include our new admin-related tables
-export interface AdminDatabase extends Database {
+// Define the admin-related tables directly without extending Database
+export type AdminTables = {
   public: {
     Tables: Database['public']['Tables'] & {
       // Admin Audit Log table
@@ -47,22 +47,13 @@ export interface AdminDatabase extends Database {
           user_agent?: string | null;
           created_at?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "admin_audit_log_admin_id_fkey";
-            columns: ["admin_id"];
-            isOneToOne: false;
-            referencedRelation: "unified_profiles";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "admin_audit_log_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "unified_profiles";
-            referencedColumns: ["id"];
-          }
-        ];
+        Relationships: Array<{
+          foreignKeyName: string;
+          columns: string[];
+          isOneToOne: boolean;
+          referencedRelation: string;
+          referencedColumns: string[];
+        }>;
       };
       
       // User Notes table
@@ -97,22 +88,13 @@ export interface AdminDatabase extends Database {
           created_at?: string;
           updated_at?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "user_notes_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "unified_profiles";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "user_notes_admin_id_fkey";
-            columns: ["admin_id"];
-            isOneToOne: false;
-            referencedRelation: "unified_profiles";
-            referencedColumns: ["id"];
-          }
-        ];
+        Relationships: Array<{
+          foreignKeyName: string;
+          columns: string[];
+          isOneToOne: boolean;
+          referencedRelation: string;
+          referencedColumns: string[];
+        }>;
       };
       
       // User Activity Log table
@@ -153,15 +135,13 @@ export interface AdminDatabase extends Database {
           session_id?: string | null;
           created_at?: string;
         };
-        Relationships: [
-          {
-            foreignKeyName: "user_activity_log_user_id_fkey";
-            columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "unified_profiles";
-            referencedColumns: ["id"];
-          }
-        ];
+        Relationships: Array<{
+          foreignKeyName: string;
+          columns: string[];
+          isOneToOne: boolean;
+          referencedRelation: string;
+          referencedColumns: string[];
+        }>;
       };
     };
     Views: Database['public']['Views'];
@@ -171,7 +151,17 @@ export interface AdminDatabase extends Database {
 };
 
 // Extended unified_profiles type with admin fields
-export interface ExtendedUnifiedProfile extends Database['public']['Tables']['unified_profiles']['Row'] {
+export interface ExtendedUnifiedProfile {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  avatar_url: string | null;
+  acquisition_source: string | null;
+  tags: string[] | null;
+  created_at: string;
+  updated_at: string;
   status: string;
   admin_metadata: any | null;
   last_login_at: string | null;
@@ -193,10 +183,12 @@ export interface UserSearchParams {
   hasEnrollments?: boolean;
   limit?: number;
   offset?: number;
+  sortField?: string; // Field to sort by (name, status, source, activity, joined)
+  sortDirection?: 'asc' | 'desc'; // Sort direction
 }
 
 // Audit log entry
-export interface AuditLogEntry extends AdminDatabase['public']['Tables']['admin_audit_log']['Row'] {
+export interface AuditLogEntry extends Omit<AdminTables['public']['Tables']['admin_audit_log']['Row'], 'Relationships'> {
   admin?: {
     email: string;
     first_name: string | null;
@@ -205,7 +197,7 @@ export interface AuditLogEntry extends AdminDatabase['public']['Tables']['admin_
 }
 
 // User note with admin info
-export interface UserNote extends AdminDatabase['public']['Tables']['user_notes']['Row'] {
+export interface UserNote extends Omit<AdminTables['public']['Tables']['user_notes']['Row'], 'Relationships'> {
   admin?: {
     email: string;
     first_name: string | null;
@@ -214,7 +206,7 @@ export interface UserNote extends AdminDatabase['public']['Tables']['user_notes'
 }
 
 // User activity log entry
-export interface UserActivityLogEntry extends AdminDatabase['public']['Tables']['user_activity_log']['Row'] {
+export interface UserActivityLogEntry extends Omit<AdminTables['public']['Tables']['user_activity_log']['Row'], 'Relationships'> {
   // Add any additional fields needed for the admin interface
 }
 

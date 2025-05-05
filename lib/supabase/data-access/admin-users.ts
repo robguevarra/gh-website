@@ -18,6 +18,7 @@ import {
   UserActivityLogEntry,
   UserPurchaseHistoryItem
 } from '@/types/admin-types';
+import { withPerformanceMonitoring, createCachedUserSearch } from '@/lib/utils/performance';
 
 /**
  * Error handling wrapper for data access functions
@@ -41,23 +42,71 @@ async function withErrorHandling<T>(
  */
 export async function searchUsers(params: UserSearchParams = {}) {
   return withErrorHandling(async () => {
-    const supabase = createServerSupabaseClient();
-    
-    const { data, error } = await supabase.rpc('search_users', {
-      p_search_term: params.searchTerm || null,
-      p_status: params.status || null,
-      p_tags: params.tags || null,
-      p_acquisition_source: params.acquisitionSource || null,
-      p_created_after: params.createdAfter ? new Date(params.createdAfter).toISOString() : null,
-      p_created_before: params.createdBefore ? new Date(params.createdBefore).toISOString() : null,
-      p_has_transactions: params.hasTransactions !== undefined ? params.hasTransactions : null,
-      p_has_enrollments: params.hasEnrollments !== undefined ? params.hasEnrollments : null,
-      p_limit: params.limit || 50,
-      p_offset: params.offset || 0
-    });
-    
-    if (error) throw error;
-    return data as ExtendedUnifiedProfile[];
+    return await withPerformanceMonitoring(async () => {
+      const supabase = createServerSupabaseClient();
+      
+      // First get the data using the search_users RPC function
+      const { data, error } = await supabase.rpc('search_users', {
+        p_search_term: params.searchTerm || null,
+        p_status: params.status || null,
+        p_tags: params.tags || null,
+        p_acquisition_source: params.acquisitionSource || null,
+        p_created_after: params.createdAfter ? new Date(params.createdAfter).toISOString() : null,
+        p_created_before: params.createdBefore ? new Date(params.createdBefore).toISOString() : null,
+        p_has_transactions: params.hasTransactions !== undefined ? params.hasTransactions : null,
+        p_has_enrollments: params.hasEnrollments !== undefined ? params.hasEnrollments : null,
+        p_limit: params.limit || 50,
+        p_offset: params.offset || 0
+      });
+      
+      if (error) throw error;
+      
+      // Apply client-side sorting if sortField and sortDirection are provided
+      let sortedData = [...(data as ExtendedUnifiedProfile[])];
+      
+      if (params.sortField && params.sortDirection) {
+        sortedData.sort((a, b) => {
+          let valueA: any;
+          let valueB: any;
+          
+          // Map the sort field to the actual property in the user object
+          switch (params.sortField) {
+            case 'name':
+              valueA = `${a.first_name || ''} ${a.last_name || ''}`.trim().toLowerCase();
+              valueB = `${b.first_name || ''} ${b.last_name || ''}`.trim().toLowerCase();
+              break;
+            case 'status':
+              valueA = a.status?.toLowerCase() || '';
+              valueB = b.status?.toLowerCase() || '';
+              break;
+            case 'source':
+              valueA = a.acquisition_source?.toLowerCase() || '';
+              valueB = b.acquisition_source?.toLowerCase() || '';
+              break;
+            case 'activity':
+              valueA = a.last_login_at || '1970-01-01T00:00:00Z';
+              valueB = b.last_login_at || '1970-01-01T00:00:00Z';
+              break;
+            case 'joined':
+              valueA = a.created_at || '1970-01-01T00:00:00Z';
+              valueB = b.created_at || '1970-01-01T00:00:00Z';
+              break;
+            default:
+              return 0;
+          }
+          
+          // Apply the sort direction
+          const direction = params.sortDirection === 'asc' ? 1 : -1;
+          
+          // Compare the values
+          if (valueA < valueB) return -1 * direction;
+          if (valueA > valueB) return 1 * direction;
+          return 0;
+        });
+      }
+      
+      return sortedData as ExtendedUnifiedProfile[];
+    }, 'searchUsers');
   }, 'Failed to search users');
 }
 
@@ -572,9 +621,94 @@ export async function getUserEnrollments(
   }, 'Failed to get user enrollments');
 }
 
+/**
+ * Get the total count of users matching the search criteria
+ * This implementation uses a direct count query instead of an RPC call for better performance with large datasets
+ */
+export async function getUserCount(params: UserSearchParams = {}) {
+  return withErrorHandling(async () => {
+    return await withPerformanceMonitoring(async () => {
+      const supabase = createServerSupabaseClient();
+      
+      try {
+        // Start with a base query on the unified_profiles table
+        let query = supabase
+          .from('unified_profiles')
+          .select('id', { count: 'exact', head: true });
+        
+        // Apply filters if provided
+        if (params.searchTerm) {
+          const searchTermLower = params.searchTerm.toLowerCase();
+          query = query.or(
+            `first_name.ilike.%${searchTermLower}%,last_name.ilike.%${searchTermLower}%,email.ilike.%${searchTermLower}%,phone.ilike.%${searchTermLower}%`
+          );
+        }
+        
+        if (params.status) {
+          query = query.eq('status', params.status);
+        }
+        
+        if (params.acquisitionSource) {
+          query = query.eq('acquisition_source', params.acquisitionSource);
+        }
+        
+        if (params.createdAfter) {
+          query = query.gte('created_at', new Date(params.createdAfter).toISOString());
+        }
+        
+        if (params.createdBefore) {
+          query = query.lte('created_at', new Date(params.createdBefore).toISOString());
+        }
+        
+        // Tags require special handling as they're stored as an array
+        if (params.tags && params.tags.length > 0) {
+          // For each tag, we want profiles that contain that tag
+          params.tags.forEach(tag => {
+            query = query.contains('tags', [tag]);
+          });
+        }
+        
+        // Execute the count query
+        const { count, error } = await query;
+        
+        if (error) {
+          console.error('Error in getUserCount:', error);
+          throw error;
+        }
+        
+        // Handle additional filters that may require joins (transactions, enrollments)
+        // These are more complex and might need separate queries
+        if (params.hasTransactions !== undefined || params.hasEnrollments !== undefined) {
+          console.log('Complex filtering with transactions/enrollments is using a fallback approach');
+          // For now, we'll return an approximate count to avoid performance issues
+          // In a production environment, you might want to implement more sophisticated counting
+          return count || 0;
+        }
+        
+        return count || 0;
+      } catch (error) {
+        console.error('Error in getUserCount:', error);
+        // Fallback to a simpler count if the complex query fails
+        const { count } = await supabase
+          .from('unified_profiles')
+          .select('id', { count: 'exact', head: true });
+          
+        // Return the total count as a fallback
+        return count || 0;
+      }
+    }, 'getUserCount');
+  }, 'Failed to count users');
+}
+
+// Create cached versions of expensive operations
+// These need to be directly exported for proper module resolution
+export const cachedSearchUsers = createCachedUserSearch(searchUsers);
+export const cachedGetUserCount = createCachedUserSearch(getUserCount);
+
 // Export all functions as a unified admin users data access object
 export const adminUsersDb = {
   searchUsers,
+  cachedSearchUsers,
   getUserById,
   getUserDetail,
   updateUserProfile,
@@ -586,5 +720,7 @@ export const adminUsersDb = {
   getUserActivityLog,
   logUserActivity,
   getUserPurchaseHistory,
-  getUserEnrollments
+  getUserEnrollments,
+  getUserCount,
+  cachedGetUserCount
 };

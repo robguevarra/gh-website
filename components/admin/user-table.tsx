@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import {
@@ -28,6 +28,13 @@ import {
   MoreHorizontal,
   UserCog,
   Trash2,
+  CreditCard,
+  GraduationCap,
+  Clock,
+  Tag,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -39,62 +46,59 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ExtendedUnifiedProfile, UserSearchParams } from '@/types/admin-types';
 
-const roleColorMap: Record<string, string> = {
-  admin: 'bg-red-500',
-  instructor: 'bg-blue-500',
-  user: 'bg-green-500',
-  moderator: 'bg-yellow-500',
-  marketing: 'bg-purple-500',
-};
-
-type User = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  phone: string | null;
-  avatar_url: string | null;
-  role: string;
-  created_at: string;
-  is_admin: boolean;
-  user_memberships: Array<{
-    id: string;
-    status: string;
-    membership_tier_id: string;
-    membership_tiers: {
-      name: string;
-    }[];
-  }>;
+const statusColorMap: Record<string, string> = {
+  active: 'bg-green-500',
+  inactive: 'bg-gray-500',
+  pending: 'bg-yellow-500',
+  suspended: 'bg-red-500',
 };
 
 interface UserTableProps {
-  users: User[];
-  totalPages: number;
+  users: ExtendedUnifiedProfile[];
+  searchParams: UserSearchParams;
   page: number;
-  search: string;
-  role: string;
+  pageSize: number;
+  totalPages: number;
 }
 
-export default function UserTable({
-  users,
-  totalPages,
-  page,
-  search,
-  role,
-}: UserTableProps) {
+type SortField = 'name' | 'status' | 'source' | 'activity' | 'joined' | '';
+type SortDirection = 'asc' | 'desc' | '';
+
+export default function UserTable({ users, searchParams, page, pageSize, totalPages }: UserTableProps) {
   const router = useRouter();
   const pathname = usePathname();
-  const [searchInput, setSearchInput] = useState(search || '');
-  
+  // Remove searchInput state as we'll use the UserFilters component for search
+  const [sortField, setSortField] = useState<SortField>(searchParams.sortField as SortField || '');
+  const [sortDirection, setSortDirection] = useState<SortDirection>(searchParams.sortDirection as SortDirection || '');
+
+  // Initialize sort state from URL params on component mount
+  useEffect(() => {
+    if (searchParams.sortField) {
+      setSortField(searchParams.sortField as SortField);
+    }
+    if (searchParams.sortDirection) {
+      setSortDirection(searchParams.sortDirection as SortDirection);
+    }
+  }, [searchParams.sortField, searchParams.sortDirection]);
+
   // Create a function to generate URLs with updated search params
   const createQueryString = (params: Record<string, string | number | null>) => {
     const newParams = new URLSearchParams();
-    
+
     // Add current search params
-    if (search) newParams.set('search', search);
-    if (role) newParams.set('role', role);
+    if (searchParams.searchTerm) newParams.set('search', searchParams.searchTerm.toString());
+    if (searchParams.status) newParams.set('status', searchParams.status.toString());
+    if (searchParams.acquisitionSource) newParams.set('source', searchParams.acquisitionSource.toString());
+    if (searchParams.hasTransactions !== undefined) newParams.set('hasTransactions', searchParams.hasTransactions.toString());
+    if (searchParams.hasEnrollments !== undefined) newParams.set('hasEnrollments', searchParams.hasEnrollments.toString());
+    if (searchParams.createdAfter) newParams.set('createdAfter', searchParams.createdAfter.toString());
+    if (searchParams.createdBefore) newParams.set('createdBefore', searchParams.createdBefore.toString());
+    if (searchParams.tags) newParams.set('tags', searchParams.tags.join(','));
     if (page) newParams.set('page', page.toString());
-    
+    if (pageSize) newParams.set('pageSize', pageSize.toString());
+
     // Update with new params
     Object.entries(params).forEach(([key, value]) => {
       if (value === null) {
@@ -103,26 +107,54 @@ export default function UserTable({
         newParams.set(key, String(value));
       }
     });
-    
+
     return newParams.toString();
   };
-  
-  // Handle search submit
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    router.push(`${pathname}?${createQueryString({ search: searchInput, page: 1 })}`);
+
+  // Handle column sorting
+  const handleSort = (field: SortField) => {
+    let direction: SortDirection = 'asc';
+
+    // If already sorting by this field, toggle direction or clear
+    if (field === sortField) {
+      if (sortDirection === 'asc') {
+        direction = 'desc';
+      } else if (sortDirection === 'desc') {
+        // Clear sorting
+        field = '';
+        direction = '';
+      }
+    }
+
+    // Update state
+    setSortField(field);
+    setSortDirection(direction);
+
+    // Update URL
+    router.push(
+      `${pathname}?${createQueryString({
+        sortField: field || null,
+        sortDirection: direction || null,
+        page: 1, // Reset to first page when sorting changes
+      })}`
+    );
   };
-  
-  // Handle clear search
-  const handleClearSearch = () => {
-    setSearchInput('');
-    router.push(`${pathname}?${createQueryString({ search: null, page: 1 })}`);
+
+  // Get sort icon for column header
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="ml-2 h-4 w-4" />;
+    }
+
+    return sortDirection === 'asc' ? 
+      <ArrowUp className="ml-2 h-4 w-4" /> : 
+      <ArrowDown className="ml-2 h-4 w-4" />;
   };
-  
-  // Handle role filter change
-  const handleRoleChange = (newRole: string) => {
-    router.push(`${pathname}?${createQueryString({ role: newRole === 'all' ? null : newRole, page: 1 })}`);
+
+  const handleStatusChange = (newStatus: string) => {
+    router.push(`${pathname}?${createQueryString({ status: newStatus === 'all' ? null : newStatus, page: 1 })}`);
   };
+
   
   // Handle pagination
   const handlePageChange = (newPage: number) => {
@@ -151,44 +183,22 @@ export default function UserTable({
   return (
     <div className="w-full rounded-md border">
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <form onSubmit={handleSearch} className="flex w-full max-w-sm items-center space-x-2">
-          <div className="relative w-full">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search users..."
-              className="w-full pl-8"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={handleClearSearch}
-                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Clear search</span>
-              </button>
-            )}
-          </div>
-          <Button type="submit">Search</Button>
-        </form>
+        {/* Search form removed - now handled by UserFilters component */}
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-auto">
           <Select
-            defaultValue={role || 'all'}
-            onValueChange={handleRoleChange}
+            defaultValue={searchParams.status || 'all'}
+            onValueChange={handleStatusChange}
           >
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by role" />
+              <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Roles</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
-              <SelectItem value="instructor">Instructor</SelectItem>
-              <SelectItem value="moderator">Moderator</SelectItem>
-              <SelectItem value="user">User</SelectItem>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="suspended">Suspended</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -197,10 +207,51 @@ export default function UserTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead>Membership</TableHead>
-            <TableHead>Joined</TableHead>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => handleSort('name')}
+            >
+              <div className="flex items-center">
+                Name
+                {getSortIcon('name')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => handleSort('status')}
+            >
+              <div className="flex items-center">
+                Status
+                {getSortIcon('status')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => handleSort('source')}
+            >
+              <div className="flex items-center">
+                Source
+                {getSortIcon('source')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => handleSort('activity')}
+            >
+              <div className="flex items-center">
+                Activity
+                {getSortIcon('activity')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => handleSort('joined')}
+            >
+              <div className="flex items-center">
+                Joined
+                {getSortIcon('joined')}
+              </div>
+            </TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -218,30 +269,55 @@ export default function UserTable({
                   </Avatar>
                   <div>
                     <div className="font-medium">{getFullName(user.first_name, user.last_name)}</div>
-                    {user.phone && <div className="text-sm text-muted-foreground">{user.phone}</div>}
+                    <div className="text-sm text-muted-foreground">{user.email}</div>
+                    {user.phone && <div className="text-xs text-muted-foreground">{user.phone}</div>}
                   </div>
                 </div>
               </TableCell>
               <TableCell>
-                <Badge variant="secondary" className={roleColorMap[user.role]}>
-                  {user.role}
+                <Badge variant="secondary" className={statusColorMap[user.status] || 'bg-gray-500'}>
+                  {user.status || 'Unknown'}
                 </Badge>
-                {user.is_admin && (
-                  <Badge variant="secondary" className="ml-2 bg-red-500">
-                    Admin
-                  </Badge>
+              </TableCell>
+              <TableCell>
+                {user.acquisition_source ? (
+                  <div className="flex items-center gap-1">
+                    <Tag className="h-3 w-3 text-muted-foreground" />
+                    <span>{user.acquisition_source}</span>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">Unknown</span>
+                )}
+                {user.tags && user.tags.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {user.tags.slice(0, 2).map((tag, index) => (
+                      <Badge key={index} variant="outline" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                    {user.tags.length > 2 && (
+                      <Badge variant="outline" className="text-xs">
+                        +{user.tags.length - 2}
+                      </Badge>
+                    )}
+                  </div>
                 )}
               </TableCell>
               <TableCell>
-                {user.user_memberships?.length > 0 ? (
-                  user.user_memberships.map((membership) => (
-                    <Badge key={membership.id} variant="outline">
-                      {membership.membership_tiers[0]?.name || 'Unknown'}
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-muted-foreground">No membership</span>
-                )}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-1 text-sm">
+                    <Clock className="h-3 w-3 text-muted-foreground" />
+                    <span>Last login: {user.last_login_at ? formatDate(user.last_login_at) : 'Never'}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-sm">
+                    <CreditCard className="h-3 w-3 text-muted-foreground" />
+                    <span>Transactions: {user.transaction_count || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-sm">
+                    <GraduationCap className="h-3 w-3 text-muted-foreground" />
+                    <span>Enrollments: {user.enrollment_count || 0}</span>
+                  </div>
+                </div>
               </TableCell>
               <TableCell>{formatDate(user.created_at)}</TableCell>
               <TableCell className="text-right">
@@ -256,6 +332,12 @@ export default function UserTable({
                     <DropdownMenuLabel>Actions</DropdownMenuLabel>
                     <DropdownMenuItem asChild>
                       <Link href={`/admin/users/${user.id}`}>
+                        <UserCog className="mr-2 h-4 w-4" />
+                        View Details
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href={`/admin/users/${user.id}/edit`}>
                         <UserCog className="mr-2 h-4 w-4" />
                         Edit User
                       </Link>

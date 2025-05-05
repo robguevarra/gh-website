@@ -11,7 +11,7 @@
 import { revalidatePath } from 'next/cache';
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { adminUsersDb } from '@/lib/supabase/data-access';
+import * as adminUsersDb from '@/lib/supabase/data-access/admin-users';
 import { 
   UserSearchParams, 
   ExtendedUnifiedProfile, 
@@ -23,7 +23,7 @@ import { createServerClient } from '@supabase/ssr';
 
 // Helper to get the current user ID from the session
 async function getCurrentUserId() {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -62,11 +62,11 @@ async function validateAdmin() {
 }
 
 // Helper to get request metadata
-function getRequestMetadata() {
-  const headersList = headers();
+async function getRequestMetadata() {
+  const headersList = await headers();
   return {
-    ipAddress: headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || null,
-    userAgent: headersList.get('user-agent') || null
+    ipAddress: headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'unknown',
+    userAgent: headersList.get('user-agent') || 'unknown',
   };
 }
 
@@ -139,26 +139,65 @@ export async function getUserDetail(userId: string) {
 }
 
 /**
- * Update a user profile
+ * Update a user profile with comprehensive validation, error handling, and audit logging
  */
 export async function updateUserProfile(userId: string, profileData: Partial<ExtendedUnifiedProfile>) {
   try {
+    // Validate admin access
     const adminId = await validateAdmin();
-    
-    // Get current profile for audit logging
-    const { data: currentProfile, error: fetchError } = await adminUsersDb.getUserById(userId);
-    
-    if (fetchError) {
-      return { success: false, error: fetchError.message };
+    if (!adminId) {
+      return { success: false, error: 'Unauthorized access. Admin privileges required.' };
     }
     
+    // Validate user ID
+    if (!userId) {
+      return { success: false, error: 'User ID is required' };
+    }
+    
+    // Get current profile for audit logging and validation
+    const { data: currentProfile, error: fetchError } = await adminUsersDb.getUserById(userId);
+    
+    if (fetchError || !currentProfile) {
+      return { success: false, error: fetchError?.message || 'User not found' };
+    }
+    
+    // Validate profile data
+    if (Object.keys(profileData).length === 0) {
+      return { success: false, error: 'No profile data provided for update' };
+    }
+    
+    // Prepare metadata for logging
+    const requestMetadata = await getRequestMetadata();
+    
+    // Track sensitive changes for enhanced logging
+    const sensitiveChanges = [];
+    if (profileData.status && profileData.status !== currentProfile.status) {
+      sensitiveChanges.push({
+        field: 'status',
+        from: currentProfile.status,
+        to: profileData.status
+      });
+    }
+    
+    // Update the user profile
     const { data, error } = await adminUsersDb.updateUserProfile(userId, profileData);
     
     if (error) {
       return { success: false, error: error.message };
     }
     
-    // Log the admin action
+    // Prepare detailed audit log entry
+    const auditMetadata = {
+      changes: Object.keys(profileData).map(key => ({
+        field: key,
+        from: currentProfile[key as keyof typeof currentProfile],
+        to: profileData[key as keyof typeof profileData]
+      })),
+      sensitiveChanges,
+      requestInfo: requestMetadata
+    };
+    
+    // Log the admin action with detailed metadata
     await adminUsersDb.logAdminAction(
       adminId,
       'update',
@@ -167,13 +206,21 @@ export async function updateUserProfile(userId: string, profileData: Partial<Ext
       userId,
       currentProfile,
       data,
-      ...Object.values(getRequestMetadata())
+      requestMetadata.ipAddress,
+      requestMetadata.userAgent,
+      auditMetadata
     );
     
-    // Revalidate the user detail page
+    // Revalidate all relevant paths
     revalidatePath(`/admin/users/${userId}`);
+    revalidatePath('/admin/users');
     
-    return { success: true, data };
+    return { 
+      success: true, 
+      data,
+      message: 'User profile updated successfully',
+      sensitiveChanges: sensitiveChanges.length > 0 ? sensitiveChanges : undefined
+    };
   } catch (error) {
     console.error('Error in updateUserProfile server action:', error);
     return { 

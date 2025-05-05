@@ -1,16 +1,18 @@
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { createServiceRoleClient } from '@/lib/supabase/server';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Metadata } from 'next';
-import { ArrowLeft, UserCog } from 'lucide-react';
+import { ArrowLeft, UserCog, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
-import { UserProfileForm } from '@/components/admin/user-profile-form';
-import { UserMembershipForm } from '@/components/admin/user-membership-form';
-import { UserCourses } from '@/components/admin/user-courses';
-import { UserSecurityForm } from '@/components/admin/user-security-form';
+// Import our data access layer functions
+import { getUserDetail, getUserActivityLog, getUserPurchaseHistory, getUserEnrollments } from '@/lib/supabase/data-access/admin-users';
+
+// Import UI components
+import { UserProfileForm, UserMembershipForm, UserCourses, UserActivity, UserSecurityForm, UserAdminTools } from '@/components/admin';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export const metadata: Metadata = {
   title: 'User Details | Admin',
@@ -19,146 +21,197 @@ export const metadata: Metadata = {
 
 export default async function UserDetailPage(
   props: {
-    params: Promise<{ id: string }>
+    params: { id: string }
   }
 ) {
-  const params = await props.params;
-  // Create Supabase clients - standard and service role
-  const supabase = await createServerSupabaseClient();
-  const serviceClient = await createServiceRoleClient();
+  // Await params to satisfy Next.js 15 requirements
+  const params = await Promise.resolve(props.params);
+  const id = params.id;
+  
+  try {
+    // Create Supabase client for additional queries
+    const supabase = await createServerSupabaseClient();
+    
+    // Fetch user details using our data access layer
+    const { data: userDetail, error: userError } = await getUserDetail(id);
+    
+    if (userError || !userDetail) {
+      console.error('Error fetching user:', userError);
+      notFound();
+    }
+    
+    // userDetail is already the profile with additional data
+    // No need to extract from a nested property
+    
+    // Fetch additional user data in parallel for better performance
+    const [activityLogResult, purchaseHistoryResult, enrollmentsResult, coursesResult] = await Promise.all([
+      getUserActivityLog(id, { limit: 10 }),
+      getUserPurchaseHistory(id, { limit: 10 }),
+      getUserEnrollments(id),
+      // Fetch available courses for the enrollment tab
+      supabase.from('courses').select('id, title, description, slug, published, thumbnail_url').eq('published', true)
+    ]);
+    
+    // Extract activity, purchases, and enrollments
+    const activityLog = activityLogResult.data || [];
+    const purchaseHistory = purchaseHistoryResult.data || [];
+    const enrollments = enrollmentsResult.data || [];
+    
+    // Fetch membership tiers for the membership form
+    const { data: membershipTiers } = await supabase
+      .from('membership_tiers')
+      .select('*')
+      .order('price_monthly', { ascending: true });
 
-  // Fetch user details including auth data from service client (bypasses RLS)
-  const { data: user, error: userError } = await serviceClient
-    .from('auth.users')
-    .select('*, profile:profiles(*)')
-    .eq('id', params.id)
-    .single();
+    // Fetch user's current membership
+    const { data: membership } = await supabase
+      .from('memberships')
+      .select('*')
+      .eq('user_id', id)
+      .maybeSingle();
+    
+    // Create user profile data structure from the userDetail
+    const userProfile = {
+      id: id,
+      first_name: userDetail.first_name || null,
+      last_name: userDetail.last_name || null,
+      email: userDetail.email,
+      phone: userDetail.phone || null,
+      role: userDetail.status || 'user', // Use status as role
+    };
 
-  if (userError || !user) {
-    console.error('Error fetching user:', userError);
-    notFound();
-  }
+    // Define default roles if none are found in the database
+    const defaultRoles = [
+      { id: '1', name: 'user', description: 'Regular user' },
+      { id: '2', name: 'admin', description: 'Administrator' },
+      { id: '3', name: 'moderator', description: 'Content moderator' },
+    ];
 
-  // Fetch membership tiers for the membership form
-  const { data: membershipTiers } = await supabase
-    .from('membership_tiers')
-    .select('*')
-    .order('price_monthly', { ascending: true });
-
-  // Fetch user's current membership
-  const { data: membership } = await serviceClient
-    .from('memberships')
-    .select('*')
-    .eq('user_id', params.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  // Fetch user's enrolled courses with course details
-  const { data: userCourses } = await serviceClient
-    .from('user_courses')
-    .select('*, course:courses(*)')
-    .eq('user_id', params.id);
-
-  // Fetch all available courses for enrollment options
-  const { data: allCourses } = await supabase
-    .from('courses')
-    .select('*')
-    .order('title');
-
-  // Fetch available user roles
-  const { data: roles } = await supabase
-    .from('user_roles')
-    .select('*')
-    .order('name');
-
-  // Create user profile data structure
-  const userProfile = {
-    id: params.id,
-    first_name: user.profile?.first_name || null,
-    last_name: user.profile?.last_name || null,
-    email: user.email,
-    phone: user.profile?.phone || null,
-    role: user.profile?.role || 'user',
-  };
-
-  // Define default roles if none are found in the database
-  const defaultRoles = [
-    { id: '1', name: 'user', description: 'Regular user' },
-    { id: '2', name: 'admin', description: 'Administrator' },
-    { id: '3', name: 'moderator', description: 'Content moderator' },
-  ];
-
-  return (
-    <div className="container py-8 space-y-6">
-      {/* Header with back button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <Link href="/admin/users">
-            <Button variant="outline" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Users
-            </Button>
-          </Link>
-          <h1 className="text-3xl font-bold tracking-tight mt-2">
-            <UserCog className="inline-block mr-2 h-8 w-8" />
-            User Details
-          </h1>
-          <p className="text-muted-foreground">
-            {user.profile?.first_name
-              ? `${user.profile.first_name} ${user.profile.last_name || ''}`
-              : user.email}
-          </p>
+    return (
+      <div className="container py-8 space-y-6">
+        {/* Header with back button */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <Link href="/admin/users">
+              <Button variant="outline" size="sm">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Users
+              </Button>
+            </Link>
+            <h1 className="text-3xl font-bold tracking-tight mt-2">
+              <UserCog className="inline-block mr-2 h-8 w-8" />
+              User Details
+            </h1>
+            <p className="text-muted-foreground">
+              {userDetail.first_name
+                ? `${userDetail.first_name} ${userDetail.last_name || ''}`
+                : userDetail.email}
+            </p>
+          </div>
         </div>
+
+        {/* User management tabs */}
+        <Tabs defaultValue="profile" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-6">
+            <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="membership">Membership</TabsTrigger>
+            <TabsTrigger value="courses">Courses</TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
+            <TabsTrigger value="security">Security</TabsTrigger>
+            <TabsTrigger value="admin">Admin Tools</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="profile" className="space-y-4">
+            <UserProfileForm 
+              user={userProfile}
+              roles={defaultRoles}
+            />
+          </TabsContent>
+
+          <TabsContent value="membership" className="space-y-4">
+            <UserMembershipForm 
+              userId={id}
+              membership={membership}
+              membershipTiers={membershipTiers || []}
+            />
+          </TabsContent>
+
+          <TabsContent value="courses" className="space-y-4">
+            <UserCourses 
+              userId={id}
+              userCourses={enrollments.map(enrollment => ({
+                ...enrollment,
+                course: enrollment.course
+              })) || []}
+              availableCourses={coursesResult?.data || []}
+            />
+          </TabsContent>
+
+          <TabsContent value="activity" className="space-y-4">
+            <UserActivity 
+              userId={id}
+              activityLog={activityLog}
+            />
+          </TabsContent>
+
+          <TabsContent value="security" className="space-y-4">
+            <UserSecurityForm 
+              userId={id}
+              user={{
+                id: id,
+                email: userDetail.email,
+                last_login_at: userDetail.last_login_at,
+                created_at: userDetail.created_at,
+                updated_at: userDetail.updated_at,
+                login_count: userDetail.login_count
+              }}
+            />
+          </TabsContent>
+          
+          <TabsContent value="admin" className="space-y-4">
+            <UserAdminTools
+              userId={id}
+              userEmail={userDetail.email}
+              userName={`${userDetail.first_name || ''} ${userDetail.last_name || ''}`.trim() || userDetail.email}
+              currentStatus={userDetail.status || 'active'}
+              currentPermissions={{
+                canAccessPremiumContent: userDetail.permissions?.canAccessPremiumContent || false,
+                canAccessBetaFeatures: userDetail.permissions?.canAccessBetaFeatures || false,
+                canPostComments: userDetail.permissions?.canPostComments || true,
+                canSubmitContent: userDetail.permissions?.canSubmitContent || false,
+                maxConcurrentLogins: userDetail.permissions?.maxConcurrentLogins || 3,
+                customPermissions: userDetail.permissions?.customPermissions || ''
+              }}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
-
-      {/* User management tabs */}
-      <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="membership">Membership</TabsTrigger>
-          <TabsTrigger value="courses">Courses</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="profile" className="space-y-4">
-          <UserProfileForm 
-            user={userProfile}
-            roles={roles || defaultRoles}
-          />
-        </TabsContent>
-
-        <TabsContent value="membership" className="space-y-4">
-          <UserMembershipForm 
-            userId={params.id}
-            membership={membership}
-            membershipTiers={membershipTiers || []}
-          />
-        </TabsContent>
-
-        <TabsContent value="courses" className="space-y-4">
-          <UserCourses 
-            userId={params.id}
-            userCourses={userCourses || []}
-            availableCourses={allCourses || []}
-          />
-        </TabsContent>
-
-        <TabsContent value="security" className="space-y-4">
-          <UserSecurityForm 
-            userId={params.id}
-            user={{
-              id: params.id,
-              email: user.email,
-              email_confirmed_at: user.email_confirmed_at,
-              last_sign_in_at: user.last_sign_in_at,
-              created_at: user.created_at,
-              updated_at: user.updated_at,
-              profile: user.profile,
-            }}
-          />
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
+    );
+  } catch (error) {
+    console.error('Error loading user detail page:', error);
+    
+    // Return a more user-friendly error page instead of 404
+    return (
+      <div className="container py-8 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <Link href="/admin/users">
+              <Button variant="outline" size="sm">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Users
+              </Button>
+            </Link>
+          </div>
+        </div>
+        
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>
+            There was a problem loading the user details. Please try again later or contact support if the issue persists.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 } 

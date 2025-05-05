@@ -105,7 +105,7 @@ export function UserCourses({
   const [isLoading, setIsLoading] = useState(false);
 
   // Filter out courses the user is already enrolled in
-  const unenrolledCourses = availableCourses.filter(
+  const unenrolledCourses = (availableCourses || []).filter(
     course => !userCourses.some(uc => uc.course_id === course.id)
   );
 

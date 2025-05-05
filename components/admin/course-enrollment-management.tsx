@@ -452,7 +452,7 @@ export function CourseEnrollmentManagement({ courseId }: CourseEnrollmentManagem
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="suspended">Suspended</SelectItem>
                 <SelectItem value="cancelled">Cancelled</SelectItem>
