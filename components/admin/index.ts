@@ -17,3 +17,5 @@ export { UserMembershipForm } from './user-membership-form';
 export { UserCourses } from './user-courses';
 export { UserSecurityForm } from './user-security-form';
 export { UserPageClient } from './user-page-client';
+export { UserPurchaseHistory } from './user-purchase-history';
+export { UserEnrollments } from './user-enrollments';

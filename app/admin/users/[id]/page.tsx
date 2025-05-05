@@ -9,7 +9,16 @@ import Link from 'next/link';
 import { getUserDetail, getUserActivityLog, getUserPurchaseHistory, getUserEnrollments } from '@/lib/supabase/data-access/admin-users';
 
 // Import UI components
-import { UserProfileForm, UserMembershipForm, UserCourses, UserActivity, UserSecurityForm, UserAdminTools } from '@/components/admin';
+import { 
+  UserProfileForm, 
+  UserMembershipForm, 
+  UserCourses, 
+  UserActivity, 
+  UserSecurityForm, 
+  UserAdminTools,
+  UserPurchaseHistory,
+  UserEnrollments
+} from '@/components/admin';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -112,9 +121,11 @@ export default async function UserDetailPage(
 
         {/* User management tabs */}
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="membership">Membership</TabsTrigger>
+            <TabsTrigger value="purchases">Purchases</TabsTrigger>
+            <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
             <TabsTrigger value="courses">Courses</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="security">Security</TabsTrigger>
@@ -136,6 +147,21 @@ export default async function UserDetailPage(
             />
           </TabsContent>
 
+          <TabsContent value="purchases" className="space-y-4">
+            <UserPurchaseHistory 
+              userId={id}
+              purchaseHistory={purchaseHistory || []}
+            />
+          </TabsContent>
+
+          <TabsContent value="enrollments" className="space-y-4">
+            <UserEnrollments 
+              userId={id}
+              userCourses={enrollments || []}
+              availableCourses={coursesResult?.data || []}
+            />
+          </TabsContent>
+          
           <TabsContent value="courses" className="space-y-4">
             <UserCourses 
               userId={id}
