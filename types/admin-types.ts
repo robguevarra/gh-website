@@ -173,18 +173,48 @@ export interface ExtendedUnifiedProfile {
 
 // User search parameters
 export interface UserSearchParams {
-  searchTerm?: string;
+  query?: string;
   status?: string;
-  tags?: string[];
-  acquisitionSource?: string;
-  createdAfter?: string;
-  createdBefore?: string;
-  hasTransactions?: boolean;
-  hasEnrollments?: boolean;
-  limit?: number;
-  offset?: number;
-  sortField?: string; // Field to sort by (name, status, source, activity, joined)
-  sortDirection?: 'asc' | 'desc'; // Sort direction
+  role?: string;
+  plan?: string;
+  startDate?: string;
+  endDate?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface UserSearchResult {
+  id: string;
+  email: string;
+  name?: string;
+  system?: string;
+  status?: string;
+  lastActive?: string | null;
+  matchScore?: number;
+  rawData?: any; // Raw data from the source system
+}
+
+export interface UserProfile {
+  id?: string;
+  email?: string;
+  name?: string;
+  status?: string;
+  system?: string;
+  createdAt?: string;
+  lastActive?: string;
+  role?: string;
+  phone?: string;
+  address?: string;
+  membershipPlan?: string;
+  membershipStatus?: string;
+  totalOrders?: number;
+  totalSpent?: number;
+  courseEnrollments?: number;
+  lastLoginIp?: string;
+  twoFactorEnabled?: boolean;
+  [key: string]: any; // Index signature to allow dynamic property access
 }
 
 // Audit log entry
@@ -233,5 +263,46 @@ export interface UserDetail extends ExtendedUnifiedProfile {
   notes?: UserNote[];
   activities?: UserActivityLogEntry[];
   purchases?: UserPurchaseHistoryItem[];
-  enrollments?: any[]; // Use the appropriate type from your database
+  enrollments?: any[];
+  linkedAccounts?: LinkedAccount[];
+}
+
+// Account detail for reconciliation
+export interface AccountDetail {
+  id: string;
+  system: 'Unified' | 'SystemeIO' | 'Xendit';
+  basicInfo: {
+    email: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    name?: string | null;
+    phone?: string | null;
+    status?: string | null;
+  };
+  activityInfo?: {
+    createdAt?: string | null;
+    updatedAt?: string | null;
+    lastLoginAt?: string | null;
+    loginCount?: number | null;
+    tags?: string | string[] | null;
+    paidAt?: string | null;
+    settledAt?: string | null;
+  };
+  paymentInfo?: {
+    amount?: number | string | null;
+    currency?: string | null;
+    paymentMethod?: string | null;
+    description?: string | null;
+  };
+  enrollments?: any[];
+  rawData?: any;
+}
+
+// Linked account information
+export interface LinkedAccount {
+  system: string;
+  identifier: string;
+  linkType: 'same-person' | 'related' | 'duplicate';
+  notes?: string;
+  linkedAt: string;
 }

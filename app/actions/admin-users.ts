@@ -19,7 +19,7 @@ import {
   UserNote
 } from '@/types/admin-types';
 import { validateAdminStatus } from '@/lib/supabase/admin';
-import { createServerClient } from '@supabase/ssr';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 // Helper to get the current user ID from the session
 async function getCurrentUserId() {
@@ -47,18 +47,26 @@ async function getCurrentUserId() {
 }
 
 // Helper to validate admin access
-async function validateAdmin() {
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    throw new Error('Authentication required');
+export async function validateAdmin() {
+  // Use the createServerSupabaseClient helper which properly handles cookies
+  const supabase = await createServerSupabaseClient();
+  
+  // Use getUser() instead of getSession() for secure authentication
+  const { data: { user }, error } = await supabase.auth.getUser();
+  
+  if (error || !user) {
+    return { isAdmin: false };
   }
   
-  const isAdmin = await validateAdminStatus(userId);
-  if (!isAdmin) {
-    throw new Error('Admin access required');
-  }
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
   
-  return userId;
+  const isAdmin = profile?.role === 'admin';
+  
+  return { isAdmin };
 }
 
 // Helper to get request metadata

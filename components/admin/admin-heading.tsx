@@ -3,12 +3,14 @@ import React from 'react';
 interface AdminHeadingProps {
   title: string;
   description?: string;
+  backHref?: string;
   className?: string;
 }
 
 export function AdminHeading({
   title,
   description,
+  backHref,
   className,
 }: AdminHeadingProps) {
   return (

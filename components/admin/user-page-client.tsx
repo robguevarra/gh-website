@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { UserSearchParams } from '@/types/admin-types';
 import { Button } from '@/components/ui/button';
-import { Plus, Filter } from 'lucide-react';
+import { Plus, Filter, UserSearch } from 'lucide-react';
 import { UserFilters, AdminHeading } from '@/components/admin';
 
 interface UserPageClientProps {
@@ -14,6 +15,7 @@ interface UserPageClientProps {
 
 export function UserPageClient({ children, searchParams }: UserPageClientProps) {
   const [showFilters, setShowFilters] = useState(false);
+  const router = useRouter();
   
   return (
     <div className="space-y-6 py-6">
@@ -29,6 +31,13 @@ export function UserPageClient({ children, searchParams }: UserPageClientProps) 
           >
             <Filter className="mr-2 h-4 w-4" />
             {showFilters ? 'Hide Filters' : 'Show Filters'}
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => router.push('/admin/users/reconciliation')}
+          >
+            <UserSearch className="mr-2 h-4 w-4" />
+            Account Reconciliation
           </Button>
           <Button asChild>
             <Link href="/admin/users/new">

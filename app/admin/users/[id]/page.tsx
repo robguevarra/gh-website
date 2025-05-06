@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Metadata } from 'next';
-import { ArrowLeft, UserCog, AlertCircle } from 'lucide-react';
+import { ArrowLeft, UserCog, AlertCircle, Pencil, Shield, CreditCard, Activity, BookOpen, Receipt, GraduationCap, Link2 } from 'lucide-react';
 import Link from 'next/link';
 
 // Import our data access layer functions
@@ -121,15 +121,19 @@ export default async function UserDetailPage(
 
         {/* User management tabs */}
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8">
-            <TabsTrigger value="profile">Profile</TabsTrigger>
-            <TabsTrigger value="membership">Membership</TabsTrigger>
-            <TabsTrigger value="purchases">Purchases</TabsTrigger>
-            <TabsTrigger value="enrollments">Enrollments</TabsTrigger>
-            <TabsTrigger value="courses">Courses</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
-            <TabsTrigger value="security">Security</TabsTrigger>
-            <TabsTrigger value="admin">Admin Tools</TabsTrigger>
+          <TabsList className="grid grid-cols-8 w-full">
+            <TabsTrigger value="profile"><Pencil className="h-4 w-4 mr-2" /> Profile</TabsTrigger>
+            <TabsTrigger value="security"><Shield className="h-4 w-4 mr-2" /> Security</TabsTrigger>
+            <TabsTrigger value="membership"><CreditCard className="h-4 w-4 mr-2" /> Membership</TabsTrigger>
+            <TabsTrigger value="courses"><BookOpen className="h-4 w-4 mr-2" /> Courses</TabsTrigger>
+            <TabsTrigger value="activity"><Activity className="h-4 w-4 mr-2" /> Activity</TabsTrigger>
+            <TabsTrigger value="purchases"><Receipt className="h-4 w-4 mr-2" /> Purchases</TabsTrigger>
+            <TabsTrigger value="enrollments"><GraduationCap className="h-4 w-4 mr-2" /> Enrollments</TabsTrigger>
+            <TabsTrigger asChild>
+              <Link href="/admin/users/reconciliation" className="flex items-center justify-center">
+                <Link2 className="h-4 w-4 mr-2" /> Reconcile
+              </Link>
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile" className="space-y-4">
