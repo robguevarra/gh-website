@@ -50,12 +50,12 @@ export function AccountReconciliation() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
+  const [selectedAccountDetails, setSelectedAccountDetails] = useState<Record<string, UserSearchResult>>({});
   
   // State for comparison and actions
   const [showComparison, setShowComparison] = useState(false);
   const [showLinkingDialog, setShowLinkingDialog] = useState(false);
   const [showMergePreview, setShowMergePreview] = useState(false);
-  const [showSelectedAccounts, setShowSelectedAccounts] = useState(false);
   
   // Handle search submission
   const handleSearch = async (e?: React.FormEvent) => {
@@ -107,11 +107,30 @@ export function AccountReconciliation() {
   
   // Handle account selection
   const toggleAccountSelection = (accountId: string) => {
-    setSelectedAccounts(prev => 
-      prev.includes(accountId)
-        ? prev.filter(id => id !== accountId)
-        : [...prev, accountId]
-    );
+    // Find the account in search results
+    const account = searchResults.find(result => result.id === accountId);
+    
+    setSelectedAccounts(prev => {
+      // If account is already selected, remove it
+      if (prev.includes(accountId)) {
+        // Also remove from selectedAccountDetails
+        const updatedDetails = {...selectedAccountDetails};
+        delete updatedDetails[accountId];
+        setSelectedAccountDetails(updatedDetails);
+        
+        return prev.filter(id => id !== accountId);
+      } else {
+        // Otherwise add it and store its details
+        if (account) {
+          setSelectedAccountDetails(prev => ({
+            ...prev,
+            [accountId]: account
+          }));
+        }
+        
+        return [...prev, accountId];
+      }
+    });
   };
   
   // Handle comparison action
@@ -272,100 +291,41 @@ export function AccountReconciliation() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {/* Selected Accounts Panel */}
+              {/* Action Buttons */}
               {selectedAccounts.length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between bg-muted p-2 rounded-md">
-                    <button 
-                      onClick={() => setShowSelectedAccounts(!showSelectedAccounts)}
-                      className="text-sm flex items-center hover:underline focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1 rounded px-1"
-                    >
-                      <span className="font-medium">{selectedAccounts.length}</span> accounts selected
-                      <svg 
-                        className={`h-4 w-4 ml-1 transition-transform ${showSelectedAccounts ? 'rotate-180' : ''}`} 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        viewBox="0 0 20 20" 
-                        fill="currentColor"
-                      >
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCompare}
-                        disabled={selectedAccounts.length < 2}
-                      >
-                        <Users className="h-4 w-4 mr-1" />
-                        Compare
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleLink}
-                        disabled={selectedAccounts.length < 2}
-                      >
-                        <Link2 className="h-4 w-4 mr-1" />
-                        Link
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleMerge}
-                        disabled={selectedAccounts.length !== 2}
-                      >
-                        <MergeIcon className="h-4 w-4 mr-1" />
-                        Merge
-                      </Button>
+                <div className="flex items-center justify-between bg-muted p-2 rounded-md">
+                  <div className="text-sm">
+                    <span className="font-medium">{selectedAccounts.length}</span> accounts selected
                   </div>
-                  
-                  {/* Expandable panel with selected accounts */}
-                  {showSelectedAccounts && (
-                    <div className="border rounded-md p-3 bg-background">
-                      <h4 className="text-sm font-medium mb-2">Selected Accounts</h4>
-                      <div className="space-y-2">
-                        {selectedAccounts.map(id => {
-                          // Find the account in search results
-                          const account = searchResults.find(result => result.id === id);
-                          // If not found in current results, show basic info
-                          return (
-                            <div key={id} className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md">
-                              <div className="flex items-center">
-                                <span className="font-medium">
-                                  {account ? (
-                                    <>
-                                      {account.name || account.email}
-                                      <span className="ml-2 text-xs text-muted-foreground">{account.system}</span>
-                                    </>
-                                  ) : (
-                                    <span>{id} <span className="text-xs text-muted-foreground">(not in current results)</span></span>
-                                  )}
-                                </span>
-                              </div>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-7 px-2" 
-                                onClick={() => toggleAccountSelection(id)}
-                              >
-                                Remove
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="mt-3 flex justify-end">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => setSelectedAccounts([])}
-                        >
-                          Clear All
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCompare}
+                      disabled={selectedAccounts.length < 2}
+                    >
+                      <Users className="h-4 w-4 mr-1" />
+                      Compare
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleLink}
+                      disabled={selectedAccounts.length < 2}
+                    >
+                      <Link2 className="h-4 w-4 mr-1" />
+                      Link
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleMerge}
+                      disabled={selectedAccounts.length !== 2}
+                    >
+                      <MergeIcon className="h-4 w-4 mr-1" />
+                      Merge
+                    </Button>
+                  </div>
                 </div>
               )}
               
@@ -447,19 +407,20 @@ export function AccountReconciliation() {
       {showLinkingDialog && (
         <AccountLinkingDialog
           accounts={selectedAccounts.map(id => {
-            // Find the account in search results to get full details
-            const account = searchResults.find(result => result.id === id);
+            // Get account details from our stored details
+            const account = selectedAccountDetails[id] || { id };
             return {
               id: id,
-              name: account?.name || '',
-              email: account?.email || '',
-              system: account?.system || ''
+              name: account.name || '',
+              email: account.email || '',
+              system: account.system || ''
             };
           })}
           onClose={() => setShowLinkingDialog(false)}
           onSuccess={() => {
             setShowLinkingDialog(false);
             setSelectedAccounts([]);
+            setSelectedAccountDetails({});
             toast({
               title: "Accounts linked",
               description: "The selected accounts have been successfully linked.",
