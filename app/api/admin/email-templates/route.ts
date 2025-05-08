@@ -54,6 +54,14 @@ const requireAuth = async () => {
   return { isAuthenticated: true, userId: user.id, error: null };
 };
 
+/**
+ * Helper function to sanitize a template ID
+ * Ensures we use consistent IDs that work as filenames across the system
+ */
+const sanitizeTemplateId = (id: string): string => {
+  return id.replace(/[^a-zA-Z0-9-_]/g, '-').toLowerCase();
+};
+
 // GET: List all templates OR get a specific template by ID
 export async function GET(request: NextRequest) {
   // Verify user is authenticated
@@ -144,17 +152,20 @@ export async function GET(request: NextRequest) {
     }
   }
   
-  // Get a specific template
+  // Get a specific template - sanitize ID for consistency
+  const sanitizedId = sanitizeTemplateId(templateId);
+  console.log(`Getting template: ${sanitizedId}`);
+  
   try {
     // Initialize template manager if needed
     await templateManager.initialize();
     
     // Get template details
-    const template = await templateManager.getTemplate(templateId);
+    const template = await templateManager.getTemplate(sanitizedId);
     
     if (!template) {
       return NextResponse.json(
-        { error: `Template not found: ${templateId}` },
+        { error: `Template not found: ${sanitizedId}` },
         { status: 404 }
       );
     }
@@ -164,20 +175,20 @@ export async function GET(request: NextRequest) {
       process.cwd(),
       'lib/services/email/templates',
       template.category,
-      `${templateId}.html`
+      `${sanitizedId}.html`
     );
     
     const metadataPath = path.join(
       process.cwd(),
       'lib/services/email/templates',
       template.category,
-      `${templateId}.metadata.json`
+      `${sanitizedId}.metadata.json`
     );
     
     // Check if template file exists
     if (!fs.existsSync(templatePath)) {
       return NextResponse.json(
-        { error: `Template file not found: ${templateId}` },
+        { error: `Template file not found: ${sanitizedId}` },
         { status: 404 }
       );
     }
@@ -191,7 +202,7 @@ export async function GET(request: NextRequest) {
       try {
         metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
       } catch (err) {
-        console.error(`Error parsing metadata for ${templateId}:`, err);
+        console.error(`Error parsing metadata for ${sanitizedId}:`, err);
       }
     }
     
@@ -199,7 +210,7 @@ export async function GET(request: NextRequest) {
     let renderedHtml = htmlTemplate;
     
     if (variables) {
-      renderedHtml = await templateManager.renderTemplate(templateId, variables);
+      renderedHtml = await templateManager.renderTemplate(sanitizedId, variables);
     }
     
     return NextResponse.json({
@@ -246,16 +257,27 @@ export async function POST(request: NextRequest) {
     }
     
     // Use provided ID or generate a unique template ID
-    const templateId = id || `${category}-${name.toLowerCase().replace(/\\s+/g, '-')}-${Date.now().toString().substring(9)}`;
+    const baseTemplateId = id || `${category}-${name.toLowerCase().replace(/\\s+/g, '-')}-${Date.now().toString().substring(9)}`;
+    
+    // Sanitize the template ID for consistent usage
+    const sanitizedId = sanitizeTemplateId(baseTemplateId);
+    
+    // Ensure the templates directory exists
+    const templatesDir = path.join(process.cwd(), 'lib/services/email/templates');
+    if (!fs.existsSync(templatesDir)) {
+      fs.mkdirSync(templatesDir, { recursive: true });
+    }
     
     // Create directory for category if it doesn't exist
-    const categoryDir = path.join(process.cwd(), 'lib/services/email/templates', category);
+    const categoryDir = path.join(templatesDir, category);
     if (!fs.existsSync(categoryDir)) {
       fs.mkdirSync(categoryDir, { recursive: true });
     }
     
-    // Create template file
-    const templatePath = path.join(categoryDir, `${templateId}.html`);
+    console.log(`Creating template: ${sanitizedId} in directory: ${categoryDir}`);
+    
+    // Create template file with sanitized ID
+    const templatePath = path.join(categoryDir, `${sanitizedId}.html`);
     
     // If we have HTML from the request, use it; otherwise, create a minimal starter template
     const initialHtml = htmlTemplate || `<!DOCTYPE html>
@@ -272,8 +294,8 @@ export async function POST(request: NextRequest) {
     // Write the HTML file
     fs.writeFileSync(templatePath, initialHtml, 'utf-8');
     
-    // Create metadata file with design JSON
-    const metadataPath = path.join(categoryDir, `${templateId}.metadata.json`);
+    // Create metadata file with design JSON using sanitized ID
+    const metadataPath = path.join(categoryDir, `${sanitizedId}.metadata.json`);
     const metadata = {
       version: 1,
       design: design || null,
@@ -291,9 +313,10 @@ export async function POST(request: NextRequest) {
     // Initialize template manager to refresh templates
     await templateManager.initialize();
     
+    // Return the sanitized ID to ensure consistency
     return NextResponse.json({ 
       template: {
-        id: templateId,
+        id: sanitizedId, // Use sanitized ID for consistency
         name,
         category,
         design: metadata.design,
@@ -334,38 +357,45 @@ export async function PUT(request: NextRequest) {
       );
     }
     
+    // Sanitize the template ID for consistent usage
+    const sanitizedId = sanitizeTemplateId(templateId);
+    console.log(`Updating template: ${sanitizedId}`);
+    
     // Initialize template manager if needed
     await templateManager.initialize();
     
     // Get template details
-    const template = await templateManager.getTemplate(templateId);
+    const template = await templateManager.getTemplate(sanitizedId);
     
     if (!template) {
       return NextResponse.json(
-        { error: `Template not found: ${templateId}` },
+        { error: `Template not found: ${sanitizedId}` },
         { status: 404 }
       );
     }
     
-    // Get template file paths
+    // Get template file paths using sanitized ID
     const templatePath = path.join(
       process.cwd(),
       'lib/services/email/templates',
       template.category,
-      `${templateId}.html`
+      `${sanitizedId}.html`
     );
     
     const metadataPath = path.join(
       process.cwd(),
       'lib/services/email/templates',
       template.category,
-      `${templateId}.metadata.json`
+      `${sanitizedId}.metadata.json`
     );
+    
+    console.log(`Template path: ${templatePath}`);
+    console.log(`Metadata path: ${metadataPath}`);
     
     // Check if template file exists
     if (!fs.existsSync(templatePath)) {
       return NextResponse.json(
-        { error: `Template file not found: ${templateId}` },
+        { error: `Template file not found: ${sanitizedId}` },
         { status: 404 }
       );
     }
@@ -386,7 +416,7 @@ export async function PUT(request: NextRequest) {
       try {
         metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
       } catch (err) {
-        console.error(`Error parsing metadata for ${templateId}:`, err);
+        console.error(`Error parsing metadata for ${sanitizedId}:`, err);
       }
     }
     
@@ -412,7 +442,7 @@ export async function PUT(request: NextRequest) {
     
     return NextResponse.json({
       template: {
-        id: templateId,
+        id: sanitizedId,
         name: template.name,
         category: template.category,
         subcategory: metadata.subcategory,
@@ -443,25 +473,31 @@ export async function PATCH(request: NextRequest) {
   }
   
   try {
-    const { htmlTemplate, variables } = await request.json();
+    const { templateId, variables, html } = await request.json();
     
-    if (!htmlTemplate) {
+    if (!templateId) {
       return NextResponse.json(
-        { error: 'HTML content is required' },
+        { error: 'Template ID is required' },
         { status: 400 }
       );
     }
     
-    // Initialize template manager if needed
-    await templateManager.initialize();
+    // Sanitize template ID for consistency
+    const sanitizedId = sanitizeTemplateId(templateId);
     
-    // Create a temporary template for preview
-    const tempId = `preview-${Date.now()}`;
-    const html = await templateManager.renderHtml(htmlTemplate, variables || {});
+    // Render template with variables
+    let renderedHtml;
+    
+    if (html) {
+      // Render the provided HTML with variables
+      renderedHtml = await templateManager.renderHtml(html, variables);
+    } else {
+      // Render the stored template with variables
+      renderedHtml = await templateManager.renderTemplate(sanitizedId, variables);
+    }
     
     return NextResponse.json({
-      html,
-      variables
+      renderedHtml
     });
   } catch (error) {
     console.error('Failed to preview template:', error);
