@@ -1,0 +1,128 @@
+# Postmark Email Integration - Product Requirements Document
+
+## Overview
+Implement a comprehensive email delivery system using Postmark for Graceful Homeschooling to handle transactional emails, marketing campaigns, and educational content. This integration will replace the previously planned Amazon SES integration and will fully integrate with the existing Supabase authentication system.
+
+## Current State
+- No email delivery system currently implemented
+- Database schema includes email-related tables: email_templates, email_campaigns, campaign_recipients, email_automations, user_email_preferences
+- Supabase handles authentication with default "graceful2025" password pattern
+- Existing user base of approximately 3,000 enrolled students and 13,000+ total contacts
+- Previous architecture planning targeted Amazon SES integration
+
+## Goals and Objectives
+1. Implement a reliable email delivery system using Postmark for all communication types
+2. Create responsive, branded email templates that follow design guidelines
+3. Seamlessly integrate with Supabase authentication for account-related emails
+4. Develop an admin interface for email template and campaign management
+5. Implement user segmentation via tags for targeted communications
+6. Build analytics tracking for measuring email performance
+7. Enable secure credential management for user accounts
+8. Support various email types: authentication, transactional, marketing, and educational
+
+## User Requirements
+
+### Email Types
+- Authentication emails (registration, welcome, password reset)
+- Weekly class reminders (3x per month to enrollees)
+- Marketing campaigns (2x per month to enrollees)
+- Free live class reminders (to all 13k+ contacts)
+- Sale announcements and reminders (to all members)
+- Instructional and educational content
+
+### User Experience
+- Consistent email design matching brand identity (Purple #b08ba5, Pink #f1b5bc, Blue #9ac5d9)
+- Typography: Inter for body text, Playfair Display for headings
+- Mobile-responsive email templates using MJML
+- Simple global opt-in/opt-out preference management
+- Clear unsubscribe options in all marketing emails
+
+### Admin Requirements
+- Visual template editor for non-technical staff
+- Campaign scheduling and management interface
+- User segmentation based on tags (incomplete purchases, ebook-only purchasers, etc.)
+- Detailed engagement analytics integrated with existing admin dashboard
+- Preview functionality for desktop and mobile views
+
+## Technical Requirements
+
+### Postmark Integration
+- Create Postmark account and configure with proper authentication
+- Implement API client for interacting with Postmark services
+- Set up error handling, logging, and monitoring
+- Configure separate development/testing environments
+
+### Email Template System
+- Implement MJML processing for responsive email design
+- Create base templates following Graceful Homeschooling design guidelines
+- Develop variable substitution system for personalization
+- Build preview functionality for testing
+
+### Supabase Auth Integration
+- Configure Supabase to use Postmark for authentication emails
+- Customize templates for email confirmation, password reset, and magic links
+- Implement secure credential management to replace "graceful2025" default pattern
+- Test complete authentication flows with Postmark delivery
+
+### User Segmentation
+- Implement tagging system for categorizing users
+- Create predefined segments for common user groups
+- Build filtering logic based on tags, activity, and enrollment status
+- Develop segment preview and size estimation tools
+
+### Campaign Management
+- Create campaign building interface with scheduling capabilities
+- Implement recipient targeting based on tags and segments
+- Develop automation for recurring emails (class reminders, etc.)
+- Build duplication and templating functionality
+
+### Analytics and Reporting
+- Process Postmark webhooks for tracking email events
+- Store engagement metrics (opens, clicks, bounces, spam reports)
+- Build analytics dashboard integrated with existing admin analytics
+- Create exportable reports for stakeholders
+
+### Compliance
+- Implement global opt-in/opt-out functionality
+- Add unsubscribe link processing from emails
+- Build preference management for users
+- Ensure compliance with email regulations for Philippines audience
+
+## Success Metrics
+1. Email deliverability rate > 98%
+2. Open rates above industry average (20-25%)
+3. Click-through rates above 3%
+4. Bounce rate < 1%
+5. Spam complaint rate < 0.1%
+
+## Implementation Phases
+
+### Phase 1: Core Infrastructure
+- Postmark account setup and configuration
+- Email service implementation
+- Template system with MJML processing
+- Supabase Auth integration
+
+### Phase 2: Template and Content
+- Base email template design
+- Authentication email templates
+- Transactional email templates
+- Class reminder templates
+
+### Phase 3: Admin Interface
+- Template management interface
+- Visual template editor
+- Campaign management tools
+- User segmentation features
+
+### Phase 4: Analytics and Optimization
+- Webhook integration for tracking
+- Analytics dashboard development
+- Performance reporting
+- Optimization based on metrics
+
+## Technical Implementation Notes
+- Frontend: Next.js with React components
+- Backend: Use existing API routes and controllers
+- Database schema adjustments as needed for new functionality
+- API endpoints for template and campaign management
