@@ -13,10 +13,21 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { 
   Select, 
   SelectContent, 
+  SelectGroup,
   SelectItem, 
+  SelectLabel,
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
@@ -124,6 +135,10 @@ export default function EmailTemplatesManager() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // Template creation dialog state
+  const [newTemplateType, setNewTemplateType] = useState('');
+  const [newTemplateName, setNewTemplateName] = useState('');
+  
   // Fetch templates on mount
   useEffect(() => {
     fetchTemplates();
@@ -165,6 +180,10 @@ export default function EmailTemplatesManager() {
         throw new Error(`No template found for type: ${templateType}`);
       }
       
+      // Generate a more predictable template ID format
+      const sanitizedName = name.toLowerCase().replace(/\s+/g, '-');
+      const templateId = `${category}-${sanitizedName}-${Date.now().toString().slice(-6)}`;
+      
       // Create the template in the database
       const response = await fetch('/api/admin/email-templates', {
         method: 'POST',
@@ -172,6 +191,7 @@ export default function EmailTemplatesManager() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          id: templateId, // Send our generated ID
           name: name,
           category: category,
           description: `${name} template created using Unlayer Editor`,
@@ -197,9 +217,13 @@ export default function EmailTemplatesManager() {
       // Refresh templates list
       await fetchTemplates();
       
-      // Select and edit the new template
-      if (data.id) {
-        await fetchTemplate(data.id);
+      // Set the template details directly
+      if (data.template) {
+        // Use the complete template data from the response
+        setSelectedTemplate(data.template);
+        setEditedHtml(data.template.htmlTemplate || '');
+        setDesignJson(data.template.design || null);
+        setPreviewVariables(getTemplateSuggestions(templateId));
         setView('edit');
       }
     } catch (err) {
@@ -291,13 +315,8 @@ export default function EmailTemplatesManager() {
     try {
       setIsLoading(true);
       
-      const response = await fetch('/api/admin/email-templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ templateId }),
-      });
+      // Use GET with query params instead of POST
+      const response = await fetch(`/api/admin/email-templates?templateId=${encodeURIComponent(templateId)}`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch template: ${response.statusText}`);
@@ -523,37 +542,101 @@ export default function EmailTemplatesManager() {
             </CardDescription>
           </div>
           <div className="flex items-center space-x-2">
-            <Select
-              onValueChange={(value) => {
-                if (value && unlayerTemplates[value as keyof typeof unlayerTemplates]) {
-                  // Open dialog for template creation
-                  const category = value.includes('welcome') || value.includes('password-reset') || value.includes('verification') 
-                    ? 'authentication' 
-                    : value.includes('reminder') 
-                      ? 'transactional' 
-                      : 'marketing';
-                  
-                  const name = TEMPLATE_CATEGORIES
-                    .find(c => c.name === category)?.subcategories
-                    .find(s => value.includes(s.name))?.label || 'New Template';
-                  
-                  // Create new template
-                  createNewTemplate(value, name, category);
-                }
-              }}
-            >
-              <SelectTrigger className="w-[180px]">
-                <Button variant="outline">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="default">
                   <FileCode className="h-4 w-4 mr-2" />
                   New Template
                 </Button>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="email-verification">Email Verification</SelectItem>
-                <SelectItem value="password-reset">Password Reset</SelectItem>
-                <SelectItem value="welcome">Welcome</SelectItem>
-              </SelectContent>
-            </Select>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Create New Template</DialogTitle>
+                  <DialogDescription>
+                    Choose a template type to create a new professional email template with Unlayer.  
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="template-type" className="text-right">
+                      Template Type
+                    </Label>
+                    <Select
+                      onValueChange={(value) => {
+                        // Store selected template type in state
+                        setNewTemplateType(value);
+                      }}
+                    >
+                      <SelectTrigger className="col-span-3">
+                        <SelectValue placeholder="Select a template type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectLabel>Authentication</SelectLabel>
+                          <SelectItem value="email-verification">Email Verification</SelectItem>
+                          <SelectItem value="password-reset">Password Reset</SelectItem>
+                          <SelectItem value="welcome">Welcome</SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="name" className="text-right">
+                      Name
+                    </Label>
+                    <Input
+                      id="name"
+                      className="col-span-3"
+                      placeholder="Template name"
+                      onChange={(e) => setNewTemplateName(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="button" variant="secondary" onClick={() => {
+                    setNewTemplateType('');
+                    setNewTemplateName('');
+                  }}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" onClick={() => {
+                    if (!newTemplateType) {
+                      toast({
+                        title: 'Template type required',
+                        description: 'Please select a template type',
+                        variant: 'destructive',
+                      });
+                      return;
+                    }
+                    
+                    const name = newTemplateName || (
+                      TEMPLATE_CATEGORIES
+                        .find(c => {
+                          const subcategory = c.subcategories.find(s => newTemplateType.includes(s.name));
+                          return subcategory != null;
+                        })?.subcategories
+                        .find(s => newTemplateType.includes(s.name))?.label || 'New Template'
+                    );
+                    
+                    // Determine category
+                    const category = newTemplateType.includes('welcome') || newTemplateType.includes('password-reset') || newTemplateType.includes('verification') 
+                      ? 'authentication' 
+                      : newTemplateType.includes('reminder') 
+                        ? 'transactional' 
+                        : 'marketing';
+                      
+                    // Create new template
+                    createNewTemplate(newTemplateType, name, category);
+                    
+                    // Clear state
+                    setNewTemplateType('');
+                    setNewTemplateName('');
+                  }}>
+                    Create Template
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
