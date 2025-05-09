@@ -111,25 +111,41 @@ export default function UnlayerEmailEditor({
   }, [onSave, onPreview]);
 
   // Render the editor with proper default options
+  // Use a container div with fixed height to control the editor size
   return (
-    <EmailEditor
-      ref={emailEditorRef}
-      onReady={onReady}
-      minHeight="600px"
-      options={{
-        // Include basic configuration
-        displayMode: 'email',
-        projectId: 1,
-        // Appearance customization
-        appearance: {
-          theme: 'light',
-          panels: {
-            tools: {
-              dock: 'left'
+    <div style={{ 
+      width: '100%', 
+      height: 'calc(100vh - 10rem)',
+      position: 'relative' 
+    }}>
+      <EmailEditor
+        ref={emailEditorRef}
+        onReady={onReady}
+        minHeight="100%"
+        style={{ 
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          height: '100%',
+          width: '100%'
+        }}
+        options={{
+          // Include basic configuration
+          displayMode: 'email',
+          projectId: 1,
+          // Appearance customization
+          appearance: {
+            theme: 'light',
+            panels: {
+              tools: {
+                dock: 'left'
+              }
             }
           }
-        }
-      }}
-    />
+        }}
+      />
+    </div>
   );
 }

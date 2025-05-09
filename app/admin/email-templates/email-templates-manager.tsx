@@ -42,13 +42,19 @@ import {
 } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Edit, Eye, Send, Save, FileCode, ArrowLeft } from 'lucide-react';
+import { Loader2, Edit, Eye, Send, Save, FileCode, ArrowLeft, Trash2, MoreHorizontal, Pencil, Copy } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { format } from 'date-fns';
 import UnlayerEmailEditor from './unlayer-email-editor';
 import { unlayerTemplates } from '@/lib/services/email/unlayer-templates/index';
 import TemplatePreview from './template-preview';
 import TemplateTester from './template-tester';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 // Define template types
 type EmailTemplate = {
@@ -139,6 +145,15 @@ export default function EmailTemplatesManager() {
   const [newTemplateType, setNewTemplateType] = useState('');
   const [newTemplateName, setNewTemplateName] = useState('');
   
+  // Delete dialog state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<EmailTemplate | null>(null);
+  
+  // Rename dialog state
+  const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [templateToRename, setTemplateToRename] = useState<EmailTemplate | null>(null);
+  const [newTemplateNameInput, setNewTemplateNameInput] = useState('');
+  
   // Fetch templates on mount
   useEffect(() => {
     fetchTemplates();
@@ -181,9 +196,9 @@ export default function EmailTemplatesManager() {
       }
       
       // Generate a more predictable template ID format
-      const sanitizedName = name.toLowerCase().replace(/\s+/g, '-');
-      const templateId = `${category}-${sanitizedName}-${Date.now().toString().slice(-6)}`;
-      
+      // const sanitizedName = name.toLowerCase().replace(/\s+/g, '-'); // No longer needed
+      // const templateId = `${category}-${sanitizedName}-${Date.now().toString().slice(-6)}`; // Backend will generate UUID
+
       // Create the template in the database
       const response = await fetch('/api/admin/email-templates', {
         method: 'POST',
@@ -191,7 +206,7 @@ export default function EmailTemplatesManager() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          id: templateId, // Send our generated ID
+          // id: templateId, // Remove: Backend will generate the UUID
           name: name,
           category: category,
           description: `${name} template created using Unlayer Editor`,
@@ -218,12 +233,12 @@ export default function EmailTemplatesManager() {
       await fetchTemplates();
       
       // Set the template details directly
-      if (data.template) {
+      if (data.template && data.template.id) { // Ensure template and its ID exist in response
         // Use the complete template data from the response
         setSelectedTemplate(data.template);
         setEditedHtml(data.template.htmlTemplate || '');
         setDesignJson(data.template.design || null);
-        setPreviewVariables(getTemplateSuggestions(templateId));
+        setPreviewVariables(getTemplateSuggestions(data.template.id)); // Use the new ID from response
         setView('edit');
       }
     } catch (err) {
@@ -241,8 +256,11 @@ export default function EmailTemplatesManager() {
   // Get template suggestions based on template ID
   const getTemplateSuggestions = (templateId: string) => {
     // Try to find specific variables for this template
+    // This logic might need adjustment if templateId is now a UUID
+    // For now, we keep it, but it's less likely to match based on substrings of UUIDs.
+    // Consider matching based on template 'name' or 'category' if this becomes an issue.
     for (const [id, vars] of Object.entries(TEMPLATE_VARIABLES)) {
-      if (templateId.includes(id)) {
+      if (templateId.includes(id)) { // This matching might be less effective with UUIDs
         return { ...DEFAULT_VARIABLES, ...vars };
       }
     }
@@ -447,6 +465,242 @@ export default function EmailTemplatesManager() {
     }
   };
   
+  // Save template with version history
+  const saveTemplateWithVersion = async () => {
+    if (!selectedTemplate || !editedHtml) return;
+    
+    try {
+      setIsSaving(true);
+      
+      // Current version or 1 if not set
+      const currentVersion = selectedTemplate.version || 1;
+      
+      // Prepare previous version data
+      let previousVersion = null;
+      if (selectedTemplate.htmlTemplate) {
+        previousVersion = {
+          version: currentVersion,
+          htmlTemplate: selectedTemplate.htmlTemplate,
+          design: selectedTemplate.design, // Store design JSON for version history
+          updatedAt: selectedTemplate.updatedAt || new Date().toISOString(),
+        };
+      }
+      
+      const response = await fetch('/api/admin/email-templates', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          templateId: selectedTemplate.id,
+          htmlTemplate: editedHtml,
+          design: designJson, // Include design JSON
+          category: selectedTemplate.category,
+          subcategory: selectedTemplate.subcategory || '',
+          version: currentVersion + 1,
+          previousVersion: previousVersion,
+        }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to save template');
+      }
+      
+      toast({
+        title: 'Success',
+        description: `Template saved successfully as version ${currentVersion + 1}`,
+      });
+      
+      // Refresh the template to get the latest version
+      await fetchTemplate(selectedTemplate.id);
+      
+      // Refresh the templates list
+      fetchTemplates();
+    } catch (err) {
+      console.error('Error saving template:', err);
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to save template',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  // Restore a previous version
+  const restoreVersion = async (version: number) => {
+    if (!selectedTemplate || !selectedTemplate.previousVersions) return;
+    
+    const versionToRestore = selectedTemplate.previousVersions.find(v => v.version === version);
+    if (!versionToRestore) {
+      toast({
+        title: 'Error',
+        description: 'Version not found',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Set the editor content to the previous version
+    setEditedHtml(versionToRestore.htmlTemplate);
+    setDesignJson(versionToRestore.design || null);
+    
+    toast({
+      title: 'Version Restored',
+      description: `Restored version ${version}. Save to make this the current version.`,
+    });
+  };
+  
+  // Handle actual deletion of the template
+  const handleDeleteTemplate = async () => {
+    if (!templateToDelete) return;
+
+    try {
+      setIsLoading(true); // Or a specific deleting state
+      const response = await fetch(`/api/admin/email-templates/${templateToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete template');
+      }
+
+      toast({
+        title: 'Success',
+        description: `Template "${templateToDelete.name}" deleted successfully`,
+      });
+
+      // Update local state immediately for better UX
+      setTemplates(prevTemplates => prevTemplates.filter(t => t.id !== templateToDelete.id));
+      setShowDeleteDialog(false);
+      setTemplateToDelete(null);
+    } catch (err) {
+      console.error('Error deleting template:', err);
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete template',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Helper functions for Unlayer editor interaction (Save & Preview buttons in edit view)
+  const handleSave = async () => {
+    if (typeof window !== 'undefined' && (window as any).unlayerExportHtml) {
+      console.log('Calling Unlayer export HTML');
+      (window as any).unlayerExportHtml();
+    } else {
+      console.error('Unlayer export method not found');
+    }
+  };
+  
+  const handlePreview = () => {
+    if (typeof window !== 'undefined' && (window as any).unlayerPreview) {
+      console.log('Calling Unlayer preview');
+      (window as any).unlayerPreview();
+    } else {
+      console.error('Unlayer preview method not found');
+      // Fall back to direct preview if needed
+      previewTemplate();
+    }
+  };
+  
+  const handleRenameTemplate = async () => {
+    if (!templateToRename || !newTemplateNameInput.trim()) {
+      toast({
+        title: 'Error',
+        description: 'New template name cannot be empty.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsLoading(true); // Or a specific renaming state
+      const response = await fetch(`/api/admin/email-templates/${templateToRename.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: newTemplateNameInput.trim() }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to rename template');
+      }
+
+      toast({
+        title: 'Success',
+        description: `Template "${templateToRename.name}" renamed to "${newTemplateNameInput.trim()}"`,
+      });
+
+      // Update local state for immediate UI feedback
+      setTemplates(prevTemplates => 
+        prevTemplates.map(t => 
+          t.id === templateToRename.id ? { ...t, name: newTemplateNameInput.trim() } : t
+        )
+      );
+      setShowRenameDialog(false);
+      setTemplateToRename(null);
+      setNewTemplateNameInput('');
+    } catch (err) {
+      console.error('Error renaming template:', err);
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to rename template',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  const handleDuplicateTemplate = async (templateId: string, templateName: string) => {
+    try {
+      setIsLoading(true); // Or a specific duplicating state
+      const response = await fetch(`/api/admin/email-templates/${templateId}/duplicate`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to duplicate template');
+      }
+      
+      const { newTemplate } = await response.json(); // Assuming API returns the new template
+
+      toast({
+        title: 'Success',
+        description: `Template "${templateName}" duplicated successfully as "${newTemplate?.name || 'New Template Copy'}"`,
+      });
+
+      await fetchTemplates(); // Refresh the entire list to get the new template
+      
+      // Optionally, switch to edit view for the new duplicate
+      if (newTemplate) {
+        // await handleSelectTemplate(newTemplate.id); // This would fetch it again, then switch view
+        // For now, just log and let the user find it in the refreshed list or navigate manually
+        console.log('New duplicated template:', newTemplate);
+      }
+
+    } catch (err) {
+      console.error('Error duplicating template:', err);
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to duplicate template',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   // Render loading state
   if (isLoading && templates.length === 0) {
     return (
@@ -618,17 +872,14 @@ export default function EmailTemplatesManager() {
                         .find(s => newTemplateType.includes(s.name))?.label || 'New Template'
                     );
                     
-                    // Determine category
                     const category = newTemplateType.includes('welcome') || newTemplateType.includes('password-reset') || newTemplateType.includes('verification') 
                       ? 'authentication' 
                       : newTemplateType.includes('reminder') 
                         ? 'transactional' 
                         : 'marketing';
                       
-                    // Create new template
                     createNewTemplate(newTemplateType, name, category);
                     
-                    // Clear state
                     setNewTemplateType('');
                     setNewTemplateName('');
                   }}>
@@ -734,10 +985,46 @@ export default function EmailTemplatesManager() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleSelectTemplate(template.id)}
+                        className="mr-2"
                       >
                         <Edit className="w-4 h-4 mr-2" />
                         Edit
                       </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setTemplateToRename(template);
+                              setNewTemplateNameInput(template.name);
+                              setShowRenameDialog(true);
+                            }}
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDuplicateTemplate(template.id, template.name)}
+                          >
+                            <Copy className="mr-2 h-4 w-4" />
+                            Duplicate
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                            onClick={() => {
+                              setTemplateToDelete(template);
+                              setShowDeleteDialog(true);
+                            }}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -753,125 +1040,75 @@ export default function EmailTemplatesManager() {
             </Table>
           </div>
         </CardContent>
+
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete the template "{templateToDelete?.name}"? 
+                This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteTemplate} disabled={isLoading}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Delete Template
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showRenameDialog} onOpenChange={(isOpen) => {
+          setShowRenameDialog(isOpen);
+          if (!isOpen) {
+            setTemplateToRename(null);
+            setNewTemplateNameInput('');
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Rename Template</DialogTitle>
+              <DialogDescription>
+                Enter a new name for the template "{templateToRename?.name}".
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="new-template-name" className="text-right">
+                  New Name
+                </Label>
+                <Input
+                  id="new-template-name"
+                  value={newTemplateNameInput}
+                  onChange={(e) => setNewTemplateNameInput(e.target.value)}
+                  className="col-span-3"
+                  placeholder="Enter new template name"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowRenameDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleRenameTemplate} disabled={isLoading}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Rename Template
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </Card>
     );
   }
   
-  // Save template with version history
-  const saveTemplateWithVersion = async () => {
-    if (!selectedTemplate || !editedHtml) return;
-    
-    try {
-      setIsSaving(true);
-      
-      // Current version or 1 if not set
-      const currentVersion = selectedTemplate.version || 1;
-      
-      // Prepare previous version data
-      let previousVersion = null;
-      if (selectedTemplate.htmlTemplate) {
-        previousVersion = {
-          version: currentVersion,
-          htmlTemplate: selectedTemplate.htmlTemplate,
-          design: selectedTemplate.design, // Store design JSON for version history
-          updatedAt: selectedTemplate.updatedAt || new Date().toISOString(),
-        };
-      }
-      
-      const response = await fetch('/api/admin/email-templates', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          templateId: selectedTemplate.id,
-          htmlTemplate: editedHtml,
-          design: designJson, // Include design JSON
-          category: selectedTemplate.category,
-          subcategory: selectedTemplate.subcategory || '',
-          version: currentVersion + 1,
-          previousVersion: previousVersion,
-        }),
-      });
-      
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to save template');
-      }
-      
-      toast({
-        title: 'Success',
-        description: `Template saved successfully as version ${currentVersion + 1}`,
-      });
-      
-      // Refresh the template to get the latest version
-      await fetchTemplate(selectedTemplate.id);
-      
-      // Refresh the templates list
-      fetchTemplates();
-    } catch (err) {
-      console.error('Error saving template:', err);
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to save template',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-  
-  // Restore a previous version
-  const restoreVersion = async (version: number) => {
-    if (!selectedTemplate || !selectedTemplate.previousVersions) return;
-    
-    const versionToRestore = selectedTemplate.previousVersions.find(v => v.version === version);
-    if (!versionToRestore) {
-      toast({
-        title: 'Error',
-        description: 'Version not found',
-        variant: 'destructive',
-      });
-      return;
-    }
-    
-    // Set the editor content to the previous version
-    setEditedHtml(versionToRestore.htmlTemplate);
-    setDesignJson(versionToRestore.design || null);
-    
-    toast({
-      title: 'Version Restored',
-      description: `Restored version ${version}. Save to make this the current version.`,
-    });
-  };
-  
-  // Let's just delete this new hook for now to solve the hook order issue
-
-  // Helper functions for template editing - defined outside render conditions
-  const handleSave = async () => {
-    if (typeof window !== 'undefined' && (window as any).unlayerExportHtml) {
-      console.log('Calling Unlayer export HTML');
-      (window as any).unlayerExportHtml();
-    } else {
-      console.error('Unlayer export method not found');
-    }
-  };
-  
-  const handlePreview = () => {
-    if (typeof window !== 'undefined' && (window as any).unlayerPreview) {
-      console.log('Calling Unlayer preview');
-      (window as any).unlayerPreview();
-    } else {
-      console.error('Unlayer preview method not found');
-      // Fall back to direct preview if needed
-      previewTemplate();
-    }
-  };
-  
   // Render template editor
   if (view === 'edit' && selectedTemplate) {
     return (
-      <div className="h-full flex flex-col">
+      <div className="h-[calc(100vh-4rem)] flex flex-col w-full">
         {/* Simple header with minimal controls */}
         <div className="flex items-center justify-between p-3 border-b bg-background">
           <Button variant="ghost" size="sm" onClick={() => setView('list')}>
@@ -903,7 +1140,7 @@ export default function EmailTemplatesManager() {
         </div>
 
         {/* Super simple Unlayer editor following the article EXACTLY */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden w-full">
           <UnlayerEmailEditor 
             templateId={selectedTemplate.id}
             initialHtml={editedHtml}

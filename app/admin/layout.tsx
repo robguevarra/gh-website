@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { validateAdminStatus } from '@/lib/supabase/admin';
 import AdminHeader from '@/components/admin/admin-header';
 import AdminSidebar from '@/components/admin/admin-sidebar';
-import { headers } from 'next/headers';
+
 
 export const metadata = {
   title: 'Admin Dashboard | Graceful Homeschooling',
@@ -65,11 +66,20 @@ export default async function AdminLayout({
         <AdminHeader />
         <div className="flex flex-1 flex-col md:flex-row">
           <AdminSidebar />
-          <main className="flex-1 overflow-auto p-4 md:p-6">
-            <div className="mx-auto max-w-7xl space-y-4">
-              {children}
-            </div>
-          </main>
+          {/* Use conditional rendering for main element based on path */}
+          {pathname.includes('/admin/email-templates') ? (
+            <main className="flex-1 overflow-auto">
+              <div className="w-full h-full">
+                {children}
+              </div>
+            </main>
+          ) : (
+            <main className="flex-1 overflow-auto p-4 md:p-6">
+              <div className="w-full h-full">
+                {children}
+              </div>
+            </main>
+          )}
         </div>
       </div>
     );

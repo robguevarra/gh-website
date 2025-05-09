@@ -9,27 +9,35 @@
  */
 
 import { Metadata } from 'next';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import EmailTemplatesManager from './email-templates-manager';
+import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
   title: 'Email Templates | Admin Dashboard',
   description: 'Manage email templates for Graceful Homeschooling',
 };
 
-export default function EmailTemplatesPage() {
+async function checkAdmin() {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/auth/signin?message=Authentication required');
+  }
+
+  // Adjust this check based on your actual role management setup
+  const isAdmin = user.user_metadata?.is_admin === true;
+  if (!isAdmin) {
+    redirect('/dashboard?error=Admin access required'); // Or redirect to an unauthorized page
+  }
+}
+
+export default async function AdminEmailTemplatesPage() {
+  await checkAdmin(); // Ensure admin access
+
   return (
-    <div className="container py-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Email Templates</h1>
-      </div>
-      
-      <div className="space-y-1">
-        <p className="text-muted-foreground">
-          Manage email templates used throughout the application. Templates use MJML for responsive design
-          and support variable substitution for personalization.
-        </p>
-      </div>
-      
+    <div className="w-full">
       <EmailTemplatesManager />
     </div>
   );

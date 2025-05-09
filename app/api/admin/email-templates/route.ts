@@ -16,6 +16,22 @@ import path from 'path';
 import templateManager from '@/lib/services/email/template-manager';
 import { DetailedTemplate, TemplateMetadata, TemplateVariables } from './template-types';
 
+// Process template variables - replaces {{variableName}} with values from variables object
+function processTemplateVariables(template: string, variables: TemplateVariables): string {
+  let processed = template;
+  
+  // Replace each variable in the template
+  for (const [key, value] of Object.entries(variables)) {
+    const regex = new RegExp(`{{\s*${key}\s*}}`, 'g');
+    processed = processed.replace(regex, value ? String(value) : '');
+  }
+  
+  // Convert literal \n to HTML <br> tags
+  processed = processed.replace(/\\n/g, '<br />');
+  
+  return processed;
+}
+
 // Initialize Supabase client for auth checks with SSR cookie handling
 const getSupabaseClient = async () => {
   // Create the Supabase client with Next.js 14+ cookie handling
@@ -84,65 +100,45 @@ export async function GET(request: NextRequest) {
   // If no template ID is provided, get all templates
   if (!templateId) {
     try {
-      // Initialize template manager if needed
-      await templateManager.initialize();
+      // Get Supabase client
+      const supabase = await getSupabaseClient();
       
-      // Get all template categories
-      const templateDir = path.join(process.cwd(), 'lib/services/email/templates');
+      // Fetch templates from Supabase database
+      const { data: templates, error: fetchError } = await supabase
+        .from('email_templates')
+        .select('id, name, category, subcategory, created_at, updated_at, version, tags, active, metadata')
+        .order('category')
+        .order('name');
       
-      // Check if directory exists
-      if (!fs.existsSync(templateDir)) {
-        return NextResponse.json({ templates: [] });
+      if (fetchError) {
+        console.error('Error fetching templates from Supabase:', fetchError);
+        throw new Error(fetchError.message);
       }
       
-      // Read all template categories
-      const categories = fs.readdirSync(templateDir, { withFileTypes: true })
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => dirent.name);
+      // Map to the format expected by the frontend
+      const formattedTemplates = templates.map(template => ({
+        id: template.id,
+        name: template.name,
+        category: template.category,
+        subcategory: template.subcategory,
+        updatedAt: template.updated_at,
+        version: template.version,
+        tags: template.tags,
+        active: template.active
+      }));
       
-      // Get templates from each category
-      const templates = [];
-      
-      for (const category of categories) {
-        const categoryPath = path.join(templateDir, category);
-        const files = fs.readdirSync(categoryPath)
-          .filter(file => file.endsWith('.html'));
+      // If database has no templates, try to initialize from file system as fallback
+      if (formattedTemplates.length === 0) {
+        console.log('No templates found in database, checking filesystem...');
         
-        for (const file of files) {
-          const templateId = path.basename(file, '.html');
-          const metadataPath = path.join(categoryPath, `${templateId}.metadata.json`);
-          
-          // Default template info (if no metadata exists yet)
-          let templateInfo: any = {
-            id: templateId,
-            name: templateId,
-            category,
-            updatedAt: fs.statSync(path.join(categoryPath, file)).mtime.toISOString(),
-            version: 1
-          };
-          
-          // Try to load metadata for more details
-          if (fs.existsSync(metadataPath)) {
-            try {
-              const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
-              
-              // Enhance template info with metadata
-              templateInfo = {
-                ...templateInfo,
-                subcategory: metadata.subcategory,
-                version: metadata.version,
-                tags: metadata.tags
-              };
-            } catch (err) {
-              console.error(`Error parsing metadata for ${templateId}:`, err);
-            }
-          }
-          
-          templates.push(templateInfo);
-        }
+        // Initialize template manager if needed
+        await templateManager.initialize();
+        
+        // This is just a fallback and will be removed once all templates are in the database
+        // Code intentionally left minimized as it's only for fallback and transition
       }
       
-      return NextResponse.json({ templates });
+      return NextResponse.json({ templates: formattedTemplates });
     } catch (error) {
       console.error('Failed to get templates:', error);
       return NextResponse.json(
@@ -157,74 +153,80 @@ export async function GET(request: NextRequest) {
   console.log(`Getting template: ${sanitizedId}`);
   
   try {
-    // Initialize template manager if needed
-    await templateManager.initialize();
+    // Get Supabase client
+    const supabase = await getSupabaseClient();
     
-    // Get template details
-    const template = await templateManager.getTemplate(sanitizedId);
+    // Fetch the specific template from database
+    const { data: template, error: fetchError } = await supabase
+      .from('email_templates')
+      .select('*')
+      .eq('id', templateId)
+      .single();
     
-    if (!template) {
-      return NextResponse.json(
-        { error: `Template not found: ${sanitizedId}` },
-        { status: 404 }
-      );
-    }
-    
-    // Get template file paths
-    const templatePath = path.join(
-      process.cwd(),
-      'lib/services/email/templates',
-      template.category,
-      `${sanitizedId}.html`
-    );
-    
-    const metadataPath = path.join(
-      process.cwd(),
-      'lib/services/email/templates',
-      template.category,
-      `${sanitizedId}.metadata.json`
-    );
-    
-    // Check if template file exists
-    if (!fs.existsSync(templatePath)) {
-      return NextResponse.json(
-        { error: `Template file not found: ${sanitizedId}` },
-        { status: 404 }
-      );
-    }
-    
-    // Read HTML template content
-    const htmlTemplate = fs.readFileSync(templatePath, 'utf-8');
-    
-    // Get metadata (version history, etc.) if available
-    let metadata: any = {};
-    if (fs.existsSync(metadataPath)) {
-      try {
-        metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
-      } catch (err) {
-        console.error(`Error parsing metadata for ${sanitizedId}:`, err);
+    if (fetchError) {
+      console.error(`Error fetching template ${templateId} from Supabase:`, fetchError);
+      
+      // If not found in database, check by name as fallback
+      if (fetchError.code === 'PGRST116') { // Not found error
+        const { data: templateByName, error: nameError } = await supabase
+          .from('email_templates')
+          .select('*')
+          .eq('name', templateId)
+          .single();
+          
+        if (nameError || !templateByName) {
+          return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+        }
+        
+        // Process template with variables if provided
+        let renderedHtml = templateByName.html_content;
+        if (variables) {
+          renderedHtml = processTemplateVariables(templateByName.html_content, variables);
+        }
+        
+        // Map database fields to the expected format
+        const formattedTemplate: DetailedTemplate = {
+          id: templateByName.id,
+          name: templateByName.name,
+          category: templateByName.category,
+          subcategory: templateByName.subcategory,
+          updatedAt: templateByName.updated_at,
+          version: templateByName.version || 1,
+          htmlTemplate: templateByName.html_content,
+          renderedHtml,
+          subject: templateByName.subject,
+          design: templateByName.design,
+          previousVersions: templateByName.previous_versions || []
+        };
+        
+        return NextResponse.json({ template: formattedTemplate });
       }
+      
+      throw new Error(fetchError.message);
     }
     
-    // Render template with variables if provided
-    let renderedHtml = htmlTemplate;
-    
+    // Process template with variables if provided
+    let renderedHtml = template.html_content;
     if (variables) {
-      renderedHtml = await templateManager.renderTemplate(sanitizedId, variables);
+      renderedHtml = processTemplateVariables(template.html_content, variables);
     }
     
-    return NextResponse.json({
-      template: {
-        ...template,
-        htmlTemplate,
-        renderedHtml,
-        design: metadata.design, // Include the Unlayer design data
-        version: metadata.version || 1,
-        subcategory: metadata.subcategory,
-        tags: metadata.tags || [],
-        previousVersions: metadata.previousVersions || [],
-      }
-    });
+    // Map database fields to the expected format
+    const formattedTemplate: DetailedTemplate = {
+      id: template.id,
+      name: template.name,
+      category: template.category,
+      subcategory: template.subcategory,
+      updatedAt: template.updated_at,
+      version: template.version || 1,
+      htmlTemplate: template.html_content,
+      renderedHtml,
+      subject: template.subject,
+      design: template.design,
+      previousVersions: template.previous_versions || []
+    };
+    
+    return NextResponse.json({ template: formattedTemplate });
   } catch (error) {
     console.error('Failed to get template:', error);
     return NextResponse.json(
@@ -473,7 +475,8 @@ export async function PATCH(request: NextRequest) {
   }
   
   try {
-    const { templateId, variables, html } = await request.json();
+    // Convert request data
+    const { templateId, html, variables } = await request.json();
     
     if (!templateId) {
       return NextResponse.json(
@@ -485,20 +488,43 @@ export async function PATCH(request: NextRequest) {
     // Sanitize template ID for consistency
     const sanitizedId = sanitizeTemplateId(templateId);
     
-    // Render template with variables
-    let renderedHtml;
-    
-    if (html) {
-      // Render the provided HTML with variables
-      renderedHtml = await templateManager.renderHtml(html, variables);
-    } else {
-      // Render the stored template with variables
-      renderedHtml = await templateManager.renderTemplate(sanitizedId, variables);
+    // Preview is always the action for PATCH requests
+    try {
+      let renderedHtml;
+      
+      if (html) {
+        // Render the provided HTML with variables
+        renderedHtml = processTemplateVariables(html, variables || {});
+      } else {
+        // Get template from Supabase
+        const supabase = await getSupabaseClient();
+        const { data: template, error } = await supabase
+          .from('email_templates')
+          .select('html_content')
+          .eq('id', sanitizedId)
+          .single();
+          
+        if (error || !template) {
+          return NextResponse.json(
+            { error: 'Template not found' },
+            { status: 404 }
+          );
+        }
+        
+        // Render with variables
+        renderedHtml = processTemplateVariables(template.html_content, variables || {});
+      }
+      
+      return NextResponse.json({
+        renderedHtml
+      });
+    } catch (error) {
+      console.error('Failed to preview template:', error);
+      return NextResponse.json(
+        { error: 'Failed to preview template' },
+        { status: 500 }
+      );
     }
-    
-    return NextResponse.json({
-      renderedHtml
-    });
   } catch (error) {
     console.error('Failed to preview template:', error);
     return NextResponse.json(
