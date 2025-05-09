@@ -7,6 +7,9 @@
  * including listing, editing, and previewing.
  */
 
+// Import styles for editor button states
+import './editor-styles.css';
+
 import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -369,52 +372,82 @@ export default function EmailTemplatesManager() {
     }
   };
   
-  // Save a template
+  // Save a template with improved visual feedback
   const saveTemplate = async () => {
-    if (!selectedTemplate || !editedHtml) return;
+    if (!selectedTemplate || !editedHtml) {
+      // Silent fail with proper return value
+      return false;
+    }
     
     try {
-      setIsSaving(true);
+      // Ensure design is properly serializable
+      let preparedDesign;
+      try {
+        preparedDesign = designJson ? JSON.parse(JSON.stringify(designJson)) : null;
+      } catch (_) {
+        // Silently handle serialization errors with a fallback
+        preparedDesign = null;
+      }
       
+      // Request payload
+      const payload = {
+        templateId: selectedTemplate.id,
+        htmlTemplate: editedHtml,
+        design: preparedDesign,
+        category: selectedTemplate.category,
+        subcategory: selectedTemplate.subcategory || null,
+        version: selectedTemplate.version || 1
+      };
+      
+      // Save to API
       const response = await fetch('/api/admin/email-templates', {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          templateId: selectedTemplate.id,
-          htmlTemplate: editedHtml,
-          design: designJson, // Add design JSON
-          category: selectedTemplate.category,
-          subcategory: selectedTemplate.subcategory || null,
-          version: selectedTemplate.version || 1
-        }),
+        body: JSON.stringify(payload),
       });
       
+      // Check response
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to save template');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save template');
       }
       
+      // Show success indicator
       toast({
-        title: 'Success',
-        description: 'Template saved successfully',
+        title: 'Template Saved',
+        description: `${selectedTemplate.name} saved successfully`,
+        variant: 'default',
       });
       
-      // Refresh the template to get the latest version
+      // Add success visual indicator
+      const saveButton = document.getElementById('save-button');
+      if (saveButton) {
+        saveButton.classList.add('success');
+        setTimeout(() => saveButton.classList.remove('success'), 1500);
+      }
+      
+      // Refresh data
       await fetchTemplate(selectedTemplate.id);
       
-      // Refresh the templates list
-      fetchTemplates();
+      return true;
     } catch (err) {
-      console.error('Error saving template:', err);
+      // Show error toast
       toast({
-        title: 'Error',
+        title: 'Save Failed',
         description: err instanceof Error ? err.message : 'Failed to save template',
         variant: 'destructive',
       });
-    } finally {
-      setIsSaving(false);
+      
+      // Add error visual indicator
+      const saveButton = document.getElementById('save-button');
+      if (saveButton) {
+        saveButton.classList.add('error');
+        setTimeout(() => saveButton.classList.remove('error'), 1500);
+      }
+      
+      return false;
     }
   };
   
@@ -445,7 +478,6 @@ export default function EmailTemplatesManager() {
       setPreviewHtml(data.html);
       setView('preview');
     } catch (err) {
-      console.error('Error previewing template:', err);
       toast({
         title: 'Error',
         description: 'Failed to generate preview',
@@ -589,24 +621,78 @@ export default function EmailTemplatesManager() {
     }
   };
   
-  // Helper functions for Unlayer editor interaction (Save & Preview buttons in edit view)
+  // Save using our reference to the UnlayerEmailEditor component
   const handleSave = async () => {
-    if (typeof window !== 'undefined' && (window as any).unlayerExportHtml) {
-      console.log('Calling Unlayer export HTML');
-      (window as any).unlayerExportHtml();
-    } else {
-      console.error('Unlayer export method not found');
+    setIsSaving(true);
+    document.getElementById('save-button')?.classList.add('saving');
+    
+    try {
+      console.log('Saving template using exportHtml method');
+      
+      // Use the method we've exposed through the window
+      if (typeof window !== 'undefined' && (window as any).unlayerExportHtml) {
+        (window as any).unlayerExportHtml();
+        // Note: The actual saving happens in the unlayer-email-editor.tsx's exportHtml function
+        // which calls our onSave callback with the HTML and design data
+        
+        // This timeout is a fallback in case the exportHtml callback doesn't complete
+        setTimeout(() => {
+          if (isSaving) {
+            console.log('Save operation timed out, resetting state');
+            setIsSaving(false);
+            document.getElementById('save-button')?.classList.remove('saving');
+            toast({
+              title: 'Warning',
+              description: 'Save operation timed out. Please try again.',
+              variant: 'destructive',
+            });
+          }
+        }, 5000); // 5 second timeout
+      } else {
+        throw new Error('Unlayer export method not found');
+      }
+    } catch (error) {
+      console.error('Error in handleSave:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to initiate save',
+        variant: 'destructive',
+      });
+      setIsSaving(false);
+      document.getElementById('save-button')?.classList.remove('saving');
     }
   };
   
-  const handlePreview = () => {
-    if (typeof window !== 'undefined' && (window as any).unlayerPreview) {
-      console.log('Calling Unlayer preview');
-      (window as any).unlayerPreview();
-    } else {
-      console.error('Unlayer preview method not found');
-      // Fall back to direct preview if needed
-      previewTemplate();
+  // Direct handler for test sends
+  const handleTestSend = () => {
+    try {
+      // Get reference to unlayer directly
+      const unlayer = (window as any).unlayer;
+      
+      if (!unlayer) {
+        throw new Error('Unlayer editor not found on the page');
+      }
+      
+      // Save the design and HTML first
+      unlayer.saveDesign((design: any) => {
+        unlayer.exportHtml((data: any) => {
+          const { html } = data;
+          
+          // Update state
+          setEditedHtml(html);
+          setDesignJson(design);
+          
+          // Navigate to test view
+          setView('test');
+        });
+      });
+    } catch (error) {
+      console.error('Error preparing test send:', error);
+      toast({
+        title: 'Error',
+        description: 'Could not prepare template for testing',
+        variant: 'destructive',
+      });
     }
   };
   
@@ -1122,19 +1208,31 @@ export default function EmailTemplatesManager() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={handlePreview}
+              onClick={handleTestSend}
             >
-              <Eye className="w-4 h-4 mr-1" />
-              Preview
+              <Send className="w-4 h-4 mr-1" />
+              Test Send
             </Button>
             
             <Button 
+              id="save-button"
               variant="outline" 
               size="sm"
               onClick={handleSave}
+              disabled={isSaving}
+              className={isSaving ? 'opacity-70 cursor-not-allowed' : ''}
             >
-              <Save className="w-4 h-4 mr-1" />
-              Save
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-1" />
+                  Save
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -1142,17 +1240,106 @@ export default function EmailTemplatesManager() {
         {/* Super simple Unlayer editor following the article EXACTLY */}
         <div className="flex-1 overflow-hidden w-full">
           <UnlayerEmailEditor 
-            templateId={selectedTemplate.id}
+            templateId={selectedTemplate?.id}
             initialHtml={editedHtml}
             initialDesign={designJson}
             onSave={async (html, design) => {
-              setEditedHtml(html);
-              setDesignJson(design);
-              await saveTemplate();
-            }}
-            onPreview={(html) => {
-              setEditedHtml(html);
-              previewTemplate();
+              if (!selectedTemplate) {
+                console.error('Cannot save: no template selected');
+                return false;
+              }
+              
+              // Log what we received from Unlayer
+              console.log('Received from Unlayer editor:', {
+                html_length: html?.length || 0,
+                design_type: typeof design,
+                has_design: !!design
+              });
+              
+              // Direct save function that uses the HTML and design directly from Unlayer
+              // This bypasses React state timing issues that were preventing saves
+              const saveDirectContent = async (htmlContent: string, designData: any) => {
+                if (!selectedTemplate) return false;
+                
+                try {
+                  // Set loading state
+                  setIsSaving(true);
+                  const saveButton = document.getElementById('save-button');
+                  if (saveButton) saveButton.classList.add('saving');
+                  
+                  // Prepare payload directly from the parameters
+                  const payload = {
+                    templateId: selectedTemplate.id,
+                    htmlTemplate: htmlContent,
+                    design: designData,
+                    category: selectedTemplate.category,
+                    subcategory: selectedTemplate.subcategory || null,
+                    version: selectedTemplate.version || 1
+                  };
+                  
+                  // Save directly to API
+                  const response = await fetch('/api/admin/email-templates', {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload),
+                  });
+                  
+                  if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to save template');
+                  }
+                  
+                  // Success handling
+                  toast({
+                    title: 'Template Saved',
+                    description: `${selectedTemplate.name} saved successfully`,
+                    variant: 'default',
+                  });
+                  
+                  // Update UI to reflect success
+                  if (saveButton) {
+                    saveButton.classList.add('success');
+                    setTimeout(() => saveButton.classList.remove('success'), 1500);
+                  }
+                  
+                  // Update state to match what we saved
+                  setEditedHtml(htmlContent);
+                  setDesignJson(designData);
+                  
+                  // Refresh data
+                  await fetchTemplate(selectedTemplate.id);
+                  
+                  return true;
+                } catch (err) {
+                  console.error('Error saving template:', err);
+                  
+                  // Show error toast
+                  toast({
+                    title: 'Save Failed',
+                    description: err instanceof Error ? err.message : 'Failed to save template',
+                    variant: 'destructive',
+                  });
+                  
+                  // Update UI to reflect error
+                  const saveButton = document.getElementById('save-button');
+                  if (saveButton) {
+                    saveButton.classList.add('error');
+                    setTimeout(() => saveButton.classList.remove('error'), 1500);
+                  }
+                  
+                  return false;
+                } finally {
+                  // Reset loading state
+                  setIsSaving(false);
+                  const saveButton = document.getElementById('save-button');
+                  if (saveButton) saveButton.classList.remove('saving');
+                }
+              };
+              
+              // Call our direct save function with the latest HTML and design
+              return await saveDirectContent(html, design);
             }}
           />
         </div>

@@ -49,6 +49,7 @@ To fully integrate and refine the `EmailTemplatesManager` component (`app/admin/
     - [x] Changes made in Unlayer trigger `onSave` which updates component state (`editedHtml`, `designJson`).
     - [x] "Save" button calls `saveTemplate` or `saveTemplateWithVersion` (PUT to `/api/admin/email-templates`), sending HTML and Unlayer design JSON.
     - [x] Keyboard shortcut `Ctrl+S`/`Cmd+S` triggers save.
+    - [x] **FIXED**: Implemented direct save function that uses Unlayer's HTML and design data directly rather than relying on React state, resolving timing issues that prevented changes from being saved.
 - **Preview View:**
     - [x] "Preview" button in editor likely triggers Unlayer's internal preview or custom preview logic.
     - [x] `previewTemplate` function (PATCH to `/api/admin/email-templates`) sends HTML and variables for server-side rendering (if Unlayer's direct preview isn't used).

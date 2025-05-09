@@ -350,7 +350,8 @@ export async function PUT(request: NextRequest) {
   }
   
   try {
-    const { templateId, htmlTemplate, design, category, subcategory, version, previousVersion } = await request.json();
+    const requestBody = await request.json();    
+    const { templateId, htmlTemplate, design, category, subcategory, version, previousVersion } = requestBody;
     
     if (!templateId || !htmlTemplate) {
       return NextResponse.json(
@@ -359,98 +360,89 @@ export async function PUT(request: NextRequest) {
       );
     }
     
-    // Sanitize the template ID for consistent usage
-    const sanitizedId = sanitizeTemplateId(templateId);
-    console.log(`Updating template: ${sanitizedId}`);
+    // Get current timestamp for updates
+    const now = new Date().toISOString();
     
-    // Initialize template manager if needed
-    await templateManager.initialize();
+    // Get Supabase client
+    const supabase = await getSupabaseClient();
     
-    // Get template details
-    const template = await templateManager.getTemplate(sanitizedId);
+    // First, get the existing template to check if it exists and to preserve any data we're not updating
+    const { data: existingTemplate, error: fetchError } = await supabase
+      .from('email_templates')
+      .select('*')
+      .eq('id', templateId)
+      .single();
     
-    if (!template) {
+    if (fetchError) {
+      console.error(`Error fetching template ${templateId}:`, fetchError);
       return NextResponse.json(
-        { error: `Template not found: ${sanitizedId}` },
+        { error: `Template not found: ${templateId}` },
         { status: 404 }
       );
     }
     
-    // Get template file paths using sanitized ID
-    const templatePath = path.join(
-      process.cwd(),
-      'lib/services/email/templates',
-      template.category,
-      `${sanitizedId}.html`
-    );
-    
-    const metadataPath = path.join(
-      process.cwd(),
-      'lib/services/email/templates',
-      template.category,
-      `${sanitizedId}.metadata.json`
-    );
-    
-    console.log(`Template path: ${templatePath}`);
-    console.log(`Metadata path: ${metadataPath}`);
-    
-    // Check if template file exists
-    if (!fs.existsSync(templatePath)) {
-      return NextResponse.json(
-        { error: `Template file not found: ${sanitizedId}` },
-        { status: 404 }
-      );
-    }
-    
-    // Update HTML content
-    fs.writeFileSync(templatePath, htmlTemplate, 'utf-8');
-    
-    // Update or create metadata
-    let metadata: any = {
-      version: version || 1,
-      category: template.category,
-      updatedAt: new Date().toISOString(),
-      previousVersions: [] as any[]
-    };
-    
-    // Try to load existing metadata
-    if (fs.existsSync(metadataPath)) {
-      try {
-        metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
-      } catch (err) {
-        console.error(`Error parsing metadata for ${sanitizedId}:`, err);
-      }
-    }
-    
-    // Update metadata
-    metadata.version = version || (metadata.version ? metadata.version + 1 : 1);
-    metadata.design = design || metadata.design;
-    metadata.updatedAt = new Date().toISOString();
-    metadata.updatedBy = userId;
-    
-    // Add subcategory if provided
-    if (subcategory) {
-      metadata.subcategory = subcategory;
-    }
-    
-    // Add previous version to history if provided
+    // Prepare previous versions array if we need to archive the current version
+    let previousVersions = existingTemplate.previous_versions || [];
     if (previousVersion) {
-      metadata.previousVersions = metadata.previousVersions || [];
-      metadata.previousVersions.push(previousVersion);
+      previousVersions.push(previousVersion);
+    } else if (existingTemplate.html_content && existingTemplate.html_content !== htmlTemplate) {
+      // Automatically create previous version if content changed
+      previousVersions.push({
+        version: existingTemplate.version || 1,
+        htmlTemplate: existingTemplate.html_content,
+        design: existingTemplate.design,
+        updatedAt: existingTemplate.updated_at
+      });
     }
     
-    // Write metadata back to file
-    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
+    // Increment version if not explicitly provided
+    const newVersion = version || (existingTemplate.version ? existingTemplate.version + 1 : 1);
     
+    // Prepare the update payload
+    const updatePayload = {
+      html_content: htmlTemplate,
+      design: design,
+      category: category || existingTemplate.category,
+      subcategory: subcategory || existingTemplate.subcategory,
+      version: newVersion,
+      updated_at: now,
+      previous_versions: previousVersions
+    };
+
+    
+    // Update the template in the database with additional logging
+    console.time('Database update operation');
+    const { data, error: updateError } = await supabase
+      .from('email_templates')
+      .update(updatePayload)
+      .eq('id', templateId)
+      .select()
+      .single();
+    console.timeEnd('Database update operation');
+    
+    // Log raw response to debug issues
+    
+    if (updateError) {
+      console.error('Database error updating template:', updateError);
+      return NextResponse.json(
+        { error: `Failed to update template: ${updateError.message}` },
+        { status: 500 }
+      );
+    }
+    
+    
+    // Return the updated template in the expected format
     return NextResponse.json({
       template: {
-        id: sanitizedId,
-        name: template.name,
-        category: template.category,
-        subcategory: metadata.subcategory,
-        design: metadata.design,
-        version: metadata.version,
-        updatedAt: metadata.updatedAt
+        id: data.id,
+        name: data.name,
+        category: data.category,
+        subcategory: data.subcategory,
+        design: data.design,
+        version: data.version,
+        updatedAt: data.updated_at,
+        htmlTemplate: data.html_content,
+        previousVersions: data.previous_versions || []
       }
     });
   } catch (error) {

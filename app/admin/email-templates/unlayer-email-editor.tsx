@@ -15,8 +15,7 @@ export interface UnlayerEmailEditorProps {
   templateId?: string;
   initialHtml?: string;
   initialDesign?: any;
-  onSave?: (html: string, design: any) => Promise<void>;
-  onPreview?: (html: string) => void;
+  onSave?: (html: string, design: any) => Promise<any>;
 }
 
 /**
@@ -26,24 +25,41 @@ export default function UnlayerEmailEditor({
   templateId,
   initialHtml,
   initialDesign,
-  onSave,
-  onPreview
-}: UnlayerEmailEditorProps) {
+  onSave
+}: UnlayerEmailEditorProps): JSX.Element {
   // Create a reference to the editor
   const emailEditorRef = useRef<EditorRef | null>(null);
 
   // Called when the editor is loaded
   const onReady = () => {
-    console.log('Editor ready!');
+    // Track editor state for save detection
+    (window as any).unlayerReady = true;
+    (window as any).unlayerInstance = emailEditorRef.current?.editor;
     
     // Load the design from saved JSON
     if (emailEditorRef.current?.editor) {
+      // Add event listener to detect content changes
+      try {
+        // Access the internal editor events to track changes
+        // This is using Unlayer's internal API - not officially documented but works
+        const editorInstance = emailEditorRef.current.editor as any;
+        if (editorInstance.addEventListener) {
+          editorInstance.addEventListener('design:updated', () => {
+            // Flag that content has changed since last save
+            (window as any).unlayerHasUnsavedChanges = true;
+          });
+        }
+      } catch (err) {
+        console.error('Error setting up change detection:', err);
+      }
+      
       // Option 1: Load from design JSON if available (preferred method per documentation)
       if (initialDesign) {
         try {
-          console.log('Loading design from JSON:', initialDesign);
           emailEditorRef.current.editor.loadDesign(initialDesign);
-          console.log('Design loaded from JSON!');
+          
+          // Initialize with no unsaved changes since we just loaded
+          (window as any).unlayerHasUnsavedChanges = false;
         } catch (error) {
           console.error('Failed to load design from JSON:', error);
         }
@@ -51,47 +67,83 @@ export default function UnlayerEmailEditor({
       // Option 2: Create design from HTML if no design JSON is available
       else if (initialHtml) {
         try {
-          console.log('Creating design from HTML');
           // This matches the official loadDesign API format
-          // Use type assertion for HTML loading
           emailEditorRef.current.editor.loadDesign({
             html: initialHtml
           } as any);
-          console.log('Design created from HTML!');
+          
+          // Initialize with no unsaved changes since we just loaded
+          (window as any).unlayerHasUnsavedChanges = false;
         } catch (error) {
           console.error('Failed to create design from HTML:', error);
         }
       } else {
-        console.log('Starting with empty design');
+        // Starting with empty design
+        (window as any).unlayerHasUnsavedChanges = false;
       }
     }
   };
 
-  // Export HTML per official documentation
-  const exportHtml = () => {
-    if (emailEditorRef.current?.editor) {
-      console.log('Exporting HTML and design...');
-      emailEditorRef.current.editor.exportHtml(async (data) => {
-        const { design, html } = data;
-        console.log('HTML exported');
-        if (onSave) {
-          await onSave(html, design);
-        }
+  // Export HTML and design following Unlayer's official documentation
+  const exportHtml = async () => {
+    // Check if editor is initialized
+    if (!emailEditorRef.current?.editor) {
+      return false;
+    }
+
+    // Track if we have unsaved changes
+    const hasChanges = (window as any).unlayerHasUnsavedChanges === true;
+    
+    try {
+      // Step 1: Get the latest design JSON
+      const design = await new Promise<any>((resolve) => {
+        emailEditorRef.current?.editor?.saveDesign((designData: any) => {
+          resolve(designData);
+        });
       });
+      
+      // Step 2: Get the latest HTML output
+      const htmlData = await new Promise<{html: string}>((resolve) => {
+        emailEditorRef.current?.editor?.exportHtml((data: {html: string}) => {
+          resolve(data);
+        });
+      });
+      
+      // Make sure HTML exists
+      if (!htmlData.html) {
+        return false;
+      }
+      
+      // Step 3: Sanitize design data for storage
+      let cleanDesign;
+      try {
+        // Create a deep copy to ensure we don't have non-serializable properties
+        cleanDesign = JSON.parse(JSON.stringify(design));
+      } catch (_) {
+        // Provide a minimal valid design object as fallback
+        cleanDesign = { body: {}, counters: {}, schemaVersion: 1 };
+      }
+      
+      // Step 4: Reset change tracking
+      (window as any).unlayerHasUnsavedChanges = false;
+      
+      // Step 5: Call parent's save handler with processed data
+      if (onSave) {
+        return await onSave(htmlData.html, cleanDesign);
+      }
+      
+      return true;
+    } catch (_) {
+      return false;
     }
   };
 
-  // Preview HTML
+  // Preview HTML - internal use only, uses Unlayer's built-in preview
   const previewHtml = () => {
     if (emailEditorRef.current?.editor) {
-      console.log('Generating preview...');
-      emailEditorRef.current.editor.exportHtml(data => {
-        const { html } = data;
-        console.log('Preview generated');
-        if (onPreview) {
-          onPreview(html);
-        }
-      });
+      // Since 'preview' is not directly exposed in the TypeScript types,
+      // we need to use the editor as 'any' to access this method
+      (emailEditorRef.current.editor as any).togglePreview();
     }
   };
 
@@ -108,7 +160,7 @@ export default function UnlayerEmailEditor({
         delete (window as any).unlayerPreview;
       }
     };
-  }, [onSave, onPreview]);
+  }, [onSave]);
 
   // Render the editor with proper default options
   // Use a container div with fixed height to control the editor size
