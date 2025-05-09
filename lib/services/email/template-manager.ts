@@ -153,7 +153,62 @@ export class TemplateManager {
       await this.initialize();
     }
     
-    return this.templates.get(templateId) || null;
+    // First check in-memory cache
+    const cachedTemplate = this.templates.get(templateId);
+    if (cachedTemplate) {
+      console.log(`Found template ${templateId} in memory cache`);
+      return cachedTemplate;
+    }
+    
+    // If not in memory, try the database
+    // UUID format indicates a database-stored template
+    if (templateId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      console.log(`Template ${templateId} looks like a UUID, checking database...`);
+      try {
+        // Import is done inside the function to avoid circular dependencies
+        const { createClient } = await import('@supabase/supabase-js');
+        
+        // Create Supabase client directly (not using auth for this query)
+        const supabase = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
+        
+        // Fetch the template from the database
+        const { data, error } = await supabase
+          .from('email_templates')
+          .select('*')
+          .eq('id', templateId)
+          .single();
+        
+        if (error || !data) {
+          console.error(`Database lookup error for template ${templateId}:`, error);
+          return null;
+        }
+        
+        // Convert database format to our internal EmailTemplate format
+        const template: EmailTemplate = {
+          id: data.id,
+          name: data.name,
+          subject: data.subject || this.getDefaultSubject(data.name),
+          htmlContent: data.html_content,
+          plainTextContent: data.plain_text_content,
+          category: data.category as 'transactional' | 'marketing' | 'educational' | 'authentication'
+        };
+        
+        // Cache the template for future use
+        this.templates.set(templateId, template);
+        console.log(`Found template ${templateId} in database and cached it`);
+        
+        return template;
+      } catch (err) {
+        console.error(`Error fetching template ${templateId} from database:`, err);
+        return null;
+      }
+    }
+    
+    console.log(`Template ${templateId} not found in memory or database`);
+    return null;
   }
 
   /**

@@ -11,6 +11,7 @@
 import './editor-styles.css';
 
 import { useState, useEffect } from 'react';
+import { extractVariablesFromContent, generateDefaultVariableValues, categorizeVariables } from '@/lib/services/email/template-utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -84,28 +85,112 @@ type DetailedTemplate = EmailTemplate & {
   }[];
 };
 
-// Test variable suggestions for different template types
-const TEMPLATE_VARIABLES: Record<string, Record<string, string>> = {
+/**
+ * Template-specific variable definitions following industry best practices:
+ * 1. Variables are organized by template type and category
+ * 2. Each template has its own specific set of variables
+ * 3. Variables include documentation to explain their purpose
+ */
+type VariableCategory = 'user' | 'content' | 'action' | 'system' | 'course' | 'event';
+
+interface TemplateVariable {
+  value: string;
+  description: string;
+  category: VariableCategory;
+}
+
+type TemplateVariablesMap = Record<string, Record<string, TemplateVariable>>;
+
+const TEMPLATE_VARIABLES: TemplateVariablesMap = {
+  // Welcome email variables
   welcome: {
-    firstName: 'Test User',
-    loginUrl: 'https://gracefulhomeschooling.com/login',
+    firstName: {
+      value: 'Test User',
+      description: 'First name of the recipient',
+      category: 'user'
+    },
+    loginUrl: {
+      value: 'https://gracefulhomeschooling.com/login',
+      description: 'URL to log into the platform',
+      category: 'action'
+    },
+    platformName: {
+      value: 'Graceful Homeschooling',
+      description: 'Name of the platform',
+      category: 'system'
+    }
   },
+  
+  // Password reset email variables
   'password-reset': {
-    firstName: 'Test User',
-    resetUrl: 'https://gracefulhomeschooling.com/reset-password?token=test-token',
-    expiresInMinutes: '60',
+    firstName: {
+      value: 'Test User',
+      description: 'First name of the recipient',
+      category: 'user'
+    },
+    resetUrl: {
+      value: 'https://gracefulhomeschooling.com/reset-password?token=test-token',
+      description: 'URL to reset password including secure token',
+      category: 'action'
+    },
+    expiresInMinutes: {
+      value: '60',
+      description: 'Minutes until the reset link expires',
+      category: 'system'
+    }
   },
+  
+  // Class reminder email variables
   'class-reminder': {
-    firstName: 'Test User',
-    className: 'Homeschooling Essentials',
-    classDate: 'May 15, 2025',
-    classTime: '10:00 AM (PHT)',
-    zoomLink: 'https://zoom.us/j/123456789',
-    preparationMaterials: 'Please review the chapter on curriculum planning before the class.',
+    firstName: {
+      value: 'Test User',
+      description: 'First name of the recipient',
+      category: 'user'
+    },
+    className: {
+      value: 'Homeschooling Essentials',
+      description: 'Name of the class',
+      category: 'course'
+    },
+    classDate: {
+      value: 'May 15, 2025',
+      description: 'Date of the class',
+      category: 'event'
+    },
+    classTime: {
+      value: '10:00 AM (PHT)',
+      description: 'Time of the class with timezone',
+      category: 'event'
+    },
+    zoomLink: {
+      value: 'https://zoom.us/j/123456789',
+      description: 'Zoom meeting link',
+      category: 'action'
+    },
+    preparationMaterials: {
+      value: 'Please review the chapter on curriculum planning before the class.',
+      description: 'Materials to prepare before class',
+      category: 'content'
+    }
   },
+  
+  // Email verification variables
   'email-verification': {
-    firstName: 'Test User',
-    verificationUrl: 'https://gracefulhomeschooling.com/verify-email?token=test-token',
+    firstName: {
+      value: 'Test User',
+      description: 'First name of the recipient',
+      category: 'user'
+    },
+    verificationUrl: {
+      value: 'https://gracefulhomeschooling.com/verify-email?token=test-token',
+      description: 'URL to verify email including secure token',
+      category: 'action'
+    },
+    expiresInHours: {
+      value: '24',
+      description: 'Hours until the verification link expires',
+      category: 'system'
+    }
   },
 };
 
@@ -114,6 +199,7 @@ const DEFAULT_VARIABLES = {
   firstName: 'Test User',
   email: 'user@example.com',
   date: format(new Date(), 'MMMM d, yyyy'),
+  platformName: 'Graceful Homeschooling',
 };
 
 /**
@@ -161,6 +247,48 @@ export default function EmailTemplatesManager() {
   useEffect(() => {
     fetchTemplates();
   }, []);
+  
+  // Add effect to track view state changes and ensure variables are properly extracted for test view
+  useEffect(() => {
+    console.log('View state changed to:', view);
+    
+    // Handle test view with variable extraction
+    if (view === 'test' && selectedTemplate?.htmlTemplate) {
+      console.log('TEST VIEW ACTIVE - Conditions for rendering test form:', 
+        'selectedTemplate exists?', !!selectedTemplate);
+      
+      console.log('Template data for test:', {
+        id: selectedTemplate.id,
+        name: selectedTemplate.name
+      });
+      
+      // CRITICAL FIX: Verify that all template variables are properly extracted
+      console.log('🔍 Test view checking template variables...');
+      console.log('Current previewVariables:', previewVariables);
+      const previewVarCount = Object.keys(previewVariables).length;
+      
+      // Extract variables from template to see how many there should be
+      const extractedVars = extractVariablesFromContent(selectedTemplate.htmlTemplate);
+      console.log('Expected variables from template:', extractedVars);
+      
+      // If we're missing variables, extract them directly
+      if (previewVarCount < extractedVars.length) {
+        console.log('❗ Variable mismatch detected! Fixing by direct extraction...');
+        
+        // Extract variables directly and update state
+        const defaultValues = generateDefaultVariableValues(extractedVars);
+        const allDetectedVariables: Record<string, string> = {};
+        
+        extractedVars.forEach(varName => {
+          allDetectedVariables[varName] = defaultValues[varName] || `[${varName}]`;
+        });
+        
+        console.log('🔧 Fixing variables in test view:', allDetectedVariables);
+        console.log('🔢 Fixed variable count:', Object.keys(allDetectedVariables).length);
+        setPreviewVariables(allDetectedVariables);
+      }
+    }
+  }, [view, selectedTemplate, previewVariables]);
   
   // Keyboard shortcut handler for saving templates (save this before any conditional hooks)
   useEffect(() => {
@@ -256,18 +384,89 @@ export default function EmailTemplatesManager() {
     }
   };
   
-  // Get template suggestions based on template ID
-  const getTemplateSuggestions = (templateId: string) => {
-    // Try to find specific variables for this template
-    // This logic might need adjustment if templateId is now a UUID
-    // For now, we keep it, but it's less likely to match based on substrings of UUIDs.
-    // Consider matching based on template 'name' or 'category' if this becomes an issue.
-    for (const [id, vars] of Object.entries(TEMPLATE_VARIABLES)) {
-      if (templateId.includes(id)) { // This matching might be less effective with UUIDs
-        return { ...DEFAULT_VARIABLES, ...vars };
+  // Detect and extract variables from template content
+  const detectTemplateVariables = (templateContent: string): Record<string, string> => {
+    if (!templateContent) return DEFAULT_VARIABLES;
+    
+    // Extract variables using the {{variable}} pattern
+    const extractedVars = extractVariablesFromContent(templateContent);
+    
+    if (extractedVars.length === 0) {
+      // Fallback to predefined variables if none detected
+      return getTemplateSuggestionsByType();
+    }
+    
+    // Generate appropriate default values for the detected variables
+    return generateDefaultVariableValues(extractedVars);
+  };
+  
+  // Get template variable info with descriptions and categories
+  const getTemplateVariableInfo = (templateContent: string) => {
+    // Extract variables using the {{variable}} pattern
+    const extractedVars = extractVariablesFromContent(templateContent);
+    
+    if (extractedVars.length === 0) {
+      // If no variables detected, return empty object
+      return {};
+    }
+    
+    // Generate appropriate categories and descriptions
+    return categorizeVariables(extractedVars);
+  };
+  
+  // Get template suggestions based on template type
+  const getTemplateSuggestionsByType = (): Record<string, string> => {
+    // Match template type by name or ID
+    const templateType = Object.keys(TEMPLATE_VARIABLES).find(id => 
+      selectedTemplate?.id?.includes(id) || 
+      (selectedTemplate?.name?.toLowerCase().includes(id))
+    );
+    
+    if (templateType && TEMPLATE_VARIABLES[templateType]) {
+      // Extract just the values from our enhanced template variables
+      const templateVars = Object.entries(TEMPLATE_VARIABLES[templateType]).reduce<Record<string, string>>(
+        (acc, [key, variableObj]) => {
+          acc[key] = variableObj.value;
+          return acc;
+        }, 
+        {}
+      );
+      return { ...DEFAULT_VARIABLES, ...templateVars };
+    }
+    
+    return DEFAULT_VARIABLES;
+  };
+  
+  // Get template suggestions with smart detection
+  const getTemplateSuggestions = (templateId: string): Record<string, string> => {
+    // If we have a selected template with HTML content, use it for variable detection
+    if (selectedTemplate?.htmlTemplate) {
+      return detectTemplateVariables(selectedTemplate.htmlTemplate);
+    }
+    
+    // Fallback to predefined variables by type
+    return getTemplateSuggestionsByType();
+  };
+  
+  // Get variable descriptions and metadata for documentation
+  const getTemplateVariableDocs = (templateId: string) => {
+    // If we have template content, use it for detection-based metadata
+    if (selectedTemplate?.htmlTemplate) {
+      const variableInfo = getTemplateVariableInfo(selectedTemplate.htmlTemplate);
+      
+      // If we detected variables, return them with their documentation
+      if (Object.keys(variableInfo).length > 0) {
+        return variableInfo;
       }
     }
-    return DEFAULT_VARIABLES;
+    
+    // Fallback to predefined variables with documentation
+    const templateType = Object.keys(TEMPLATE_VARIABLES).find(id => 
+      templateId.includes(id) || 
+      (selectedTemplate?.name?.toLowerCase().includes(id))
+    );
+    
+    return templateType ? TEMPLATE_VARIABLES[templateType] : {};
   };
   
   // Convert variables to Unlayer merge tags format
@@ -497,6 +696,97 @@ export default function EmailTemplatesManager() {
     }
   };
   
+  // Handle test send button click with a direct action approach
+  const handleTestSend = () => {
+    console.log('Test send button clicked');
+    // Create a separate function to handle the direct DOM rendering approach
+    const prepareAndShowTestForm = () => {
+      try {
+        // Check if template is selected
+        if (!selectedTemplate) {
+          console.error('Cannot test send: no template selected');
+          return;
+        }
+        
+        console.log('Current view state:', view, 'Preparing to change to test view');
+        
+        // Detect variables from the current template content
+        if (selectedTemplate.htmlTemplate) {
+          console.group('🔍 Template Variable Detection');
+          console.log('Template ID:', selectedTemplate.id);
+          console.log('Template Name:', selectedTemplate.name);
+          console.log('HTML Content Length:', selectedTemplate.htmlTemplate.length);
+          
+          // Log first part of HTML content for debugging (truncated)
+          const previewLength = 200;
+          const htmlPreview = selectedTemplate.htmlTemplate.length > previewLength 
+            ? selectedTemplate.htmlTemplate.substring(0, previewLength) + '...' 
+            : selectedTemplate.htmlTemplate;
+          console.log('HTML Content Preview:', htmlPreview);
+          
+          // Extract all variables from the template content
+          const extractedVars = extractVariablesFromContent(selectedTemplate.htmlTemplate);
+          console.log('📋 EXTRACTED VARIABLES:', extractedVars);
+          
+          // Generate default values for the variables
+          const defaultValues = generateDefaultVariableValues(extractedVars);
+          console.log('🔄 GENERATED DEFAULT VALUES:', defaultValues);
+          console.table(defaultValues);
+          
+          // Get variable categorization and documentation
+          const variableDocs = categorizeVariables(extractedVars);
+          console.log('📊 VARIABLE CATEGORIES:', Object.keys(variableDocs));
+          
+          // CRITICAL FIX: Use the extracted variables directly without any filtering
+          const allDetectedVariables: Record<string, string> = {};
+          
+          // Ensure ALL variables are included with their default values
+          extractedVars.forEach(varName => {
+            allDetectedVariables[varName] = defaultValues[varName] || `[${varName}]`;
+          });
+          
+          console.log('🔍 ALL DETECTED VARIABLES BEING SET:', allDetectedVariables);
+          console.log('🔢 VARIABLE COUNT:', Object.keys(allDetectedVariables).length);
+          
+          // Set the preview variables with ALL detected variables
+          setPreviewVariables(allDetectedVariables);
+          console.log('✅ Variables set for test form');
+          console.groupEnd();
+        } else {
+          console.warn('⚠️ No HTML content available, using default variables');
+          const defaultVars = getTemplateSuggestionsByType();
+          console.log('Default variables:', defaultVars);
+          setPreviewVariables(defaultVars);
+        }
+        
+        // Switching view state to test
+        console.log('Setting view state to test directly');
+        setView('test');
+        
+        // Provide immediate feedback
+        toast({
+          title: 'Preparing Test Form',
+          description: 'Loading test send form...',
+        });
+        
+        console.log('Template data for test:', {
+          id: selectedTemplate.id,
+          name: selectedTemplate.name,
+        });
+      } catch (err) {
+        console.error('Error in prepareAndShowTestForm:', err);
+        toast({
+          title: 'Error',
+          description: 'Failed to prepare test form',
+          variant: 'destructive',
+        });
+      }
+    };
+    
+    // Execute the function immediately
+    prepareAndShowTestForm();
+  };
+  
   // Save template with version history
   const saveTemplateWithVersion = async () => {
     if (!selectedTemplate || !editedHtml) return;
@@ -621,33 +911,15 @@ export default function EmailTemplatesManager() {
     }
   };
   
-  // Save using our reference to the UnlayerEmailEditor component
-  const handleSave = async () => {
-    setIsSaving(true);
-    document.getElementById('save-button')?.classList.add('saving');
-    
+  // Handle save button click - simplified to use unlayer directly
+  const handleSave = () => {
+    console.log('Save button clicked');
     try {
-      console.log('Saving template using exportHtml method');
-      
-      // Use the method we've exposed through the window
       if (typeof window !== 'undefined' && (window as any).unlayerExportHtml) {
-        (window as any).unlayerExportHtml();
-        // Note: The actual saving happens in the unlayer-email-editor.tsx's exportHtml function
+        console.log('Triggering Unlayer HTML export for save');
+        // The actual saving happens in the unlayer-email-editor.tsx's exportHtml function
         // which calls our onSave callback with the HTML and design data
-        
-        // This timeout is a fallback in case the exportHtml callback doesn't complete
-        setTimeout(() => {
-          if (isSaving) {
-            console.log('Save operation timed out, resetting state');
-            setIsSaving(false);
-            document.getElementById('save-button')?.classList.remove('saving');
-            toast({
-              title: 'Warning',
-              description: 'Save operation timed out. Please try again.',
-              variant: 'destructive',
-            });
-          }
-        }, 5000); // 5 second timeout
+        (window as any).unlayerExportHtml();
       } else {
         throw new Error('Unlayer export method not found');
       }
@@ -658,43 +930,10 @@ export default function EmailTemplatesManager() {
         description: error instanceof Error ? error.message : 'Failed to initiate save',
         variant: 'destructive',
       });
-      setIsSaving(false);
-      document.getElementById('save-button')?.classList.remove('saving');
     }
   };
   
-  // Direct handler for test sends
-  const handleTestSend = () => {
-    try {
-      // Get reference to unlayer directly
-      const unlayer = (window as any).unlayer;
-      
-      if (!unlayer) {
-        throw new Error('Unlayer editor not found on the page');
-      }
-      
-      // Save the design and HTML first
-      unlayer.saveDesign((design: any) => {
-        unlayer.exportHtml((data: any) => {
-          const { html } = data;
-          
-          // Update state
-          setEditedHtml(html);
-          setDesignJson(design);
-          
-          // Navigate to test view
-          setView('test');
-        });
-      });
-    } catch (error) {
-      console.error('Error preparing test send:', error);
-      toast({
-        title: 'Error',
-        description: 'Could not prepare template for testing',
-        variant: 'destructive',
-      });
-    }
-  };
+  // The handleTestSend function is properly implemented above
   
   const handleRenameTemplate = async () => {
     if (!templateToRename || !newTemplateNameInput.trim()) {
@@ -1208,7 +1447,17 @@ export default function EmailTemplatesManager() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={handleTestSend}
+              onClick={() => {
+                console.log('Test Send button clicked directly');
+                // Direct state update bypassing any complex logic
+                setView('test');
+                
+                // Provide user feedback
+                toast({
+                  title: 'Test Send',
+                  description: 'Loading test send form...',
+                });
+              }}
             >
               <Send className="w-4 h-4 mr-1" />
               Test Send
@@ -1390,14 +1639,22 @@ export default function EmailTemplatesManager() {
     );
   }
   
+  // We've moved the variable extraction logic to the view state tracking useEffect above
+  
   // Render test send form
   if (view === 'test' && selectedTemplate) {
+    console.log('TEST VIEW ACTIVE - Conditions for rendering test form: selectedTemplate exists?', !!selectedTemplate);
+    console.log('Template data for test:', {
+      id: selectedTemplate.id,
+      name: selectedTemplate.name
+    });
+    
     return (
       <div className="space-y-6">
         <div className="flex items-center space-x-2">
-          <Button variant="ghost" onClick={() => setView('preview')}>
+          <Button variant="ghost" onClick={() => setView('edit')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Preview
+            Back to Editor
           </Button>
         </div>
         
@@ -1410,10 +1667,12 @@ export default function EmailTemplatesManager() {
           </CardHeader>
           <CardContent>
             <TemplateTester
+              key={Object.keys(previewVariables).length} // Force remount when variable count changes
               templateId={selectedTemplate.id}
               templateName={selectedTemplate.name}
               variables={previewVariables}
-              onCancel={() => setView('preview')}
+              variableInfo={getTemplateVariableDocs(selectedTemplate.id)}
+              onCancel={() => setView('edit')}
               onSuccess={() => {
                 toast({
                   title: 'Success',
