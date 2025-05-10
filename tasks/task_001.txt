@@ -1,0 +1,122 @@
+# Task ID: 1
+# Title: Audit and Document Existing User Data Schema
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: Review all existing user-related tables, relationships, and data structures to identify gaps and requirements for the admin system.
+# Details:
+Analyze the current Supabase database schema focusing on unified_profiles, enrollments, shopify_orders, shopify_order_items, and related tables. Document the current state, identify missing fields needed for admin functionality, and create an ERD (Entity Relationship Diagram) showing all relationships. Pay special attention to how user data is currently structured and where administrative metadata is stored. The schema enhancements have been implemented in the database using Supabase migrations, including administrative fields in unified_profiles, tables for user notes, admin audit logging, and user activity tracking, search optimization with trigram indexes, a unified purchase history view, and helper functions for admin operations. The documentation has been created in ProjectDocs/admin-user-schema-audit.md.
+
+# Test Strategy:
+Produce comprehensive documentation including current schema diagrams, identified gaps, and implemented changes. Review with stakeholders to ensure all requirements are captured and properly implemented.
+
+# Subtasks:
+## 1. Extract and Document Current User-Related Tables Schema [done]
+### Dependencies: None
+### Description: Extract the complete schema definition for all user-related tables from Supabase, including unified_profiles, enrollments, shopify_orders, shopify_order_items, and document their current structure.
+### Details:
+Implementation steps:
+1. Connect to the Supabase database using appropriate credentials
+2. Use SQL information_schema queries to extract table definitions, columns, data types, constraints, and indexes for the primary user-related tables
+3. Document each table's purpose, primary keys, foreign keys, and unique constraints
+4. Create a comprehensive data dictionary listing all fields with their data types, constraints, and business purpose
+5. Identify which fields store user identity information, contact details, and administrative metadata
+6. Document any existing triggers or functions that modify these tables
+
+Testing approach:
+- Verify the extracted schema matches the actual database structure
+- Cross-check documentation against sample data to ensure all fields are properly documented
+
+## 2. Document Views and Functions Related to User Data [done]
+### Dependencies: 1.1
+### Description: Analyze and document all views, functions, and triggers that interact with user data, focusing on monthly_enrollments_view, revenue_analysis_view, marketing_source_view, unified purchase history view, and related functions/triggers, including the newly implemented admin helper functions.
+### Details:
+Implementation steps:
+1. Extract the definitions of all views that present or transform user data, including the new unified purchase history view
+2. Document each view's purpose, source tables, and transformation logic
+3. Extract and document all functions and stored procedures that modify or access user data, including the newly implemented admin helper functions
+4. Document triggers that affect user-related tables, including any new ones for admin audit logging
+5. Create a dependency map showing how views and functions relate to the base tables
+6. Identify which views and functions would need to be updated if the schema changes further
+7. Update the ProjectDocs/admin-user-schema-audit.md with the views and functions documentation
+
+Testing approach:
+- Verify all views can be successfully queried
+- Confirm function documentation matches actual behavior by testing with sample inputs
+- Validate that all newly implemented admin helper functions are properly documented
+
+## 3. Map Entity Relationships and Create ERD [done]
+### Dependencies: 1.1, 1.2
+### Description: Create a comprehensive Entity Relationship Diagram (ERD) showing all user-related tables, their relationships, cardinality, and how they connect to other parts of the system, including the newly added tables for user notes, admin audit logging, and user activity tracking.
+### Details:
+Implementation steps:
+1. Use a database modeling tool (e.g., dbdiagram.io, Lucidchart, or similar) to create the ERD
+2. Include all user-related tables documented in subtask 1
+3. Add the newly implemented tables for user notes, admin audit logging, and user activity tracking
+4. Map all relationships between tables, showing primary and foreign keys
+5. Document cardinality of relationships (one-to-one, one-to-many, many-to-many)
+6. Include views from subtask 2 in the diagram, showing their data sources
+7. Color-code or group tables by functional area (user identity, transactions, enrollments, admin functionality, etc.)
+8. Export the ERD in both editable format and as a PNG/PDF for documentation
+9. Update the ProjectDocs/admin-user-schema-audit.md with the ERD
+
+Testing approach:
+- Verify all tables from subtask 1 and newly implemented tables are included in the ERD
+- Confirm all relationships are correctly represented
+- Have another team member review the ERD for accuracy and completeness
+
+## 4. Identify Schema Gaps for Admin Functionality [done]
+### Dependencies: 1.1, 1.2, 1.3
+### Description: Analyze the current schema to identify missing fields, tables, or relationships needed to support administrative functionality, focusing on user management, permissions, and audit trails.
+### Details:
+Implementation steps:
+1. Review common administrative requirements: user roles, permissions, status flags, audit trails, etc.
+2. Compare these requirements against the current schema to identify gaps
+3. Document missing fields needed in existing tables (e.g., is_admin, role_id, status)
+4. Identify new tables that may be needed (e.g., roles, permissions, admin_logs)
+5. Document missing relationships between existing and potentially new tables
+6. Prioritize the identified gaps based on importance for admin functionality
+7. Consider data migration implications for any proposed changes
+
+Testing approach:
+- Create user stories for admin functionality and verify the identified schema can support them
+- Review findings with stakeholders to validate the completeness of the gap analysis
+
+## 5. Create Schema Enhancement Recommendations Document [done]
+### Dependencies: 1.1, 1.2, 1.3, 1.4
+### Description: Compile a comprehensive recommendations document that outlines proposed schema changes, additions, and modifications needed to support the admin system.
+### Details:
+Implementation steps:
+1. Compile findings from all previous subtasks into a cohesive document
+2. Create SQL scripts for recommended schema changes (new tables, altered tables, new fields)
+3. Document potential impacts of schema changes on existing functionality
+4. Provide recommendations for handling data migration for any schema changes
+5. Include the ERD from subtask 3 with annotations showing proposed changes
+6. Document recommended changes to views and functions based on schema modifications
+7. Include a section on security considerations for admin data
+8. Create an implementation timeline and dependency chart for the recommended changes
+
+Testing approach:
+- Review recommendations with database administrators and developers
+- Validate that all identified gaps from subtask 4 are addressed
+- Test proposed SQL scripts in a development environment to verify syntax and functionality
+
+## 6. Document Implemented Schema Enhancements [done]
+### Dependencies: 1.4, 1.5
+### Description: Document the schema enhancements that have been implemented in the database using Supabase migrations.
+### Details:
+Implementation steps:
+1. Document the administrative fields added to unified_profiles
+2. Document the new tables created for user notes, admin audit logging, and user activity tracking
+3. Document the search optimization implemented with trigram indexes
+4. Document the unified purchase history view
+5. Document the helper functions implemented for admin operations
+6. Update the ProjectDocs/admin-user-schema-audit.md with the implemented enhancements
+7. Create a section comparing the recommended changes with what was actually implemented
+8. Document any deviations from the original recommendations and the rationale behind them
+
+Testing approach:
+- Verify that all implemented changes are properly documented
+- Confirm that the documentation accurately reflects the current state of the database
+- Review the documentation with stakeholders to ensure clarity and completeness
+

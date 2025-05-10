@@ -1,0 +1,36 @@
+# Task ID: 27
+# Title: Authentication Email Templates
+# Status: cancelled
+# Dependencies: 18, 19
+# Priority: high
+# Description: Create and implement custom email templates for authentication flows including registration, welcome, password reset, and magic links.
+# Details:
+**NOTE: This task is now deprecated/completed. The creation and implementation of custom authentication email templates are being handled as part of the Unlayer email editor integration (Task 32).**
+
+Refer to `ProjectDocs/Build_Notes/unlayer-email-editor-integration_phase-1_implementation.md` which lists these templates as part of completed work with Unlayer.
+
+~~1. Design and implement the following authentication email templates:~~
+   ~~- Email verification~~
+   ~~- Welcome email~~
+   ~~- Password reset~~
+   ~~- Magic link authentication~~
+~~2. Ensure templates follow Graceful Homeschooling brand guidelines~~
+~~3. Implement responsive design using MJML~~
+~~4. Add appropriate security messaging~~
+~~5. Ensure clear call-to-action buttons~~
+~~6. Implement template variables for personalization~~
+
+The original MJML template examples and implementation code have been superseded by the Unlayer implementation in Task 32.
+
+# Test Strategy:
+**NOTE: Testing for authentication email templates is now being handled as part of Task 32 (Unlayer email editor integration).**
+
+The following test strategy has been transferred to Task 32:
+1. Test template rendering with various user data
+2. Verify responsive design across different email clients
+3. Test all links and buttons in templates
+4. Validate template variables are correctly substituted
+5. Test accessibility of email templates
+6. Verify branding consistency across all templates
+7. Test template loading times and size
+8. Validate security messaging is clear and accurate

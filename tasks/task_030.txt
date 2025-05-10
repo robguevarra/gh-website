@@ -1,0 +1,265 @@
+# Task ID: 30
+# Title: Email Campaign Scheduling and Automation
+# Status: pending
+# Dependencies: 22, 23
+# Priority: medium
+# Description: Implement scheduling functionality for email campaigns and automation for recurring emails such as class reminders.
+# Details:
+1. Design and implement campaign scheduling system
+2. Create automation rules for recurring emails
+3. Implement timezone handling for scheduled sends
+4. Add batch processing for large campaigns
+5. Create retry mechanism for failed sends
+6. Implement campaign status tracking and notifications
+7. Add campaign pause/resume functionality
+8. Create campaign analytics tracking
+
+```typescript
+// Example campaign scheduler implementation
+import { CronJob } from 'cron';
+import { supabase } from '../lib/supabaseClient';
+import { EmailService } from '../lib/emailService';
+import { logger } from '../lib/logger';
+
+const emailService = new EmailService(process.env.POSTMARK_API_TOKEN);
+
+// Initialize scheduler
+export function initCampaignScheduler() {
+  // Check for campaigns to send every minute
+  const job = new CronJob('* * * * *', async function() {
+    await processPendingCampaigns();
+    await processRecurringCampaigns();
+  });
+  
+  job.start();
+  logger.info('Campaign scheduler initialized');
+}
+
+// Process one-time campaigns that are scheduled to send
+async function processPendingCampaigns() {
+  const now = new Date();
+  
+  // Find campaigns that are scheduled to send now
+  const { data: campaigns, error } = await supabase
+    .from('email_campaigns')
+    .select('*')
+    .eq('status', 'scheduled')
+    .eq('is_recurring', false)
+    .lte('scheduled_for', now.toISOString())
+    .order('scheduled_for', { ascending: true })
+    .limit(5); // Process in small batches
+    
+  if (error) {
+    logger.error('Error fetching pending campaigns', { error });
+    return;
+  }
+  
+  if (!campaigns || campaigns.length === 0) {
+    return; // No campaigns to process
+  }
+  
+  for (const campaign of campaigns) {
+    await processCampaign(campaign);
+  }
+}
+
+// Process recurring campaigns
+async function processRecurringCampaigns() {
+  const now = new Date();
+  
+  // Find recurring campaigns that need to be processed
+  const { data: campaigns, error } = await supabase
+    .from('email_campaigns')
+    .select('*')
+    .eq('status', 'active')
+    .eq('is_recurring', true)
+    .lte('next_send_date', now.toISOString())
+    .order('next_send_date', { ascending: true })
+    .limit(5); // Process in small batches
+    
+  if (error) {
+    logger.error('Error fetching recurring campaigns', { error });
+    return;
+  }
+  
+  if (!campaigns || campaigns.length === 0) {
+    return; // No campaigns to process
+  }
+  
+  for (const campaign of campaigns) {
+    await processCampaign(campaign);
+    
+    // Calculate next send date based on recurrence pattern
+    const nextSendDate = calculateNextSendDate(campaign.recurrence_pattern, now);
+    
+    // Update campaign with next send date
+    await supabase
+      .from('email_campaigns')
+      .update({
+        next_send_date: nextSendDate.toISOString(),
+        last_sent_at: now.toISOString()
+      })
+      .eq('id', campaign.id);
+  }
+}
+
+// Process a single campaign
+async function processCampaign(campaign) {
+  try {
+    // Update campaign status to processing
+    await supabase
+      .from('email_campaigns')
+      .update({ status: 'processing', processing_started_at: new Date().toISOString() })
+      .eq('id', campaign.id);
+    
+    // Get recipients based on segment
+    const recipients = await getRecipientsForCampaign(campaign);
+    
+    if (!recipients || recipients.length === 0) {
+      logger.warn('No recipients found for campaign', { campaignId: campaign.id });
+      await updateCampaignStatus(campaign.id, 'completed', 'No recipients found');
+      return;
+    }
+    
+    // Get template data
+    const { data: template, error: templateError } = await supabase
+      .from('email_templates')
+      .select('*')
+      .eq('id', campaign.template_id)
+      .single();
+      
+    if (templateError) {
+      logger.error('Error fetching template for campaign', { campaignId: campaign.id, error: templateError });
+      await updateCampaignStatus(campaign.id, 'error', 'Template not found');
+      return;
+    }
+    
+    // Send campaign
+    const result = await emailService.sendMarketingEmail({
+      recipients: recipients.map(r => ({
+        email: r.email,
+        data: {
+          firstName: r.first_name,
+          lastName: r.last_name,
+          // Add other personalization variables
+          unsubscribeUrl: `${process.env.NEXT_PUBLIC_APP_URL}/unsubscribe?email=${encodeURIComponent(r.email)}&token=${generateUnsubscribeToken(r.email)}`,
+          preferencesUrl: `${process.env.NEXT_PUBLIC_APP_URL}/preferences?email=${encodeURIComponent(r.email)}&token=${generatePreferencesToken(r.email)}`
+        }
+      })),
+      subject: campaign.subject,
+      templateId: template.postmark_template_id,
+      from: `${campaign.from_name} <${campaign.from_email}>`,
+      messageStream: 'broadcast'
+    });
+    
+    if (!result.success) {
+      throw new Error('Failed to send campaign: ' + JSON.stringify(result.error));
+    }
+    
+    // Update campaign status to completed
+    await updateCampaignStatus(campaign.id, 'completed', `Sent to ${recipients.length} recipients`);
+    
+    // Record campaign metrics
+    await supabase
+      .from('campaign_metrics')
+      .insert({
+        campaign_id: campaign.id,
+        recipient_count: recipients.length,
+        sent_at: new Date().toISOString()
+      });
+      
+  } catch (error) {
+    logger.error('Error processing campaign', { campaignId: campaign.id, error });
+    await updateCampaignStatus(campaign.id, 'error', error.message);
+  }
+}
+
+// Helper function to update campaign status
+async function updateCampaignStatus(campaignId, status, statusMessage = '') {
+  await supabase
+    .from('email_campaigns')
+    .update({
+      status,
+      status_message: statusMessage,
+      updated_at: new Date().toISOString(),
+      processing_completed_at: status !== 'processing' ? new Date().toISOString() : null
+    })
+    .eq('id', campaignId);
+}
+
+// Helper function to get recipients for a campaign
+async function getRecipientsForCampaign(campaign) {
+  // Get segment definition
+  const { data: segment, error: segmentError } = await supabase
+    .from('user_segments')
+    .select('*')
+    .eq('id', campaign.segment_id)
+    .single();
+    
+  if (segmentError) {
+    logger.error('Error fetching segment for campaign', { campaignId: campaign.id, error: segmentError });
+    throw new Error('Segment not found');
+  }
+  
+  // Evaluate segment to get recipient IDs
+  const recipientIds = await evaluateSegment(segment.id);
+  
+  // Get recipient details
+  const { data: recipients, error: recipientsError } = await supabase
+    .from('profiles')
+    .select('email, first_name, last_name')
+    .in('id', recipientIds)
+    .eq('email_verified', true); // Only send to verified emails
+    
+  if (recipientsError) {
+    logger.error('Error fetching recipients for campaign', { campaignId: campaign.id, error: recipientsError });
+    throw new Error('Failed to fetch recipients');
+  }
+  
+  return recipients;
+}
+
+// Helper function to calculate next send date for recurring campaigns
+function calculateNextSendDate(recurrencePattern, fromDate) {
+  const pattern = JSON.parse(recurrencePattern);
+  const nextDate = new Date(fromDate);
+  
+  switch (pattern.frequency) {
+    case 'daily':
+      nextDate.setDate(nextDate.getDate() + pattern.interval);
+      break;
+    case 'weekly':
+      nextDate.setDate(nextDate.getDate() + (pattern.interval * 7));
+      break;
+    case 'monthly':
+      nextDate.setMonth(nextDate.getMonth() + pattern.interval);
+      break;
+    default:
+      throw new Error(`Unknown frequency: ${pattern.frequency}`);
+  }
+  
+  return nextDate;
+}
+
+// Helper functions for security tokens
+function generateUnsubscribeToken(email) {
+  // Implementation would use a secure method to generate a token
+  // that can be validated when the unsubscribe link is clicked
+  return 'token'; // Placeholder
+}
+
+function generatePreferencesToken(email) {
+  // Similar to unsubscribe token
+  return 'token'; // Placeholder
+}
+```
+
+# Test Strategy:
+1. Test campaign scheduling with various time configurations
+2. Verify timezone handling for different user locations
+3. Test recurring campaign patterns (daily, weekly, monthly)
+4. Validate batch processing for large recipient lists
+5. Test retry mechanism for failed sends
+6. Verify campaign status updates throughout the process
+7. Test pause/resume functionality
+8. Validate analytics tracking for scheduled campaigns

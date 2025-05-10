@@ -1,0 +1,178 @@
+# Task ID: 25
+# Title: Email Analytics Dashboard
+# Status: pending
+# Dependencies: 24
+# Priority: medium
+# Description: Build an analytics dashboard to visualize email performance metrics including opens, clicks, bounces, and engagement over time.
+# Details:
+1. Design analytics dashboard UI with key metrics overview
+2. Implement data aggregation for email performance metrics
+3. Create visualizations for:
+   - Open rates
+   - Click-through rates
+   - Bounce rates
+   - Spam complaint rates
+   - Engagement over time
+4. Add filtering by campaign, date range, and email type
+5. Implement drill-down capabilities for detailed analysis
+6. Create exportable reports for stakeholders
+7. Add real-time updates for recent campaigns
+
+```typescript
+// Example analytics data fetching service
+import { supabase } from '../lib/supabaseClient';
+
+export async function getEmailAnalytics(filters: {
+  startDate?: Date;
+  endDate?: Date;
+  campaignId?: string;
+  emailType?: string;
+}) {
+  const {
+    startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Default to last 30 days
+    endDate = new Date(),
+    campaignId,
+    emailType
+  } = filters;
+  
+  // Base query for sent emails
+  let sentQuery = supabase
+    .from('email_events')
+    .select('count')
+    .eq('event_type', 'delivery')
+    .gte('timestamp', startDate.toISOString())
+    .lte('timestamp', endDate.toISOString());
+    
+  // Apply filters if provided
+  if (campaignId) {
+    sentQuery = sentQuery.eq('campaign_id', campaignId);
+  }
+  
+  if (emailType) {
+    sentQuery = sentQuery.eq('email_type', emailType);
+  }
+  
+  // Execute sent emails query
+  const { data: sentData, error: sentError } = await sentQuery;
+  
+  if (sentError) throw sentError;
+  
+  // Similar queries for opens, clicks, bounces, etc.
+  // ...
+  
+  // Get daily stats for time series
+  const { data: dailyStats, error: dailyError } = await supabase
+    .rpc('get_daily_email_stats', {
+      start_date: startDate.toISOString(),
+      end_date: endDate.toISOString(),
+      campaign_id: campaignId || null,
+      email_type: emailType || null
+    });
+    
+  if (dailyError) throw dailyError;
+  
+  // Calculate key metrics
+  const totalSent = sentData[0]?.count || 0;
+  const totalOpens = opensData[0]?.count || 0;
+  const totalClicks = clicksData[0]?.count || 0;
+  const totalBounces = bouncesData[0]?.count || 0;
+  const totalComplaints = complaintsData[0]?.count || 0;
+  
+  const openRate = totalSent > 0 ? (totalOpens / totalSent) * 100 : 0;
+  const clickRate = totalSent > 0 ? (totalClicks / totalSent) * 100 : 0;
+  const clickToOpenRate = totalOpens > 0 ? (totalClicks / totalOpens) * 100 : 0;
+  const bounceRate = totalSent > 0 ? (totalBounces / totalSent) * 100 : 0;
+  const complaintRate = totalSent > 0 ? (totalComplaints / totalSent) * 100 : 0;
+  
+  return {
+    summary: {
+      totalSent,
+      totalOpens,
+      totalClicks,
+      totalBounces,
+      totalComplaints,
+      openRate,
+      clickRate,
+      clickToOpenRate,
+      bounceRate,
+      complaintRate
+    },
+    dailyStats
+  };
+}
+
+// Example SQL function for daily stats (to be created in Supabase)
+/*
+CREATE OR REPLACE FUNCTION get_daily_email_stats(
+  start_date TIMESTAMP WITH TIME ZONE,
+  end_date TIMESTAMP WITH TIME ZONE,
+  campaign_id UUID,
+  email_type TEXT
+) RETURNS TABLE (
+  date DATE,
+  sent BIGINT,
+  opens BIGINT,
+  clicks BIGINT,
+  bounces BIGINT,
+  complaints BIGINT
+) AS $$
+BEGIN
+  RETURN QUERY
+  WITH dates AS (
+    SELECT generate_series(start_date::DATE, end_date::DATE, '1 day'::INTERVAL)::DATE AS date
+  ),
+  sent_counts AS (
+    SELECT
+      DATE(timestamp) AS date,
+      COUNT(*) AS count
+    FROM email_events
+    WHERE
+      event_type = 'delivery'
+      AND timestamp >= start_date
+      AND timestamp <= end_date
+      AND (campaign_id IS NULL OR campaign_id = $3)
+      AND (email_type IS NULL OR email_type = $4)
+    GROUP BY DATE(timestamp)
+  ),
+  open_counts AS (
+    -- Similar query for opens
+  ),
+  click_counts AS (
+    -- Similar query for clicks
+  ),
+  bounce_counts AS (
+    -- Similar query for bounces
+  ),
+  complaint_counts AS (
+    -- Similar query for complaints
+  )
+  SELECT
+    d.date,
+    COALESCE(s.count, 0) AS sent,
+    COALESCE(o.count, 0) AS opens,
+    COALESCE(c.count, 0) AS clicks,
+    COALESCE(b.count, 0) AS bounces,
+    COALESCE(cp.count, 0) AS complaints
+  FROM
+    dates d
+    LEFT JOIN sent_counts s ON d.date = s.date
+    LEFT JOIN open_counts o ON d.date = o.date
+    LEFT JOIN click_counts c ON d.date = c.date
+    LEFT JOIN bounce_counts b ON d.date = b.date
+    LEFT JOIN complaint_counts cp ON d.date = cp.date
+  ORDER BY
+    d.date;
+END;
+$$ LANGUAGE plpgsql;
+*/
+```
+
+# Test Strategy:
+1. Test data aggregation with various filter combinations
+2. Verify metric calculations are accurate
+3. Test dashboard performance with large datasets
+4. Validate visualization rendering with different data patterns
+5. Test export functionality for different report formats
+6. Verify real-time updates for recent campaigns
+7. Test dashboard responsiveness across different devices
+8. Validate filter interactions and state management

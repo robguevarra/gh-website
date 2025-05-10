@@ -1,0 +1,11 @@
+# Task ID: 9
+# Title: Develop Purchase History and Enrollment Sections
+# Status: done
+# Dependencies: 7
+# Priority: medium
+# Description: Implement the purchase history and enrollment tabs in the user detail view.
+# Details:
+Create the purchase history tab showing all transactions from shopify_orders and shopify_order_items with product details and payment information. Implement the enrollment tab displaying current and past course enrollments with status indicators. Add filtering and sorting capabilities within each tab. Include action buttons for managing enrollments and viewing order details. Ensure efficient data loading with pagination for users with extensive history.
+
+# Test Strategy:
+Test with users having various purchase and enrollment patterns. Verify all data is displayed correctly and actions work as expected. Test pagination for users with large datasets.

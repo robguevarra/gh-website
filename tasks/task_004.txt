@@ -1,0 +1,11 @@
+# Task ID: 4
+# Title: Create Basic Admin Layout and Navigation
+# Status: done
+# Dependencies: 3
+# Priority: high
+# Description: Implement the admin interface layout, navigation structure, and authentication guards.
+# Details:
+Create a layout component for the admin area at /admin using Next.js App Router. Implement navigation sidebar with links to users and future admin sections. Add authentication middleware to protect all admin routes, ensuring only users with admin role can access these pages. Use Shadcn UI components for consistent styling and implement responsive design that works across all device sizes.
+
+# Test Strategy:
+Test authentication guards by attempting access with different user roles. Verify responsive behavior across multiple device sizes. Ensure keyboard navigation and screen reader accessibility.

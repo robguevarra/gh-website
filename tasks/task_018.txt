@@ -1,0 +1,119 @@
+# Task ID: 18
+# Title: MJML Email Template System
+# Status: cancelled
+# Dependencies: 16
+# Priority: high
+# Description: This task is deprecated. The MJML-based email template system has been superseded by a direct HTML approach (Task 31) and the integration of the Unlayer email editor (Task 32).
+# Details:
+**DEPRECATED APPROACH**
+
+This MJML-based email template system has been replaced by:
+1. A direct HTML approach (see Task 31)
+2. The integration of Unlayer email editor (see Task 32) for a more user-friendly template management experience
+
+All email template creation and management will now use Unlayer instead of the MJML approach described below.
+
+**Original Implementation (No Longer Used):**
+
+1. Install and configure MJML processing libraries ✅
+2. Create base MJML template with Graceful Homeschooling branding (Purple #b08ba5, Pink #f1b5bc, Blue #9ac5d9) ✅
+3. Implement typography standards (Inter for body text, Playfair Display for headings) ✅
+4. Design responsive layouts that work across all email clients ✅
+5. Create component library for common email elements (headers, footers, buttons, etc.) ✅
+6. Implement variable substitution system for personalization ✅
+7. Create utility functions to convert MJML to HTML ✅
+8. Set up template storage in the database ✅
+9. Implement Monaco-based code editor in admin interface for template editing ✅
+10. Create template preview functionality in admin interface ✅
+11. Develop specialized templates for different email types:
+    - Authentication emails (verification, password reset) ✅
+    - Transactional emails (receipts, confirmations) ✅
+    - Marketing/newsletter templates ✅
+
+```typescript
+// Example MJML template processing
+import mjml2html from 'mjml';
+
+const baseTemplate = `
+<mjml>
+  <mj-head>
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif" />
+      <mj-text font-weight="400" font-size="16px" color="#000000" line-height="24px" />
+      <mj-section padding="0px" />
+    </mj-attributes>
+    <mj-style>
+      h1, h2, h3, h4 { font-family: 'Playfair Display', Georgia, serif; }
+      .gh-primary { color: #b08ba5; }
+      .gh-secondary { color: #f1b5bc; }
+      .gh-tertiary { color: #9ac5d9; }
+    </mj-style>
+  </mj-head>
+  <mj-body background-color="#ffffff">
+    <!-- Header -->
+    <mj-section background-color="#b08ba5" padding="20px">
+      <mj-column>
+        <mj-image width="200px" src="{{logoUrl}}" alt="Graceful Homeschooling" />
+      </mj-column>
+    </mj-section>
+    
+    <!-- Content -->
+    <mj-section padding="20px">
+      <mj-column>
+        <mj-text>
+          {{content}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+    
+    <!-- Footer -->
+    <mj-section background-color="#f6f6f6" padding="20px">
+      <mj-column>
+        <mj-text align="center" font-size="12px">
+          &copy; {{year}} Graceful Homeschooling. All rights reserved.
+          <br />
+          {{#if showUnsubscribe}}
+          <a href="{{unsubscribeUrl}}">Unsubscribe</a>
+          {{/if}}
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>
+`;
+
+function renderTemplate(template, variables) {
+  // Replace variables in template
+  const processedTemplate = Object.entries(variables).reduce(
+    (result, [key, value]) => result.replace(new RegExp(`{{${key}}}`, 'g'), value),
+    template
+  );
+  
+  // Convert MJML to HTML
+  const { html, errors } = mjml2html(processedTemplate);
+  
+  if (errors && errors.length) {
+    console.error('MJML processing errors:', errors);
+  }
+  
+  return html;
+}
+```
+
+# Test Strategy:
+**DEPRECATED TESTING APPROACH**
+
+This testing strategy is no longer applicable as the MJML approach has been replaced by Unlayer (Task 32) and direct HTML (Task 31). Please refer to those tasks for current testing strategies.
+
+Original testing strategy (for reference only):
+
+1. Create visual regression tests for email templates ✅
+2. Test templates across different email clients using Email on Acid or Litmus ✅
+3. Verify responsive behavior on mobile, tablet, and desktop viewports ✅
+4. Test variable substitution with different data sets ✅
+5. Validate HTML output meets email client compatibility standards ✅
+6. Test rendering performance with large templates ✅
+7. Test Monaco editor functionality in the admin interface
+8. Verify template preview accurately represents final email output
+9. Test template saving and loading from database
+10. Verify specialized templates (authentication, transactional, etc.) meet their specific requirements

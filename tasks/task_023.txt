@@ -1,0 +1,194 @@
+# Task ID: 23
+# Title: Email Sending Service Implementation
+# Status: done
+# Dependencies: 17, 18
+# Priority: high
+# Description: Develop the core email sending service that handles different types of emails (transactional, marketing, educational) using Postmark's API.
+# Details:
+1. Create a comprehensive email sending service
+2. Implement different sending methods for various email types
+3. Add template rendering with variable substitution
+4. Implement batch sending capabilities
+5. Add rate limiting and throttling
+6. Create retry mechanism for failed sends
+7. Implement logging and monitoring
+8. Add support for attachments and inline images
+
+```typescript
+// Example email sending service
+import { PostmarkClient } from 'postmark';
+import { renderTemplate } from './templateRenderer';
+import { logger } from './logger';
+
+export class EmailService {
+  private client: PostmarkClient;
+  
+  constructor(apiKey: string) {
+    this.client = new PostmarkClient(apiKey);
+  }
+  
+  /**
+   * Send a transactional email using a template
+   */
+  async sendTransactionalEmail(options: {
+    to: string;
+    subject: string;
+    templateId: string;
+    templateData: Record<string, any>;
+    from?: string;
+    replyTo?: string;
+    attachments?: Array<{ name: string, content: string, contentType: string }>;
+    messageStream?: string;
+  }) {
+    const {
+      to,
+      subject,
+      templateId,
+      templateData,
+      from = 'hello@gracefulhomeschooling.com',
+      replyTo,
+      attachments = [],
+      messageStream = 'outbound'
+    } = options;
+    
+    try {
+      const response = await this.client.sendEmailWithTemplate({
+        From: from,
+        To: to,
+        Subject: subject,
+        TemplateId: templateId,
+        TemplateModel: templateData,
+        ReplyTo: replyTo,
+        MessageStream: messageStream,
+        Attachments: attachments.map(att => ({
+          Name: att.name,
+          Content: att.content,
+          ContentType: att.contentType
+        }))
+      });
+      
+      logger.info('Transactional email sent', {
+        messageId: response.MessageID,
+        to,
+        subject,
+        templateId
+      });
+      
+      return {
+        success: true,
+        messageId: response.MessageID
+      };
+    } catch (error) {
+      logger.error('Failed to send transactional email', {
+        error,
+        to,
+        subject,
+        templateId
+      });
+      
+      return {
+        success: false,
+        error
+      };
+    }
+  }
+  
+  /**
+   * Send a marketing email to multiple recipients
+   */
+  async sendMarketingEmail(options: {
+    recipients: Array<{ email: string, data?: Record<string, any> }>;
+    subject: string;
+    templateId: string;
+    from?: string;
+    messageStream?: string;
+  }) {
+    const {
+      recipients,
+      subject,
+      templateId,
+      from = 'hello@gracefulhomeschooling.com',
+      messageStream = 'broadcast'
+    } = options;
+    
+    try {
+      // Split recipients into batches of 500 (Postmark's limit)
+      const batchSize = 500;
+      const batches = [];
+      
+      for (let i = 0; i < recipients.length; i += batchSize) {
+        batches.push(recipients.slice(i, i + batchSize));
+      }
+      
+      const results = [];
+      
+      for (const batch of batches) {
+        const messages = batch.map(recipient => ({
+          From: from,
+          To: recipient.email,
+          Subject: subject,
+          TemplateId: templateId,
+          TemplateModel: recipient.data || {},
+          MessageStream: messageStream
+        }));
+        
+        const response = await this.client.sendEmailBatch(messages);
+        results.push(...response);
+        
+        // Add a small delay between batches to avoid rate limits
+        if (batches.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      logger.info('Marketing email batch sent', {
+        recipientCount: recipients.length,
+        subject,
+        templateId
+      });
+      
+      return {
+        success: true,
+        results
+      };
+    } catch (error) {
+      logger.error('Failed to send marketing email batch', {
+        error,
+        recipientCount: recipients.length,
+        subject,
+        templateId
+      });
+      
+      return {
+        success: false,
+        error
+      };
+    }
+  }
+  
+  /**
+   * Send a test email to verify template rendering
+   */
+  async sendTestEmail(options: {
+    to: string;
+    subject: string;
+    templateId: string;
+    templateData: Record<string, any>;
+  }) {
+    return this.sendTransactionalEmail({
+      ...options,
+      subject: `[TEST] ${options.subject}`
+    });
+  }
+}
+```
+
+# Test Strategy:
+1. Unit test each email sending method
+2. Test template rendering with various data sets
+3. Verify batch sending with different recipient counts
+4. Test rate limiting and throttling behavior
+5. Verify retry mechanism for failed sends
+6. Test logging captures appropriate information
+7. Validate attachment handling
+8. Test with different Postmark message streams

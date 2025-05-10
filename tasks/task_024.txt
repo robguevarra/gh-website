@@ -1,0 +1,193 @@
+# Task ID: 24
+# Title: Email Webhook Processing
+# Status: pending
+# Dependencies: 23
+# Priority: medium
+# Description: Implement webhook handling for Postmark events to track email engagement metrics like opens, clicks, bounces, and spam reports.
+# Details:
+1. Create webhook endpoint for Postmark events
+2. Implement handlers for different event types:
+   - Delivery
+   - Open
+   - Click
+   - Bounce
+   - Spam complaint
+   - Subscription change
+3. Store event data in the database
+4. Implement webhook authentication and validation
+5. Add error handling and retry logic
+6. Create background processing for high-volume events
+7. Implement event aggregation for analytics
+
+```typescript
+// Example webhook handler for Next.js API route
+import { NextApiRequest, NextApiResponse } from 'next';
+import { supabase } from '../../lib/supabaseClient';
+import { verifyPostmarkWebhook } from '../../lib/postmarkUtils';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+  
+  try {
+    // Verify webhook signature if Postmark provides one
+    if (!verifyPostmarkWebhook(req)) {
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+    
+    const event = req.body;
+    
+    // Process different event types
+    switch (event.RecordType) {
+      case 'Delivery':
+        await processDeliveryEvent(event);
+        break;
+      case 'Open':
+        await processOpenEvent(event);
+        break;
+      case 'Click':
+        await processClickEvent(event);
+        break;
+      case 'Bounce':
+        await processBounceEvent(event);
+        break;
+      case 'SpamComplaint':
+        await processSpamComplaintEvent(event);
+        break;
+      case 'SubscriptionChange':
+        await processSubscriptionChangeEvent(event);
+        break;
+      default:
+        console.warn('Unknown event type:', event.RecordType);
+    }
+    
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function processDeliveryEvent(event) {
+  await supabase.from('email_events').insert([
+    {
+      message_id: event.MessageID,
+      event_type: 'delivery',
+      recipient: event.Recipient,
+      timestamp: new Date(event.DeliveredAt),
+      raw_event: event
+    }
+  ]);
+}
+
+async function processOpenEvent(event) {
+  await supabase.from('email_events').insert([
+    {
+      message_id: event.MessageID,
+      event_type: 'open',
+      recipient: event.Recipient,
+      timestamp: new Date(event.ReceivedAt),
+      user_agent: event.UserAgent,
+      geo_location: event.Geo,
+      raw_event: event
+    }
+  ]);
+}
+
+async function processClickEvent(event) {
+  await supabase.from('email_events').insert([
+    {
+      message_id: event.MessageID,
+      event_type: 'click',
+      recipient: event.Recipient,
+      timestamp: new Date(event.ReceivedAt),
+      user_agent: event.UserAgent,
+      geo_location: event.Geo,
+      link_url: event.OriginalLink,
+      raw_event: event
+    }
+  ]);
+}
+
+async function processBounceEvent(event) {
+  // Insert event record
+  await supabase.from('email_events').insert([
+    {
+      message_id: event.MessageID,
+      event_type: 'bounce',
+      recipient: event.Recipient,
+      timestamp: new Date(event.BouncedAt),
+      bounce_type: event.Type,
+      bounce_reason: event.Description,
+      raw_event: event
+    }
+  ]);
+  
+  // Update user record for hard bounces
+  if (event.Type === 'HardBounce') {
+    await supabase.from('user_email_preferences')
+      .update({ 
+        is_valid_email: false,
+        bounce_reason: event.Description,
+        updated_at: new Date()
+      })
+      .eq('email', event.Recipient);
+  }
+}
+
+async function processSpamComplaintEvent(event) {
+  // Insert event record
+  await supabase.from('email_events').insert([
+    {
+      message_id: event.MessageID,
+      event_type: 'spam_complaint',
+      recipient: event.Recipient,
+      timestamp: new Date(event.BouncedAt),
+      raw_event: event
+    }
+  ]);
+  
+  // Update user preferences to opt out
+  await supabase.from('user_email_preferences')
+    .update({ 
+      marketing_opt_in: false,
+      updated_at: new Date(),
+      opt_out_reason: 'spam_complaint'
+    })
+    .eq('email', event.Recipient);
+}
+
+async function processSubscriptionChangeEvent(event) {
+  await supabase.from('email_events').insert([
+    {
+      message_id: event.MessageID,
+      event_type: 'subscription_change',
+      recipient: event.Recipient,
+      timestamp: new Date(event.ChangedAt),
+      subscription_change: event.SuppressionReason,
+      raw_event: event
+    }
+  ]);
+  
+  // Update user preferences based on subscription change
+  await supabase.from('user_email_preferences')
+    .update({ 
+      marketing_opt_in: event.SuppressionReason !== 'Unsubscribed',
+      updated_at: new Date(),
+      opt_out_reason: event.SuppressionReason === 'Unsubscribed' ? 'unsubscribe' : null
+    })
+    .eq('email', event.Recipient);
+}
+```
+
+# Test Strategy:
+1. Test webhook endpoint with sample Postmark event payloads
+2. Verify event data is correctly stored in the database
+3. Test webhook authentication and validation
+4. Verify error handling for malformed requests
+5. Test high-volume event processing
+6. Validate user preference updates based on events
+7. Test event aggregation for analytics
+8. Verify webhook endpoint security

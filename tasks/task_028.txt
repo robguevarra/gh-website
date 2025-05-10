@@ -1,0 +1,110 @@
+# Task ID: 28
+# Title: Transactional Email Templates
+# Status: pending
+# Dependencies: 23, 32
+# Priority: high
+# Description: Create and implement transactional email templates for order confirmations, class enrollments, and other system notifications using Unlayer (Task 32).
+# Details:
+1. Design and implement the following transactional email templates using Unlayer:
+   - Order confirmation
+   - Class enrollment confirmation
+   - Payment receipt
+   - Account updates
+   - System notifications
+2. Ensure templates follow Graceful Homeschooling brand guidelines
+3. Implement responsive design using Unlayer's responsive template features
+4. Add appropriate transaction details and formatting
+5. Ensure clear call-to-action buttons where applicable
+6. Implement template variables for personalization and transaction details
+7. Refer to Unlayer build notes in subtask 32.1 for creating these template types (e.g., 'Course enrollment templates')
+
+Note: Previously planned MJML implementation has been replaced with Unlayer as per Task 32.
+
+```typescript
+// Example function to register transactional templates with Postmark using Unlayer HTML
+async function registerTransactionalTemplates() {
+  const postmarkClient = new PostmarkClient(process.env.POSTMARK_API_TOKEN);
+  
+  // Class enrollment template - now using Unlayer HTML export
+  const enrollmentHtml = await getUnlayerTemplateHtml('class-enrollment');
+  
+  await postmarkClient.createTemplate({
+    Name: 'Class Enrollment Confirmation',
+    Subject: 'Your Enrollment in {{className}} is Confirmed',
+    HtmlBody: enrollmentHtml,
+    TextBody: 'Thank you for enrolling in {{className}}. Your class is scheduled for {{classSchedule}} starting on {{startDate}}.',
+    TemplateType: 'Standard'
+  });
+  
+  // Similar code for other transactional templates...
+}
+
+// Function to get HTML from Unlayer template
+async function getUnlayerTemplateHtml(templateName) {
+  // Implementation will depend on how Unlayer templates are stored/exported
+  // This could involve API calls to Unlayer or reading from exported files
+  return unlayerExportedHtml;
+}
+```
+
+# Test Strategy:
+1. Test template rendering with various transaction data
+2. Verify responsive design across different email clients using Unlayer's responsive templates
+3. Test all links and buttons in templates
+4. Validate template variables are correctly substituted
+5. Test accessibility of email templates
+6. Verify branding consistency across all templates
+7. Test template loading times and size
+8. Validate transaction details are clearly presented
+9. Verify integration between Unlayer exports and email sending system
+10. Test compatibility with Postmark's template system
+
+# Subtasks:
+## 28.1. Review Unlayer build notes from subtask 32.1 [pending]
+### Dependencies: None
+### Description: Review the Unlayer build notes and template structure from subtask 32.1 to understand how to create the required transactional email templates.
+### Details:
+
+
+## 28.2. Create order confirmation template in Unlayer [pending]
+### Dependencies: None
+### Description: Design and implement the order confirmation email template using Unlayer, ensuring it includes all necessary transaction details and follows brand guidelines.
+### Details:
+
+
+## 28.3. Create class enrollment confirmation template in Unlayer [pending]
+### Dependencies: None
+### Description: Design and implement the class enrollment confirmation email template using Unlayer, including class details, instructor information, and calendar integration options.
+### Details:
+
+
+## 28.4. Create payment receipt template in Unlayer [pending]
+### Dependencies: None
+### Description: Design and implement the payment receipt email template using Unlayer, ensuring it includes all necessary payment details and follows financial reporting requirements.
+### Details:
+
+
+## 28.5. Create account updates template in Unlayer [pending]
+### Dependencies: None
+### Description: Design and implement the account updates email template using Unlayer for notifying users about changes to their account information.
+### Details:
+
+
+## 28.6. Create system notifications template in Unlayer [pending]
+### Dependencies: None
+### Description: Design and implement the system notifications email template using Unlayer for general platform announcements and alerts.
+### Details:
+
+
+## 28.7. Implement template variable system for Unlayer templates [pending]
+### Dependencies: None
+### Description: Set up the template variable system to work with Unlayer exports, ensuring proper substitution of personalization and transaction details.
+### Details:
+
+
+## 28.8. Integrate Unlayer templates with Postmark [pending]
+### Dependencies: None
+### Description: Develop the integration between Unlayer-exported templates and the Postmark email delivery system.
+### Details:
+
+

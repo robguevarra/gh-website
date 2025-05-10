@@ -1,0 +1,11 @@
+# Task ID: 7
+# Title: Create User Detail View Framework
+# Status: done
+# Dependencies: 3, 4
+# Priority: high
+# Description: Build the basic structure for the comprehensive user profile at /admin/users/[id].
+# Details:
+Implement the user detail page at /admin/users/[id] with a tabbed interface using Shadcn UI tabs component. Create the basic layout with sections for personal details, purchase history, enrollments, and activity tracking. Fetch core user data and implement navigation between tabs that preserves state. Add breadcrumb navigation back to the user list and implement proper loading and error states.
+
+# Test Strategy:
+Test navigation between tabs, verify data loading for different user IDs, and ensure the UI matches design specifications. Test error handling with invalid user IDs.

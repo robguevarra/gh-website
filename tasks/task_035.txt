@@ -1,0 +1,41 @@
+# Task ID: 35
+# Title: Phase 2: Build Out Advanced Email Features & User Management
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: With the core infrastructure in place, this phase focuses on developing advanced email capabilities such as user segmentation, campaign management, detailed analytics, and user preference systems.
+# Details:
+This phase will group tasks related to: User tagging and segmentation (Task 20), Campaign Management System (Task 22), comprehensive Email Webhook Processing for analytics (Task 24), Email Analytics Dashboard (Task 25), and User Email Preference Management (Task 26).
+
+# Test Strategy:
+Verify completion of all sub-tasks. Advanced features should be functional and integrated.
+
+# Subtasks:
+## 1. Implement User Tagging and Segmentation (from Task 20) [pending]
+### Dependencies: None
+### Description: Implement user tagging and segmentation for targeted emails. (Originally Task 20)
+### Details:
+Original Task 20. 
+1. Design database schema for user tags and segments
+2. Create API endpoints for tag management
+3. Implement tag assignment logic for users
+4. Develop predefined segments based on common criteria (enrollment, purchase, activity, preferences)
+5. Build filtering logic for combining tags and attributes
+6. Create segment preview and size estimation tools
+7. Implement batch operations for tag management.
+
+## 2. Implement Campaign Management System (from Task 22) [pending]
+### Dependencies: 35.1
+### Description: Develop campaign management interface with scheduling, targeting, and automation. (Originally Task 22)
+### Details:
+Original Task 22. Key features:
+1. Design campaign management UI (listing, filtering, status).
+2. Implement campaign creation workflow.
+3. Create recipient selection using segments/tags (from Subtask 35.1).
+4. Build scheduling with timezone support.
+5. Implement campaign preview/testing (using Unlayer templates from Task 34).
+6. Add campaign duplication.
+7. Develop automation for recurring emails.
+8. Consider A/B testing capabilities.
+9. Implement campaign status tracking.
+
