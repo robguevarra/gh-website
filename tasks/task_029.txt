@@ -1,6 +1,6 @@
 # Task ID: 29
 # Title: Marketing Email Templates
-# Status: pending
+# Status: done
 # Dependencies: 26, 32
 # Priority: medium
 # Description: Create and implement marketing email templates (campaigns, promotions, educational content) using Unlayer (Task 32), following brand guidelines and respecting user preferences (Task 26).

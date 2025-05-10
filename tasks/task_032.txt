@@ -9,7 +9,7 @@ Context: Our current email template editing solution has several limitations (No
 Implementation Details:
 1. Installation and Setup: Install react-email-editor, create EmailEditor wrapper, configure branding.
 2. API Enhancement: Update API to store HTML & design JSON, add design field to schema, improve version management.
-3. User Interface: Replace TipTap with Unlayer, update management screens, create template gallery.
+3. User Interface: Replace TipTap with Unlayer, update management screens.
 4. Migration: Convert existing HTML templates (Note: Build notes indicate creating *new* templates instead of migrating existing ones - this needs clarification).
 Technical Notes: Package: react-email-editor, iframe-based (check CSP), store design JSON with HTML.
 Resources: Unlayer Docs, react-email-editor GitHub, Unlayer templates examples.

@@ -35,6 +35,9 @@ const nextConfig = {
     webpackBuildWorker: true,
     parallelServerBuildTraces: true,
     parallelServerCompiles: true,
+    allowedDevOrigins: [
+      'https://7d10-110-54-153-152.ngrok-free.app'
+    ],
     optimizePackageImports: [
       'lucide-react',
       'date-fns',

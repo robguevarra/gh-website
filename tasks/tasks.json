@@ -536,7 +536,7 @@
       "id": 28,
       "title": "Transactional Email Templates",
       "description": "Create and implement transactional email templates for order confirmations, class enrollments, and other system notifications using Unlayer (Task 32).",
-      "status": "pending",
+      "status": "done",
       "dependencies": [
         23,
         32
@@ -549,49 +549,49 @@
           "id": "28.1",
           "title": "Review Unlayer build notes from subtask 32.1",
           "description": "Review the Unlayer build notes and template structure from subtask 32.1 to understand how to create the required transactional email templates.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "28.2",
           "title": "Create order confirmation template in Unlayer",
           "description": "Design and implement the order confirmation email template using Unlayer, ensuring it includes all necessary transaction details and follows brand guidelines.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "28.3",
           "title": "Create class enrollment confirmation template in Unlayer",
           "description": "Design and implement the class enrollment confirmation email template using Unlayer, including class details, instructor information, and calendar integration options.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "28.4",
           "title": "Create payment receipt template in Unlayer",
           "description": "Design and implement the payment receipt email template using Unlayer, ensuring it includes all necessary payment details and follows financial reporting requirements.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "28.5",
           "title": "Create account updates template in Unlayer",
           "description": "Design and implement the account updates email template using Unlayer for notifying users about changes to their account information.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "28.6",
           "title": "Create system notifications template in Unlayer",
           "description": "Design and implement the system notifications email template using Unlayer for general platform announcements and alerts.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "28.7",
           "title": "Implement template variable system for Unlayer templates",
           "description": "Set up the template variable system to work with Unlayer exports, ensuring proper substitution of personalization and transaction details.",
-          "status": "pending"
+          "status": "done"
         },
         {
           "id": "28.8",
           "title": "Integrate Unlayer templates with Postmark",
           "description": "Develop the integration between Unlayer-exported templates and the Postmark email delivery system.",
-          "status": "pending"
+          "status": "done"
         }
       ]
     },
@@ -599,7 +599,7 @@
       "id": 29,
       "title": "Marketing Email Templates",
       "description": "Create and implement marketing email templates (campaigns, promotions, educational content) using Unlayer (Task 32), following brand guidelines and respecting user preferences (Task 26).",
-      "status": "pending",
+      "status": "done",
       "dependencies": [
         26,
         32
@@ -699,13 +699,13 @@
       "id": 32,
       "title": "Integrate Unlayer Email Editor",
       "description": "Replace the current TipTap-based email editor with Unlayer's react-email-editor to provide a professional, drag-and-drop email template editing experience for non-technical admin users.",
-      "details": "Context: Our current email template editing solution has several limitations (Not truly WYSIWYG, limited components, requires HTML knowledge, no proper preview, error-prone saving/previewing). Unlayer provides a professional solution with drag-and-drop capabilities, responsive templates, and real-time previews.\nImplementation Details:\n1. Installation and Setup: Install react-email-editor, create EmailEditor wrapper, configure branding.\n2. API Enhancement: Update API to store HTML & design JSON, add design field to schema, improve version management.\n3. User Interface: Replace TipTap with Unlayer, update management screens, create template gallery.\n4. Migration: Convert existing HTML templates (Note: Build notes indicate creating *new* templates instead of migrating existing ones - this needs clarification).\nTechnical Notes: Package: react-email-editor, iframe-based (check CSP), store design JSON with HTML.\nResources: Unlayer Docs, react-email-editor GitHub, Unlayer templates examples.",
-      "testStrategy": "Verify Unlayer editor integrated; templates can be created/edited/saved via drag-and-drop; HTML & design JSON stored; variable substitution (merge tags) works; templates can be previewed across devices/clients; version history and rollback functionality is preserved. (Migration of existing templates needs clarification based on conflicting information: task file says migrate, build note says create new).",
       "status": "in-progress",
       "dependencies": [
         31
       ],
       "priority": "high",
+      "details": "Context: Our current email template editing solution has several limitations (Not truly WYSIWYG, limited components, requires HTML knowledge, no proper preview, error-prone saving/previewing). Unlayer provides a professional solution with drag-and-drop capabilities, responsive templates, and real-time previews.\nImplementation Details:\n1. Installation and Setup: Install react-email-editor, create EmailEditor wrapper, configure branding.\n2. API Enhancement: Update API to store HTML & design JSON, add design field to schema, improve version management.\n3. User Interface: Replace TipTap with Unlayer, update management screens.\n4. Migration: Convert existing HTML templates (Note: Build notes indicate creating *new* templates instead of migrating existing ones - this needs clarification).\nTechnical Notes: Package: react-email-editor, iframe-based (check CSP), store design JSON with HTML.\nResources: Unlayer Docs, react-email-editor GitHub, Unlayer templates examples.",
+      "testStrategy": "Verify Unlayer editor integrated; templates can be created/edited/saved via drag-and-drop; HTML & design JSON stored; variable substitution (merge tags) works; templates can be previewed across devices/clients; version history and rollback functionality is preserved. (Migration of existing templates needs clarification based on conflicting information: task file says migrate, build note says create new).",
       "subtasks": [
         {
           "id": 1,
@@ -819,32 +819,181 @@
     {
       "id": 35,
       "title": "Phase 2: Build Out Advanced Email Features & User Management",
-      "description": "With the core infrastructure in place, this phase focuses on developing advanced email capabilities such as user segmentation, campaign management, detailed analytics, and user preference systems.",
-      "details": "This phase will group tasks related to: User tagging and segmentation (Task 20), Campaign Management System (Task 22), comprehensive Email Webhook Processing for analytics (Task 24), Email Analytics Dashboard (Task 25), and User Email Preference Management (Task 26).",
-      "testStrategy": "Verify completion of all sub-tasks. Advanced features should be functional and integrated.",
-      "status": "pending",
+      "description": "With the core infrastructure in place, this phase focuses on developing advanced email capabilities with webhook processing integration as a primary focus area, enabling user segmentation, campaign management, detailed analytics, and user preference systems.",
+      "status": "done",
       "dependencies": [],
       "priority": "high",
+      "details": "This phase will prioritize webhook processing as a key component for email analytics and user preference management. Tasks include: Webhook endpoint architecture and event processing (Tasks 1, 2, 10), User tagging and segmentation (Task 20), Campaign Management System (Task 22), comprehensive Email Analytics Dashboard (Task 25), and User Email Preference Management (Task 26). Webhook integration is critical as it provides the real-time data foundation for analytics and user preference updates.",
+      "testStrategy": "Verify completion of all sub-tasks with particular emphasis on webhook processing integration. Advanced features should be functional and integrated with the webhook system.",
       "subtasks": [
         {
           "id": 1,
-          "title": "Implement User Tagging and Segmentation (from Task 20)",
-          "description": "Implement user tagging and segmentation for targeted emails. (Originally Task 20)",
-          "details": "Original Task 20. \n1. Design database schema for user tags and segments\n2. Create API endpoints for tag management\n3. Implement tag assignment logic for users\n4. Develop predefined segments based on common criteria (enrollment, purchase, activity, preferences)\n5. Build filtering logic for combining tags and attributes\n6. Create segment preview and size estimation tools\n7. Implement batch operations for tag management.",
-          "status": "pending",
+          "title": "Design and implement webhook endpoint architecture",
+          "description": "Create secure webhook endpoints to receive and process email events from ESPs (Email Service Providers)",
           "dependencies": [],
-          "parentTaskId": 35
+          "details": "Implement RESTful endpoints with authentication, rate limiting, and request validation. Design for idempotency using event IDs and deduplication logic. Include proper error handling and logging.",
+          "status": "done",
+          "testStrategy": "Unit tests for validation logic, integration tests with mock ESP payloads, security testing for authentication mechanisms."
         },
         {
           "id": 2,
-          "title": "Implement Campaign Management System (from Task 22)",
-          "description": "Develop campaign management interface with scheduling, targeting, and automation. (Originally Task 22)",
-          "details": "Original Task 22. Key features:\n1. Design campaign management UI (listing, filtering, status).\n2. Implement campaign creation workflow.\n3. Create recipient selection using segments/tags (from Subtask 35.1).\n4. Build scheduling with timezone support.\n5. Implement campaign preview/testing (using Unlayer templates from Task 34).\n6. Add campaign duplication.\n7. Develop automation for recurring emails.\n8. Consider A/B testing capabilities.\n9. Implement campaign status tracking.",
-          "status": "pending",
+          "title": "Develop event normalization and storage system",
+          "description": "Create a system to normalize event data from different ESPs into a standardized format and store in the database",
           "dependencies": [
-            "35.1"
+            1
           ],
-          "parentTaskId": 35
+          "details": "Implement adapter pattern for different ESP formats. Create a unified event schema with appropriate indexes. Include batch processing capabilities for high-volume scenarios.",
+          "status": "done",
+          "testStrategy": "Unit tests for each adapter, integration tests for the storage layer, performance tests for batch processing."
+        },
+        {
+          "id": 3,
+          "title": "Implement user tagging data model and API",
+          "description": "Design and implement the database schema and API endpoints for user tagging functionality",
+          "dependencies": [
+            2
+          ],
+          "details": "Create a flexible schema that allows for hierarchical tags, tag metadata, and efficient querying. Implement CRUD operations with proper validation and error handling. Consider using a NoSQL approach for tag storage.",
+          "status": "done",
+          "testStrategy": "Unit tests for validation rules, integration tests for API endpoints, performance tests for tag queries."
+        },
+        {
+          "id": 4,
+          "title": "Build user segmentation engine",
+          "description": "Develop a system to create and manage user segments based on tags, behaviors, and other attributes",
+          "dependencies": [
+            3
+          ],
+          "details": "Implement a query builder that supports complex logical operations (AND, OR, NOT) on user attributes. Include caching mechanisms for frequently used segments. Design for extensibility to add new segmentation criteria.",
+          "status": "done",
+          "testStrategy": "Unit tests for query logic, integration tests for segment creation and retrieval, performance tests with large user datasets."
+        },
+        {
+          "id": 5,
+          "title": "Create user segmentation UI components",
+          "description": "Develop frontend components for managing tags and creating user segments",
+          "dependencies": [
+            3,
+            4
+          ],
+          "details": "Build intuitive UI for tag management, segment creation with drag-and-drop functionality, segment preview with estimated audience size, and segment saving/sharing capabilities.",
+          "status": "done",
+          "testStrategy": "Unit tests for UI components, integration tests for API interactions, usability testing with stakeholders."
+        },
+        {
+          "id": 6,
+          "title": "Design and implement campaign data model",
+          "description": "Create the database schema and core objects for email campaign management",
+          "dependencies": [
+            2
+          ],
+          "details": "Design models for campaigns, templates, content versions, scheduling, and approval workflows. Include audit logging for all changes. Implement with proper validation and error handling.",
+          "status": "done",
+          "testStrategy": "Unit tests for model validation, integration tests for model relationships, database migration tests."
+        },
+        {
+          "id": 7,
+          "title": "Develop campaign creation and editing workflow",
+          "description": "Build the backend and frontend components for creating and editing email campaigns",
+          "dependencies": [
+            6
+          ],
+          "details": "Implement draft/publish workflow, version control for campaign content, template selection, personalization options, and content validation. Include preview functionality with sample data.",
+          "status": "done",
+          "testStrategy": "Unit tests for workflow logic, integration tests for save/publish operations, UI tests for editor functionality."
+        },
+        {
+          "id": 8,
+          "title": "Implement campaign scheduling and delivery system",
+          "description": "Create the system for scheduling campaigns and managing the delivery process",
+          "dependencies": [
+            6,
+            7
+          ],
+          "details": "Build scheduling functionality with timezone support, recurring campaigns, delivery throttling, and batch processing. Implement retry logic and failure handling. Include monitoring for delivery progress.",
+          "status": "done",
+          "testStrategy": "Unit tests for scheduling logic, integration tests for delivery process, stress tests for high-volume scenarios."
+        },
+        {
+          "id": 9,
+          "title": "Build campaign targeting and preview functionality",
+          "description": "Develop features to target campaigns to specific segments and preview the recipient list",
+          "dependencies": [
+            4,
+            8
+          ],
+          "details": "Integrate segmentation engine with campaign system. Implement recipient preview with pagination and filtering. Add estimated delivery metrics and validation for minimum/maximum audience sizes.",
+          "status": "done",
+          "testStrategy": "Integration tests for segment-campaign integration, performance tests for large recipient lists, UI tests for preview functionality."
+        },
+        {
+          "id": 10,
+          "title": "Implement real-time email event processing pipeline",
+          "description": "Create a system to process and analyze email events in real-time for analytics and triggers",
+          "dependencies": [
+            2
+          ],
+          "details": "Develop stream processing for webhook events using queues for scalability. Implement event aggregation, metric calculation, and real-time updates to analytics dashboards. Include alerting for anomalies.",
+          "status": "done",
+          "testStrategy": "Unit tests for event processors, integration tests for the pipeline, performance tests with high event volumes, chaos testing for failure scenarios."
+        },
+        {
+          "id": 11,
+          "title": "Develop email analytics data warehouse",
+          "description": "Design and implement a data warehouse for storing and querying historical email analytics",
+          "dependencies": [
+            2,
+            10
+          ],
+          "details": "Create a dimensional model for email analytics with appropriate fact and dimension tables. Implement ETL processes for data aggregation and historical loading. Optimize for analytical queries with proper indexing.",
+          "status": "done",
+          "testStrategy": "Integration tests for ETL processes, performance tests for analytical queries, data integrity tests."
+        },
+        {
+          "id": 12,
+          "title": "Build email analytics dashboard UI",
+          "description": "Create interactive dashboards for visualizing email performance metrics",
+          "dependencies": [
+            10,
+            11
+          ],
+          "details": "Implement dashboard with real-time and historical views, drill-down capabilities, customizable date ranges, and exportable reports. Include visualizations for open rates, click rates, conversions, and other key metrics.",
+          "status": "done",
+          "testStrategy": "Unit tests for UI components, integration tests for data retrieval, performance tests for dashboard rendering, usability testing."
+        },
+        {
+          "id": 13,
+          "title": "Design and implement user preference data model",
+          "description": "Create the database schema and API for storing and managing user email preferences",
+          "dependencies": [
+            2
+          ],
+          "details": "Design a flexible schema for granular preference management (global opt-out, category-specific preferences, frequency settings). Include audit logging for all preference changes. Implement with proper validation.",
+          "status": "done",
+          "testStrategy": "Unit tests for model validation, integration tests for preference updates, database migration tests."
+        },
+        {
+          "id": 14,
+          "title": "Develop user preference management UI",
+          "description": "Build the frontend components for users to manage their email preferences",
+          "dependencies": [
+            13
+          ],
+          "details": "Create intuitive UI for preference management with clear explanations of each option. Implement one-click unsubscribe functionality, preference centers, and confirmation workflows. Ensure mobile-friendly design.",
+          "status": "done",
+          "testStrategy": "Unit tests for UI components, integration tests for preference updates, usability testing with real users, accessibility testing."
+        },
+        {
+          "id": 15,
+          "title": "Implement ESP preference synchronization",
+          "description": "Create a system to synchronize user preferences with Email Service Providers",
+          "dependencies": [
+            13,
+            2
+          ],
+          "details": "Develop bidirectional sync between internal preference system and ESP suppression/preference lists. Implement webhook handling for ESP-initiated preference changes (unsubscribes). Include retry logic and conflict resolution.",
+          "status": "done",
+          "testStrategy": "Integration tests with ESP APIs, end-to-end tests for preference synchronization, failure scenario testing."
         }
       ]
     },
@@ -857,7 +1006,53 @@
       "status": "pending",
       "dependencies": [],
       "priority": "medium",
-      "subtasks": []
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Performance Optimization",
+          "description": "Optimize the performance of email-related components and endpoints for better scalability and user experience.",
+          "details": "Conduct performance audit of email-related API endpoints, implement database query optimizations, enhance frontend performance, and implement scalability improvements for high-volume email operations.",
+          "status": "pending",
+          "dependencies": [],
+          "parentTaskId": 36
+        },
+        {
+          "id": 2,
+          "title": "Comprehensive Email Client Testing",
+          "description": "Test all email templates across major email clients to ensure proper rendering and functionality.",
+          "details": "Design comprehensive testing plan covering all major email clients, conduct thorough testing of all templates in desktop clients (Outlook, Apple Mail, Thunderbird), webmail clients (Gmail, Outlook.com, Yahoo Mail), mobile clients (iOS Mail, Android Gmail), and document and address any rendering issues discovered.",
+          "status": "pending",
+          "dependencies": [],
+          "parentTaskId": 36
+        },
+        {
+          "id": 3,
+          "title": "Error Handling and Monitoring",
+          "description": "Enhance error handling and implement monitoring systems for email-related operations.",
+          "details": "Implement comprehensive error handling for all API endpoints, add detailed error logging with contextual information, create user-friendly error messages, implement retry mechanisms for transient failures, and set up monitoring systems for email delivery performance and system health.",
+          "status": "pending",
+          "dependencies": [],
+          "parentTaskId": 36
+        },
+        {
+          "id": 4,
+          "title": "Administrator Training",
+          "description": "Develop and provide training materials and sessions for administrative users of the email system.",
+          "details": "Create comprehensive training materials including step-by-step guides, video tutorials, and reference documentation for all email system features. Conduct live training sessions with hands-on exercises for key functionality. Implement feedback mechanisms to collect administrator input and address usability issues.",
+          "status": "pending",
+          "dependencies": [],
+          "parentTaskId": 36
+        },
+        {
+          "id": 5,
+          "title": "Documentation",
+          "description": "Create comprehensive documentation for developers, administrators, and end-users of the email system.",
+          "details": "Develop thorough documentation including: 1) Developer documentation with system architecture, API references, code documentation, and database schema; 2) Administrator documentation with user guides, feature references, and troubleshooting procedures; 3) End-user documentation for preference management and common questions; 4) Organize and publish all documentation with proper structure, search functionality, and version control.",
+          "status": "pending",
+          "dependencies": [],
+          "parentTaskId": 36
+        }
+      ]
     }
   ]
 }
