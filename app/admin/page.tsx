@@ -19,10 +19,9 @@ import {
 //import { AdminHeader } from '@/components/admin/admin-header';
 import { DashboardOverview } from '@/components/admin/dashboard-overview';
 import { EnrollmentAnalytics } from '@/components/admin/enrollment-analytics';
-// Import the new Revenue Analytics page component
 import RevenueAnalyticsPage from '@/app/admin/revenue-analytics/page';
-// Import the renamed Marketing content component
 import MarketingAnalyticsContent from '@/app/admin/marketing/MarketingAnalyticsContent';
+import EmailAnalyticsDashboard from '@/components/admin/email-analytics-dashboard';
 //import { RevenueAnalysis } from '@/components/admin/revenue-analysis';
 //import { MarketingInsights } from '@/components/admin/marketing-insights';
 
@@ -44,7 +43,7 @@ export default async function AdminDashboardPage() {
       </div>
       {/* Tab navigation for dashboard sections. Add new sections as needed. */}
       <Tabs defaultValue="overview" className="space-y-8">
-        <TabsList className="grid w-full grid-cols-4 md:w-auto">
+        <TabsList className="grid w-full grid-cols-5 md:w-auto">
           {/* Tab triggers for each dashboard section */}
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <BarChart2 className="h-4 w-4" />
@@ -59,32 +58,42 @@ export default async function AdminDashboardPage() {
             <span className="hidden sm:inline">Revenue</span>
           </TabsTrigger>
           <TabsTrigger value="marketing" className="flex items-center gap-2">
-            <Target className="h-4 w-4" />
+            <TrendingUp className="h-4 w-4" />
             <span className="hidden sm:inline">Marketing</span>
+          </TabsTrigger>
+          <TabsTrigger value="email" className="flex items-center gap-2">
+            <BarChart2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Email Analytics</span>
           </TabsTrigger>
         </TabsList>
     
-        <TabsContent value="overview" className="m-0">
+        <TabsContent value="overview">
           <Suspense fallback={<DashboardSkeleton />}>
             <DashboardOverview />
           </Suspense>
         </TabsContent>
-        <TabsContent value="enrollments" className="m-0">
+        <TabsContent value="enrollments">
           <Suspense fallback={<DashboardSkeleton />}>
             <EnrollmentAnalytics />
           </Suspense>
         </TabsContent>
         
         {/* Connect the new Revenue Analytics page */}
-        <TabsContent value="revenue" className="m-0">
+        <TabsContent value="revenue">
           <Suspense fallback={<DashboardSkeleton />}>
             <RevenueAnalyticsPage /> {/* Use the new page component */}
           </Suspense>
         </TabsContent>
         {/* Add Marketing TabsContent */}
-        <TabsContent value="marketing" className="m-0">
-          <Suspense fallback={<DashboardSkeleton />}>
+        <TabsContent value="marketing">
+          <Suspense fallback={<DashboardSkeleton />}> 
             <MarketingAnalyticsContent />
+          </Suspense>
+        </TabsContent>
+        {/* Add Email Analytics TabsContent */}
+        <TabsContent value="email">
+          <Suspense fallback={<DashboardSkeleton />}>
+            <EmailAnalyticsDashboard />
           </Suspense>
         </TabsContent>
       </Tabs>

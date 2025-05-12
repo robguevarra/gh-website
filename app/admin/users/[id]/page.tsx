@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Metadata } from 'next';
-import { ArrowLeft, UserCog, AlertCircle, Pencil, Shield, CreditCard, Activity, BookOpen, Receipt, GraduationCap, Link2 } from 'lucide-react';
+import { ArrowLeft, UserCog, AlertCircle, Pencil, Shield, CreditCard, Activity, BookOpen, Receipt, GraduationCap, Link2, MailOpen } from 'lucide-react';
 import Link from 'next/link';
 
 // Import our data access layer functions
@@ -19,6 +19,7 @@ import {
   UserPurchaseHistory,
   UserEnrollments
 } from '@/components/admin';
+import UserEmailAnalytics from '@/components/admin/user-email-analytics';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -127,6 +128,7 @@ export default async function UserDetailPage(
             <TabsTrigger value="membership"><CreditCard className="h-4 w-4 mr-2" /> Membership</TabsTrigger>
             <TabsTrigger value="courses"><BookOpen className="h-4 w-4 mr-2" /> Courses</TabsTrigger>
             <TabsTrigger value="activity"><Activity className="h-4 w-4 mr-2" /> Activity</TabsTrigger>
+           <TabsTrigger value="email-analytics"><MailOpen className="h-4 w-4 mr-2" /> Email Analytics</TabsTrigger>
             <TabsTrigger value="purchases"><Receipt className="h-4 w-4 mr-2" /> Purchases</TabsTrigger>
             <TabsTrigger value="enrollments"><GraduationCap className="h-4 w-4 mr-2" /> Enrollments</TabsTrigger>
             <TabsTrigger asChild>
@@ -182,6 +184,10 @@ export default async function UserDetailPage(
               userId={id}
               activityLog={activityLog}
             />
+          </TabsContent>
+
+          <TabsContent value="email-analytics" className="space-y-4">
+            <UserEmailAnalytics userId={id} />
           </TabsContent>
 
           <TabsContent value="security" className="space-y-4">

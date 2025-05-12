@@ -23,25 +23,25 @@ Implement RESTful endpoints with authentication, rate limiting, and request vali
 ### Details:
 Implement adapter pattern for different ESP formats. Create a unified event schema with appropriate indexes. Include batch processing capabilities for high-volume scenarios.
 
-## 3. Implement user tagging data model and API [done]
+## 3. Implement user tagging data model and API [in-progress]
 ### Dependencies: 35.2
 ### Description: Design and implement the database schema and API endpoints for user tagging functionality
 ### Details:
 Create a flexible schema that allows for hierarchical tags, tag metadata, and efficient querying. Implement CRUD operations with proper validation and error handling. Consider using a NoSQL approach for tag storage.
 
-## 4. Build user segmentation engine [done]
+## 4. Build user segmentation engine [in-progress]
 ### Dependencies: 35.3
 ### Description: Develop a system to create and manage user segments based on tags, behaviors, and other attributes
 ### Details:
 Implement a query builder that supports complex logical operations (AND, OR, NOT) on user attributes. Include caching mechanisms for frequently used segments. Design for extensibility to add new segmentation criteria.
 
-## 5. Create user segmentation UI components [done]
+## 5. Create user segmentation UI components [in-progress]
 ### Dependencies: 35.3, 35.4
 ### Description: Develop frontend components for managing tags and creating user segments
 ### Details:
 Build intuitive UI for tag management, segment creation with drag-and-drop functionality, segment preview with estimated audience size, and segment saving/sharing capabilities.
 
-## 6. Design and implement campaign data model [done]
+## 6. Design and implement campaign data model [in-progress]
 ### Dependencies: 35.2
 ### Description: Create the database schema and core objects for email campaign management
 ### Details:

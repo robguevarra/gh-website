@@ -1,0 +1,11 @@
+# Task ID: 39
+# Title: Implement per-user email events API and UI integration
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: Create /api/users/[id]/email-events API for user-specific email engagement stats. Integrate this into the user detail view for admins. Reference Admin User Management Phase 6-3 and Dashboard Analytics Phase 4-X.
+# Details:
+
+
+# Test Strategy:
+

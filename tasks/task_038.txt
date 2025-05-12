@@ -1,0 +1,74 @@
+# Task ID: 38
+# Title: Integrate Email Analytics Dashboard section
+# Status: pending
+# Dependencies: None
+# Priority: high
+# Description: Add email analytics capabilities to the admin dashboard in two key areas: (1) platform-wide email analytics section and (2) per-user email event statistics in user detail views. This task consolidates all email analytics integration work to avoid redundancy.
+# Details:
+This task involves two main components:
+
+1. **Platform-wide Email Analytics Dashboard** (COMPLETED):
+   - Created a new section in the admin dashboard dedicated to email analytics
+   - Implemented metric cards showing key email performance indicators
+   - Added trend charts to visualize email metrics over time using Recharts
+   - Integrated a table showing top email bounces and delivery issues
+   - Built with modular, mobile-first approach using Shadcn UI components
+   - Data fetched from `/api/email/analytics` endpoint
+
+2. **Per-User Email Event Statistics** (IN PROGRESS):
+   - Integrate email event data into the user detail view
+   - Connect to appropriate API endpoints to fetch user-specific email data
+   - Display email open rates, click-through rates, and delivery status for individual users
+   - Implement filtering and sorting capabilities for user email events
+
+Refer to Email System Phase 2 build notes for design specifications, API documentation, and technical summary of the completed platform-wide analytics implementation.
+
+# Test Strategy:
+**Testing Strategy**:
+
+1. **Unit Tests**:
+   - Test API integration for both dashboard-wide and per-user analytics
+   - Verify correct data parsing and transformation
+   - Test component rendering with mock data
+
+2. **Integration Tests**:
+   - Verify dashboard analytics section loads and displays data correctly
+   - Confirm user detail view properly shows email statistics
+   - Test navigation between views
+
+3. **End-to-End Tests**:
+   - Complete workflow testing from admin login to viewing both analytics sections
+   - Verify filters and interactive elements work as expected
+   - Test responsiveness across different screen sizes
+
+# Subtasks:
+## 38.1. Implement platform-wide email analytics dashboard section [completed]
+### Dependencies: None
+### Description: Create the main email analytics dashboard section with metric cards, trend charts, and bounce tables using data from /api/email/analytics
+### Details:
+
+
+## 38.2. Implement per-user email event statistics in user detail view [pending]
+### Dependencies: None
+### Description: Add email event statistics to the user detail view, including API integration and UI components to display user-specific email metrics
+### Details:
+
+
+## 38.3. Create filtering and sorting controls for both analytics views [completed]
+### Dependencies: None
+### Description: Implement date range filters, metric sorting, and other interactive controls for both the platform-wide and per-user analytics views
+### Details:
+
+
+## 38.4. Write documentation for email analytics features [pending]
+### Dependencies: None
+### Description: Document the email analytics features, including available metrics, data sources, and usage instructions for admin users
+### Details:
+
+
+## 38.5. Apply consistent UI patterns from platform-wide analytics to per-user view [pending]
+### Dependencies: None
+### Description: Ensure the per-user email analytics follows the same modular, mobile-first approach with Shadcn UI components and Recharts as implemented in the platform-wide view
+### Details:
+
+

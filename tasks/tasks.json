@@ -854,7 +854,7 @@
             2
           ],
           "details": "Create a flexible schema that allows for hierarchical tags, tag metadata, and efficient querying. Implement CRUD operations with proper validation and error handling. Consider using a NoSQL approach for tag storage.",
-          "status": "done",
+          "status": "in-progress",
           "testStrategy": "Unit tests for validation rules, integration tests for API endpoints, performance tests for tag queries."
         },
         {
@@ -865,7 +865,7 @@
             3
           ],
           "details": "Implement a query builder that supports complex logical operations (AND, OR, NOT) on user attributes. Include caching mechanisms for frequently used segments. Design for extensibility to add new segmentation criteria.",
-          "status": "done",
+          "status": "in-progress",
           "testStrategy": "Unit tests for query logic, integration tests for segment creation and retrieval, performance tests with large user datasets."
         },
         {
@@ -877,7 +877,7 @@
             4
           ],
           "details": "Build intuitive UI for tag management, segment creation with drag-and-drop functionality, segment preview with estimated audience size, and segment saving/sharing capabilities.",
-          "status": "done",
+          "status": "in-progress",
           "testStrategy": "Unit tests for UI components, integration tests for API interactions, usability testing with stakeholders."
         },
         {
@@ -888,7 +888,7 @@
             2
           ],
           "details": "Design models for campaigns, templates, content versions, scheduling, and approval workflows. Include audit logging for all changes. Implement with proper validation and error handling.",
-          "status": "done",
+          "status": "in-progress",
           "testStrategy": "Unit tests for model validation, integration tests for model relationships, database migration tests."
         },
         {
@@ -1053,6 +1053,70 @@
           "parentTaskId": 36
         }
       ]
+    },
+    {
+      "id": 37,
+      "title": "Implement advanced email analytics API and documentation",
+      "description": "Expand the backend email analytics API to provide advanced metrics (summary, rates, trends, top bounces). Add clear documentation comments for maintainability.",
+      "details": "",
+      "testStrategy": "",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "subtasks": []
+    },
+    {
+      "id": 38,
+      "title": "Integrate Email Analytics Dashboard section",
+      "description": "Add email analytics capabilities to the admin dashboard in two key areas: (1) platform-wide email analytics section and (2) per-user email event statistics in user detail views. This task consolidates all email analytics integration work to avoid redundancy.",
+      "status": "pending",
+      "dependencies": [],
+      "priority": "high",
+      "details": "This task involves two main components:\n\n1. **Platform-wide Email Analytics Dashboard** (COMPLETED):\n   - Created a new section in the admin dashboard dedicated to email analytics\n   - Implemented metric cards showing key email performance indicators\n   - Added trend charts to visualize email metrics over time using Recharts\n   - Integrated a table showing top email bounces and delivery issues\n   - Built with modular, mobile-first approach using Shadcn UI components\n   - Data fetched from `/api/email/analytics` endpoint\n\n2. **Per-User Email Event Statistics** (IN PROGRESS):\n   - Integrate email event data into the user detail view\n   - Connect to appropriate API endpoints to fetch user-specific email data\n   - Display email open rates, click-through rates, and delivery status for individual users\n   - Implement filtering and sorting capabilities for user email events\n\nRefer to Email System Phase 2 build notes for design specifications, API documentation, and technical summary of the completed platform-wide analytics implementation.",
+      "testStrategy": "**Testing Strategy**:\n\n1. **Unit Tests**:\n   - Test API integration for both dashboard-wide and per-user analytics\n   - Verify correct data parsing and transformation\n   - Test component rendering with mock data\n\n2. **Integration Tests**:\n   - Verify dashboard analytics section loads and displays data correctly\n   - Confirm user detail view properly shows email statistics\n   - Test navigation between views\n\n3. **End-to-End Tests**:\n   - Complete workflow testing from admin login to viewing both analytics sections\n   - Verify filters and interactive elements work as expected\n   - Test responsiveness across different screen sizes",
+      "subtasks": [
+        {
+          "id": "38.1",
+          "title": "Implement platform-wide email analytics dashboard section",
+          "description": "Create the main email analytics dashboard section with metric cards, trend charts, and bounce tables using data from /api/email/analytics",
+          "status": "completed"
+        },
+        {
+          "id": "38.2",
+          "title": "Implement per-user email event statistics in user detail view",
+          "description": "Add email event statistics to the user detail view, including API integration and UI components to display user-specific email metrics",
+          "status": "pending"
+        },
+        {
+          "id": "38.3",
+          "title": "Create filtering and sorting controls for both analytics views",
+          "description": "Implement date range filters, metric sorting, and other interactive controls for both the platform-wide and per-user analytics views",
+          "status": "completed"
+        },
+        {
+          "id": "38.4",
+          "title": "Write documentation for email analytics features",
+          "description": "Document the email analytics features, including available metrics, data sources, and usage instructions for admin users",
+          "status": "pending"
+        },
+        {
+          "id": "38.5",
+          "title": "Apply consistent UI patterns from platform-wide analytics to per-user view",
+          "description": "Ensure the per-user email analytics follows the same modular, mobile-first approach with Shadcn UI components and Recharts as implemented in the platform-wide view",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 39,
+      "title": "Implement per-user email events API and UI integration",
+      "description": "Create /api/users/[id]/email-events API for user-specific email engagement stats. Integrate this into the user detail view for admins. Reference Admin User Management Phase 6-3 and Dashboard Analytics Phase 4-X.",
+      "details": "",
+      "testStrategy": "",
+      "status": "done",
+      "dependencies": [],
+      "priority": "high",
+      "subtasks": []
     }
   ]
 }

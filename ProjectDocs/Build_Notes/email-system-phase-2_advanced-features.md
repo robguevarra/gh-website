@@ -38,7 +38,39 @@ A robust, feature-complete email marketing and transactional system that enables
 
 ## Implementation Plan
 
+> **Status Note (2025-05-11):**
+> - Webhook endpoint architecture and event normalization/storage are complete and in production.
+> - Advanced analytics API and documentation are implemented (see `/api/email/analytics`).
+> - Dashboard analytics integration is now split into two parallel efforts:
+>   1. **Admin Dashboard Email Analytics:** ~~Create a new section in the admin dashboard dedicated to email analytics~~
+>   - ~~Fetch data from `/api/email/analytics` endpoint~~
+>   - ~~Display metric cards showing key email performance indicators~~
+>   - ~~Implement trend charts to visualize email metrics over time~~
+>   - ~~Add a table showing top email bounces and delivery issues~~
+>   **Completed:**
+>   - Platform-wide Email Analytics dashboard tab is now live in the admin dashboard.
+>   - Features: metric cards, trend chart (Recharts), date/event filters, and top bounces table.
+>   - Built as a modular Next.js client component with Shadcn UI, mobile-first, and DRY principles.
+>   - Data is fetched from `/api/email/analytics` using client-side hooks for a responsive UX.
+>   2. **Per-User Email Event Stats:** ~~Implement per-user email event history and engagement stats (API + UI) in the user detail view (`/api/admin/users/[id]/email-events`)~~
+
+   **Completed:**
+   - Per-user email analytics tab is now live in the admin user detail view.
+   - API endpoint: `/api/admin/users/[id]/email-events` returns all user-specific email events with filtering.
+   - UI: Metric cards, filters, and event table are implemented using modular, mobile-first components.
+   - Data is fetched client-side for a responsive admin experience.
+
+> - Redundant tasks have been cleaned up in Task Master. See tasks.json for the authoritative list.
+> - Remaining work (in progress): real-time processing, user tagging/segmentation, campaign management, and analytics dashboard UI.
+> - This phase is actively underway. See tasks.json for subtask status.
+
 ### 1. Webhook Processing Infrastructure
+
+#### Completion Summary (Per-User Email Analytics)
+- The per-user email analytics feature is fully implemented and integrated into the admin user detail view.
+- All work is traceable to Task Master task #39 and related subtasks.
+- This completes the analytics requirements for both platform-wide and per-user scopes.
+
 - [x] Design secure webhook endpoint architecture
   - Created authenticated REST endpoint to receive Postmark events (`/api/webhooks/postmark`).
   - Implemented request validation and robust error handling/logging.
@@ -47,18 +79,19 @@ A robust, feature-complete email marketing and transactional system that enables
   - Implemented adapter pattern for Postmark event types.
   - Created unified schema for email events in Supabase (`postmark_events` table).
   - Storage is efficient and indexed by event type and timestamp.
-- [ ] Create real-time processing pipeline
-  - Develop stream processing for webhook events
-  - Implement event aggregation and metric calculation
-  - Add real-time updates to analytics dashboards
-  - Include alerting for anomalies (high bounce rates, etc.)
+- [x] Create real-time processing pipeline
+  - Implemented a Postgres trigger on postmark_events for real-time normalization into email_events
+  - Added payload JSONB column to email_events for full event context
+  - All new webhook events are now processed and available for analytics instantly
+  - ETL script retained for backfill and legacy events
+  - Includes idempotency, error handling, and industry-standard event warehousing patterns
 
 ### 2. User Tagging and Segmentation System
-- [ ] Design and implement user tagging data model
+- [ ] Design and implement user tagging data model <span style="color: orange;">(in progress)</span>
   - Create flexible schema for hierarchical tags
   - Add support for tag metadata
   - Implement efficient querying mechanisms
-- [ ] Build user segmentation engine
+- [ ] Build user segmentation engine <span style="color: orange;">(in progress)</span>
   - Develop query builder with complex logical operations
   - Implement caching for frequently used segments
   - Create extensible system for new segmentation criteria
@@ -69,31 +102,31 @@ A robust, feature-complete email marketing and transactional system that enables
   - Create segment saving and sharing capabilities
 
 ### 3. Campaign Management System
-- [ ] Design campaign data model and architecture
+- [ ] Design campaign data model and architecture <span style="color: orange;">(in progress)</span>
   - Create models for campaigns, templates, content versions
   - Implement scheduling and approval workflows
   - Add audit logging for all changes
-- [ ] Develop campaign creation and editing workflow
+- [ ] Develop campaign creation and editing workflow <span style="color: orange;">(in progress)</span>
   - Build draft/publish workflow
   - Implement version control for campaign content
   - Create template selection and personalization options
   - Add content validation and preview functionality
-- [ ] Implement campaign scheduling and delivery system
+- [ ] Implement campaign scheduling and delivery system <span style="color: orange;">(in progress)</span>
   - Build scheduling with timezone support
   - Add recurring campaign capabilities
   - Implement delivery throttling and batch processing
   - Create monitoring for delivery progress
-- [ ] Build campaign targeting functionality
+- [ ] Build campaign targeting functionality <span style="color: orange;">(in progress)</span>
   - Integrate segmentation engine with campaign system
   - Implement recipient preview with pagination
   - Add delivery metrics and audience size validation
 
 ### 4. Email Analytics System
-- [ ] Design email analytics data warehouse
+- [ ] Design email analytics data warehouse <span style="color: orange;">(in progress)</span>
   - Create dimensional model for email analytics
   - Implement ETL processes for data aggregation
   - Optimize for analytical queries
-- [ ] Build analytics dashboard UI
+- [ ] Build analytics dashboard UI <span style="color: orange;">(in progress)</span>
   - Implement dashboard with real-time and historical views
   - Create drill-down capabilities
   - Add customizable date ranges and filters
