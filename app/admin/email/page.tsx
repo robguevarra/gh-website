@@ -12,7 +12,7 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mail, FileEdit, BarChart3, Settings, Send } from 'lucide-react';
+import { Mail, FileEdit, BarChart3, Settings, Send, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export const metadata: Metadata = {
@@ -27,7 +27,7 @@ export default function EmailAdminPage() {
         <h1 className="text-3xl font-bold tracking-tight">Email Management</h1>
       </div>
       
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {/* Email Templates Card */}
         <Card>
           <CardHeader className="pb-3">
@@ -87,6 +87,38 @@ export default function EmailAdminPage() {
               <Button className="w-full" variant="outline">
                 <Send className="h-4 w-4 mr-2" />
                 Manage Campaigns
+              </Button>
+            </Link>
+          </CardFooter>
+        </Card>
+        
+        {/* Segmentation Card */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center space-x-2">
+              <Users className="h-5 w-5 text-primary" />
+              <CardTitle>User Segments</CardTitle>
+            </div>
+            <CardDescription>
+              Create and manage user segments
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p>
+              Target specific user groups based on:
+            </p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li>User attributes</li>
+              <li>Behavioral tags</li>
+              <li>Engagement history</li>
+              <li>Custom criteria</li>
+            </ul>
+          </CardContent>
+          <CardFooter>
+            <Link href="/admin/email/segmentation" className="w-full">
+              <Button className="w-full" variant="outline">
+                <Users className="h-4 w-4 mr-2" />
+                Manage Segments
               </Button>
             </Link>
           </CardFooter>

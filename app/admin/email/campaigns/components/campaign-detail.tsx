@@ -1,0 +1,314 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCampaignStore } from '@/lib/hooks/use-campaign-store';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/components/ui/use-toast';
+import { Loader2, Send, Calendar, ArrowLeft } from 'lucide-react';
+
+interface CampaignDetailProps {
+  campaignId: string;
+}
+
+export function CampaignDetail({ campaignId }: CampaignDetailProps) {
+  const router = useRouter();
+  const { toast } = useToast();
+  const { 
+    currentCampaign, 
+    currentCampaignLoading, 
+    currentCampaignError, 
+    fetchCampaign,
+    campaignAnalytics,
+    analyticsLoading,
+    fetchCampaignAnalytics,
+    sendCampaign
+  } = useCampaignStore();
+  
+  const [isSending, setIsSending] = useState(false);
+  
+  useEffect(() => {
+    fetchCampaign(campaignId);
+    fetchCampaignAnalytics(campaignId);
+  }, [fetchCampaign, fetchCampaignAnalytics, campaignId]);
+  
+  const handleSendCampaign = async () => {
+    setIsSending(true);
+    try {
+      await sendCampaign(campaignId);
+      toast({
+        title: 'Campaign sending initiated',
+        description: 'Your campaign is now being sent to recipients.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to send campaign',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+  
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'draft':
+        return <Badge variant="outline">Draft</Badge>;
+      case 'scheduled':
+        return <Badge variant="secondary">Scheduled</Badge>;
+      case 'sending':
+        return <Badge variant="default">Sending</Badge>;
+      case 'completed':
+        return <Badge variant="success">Completed</Badge>;
+      case 'cancelled':
+        return <Badge variant="destructive">Cancelled</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
+  };
+  
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'Not set';
+    return new Date(dateString).toLocaleString();
+  };
+  
+  if (currentCampaignLoading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  
+  if (currentCampaignError) {
+    return (
+      <div className="text-center py-8 text-destructive">
+        {currentCampaignError}
+      </div>
+    );
+  }
+  
+  if (!currentCampaign) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        Campaign not found.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <Button 
+          variant="ghost" 
+          onClick={() => router.push('/admin/email/campaigns')}
+          className="flex items-center"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Campaigns
+        </Button>
+        
+        <div className="flex space-x-2">
+          {currentCampaign.status === 'draft' && (
+            <>
+              <Button 
+                variant="outline"
+                onClick={() => router.push(`/admin/email/campaigns/${campaignId}/schedule`)}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                Schedule
+              </Button>
+              <Button 
+                onClick={handleSendCampaign}
+                disabled={isSending}
+              >
+                {isSending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Send Now
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+          
+          {currentCampaign.status === 'scheduled' && (
+            <Button 
+              onClick={handleSendCampaign}
+              disabled={isSending}
+            >
+              {isSending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Send Now
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+      
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="text-2xl">{currentCampaign.name}</CardTitle>
+              <CardDescription>{currentCampaign.description}</CardDescription>
+            </div>
+            <div className="mt-2 md:mt-0">
+              {getStatusBadge(currentCampaign.status)}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="overview">
+            <TabsList>
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="content">Content</TabsTrigger>
+              <TabsTrigger value="targeting">Targeting</TabsTrigger>
+              <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="overview" className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Created</h3>
+                  <p>{formatDate(currentCampaign.created_at)}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Last Updated</h3>
+                  <p>{formatDate(currentCampaign.updated_at)}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Scheduled For</h3>
+                  <p>{formatDate(currentCampaign.scheduled_at)}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Completed</h3>
+                  <p>{formatDate(currentCampaign.completed_at)}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Sender Name</h3>
+                  <p>{currentCampaign.sender_name}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Sender Email</h3>
+                  <p>{currentCampaign.sender_email}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">A/B Testing</h3>
+                  <p>{currentCampaign.is_ab_test ? 'Enabled' : 'Disabled'}</p>
+                </div>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="content" className="mt-4">
+              <div className="text-center py-4 text-muted-foreground">
+                Content editing interface will be implemented here.
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="targeting" className="mt-4">
+              <div className="text-center py-4 text-muted-foreground">
+                Segment targeting interface will be implemented here.
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="analytics" className="mt-4">
+              {analyticsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : !campaignAnalytics ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  No analytics data available yet.
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-2xl font-bold">{campaignAnalytics.total_recipients}</div>
+                        <p className="text-xs text-muted-foreground">Recipients</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-2xl font-bold">{campaignAnalytics.total_sent}</div>
+                        <p className="text-xs text-muted-foreground">Sent</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-2xl font-bold">{campaignAnalytics.total_opens}</div>
+                        <p className="text-xs text-muted-foreground">Opens</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-2xl font-bold">{campaignAnalytics.total_clicks}</div>
+                        <p className="text-xs text-muted-foreground">Clicks</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-2xl font-bold">{campaignAnalytics.open_rate.toFixed(2)}%</div>
+                        <p className="text-xs text-muted-foreground">Open Rate</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-2xl font-bold">{campaignAnalytics.click_rate.toFixed(2)}%</div>
+                        <p className="text-xs text-muted-foreground">Click Rate</p>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-2xl font-bold">{campaignAnalytics.bounce_rate.toFixed(2)}%</div>
+                        <p className="text-xs text-muted-foreground">Bounce Rate</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-sm font-medium mb-2">Last Updated</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {formatDate(campaignAnalytics.last_calculated_at)}
+                    </p>
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => fetchCampaignAnalytics(campaignId, true)}
+                    >
+                      Refresh Analytics
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -38,7 +38,7 @@ A robust, feature-complete email marketing and transactional system that enables
 
 ## Implementation Plan
 
-> **Status Note (2025-05-11):**
+> **Status Note (2025-05-12):**
 > - Webhook endpoint architecture and event normalization/storage are complete and in production.
 > - Advanced analytics API and documentation are implemented (see `/api/email/analytics`).
 > - Dashboard analytics integration is now split into two parallel efforts:
@@ -59,9 +59,18 @@ A robust, feature-complete email marketing and transactional system that enables
    - API endpoint: `/api/admin/users/[id]/email-events` returns all user-specific email events with filtering.
    - UI: Metric cards, filters, and event table are implemented using modular, mobile-first components.
    - Data is fetched client-side for a responsive admin experience.
+>   3. **User Segmentation System:** ~~Implement user segmentation based on tags and other criteria~~
+
+   **Completed:**
+   - User segmentation system is fully implemented and integrated with the email admin interface.
+   - Database: `user_segments` table with proper schema, RLS policies, and indexes.
+   - API: Complete RESTful endpoints for segment CRUD operations and user preview.
+   - Engine: Recursive query builder for complex logical operations (AND/OR/NOT) on tags.
+   - UI: Integrated into email admin interface at `/admin/email/segmentation`.
+   - Features: Create/edit segments with tag selection, preview matching users, and manage saved segments.
 
 > - Redundant tasks have been cleaned up in Task Master. See tasks.json for the authoritative list.
-> - Remaining work (in progress): real-time processing, user tagging/segmentation, campaign management, and analytics dashboard UI.
+> - Remaining work (in progress): campaign management (which will leverage the segmentation system), advanced analytics dashboard UI, and user preference management.
 > - This phase is actively underway. See tasks.json for subtask status.
 
 ### 1. Webhook Processing Infrastructure
@@ -87,19 +96,40 @@ A robust, feature-complete email marketing and transactional system that enables
   - Includes idempotency, error handling, and industry-standard event warehousing patterns
 
 ### 2. User Tagging and Segmentation System
-- [ ] Design and implement user tagging data model <span style="color: orange;">(in progress)</span>
-  - Create flexible schema for hierarchical tags
-  - Add support for tag metadata
-  - Implement efficient querying mechanisms
-- [ ] Build user segmentation engine <span style="color: orange;">(in progress)</span>
-  - Develop query builder with complex logical operations
-  - Implement caching for frequently used segments
-  - Create extensible system for new segmentation criteria
-- [ ] Create user segmentation UI components
-  - Build intuitive interface for tag management
-  - Implement segment creation with drag-and-drop functionality
-  - Add segment preview with audience size estimation
-  - Create segment saving and sharing capabilities
+- [x] Design and implement user tagging data model <span style="color: green;">(Core hierarchical structure and metadata support implemented and UI-enabled)</span>
+  - [x] Create flexible schema for hierarchical tags
+  - [x] Add support for tag metadata
+  - [x] Implement efficient querying mechanisms (base queries for hierarchy and type filtering established)
+
+- [x] **Define Segment Data Model & API Endpoints** <span style="color: green;">(Completed)</span>
+  - [x] Define data model for storing user segments in Supabase (e.g., `user_segments` table with `id`, `name`, `description`, `rules` (JSONB for criteria), `created_at`, `updated_at`).
+    - Created `user_segments` table with appropriate schema and RLS policies
+    - Added comments and indexes for better maintainability and performance
+  - [x] Develop API endpoints for segment CRUD operations (e.g., under `/api/admin/segments`):
+    - [x] `POST /api/admin/segments`: Create a new segment (accepts name, description, rules).
+    - [x] `GET /api/admin/segments`: List all saved segments.
+    - [x] `GET /api/admin/segments/[segmentId]`: Fetch details of a specific segment.
+    - [x] `PATCH /api/admin/segments/[segmentId]`: Update an existing segment.
+    - [x] `DELETE /api/admin/segments/[segmentId]`: Delete a segment.
+    - [x] `GET /api/admin/segments/[segmentId]/preview`: Get a preview of users matching segment rules (count and sample of users).
+
+- [x] Build user segmentation engine <span style="color: green;">(Completed)</span>
+  - [x] Develop query builder module (`lib/segmentation/engine.ts`) to parse segment `rules` (e.g., tags with AND/OR/NOT logic) and translate them into Supabase queries against `user_tags` and `users` tables.
+    - Implemented recursive query building for complex nested conditions
+    - Added support for AND, OR, and NOT operators
+  - [x] Integrate query builder with `GET /api/admin/segments/[segmentId]/preview` endpoint.
+  - [x] Implement caching for segment preview results (simple in-memory cache with 5-minute TTL).
+  - [x] Create extensible system for new segmentation criteria (foundation laid with tag usage counts).
+
+- [x] Create user segmentation UI components <span style="color: green;">(Completed)</span>
+  - [x] Build intuitive interface for tag management (includes text search, hierarchy navigation, CRUD for tags & types).
+  - [x] Implement UI components for creating and editing segments within a new `/admin/segmentation` page:
+    - [x] Form for segment `name` and `description` with validation.
+    - [x] Interface for defining segment `rules` (tag selection with AND/OR operators).
+    - [x] Display segment preview (user count, sample users) by calling the preview API endpoint.
+    - [x] Interface to list, view, edit, and delete saved segments.
+  - [x] Add segment preview with audience size estimation (both for individual tags and full segments).
+  - [x] Create segment saving and sharing capabilities (full CRUD operations via the UI).
 
 ### 3. Campaign Management System
 - [ ] Design campaign data model and architecture <span style="color: orange;">(in progress)</span>
