@@ -137,6 +137,8 @@ export async function POST(req: NextRequest) {
     const transactionsResult = await callMigrationEndpoint('/api/admin/dashboard/update-transactions');
     // Call /update-enrollments
     const enrollmentsResult = await callMigrationEndpoint('/api/admin/dashboard/update-enrollments');
+    // Call /sync-user-tags
+    const tagsSyncResult = await callMigrationEndpoint('/api/admin/dashboard/sync-user-tags');
 
     return NextResponse.json({
       success: true,
@@ -150,6 +152,7 @@ export async function POST(req: NextRequest) {
         profiles: profilesResult,
         transactions: transactionsResult,
         enrollments: enrollmentsResult,
+        tags: tagsSyncResult
       }
     });
   } catch (err: any) {

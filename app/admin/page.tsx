@@ -12,8 +12,10 @@ import {
   Settings, 
   TrendingUp, 
   Target, 
-  Package 
+  Package,
+  Tags as TagsIcon 
 } from 'lucide-react';
+import Link from 'next/link';
 
 // Dashboard Sections
 //import { AdminHeader } from '@/components/admin/admin-header';
@@ -43,7 +45,7 @@ export default async function AdminDashboardPage() {
       </div>
       {/* Tab navigation for dashboard sections. Add new sections as needed. */}
       <Tabs defaultValue="overview" className="space-y-8">
-        <TabsList className="grid w-full grid-cols-5 md:w-auto">
+        <TabsList className="grid w-full grid-cols-6 md:w-auto">
           {/* Tab triggers for each dashboard section */}
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <BarChart2 className="h-4 w-4" />
@@ -64,6 +66,10 @@ export default async function AdminDashboardPage() {
           <TabsTrigger value="email" className="flex items-center gap-2">
             <BarChart2 className="h-4 w-4" />
             <span className="hidden sm:inline">Email Analytics</span>
+          </TabsTrigger>
+          <TabsTrigger value="tag-management" className="flex items-center gap-2">
+            <TagsIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">Tag Management</span>
           </TabsTrigger>
         </TabsList>
     
@@ -96,6 +102,22 @@ export default async function AdminDashboardPage() {
             <EmailAnalyticsDashboard />
           </Suspense>
         </TabsContent>
+
+        {/* Add Tag Management TabsContent */}
+        <TabsContent value="tag-management">
+          <div className="p-4 border rounded-lg shadow-sm">
+            <h3 className="text-xl font-semibold mb-2">Access Tag & Category Management</h3>
+            <p className="text-muted-foreground mb-4">
+              Organize and manage your platform's tagging system, including tag types, hierarchical tags, and metadata.
+            </p>
+            <Link href="/admin/tag-management" legacyBehavior passHref>
+              <a className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
+                Go to Tag Management
+              </a>
+            </Link>
+          </div>
+        </TabsContent>
+
       </Tabs>
     </div>
   );

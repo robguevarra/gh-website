@@ -1,55 +1,48 @@
 // app/api/user-tags/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserTags, getUsersByTag, assignTagsToUsers, removeTagsFromUsers } from '@/lib/supabase/data-access/tags';
+import * as tags from '@/lib/supabase/data-access/tags';
 
-// GET /api/user-tags?userId=... OR ?tagId=... (with pagination)
+// GET: /api/user-tags?userId=... or /api/user-tags?tagId=...
 export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const userId = searchParams.get('userId');
+  const tagId = searchParams.get('tagId');
   try {
-    const url = new URL(req.url);
-    const userId = url.searchParams.get('userId');
-    const tagId = url.searchParams.get('tagId');
-    const limit = parseInt(url.searchParams.get('limit') || '1000', 10);
-    const offset = parseInt(url.searchParams.get('offset') || '0', 10);
     if (userId) {
-      const tags = await getUserTags(userId);
-      return NextResponse.json(tags);
+      const data = await tags.getTagsForUser(userId);
+      return NextResponse.json({ data });
     } else if (tagId) {
-      const users = await getUsersByTag(tagId, { limit, offset });
-      return NextResponse.json(users);
+      // Supports batching for large userbases
+      const limit = Number(searchParams.get('limit')) || 1000;
+      const offset = Number(searchParams.get('offset')) || 0;
+      const data = await tags.getUsersForTag(tagId, limit, offset);
+      return NextResponse.json({ data });
     } else {
-      return NextResponse.json({ error: 'Missing userId or tagId param' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing userId or tagId' }, { status: 400 });
     }
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
 
-// POST /api/user-tags (assign tags to users in batch)
+// POST: assign tags to users (batch)
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { tagIds, userIds } = body;
-    if (!Array.isArray(tagIds) || !Array.isArray(userIds)) {
-      return NextResponse.json({ error: 'tagIds and userIds must be arrays' }, { status: 400 });
-    }
-    await assignTagsToUsers({ tagIds, userIds });
-    return NextResponse.json({ ok: true });
+    const { tagIds, userIds } = await req.json();
+    await tags.assignTagsToUsers({ tagIds, userIds });
+    return NextResponse.json({ success: true });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    return NextResponse.json({ error: String(e) }, { status: 400 });
   }
 }
 
-// DELETE /api/user-tags (remove tags from users in batch)
+// DELETE: remove tags from users (batch)
 export async function DELETE(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { tagIds, userIds } = body;
-    if (!Array.isArray(tagIds) || !Array.isArray(userIds)) {
-      return NextResponse.json({ error: 'tagIds and userIds must be arrays' }, { status: 400 });
-    }
-    await removeTagsFromUsers({ tagIds, userIds });
-    return NextResponse.json({ ok: true });
+    const { tagIds, userIds } = await req.json();
+    await tags.removeTagsFromUsers({ tagIds, userIds });
+    return NextResponse.json({ success: true });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    return NextResponse.json({ error: String(e) }, { status: 400 });
   }
 }

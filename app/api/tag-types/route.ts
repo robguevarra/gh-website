@@ -1,46 +1,42 @@
 // app/api/tag-types/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getTagTypes, createTagType, updateTagType, deleteTagType } from '@/lib/supabase/data-access/tags';
+import * as tags from '@/lib/supabase/data-access/tags';
 
 export async function GET() {
   try {
-    const types = await getTagTypes();
-    return NextResponse.json(types);
+    const data = await tags.getTagTypes();
+    return NextResponse.json({ data });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    return NextResponse.json({ error: String(e) }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const type = await createTagType(body);
-    return NextResponse.json(type, { status: 201 });
+    const data = await tags.createTagType(body);
+    return NextResponse.json({ data });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    return NextResponse.json({ error: String(e) }, { status: 400 });
   }
 }
 
 export async function PATCH(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { id, ...patch } = body;
-    if (!id) return NextResponse.json({ error: 'Missing tag type id' }, { status: 400 });
-    const type = await updateTagType(id, patch);
-    return NextResponse.json(type);
+    const { id, ...updates } = await req.json();
+    const data = await tags.updateTagType(id, updates);
+    return NextResponse.json({ data });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    return NextResponse.json({ error: String(e) }, { status: 400 });
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    const url = new URL(req.url);
-    const id = url.searchParams.get('id');
-    if (!id) return NextResponse.json({ error: 'Missing tag type id' }, { status: 400 });
-    await deleteTagType(id);
-    return NextResponse.json({ ok: true });
+    const { id } = await req.json();
+    await tags.deleteTagType(id);
+    return NextResponse.json({ success: true });
   } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    return NextResponse.json({ error: String(e) }, { status: 400 });
   }
 }
