@@ -169,6 +169,45 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
 > - Implemented Zustand store for campaign state management with comprehensive actions for all CRUD operations.
 > - Remaining work focuses on template editor integration with the existing Unlayer editor, enhanced segment targeting UI, and advanced analytics features.
 
+> **Status Update (2025-05-13): Campaign Creation Flow Debugging & Schema Alignment**
+> - **Objective:** Resolve critical errors preventing the creation of new email campaigns via the `POST /api/admin/campaigns` API endpoint.
+> - **Initial Problem:** The campaign creation process was failing due to misalignments between the application code (TypeScript interfaces, data access functions) and the actual Supabase database schema for the `email_templates` and `email_campaigns` tables.
+> - **Debugging Journey & Key Issues Identified:**
+>   - **Lint Errors & Type Mismatches:** Initial investigations, guided by TypeScript lint errors, pointed towards discrepancies in expected properties for email templates (e.g., `design_json`, `is_public`, `user_id`, `thumbnail_url`) within `lib/supabase/data-access/templates.ts`.
+>   - **Runtime Error - `email_templates` Schema:** A persistent runtime error, `column email_templates.is_public does not exist` (and similar for `user_id`, `thumbnail_url`), confirmed that our data access layer was attempting to select columns that were not present in the `email_templates` table. It also highlighted that the template's design data was stored in a column named `design`, not `design_json`.
+>   - **Runtime Error - `email_campaigns` Schema:** After resolving template fetching, a subsequent error `Could not find the 'subject' column of 'email_campaigns' in the schema cache` (PostgREST error PGRST204) indicated that the `email_campaigns` table did not, in fact, have a `subject` column, contrary to earlier assumptions.
+> - **Solutions & Fixes Implemented:**
+>   - **Corrected `email_templates` Data Access (`lib/supabase/data-access/templates.ts`):**
+>     - Modified the `EmailTemplateDetail` interface to accurately reflect the `email_templates` schema:
+>       - Removed non-existent fields: `is_public`, `user_id` (template owner), `thumbnail_url`.
+>       - Ensured the application logic maps the database's `design` column to an expected `design_json` field for use with Unlayer.
+>     - Updated the `getEmailTemplateById` function's `select` statement to:
+>       - Fetch only existing columns from `email_templates`.
+>       - Use the correct column name `design` for fetching template layout data.
+>   - **Corrected `email_campaigns` Data Access & API (`lib/supabase/data-access/campaign-management.ts`, `app/api/admin/campaigns/route.ts`):**
+>     - Removed the `subject` field from the `EmailCampaign` interface and its associated `EmailCampaignInsert` and `EmailCampaignUpdate` types in `campaign-management.ts`, as this column does not exist in the database. The campaign subject is to be derived from the linked template at the point of use (e.g., sending, display).
+>     - Removed the `subject` property from the payload passed to the `createCampaign` function within the `POST /api/admin/campaigns` API route.
+>     - Ensured that the `createCampaign` call in the API route correctly provides default `null` values for other nullable fields expected by `EmailCampaignInsert` (e.g., `scheduled_at`, `completed_at`, `ab_test_variant_count`).
+> - **Outcome:** The campaign creation functionality (`POST /api/admin/campaigns`) is now operating correctly, successfully creating new campaigns by fetching necessary details from the selected email template and aligning with the true database schema.
+
+> **Status Update (2025-05-13): Template Selection Modal Integration & Fixes**
+> - **Objective:** Ensure the "Load from Template" functionality within the campaign creation/editing UI correctly fetches and utilizes real email template data.
+> - **Initial Problem:** The `TemplateSelectionModal` component (`app/admin/email/campaigns/components/template-selection-modal.tsx`) was using mock data. When attempting to switch to real data, it initially showed "No templates available."
+> - **Debugging Journey & Key Issues Identified:**
+>   - **Mock Data Replacement:** The first step was to replace the mock data fetching logic in `TemplateSelectionModal` with an API call to `GET /api/admin/email/templates`.
+>   - **API Returning Empty List:** Network inspection revealed the API endpoint `/api/admin/email/templates` was responding successfully (HTTP 200) but with an empty `templates` array: `{"templates":[],"total":0,...}`. This indicated the issue was with the API's ability to retrieve templates.
+>   - **Incorrect Supabase Client:** The API route `app/api/admin/email/templates/route.ts` was using `createClient()` (the standard client-side/user-RLS-aware Supabase client). For an admin route needing to list all templates, this client might be restricted by RLS policies, leading to no templates being returned if none were publicly accessible or owned by the current (potentially anonymous or non-admin) user context of the client.
+> - **Solutions & Fixes Implemented:**
+>   - **Standardized API Response for Templates (`app/api/admin/email/templates/route.ts`):**
+>     - Modified the `GET` handler to explicitly map the `design` column from the database to a `design_json` field in the returned template objects. This ensures consistency with `getEmailTemplateById` and simplifies client-side consumption.
+>   - **Corrected Supabase Client in API Route (`app/api/admin/email/templates/route.ts`):**
+>     - Replaced `createClient()` with `createServiceRoleClient()` (imported from `@/lib/supabase/server`). This ensures the API uses a Supabase client with service role privileges, bypassing RLS and allowing it to fetch all templates from the `email_templates` table.
+>   - **Updated `TemplateSelectionModal` (`app/admin/email/campaigns/components/template-selection-modal.tsx`):**
+>     - Implemented the API call to `GET /api/admin/email/templates`.
+>     - Defined appropriate TypeScript interfaces (`ApiEmailTemplate`, `EmailTemplateSummary`) to handle the API response.
+>     - Ensured the `onTemplateSelect` callback receives the `id`, `html_content` (as `htmlBody`), and `design_json` (as `designJson`) from the selected template.
+> - **Outcome:** The "Load from Template" modal now correctly fetches and displays the list of available email templates from the database. Selecting a template in the modal successfully provides its details to the parent campaign component.
+
 ### Completed Components
 - **Database Schema**: All required tables (`campaign_segments`, `campaign_templates`, `campaign_analytics`) and modifications to existing tables are complete.
 - **Data Access Layer**: Full CRUD operations, scheduling, analytics, and segment/template management functions are implemented.
@@ -216,3 +255,34 @@ After completing the remaining work on the campaign management system, we will m
 > 3. Align your work with the project context and design context guidelines
 > 4. Follow the established folder structure, naming conventions, and coding standards
 > 5. Include this reminder in all future build notes to maintain consistency
+
+## 2025-05-13: Fixing Campaign Save Draft Functionality
+
+**Task Objective:** Resolve issues with the "Save Draft" functionality in the email campaign creation/editing process to ensure data is correctly persisted to the backend and Unlayer editor content is properly exported.
+
+**Problems Addressed:**
+
+1.  **Local State Only:** The `handleSaveCampaign` function in `CampaignDetail.tsx` was previously using `updateCampaignFields` from the Zustand store, which only updated the local client-side state and did not make an API call to save changes to the database.
+2.  **Incorrect Unlayer Export:** The method for exporting HTML and design JSON from the Unlayer editor was attempting to use a global `window.unlayerExportHtml` function instead of the more robust and React-idiomatic `ref` provided by the `UnlayerEmailEditor` component.
+3.  **Missing Status Update:** The campaign status was not explicitly being set to 'draft' upon saving.
+4.  **Lint Error:** A type import for `EmailCampaign` was missing in `CampaignDetail.tsx`.
+
+**Implementation Details & Fixes:**
+
+*   **Modified `app/admin/email/campaigns/components/campaign-detail.tsx`:**
+    *   **`handleSaveCampaign` Reworked:**
+        *   Now correctly uses `unlayerEditorRef.current.exportHtml()` (promisified) to retrieve the latest HTML and design JSON from the Unlayer editor.
+        *   Calls the `updateCampaign` action (for existing campaigns) or `createCampaign` action (for new campaigns, identified by `campaignId === 'new'`) from the `useCampaignStore`. These actions make the necessary API calls (`PATCH` or `POST`) to the backend, ensuring data persistence.
+        *   The payload for saving now explicitly includes `status: 'draft'`.
+        *   Added a loading state (`isSavingDraft`) and spinner to the "Save Draft" button for better UX.
+    *   **`handleTemplateSelected` Updated:** This function was also modified to call `updateCampaign` (instead of `updateCampaignFields`) to ensure that selecting a template immediately saves its content to the backend as part of the current draft.
+    *   **Type Import Added:** Imported `EmailCampaign` from `@/lib/supabase/data-access/campaign-management` to resolve the lint error.
+*   **Zustand Store (`useCampaignStore`) Utilized:** Relied on the existing `updateCampaign` and `createCampaign` actions in the store which already handle API interactions.
+*   **Unlayer Editor (`UnlayerEmailEditor`) Interaction:** Confirmed that the editor component exposes an `exportHtml` method via its `ref`, which is now being used.
+
+**Outcome:** The "Save Draft" functionality should now correctly save all relevant campaign data, including the latest Unlayer editor content, to the database. Selecting a template also persists its content to the backend immediately.
+
+**Next Steps:**
+
+1.  Thorough testing of the "Save Draft" functionality.
+2.  Testing of "Load from Template" to ensure it integrates with the save draft flow correctly.

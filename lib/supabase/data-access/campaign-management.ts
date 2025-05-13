@@ -8,6 +8,7 @@
 import { createClient } from '@/lib/supabase/client';
 import { Database } from '@/types/supabase';
 import { getAdminClient } from '@/lib/supabase/admin';
+import { getEmailTemplateById } from './templates';
 
 // Type definitions
 // Using custom type definitions since these tables might not be in the Database type yet
@@ -133,14 +134,48 @@ export const getCampaignById = async (id: string) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
   
-  const { data, error } = await admin
+  const { data: campaignData, error } = await admin
     .from('email_campaigns')
     .select('*')
     .eq('id', id)
-    .single();
+    .single<EmailCampaign>(); // Specify the return type for better type safety
     
-  if (error) throw error;
-  return data;
+  if (error) {
+    // Handle case where campaign is not found more gracefully if needed
+    if (error.code === 'PGRST116') { // PostgREST error for 'Fetched zero rows'
+      console.warn(`Campaign with id ${id} not found.`);
+      return null; // Or throw a custom 'Not Found' error
+    }
+    console.error(`Error fetching campaign ${id}:`, error);
+    throw error;
+  }
+
+  if (!campaignData) return null; // Should be covered by PGRST116 but good for safety
+
+  // If campaign_design_json is missing and there's a template_id,
+  // try to fetch the design from the original template.
+  if (
+    (!campaignData.campaign_design_json || 
+     (typeof campaignData.campaign_design_json === 'object' && 
+      Object.keys(campaignData.campaign_design_json).length === 0)) && 
+    campaignData.template_id
+  ) {
+    try {
+      const template = await getEmailTemplateById(campaignData.template_id);
+      if (template && template.design_json) {
+        // We need to ensure campaignData is not treated as readonly here
+        // If single<EmailCampaign>() returns a deeply immutable object, this might be an issue
+        // However, Supabase client typically returns mutable objects.
+        (campaignData as EmailCampaign).campaign_design_json = template.design_json;
+      }
+    } catch (templateError) {
+      console.error(`Failed to fetch template ${campaignData.template_id} for campaign ${id}:`, templateError);
+      // Decide if we should still return the campaignData or throw an error
+      // For now, we'll log and continue, returning the campaign without the fallback design
+    }
+  }
+    
+  return campaignData;
 };
 
 /**

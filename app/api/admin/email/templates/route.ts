@@ -5,7 +5,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { createClient } from '@/lib/supabase/client';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAdminAccess, handleServerError } from '@/lib/supabase/route-handler';
 
 /**
@@ -25,11 +25,11 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    // Get templates from Supabase
-    const supabase = createClient();
+    // Get templates from Supabase using the service role client
+    const supabase = await createServiceRoleClient();
     const { data, error, count } = await supabase
       .from('email_templates')
-      .select('*', { count: 'exact' })
+      .select('id, name, subject, category, html_content, design, version, tags, created_at, updated_at', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -37,8 +37,18 @@ export async function GET(request: NextRequest) {
       throw error;
     }
 
+    // Map 'design' to 'design_json' and ensure structure for client
+    const mappedTemplates = data
+      ? data.map((template: any) => ({
+          ...template,
+          design_json: template.design || {},
+          // html_content: template.html_content || '', // Ensure defaults if needed
+          // subject: template.subject || '', // Ensure defaults if needed
+        }))
+      : [];
+
     return Response.json({
-      templates: data,
+      templates: mappedTemplates,
       total: count,
       limit,
       offset,

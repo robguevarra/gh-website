@@ -13,6 +13,7 @@ import { Loader2, Send, Calendar, ArrowLeft, FileText } from 'lucide-react';
 
 import { TemplateSelectionModal } from './template-selection-modal';
 import UnlayerEmailEditor, { EditorRef as UnlayerEditorRef } from '@/app/admin/email-templates/unlayer-email-editor';
+import { EmailCampaign } from '@/lib/supabase/data-access/campaign-management';
 
 interface CampaignDetailProps {
   campaignId: string;
@@ -30,9 +31,11 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     analyticsLoading,
     fetchCampaignAnalytics,
     sendCampaign,
-    updateCampaignFields,
+    updateCampaign,
+    createCampaign,
   } = useCampaignStore();
 
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
 
@@ -88,64 +91,92 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
 
   const handleTemplateSelected = (template: { id: string; htmlBody: string; designJson: any }) => {
     console.log('handleTemplateSelected called with template:', template); // Log received template data
-    if (updateCampaignFields && currentCampaign) {
-      console.log('Before updateCampaignFields - currentCampaign.id:', currentCampaign.id);
-      console.log('Before updateCampaignFields - changes to be applied:', {
+    if (updateCampaign && currentCampaign) {
+      console.log('Before updateCampaign - currentCampaign.id:', currentCampaign.id);
+      console.log('Before updateCampaign - changes to be applied:', {
         selected_template_id: template.id,
         campaign_html_body: template.htmlBody,
         campaign_design_json: template.designJson,
       });
-      updateCampaignFields({
-        id: currentCampaign.id,
-        changes: {
-          selected_template_id: template.id,
-          campaign_html_body: template.htmlBody,
-          campaign_design_json: template.designJson,
-        }
+      updateCampaign(currentCampaign.id, {
+        selected_template_id: template.id,
+        campaign_html_body: template.htmlBody,
+        campaign_design_json: template.designJson,
       });
-      console.log('After updateCampaignFields was called.');
+      console.log('After updateCampaign was called.');
     } else {
-      console.error('handleTemplateSelected: updateCampaignFields is not available or currentCampaign is null.');
+      console.error('handleTemplateSelected: updateCampaign is not available or currentCampaign is null.');
       if (!currentCampaign) console.error('currentCampaign is null/undefined');
-      if (!updateCampaignFields) console.error('updateCampaignFields is null/undefined');
+      if (!updateCampaign) console.error('updateCampaign is null/undefined');
     }
     setIsTemplateModalOpen(false);
   };
 
   const handleSaveCampaign = async () => {
-    if (!currentCampaign || !updateCampaignFields) {
-      toast({ title: 'Error', description: 'Campaign data not loaded or save action unavailable.', variant: 'destructive' });
+    if (!currentCampaign || !unlayerEditorRef.current || (!updateCampaign && campaignId !== 'new') || (!createCampaign && campaignId === 'new') ) {
+      toast({ title: 'Error', description: 'Campaign data not loaded, editor not ready, or save action unavailable.', variant: 'destructive' });
       return;
     }
+    setIsSavingDraft(true);
 
     let latestHtml = currentCampaign.campaign_html_body;
     let latestDesign = currentCampaign.campaign_design_json;
 
-    if (typeof window !== 'undefined' && (window as any).unlayerExportHtml) {
-      try {
-        const exportedData = await (window as any).unlayerExportHtml();
-        if (exportedData && exportedData.html && exportedData.design) {
-          latestHtml = exportedData.html;
-          latestDesign = exportedData.design;
+    try {
+      const exportedData = await new Promise<{ design: any; html: string }>((resolve, reject) => {
+        if (unlayerEditorRef.current) {
+          unlayerEditorRef.current.exportHtml(data => {
+            if (data && data.design && data.html) {
+              resolve(data);
+            } else {
+              reject(new Error('Failed to export valid data from Unlayer editor.')); 
+            }
+          });
+        } else {
+          reject(new Error('Editor reference is not available.'));
         }
-      } catch (exportError) {
-        console.error('Failed to export from Unlayer editor:', exportError);
-        toast({ title: 'Editor Export Error', description: 'Could not get latest content from editor.', variant: 'destructive' });
-      }
+        // Optional: Add a timeout for robustness
+        // setTimeout(() => reject(new Error('Unlayer export timed out')), 5000);
+      });
+      latestHtml = exportedData.html;
+      latestDesign = exportedData.design;
+    } catch (exportError: any) {
+      console.error('Failed to export from Unlayer editor:', exportError);
+      toast({ title: 'Editor Export Error', description: exportError.message || 'Could not get latest content from editor.', variant: 'destructive' });
+      setIsSavingDraft(false);
+      return; 
     }
 
+    const campaignDataToSave: Partial<EmailCampaign> = {
+      // Ensure to get current name, etc., from state if they are bound to input fields
+      // For this example, assuming currentCampaign holds the latest editable fields like name
+      name: currentCampaign.name, 
+      // description: currentCampaign.description, // if you have this field
+      selected_template_id: currentCampaign.selected_template_id,
+      campaign_html_body: latestHtml,
+      campaign_design_json: latestDesign,
+      status: 'draft', 
+    };
+
     try {
-      updateCampaignFields({
-        id: currentCampaign.id,
-        changes: {
-          ...currentCampaign,
-          campaign_html_body: latestHtml,
-          campaign_design_json: latestDesign,
-        }
-      });
-      toast({ title: 'Campaign Saved', description: 'Your campaign details have been updated locally. API call pending.' });
+      if (campaignId === 'new' && createCampaign) { // Assuming 'new' is the identifier for a new campaign
+        // Remove 'id' if it was part of currentCampaign for a 'new' scenario, or ensure createCampaign handles it.
+        const { id, ...newData } = campaignDataToSave; // Basic way to omit id, ensure EmailCampaign partial accepts this
+        const newCampaign = await createCampaign(newData);
+        toast({ title: 'Campaign Draft Created', description: 'New campaign draft saved successfully.' });
+        // Optionally, navigate to the new campaign's edit page
+        router.push(`/admin/email/campaigns/${newCampaign.id}`);
+      } else if (updateCampaign) {
+        await updateCampaign(currentCampaign.id, campaignDataToSave);
+        toast({ title: 'Campaign Draft Saved', description: 'Your campaign draft has been updated.' });
+      }
+      // Re-fetch campaign data to ensure UI is consistent with DB, especially if createCampaign doesn't update currentCampaign
+      if (campaignId && campaignId !== 'new') fetchCampaign(campaignId);
+
     } catch (error: any) {
-      toast({ title: 'Error Saving', description: error.message || 'Failed to save campaign.', variant: 'destructive' });
+      toast({ title: 'Error Saving Draft', description: error.message || 'Failed to save campaign draft.', variant: 'destructive' });
+    } finally {
+      setIsSavingDraft(false);
     }
   };
 
@@ -188,7 +219,10 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
         <div className="flex space-x-2">
           {currentCampaign.status === 'draft' && (
             <>
-              <Button onClick={handleSaveCampaign} variant="outline">Save Draft</Button>
+              <Button onClick={handleSaveCampaign} variant="outline" disabled={isSavingDraft}>
+                {isSavingDraft && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+                Save Draft
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => router.push(`/admin/email/campaigns/${campaignId}/schedule`)}
@@ -308,8 +342,6 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
               </div>
 
               {(() => {
-                console.log('Rendering Content Tab: currentCampaign.campaign_design_json:', currentCampaign?.campaign_design_json);
-                console.log('Rendering Content Tab: currentCampaign.campaign_html_body:', currentCampaign?.campaign_html_body);
                 return null; // Ensure a valid ReactNode is returned
               })()}
 

@@ -16,19 +16,31 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Search } from 'lucide-react';
 
-type EmailTemplateSummary = {
+// Define a more detailed type for what the API returns for each template in the list
+interface ApiEmailTemplate {
   id: string;
   name: string;
-  category?: string;
-  thumbnail_url?: string;
-  design_json?: any;
-  html_content?: string;
-};
+  category: string | null;
+  subject: string | null;
+  html_content: string | null;
+  design_json: any; // This now comes mapped from the API
+  // Add other fields if necessary, like created_at, updated_at if used in the modal for display
+}
+
+// This is what the modal uses internally and for filtering
+interface EmailTemplateSummary {
+  id: string;
+  name: string;
+  category: string | null;
+  // Retain fields needed by onTemplateSelect or for display in the modal
+  html_content: string | null; 
+  design_json: any; 
+}
 
 interface TemplateSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onTemplateSelect: (template: { id: string; htmlBody: string; designJson: any }) => void;
+  onTemplateSelect: (template: { id: string; htmlBody: string | null; designJson: any }) => void;
 }
 
 export function TemplateSelectionModal({
@@ -47,15 +59,23 @@ export function TemplateSelectionModal({
         setIsLoading(true);
         setError(null);
         try {
-          // MOCK DATA for now:
-          const data: EmailTemplateSummary[] = [
-            { id: '1', name: 'Welcome Email V1', category: 'Onboarding', design_json: { body: { rows: []}}},
-            { id: '2', name: 'Password Reset', category: 'Auth', design_json: {}},
-            { id: '3', name: 'New Course Announcement', category: 'Marketing', design_json: {}},
-          ];
-          // Simulating API delay
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          setTemplates(data);
+          const response = await fetch('/api/admin/email/templates?limit=200'); // Fetch a good number of templates
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Failed to fetch templates: ${response.statusText}`);
+          }
+          const data: { templates: ApiEmailTemplate[] } = await response.json();
+          
+          // Map API data to EmailTemplateSummary for internal state and onTemplateSelect
+          const summarizedTemplates: EmailTemplateSummary[] = data.templates.map(t => ({
+            id: t.id,
+            name: t.name,
+            category: t.category,
+            html_content: t.html_content,
+            design_json: t.design_json,
+          }));
+
+          setTemplates(summarizedTemplates);
         } catch (err: any) {
           setError(err.message || 'An unknown error occurred');
         } finally {
@@ -70,38 +90,16 @@ export function TemplateSelectionModal({
     template.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleSelect = async (templateId: string) => {
-    console.log('[Modal] handleSelect called with templateId:', templateId); // Log entry
-    setIsLoading(true);
-    setError(null);
-    try {
-        const selectedMockTemplate = templates.find(t => t.id === templateId);
-        console.log('[Modal] selectedMockTemplate from find:', selectedMockTemplate); // Log found template
-        if (!selectedMockTemplate) throw new Error('Template not found in current list');
-        
-        // Simulating API delay for fetching full template data
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const fullTemplateData = {
-            id: selectedMockTemplate.id,
-            html_template: `<html><body><h1>${selectedMockTemplate.name}</h1><p>This is mock HTML content for ${selectedMockTemplate.name}.</p></body></html>`, 
-            design: selectedMockTemplate.design_json || { body: { rows: [], values: {} } }, // Ensure design is a valid object
-        };
-        console.log('[Modal] constructed fullTemplateData:', fullTemplateData); // Log data to be passed
-
-        onTemplateSelect({
-            id: fullTemplateData.id,
-            htmlBody: fullTemplateData.html_template,
-            designJson: fullTemplateData.design,
-        });
-        console.log('[Modal] onTemplateSelect CALLED.'); // Log callback invocation
-        onClose();
-    } catch (err: any) {
-        console.error('[Modal] Error in handleSelect:', err); // Log any error
-        setError(err.message || 'Failed to load template details');
-    } finally {
-        setIsLoading(false);
-    }
+  const handleSelect = (template: EmailTemplateSummary) => {
+    onTemplateSelect({
+      id: template.id,
+      htmlBody: template.html_content, // Pass html_content as htmlBody
+      designJson: template.design_json,  // Pass design_json as designJson
+    });
+    onClose();
   };
+
+  if (!isOpen) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -164,7 +162,7 @@ export function TemplateSelectionModal({
                   <CardFooter>
                     <Button 
                         className="w-full" 
-                        onClick={() => handleSelect(template.id)}
+                        onClick={() => handleSelect(template)}
                         disabled={isLoading} 
                     >
                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
