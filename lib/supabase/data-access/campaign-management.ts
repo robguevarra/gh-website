@@ -19,7 +19,7 @@ export interface EmailCampaign {
   status: string;
   scheduled_at: string | null;
   completed_at: string | null;
-  template_id: string;
+  template_id: string; // This might be the originally selected template or the active version's template_id if versions are used directly on campaigns
   sender_email: string;
   sender_name: string;
   created_at: string;
@@ -29,7 +29,10 @@ export interface EmailCampaign {
   ab_test_winner_version: number | null;
   ab_test_winner_selected_at: string | null;
   segment_ids: string[] | null;
-  content_json: any | null;
+  content_json: any | null; // This was pre-existing, potentially for other content structures
+  selected_template_id?: string | null; // ID of the user-selected EmailTemplate
+  campaign_html_body?: string | null;   // HTML content from Unlayer
+  campaign_design_json?: any | null;    // Design JSON from Unlayer
 }
 
 export type EmailCampaignInsert = Omit<EmailCampaign, 'id' | 'created_at' | 'updated_at'> & { id?: string };

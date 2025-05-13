@@ -475,6 +475,71 @@ export type Database = {
           },
         ]
       }
+      campaign_analytics: {
+        Row: {
+          bounce_rate: number | null
+          campaign_id: string
+          click_rate: number | null
+          created_at: string | null
+          id: string
+          last_calculated_at: string | null
+          open_rate: number | null
+          total_bounces: number | null
+          total_clicks: number | null
+          total_complaints: number | null
+          total_delivered: number | null
+          total_opens: number | null
+          total_recipients: number | null
+          total_sent: number | null
+          total_unsubscribes: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          bounce_rate?: number | null
+          campaign_id: string
+          click_rate?: number | null
+          created_at?: string | null
+          id?: string
+          last_calculated_at?: string | null
+          open_rate?: number | null
+          total_bounces?: number | null
+          total_clicks?: number | null
+          total_complaints?: number | null
+          total_delivered?: number | null
+          total_opens?: number | null
+          total_recipients?: number | null
+          total_sent?: number | null
+          total_unsubscribes?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          bounce_rate?: number | null
+          campaign_id?: string
+          click_rate?: number | null
+          created_at?: string | null
+          id?: string
+          last_calculated_at?: string | null
+          open_rate?: number | null
+          total_bounces?: number | null
+          total_clicks?: number | null
+          total_complaints?: number | null
+          total_delivered?: number | null
+          total_opens?: number | null
+          total_recipients?: number | null
+          total_sent?: number | null
+          total_unsubscribes?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_analytics_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: true
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_recipients: {
         Row: {
           campaign_id: string
@@ -515,6 +580,99 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_segments: {
+        Row: {
+          campaign_id: string
+          created_at: string | null
+          id: string
+          segment_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string | null
+          id?: string
+          segment_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string | null
+          id?: string
+          segment_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_segments_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_segments_segment_id_fkey"
+            columns: ["segment_id"]
+            isOneToOne: false
+            referencedRelation: "user_segments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_templates: {
+        Row: {
+          campaign_id: string
+          created_at: string | null
+          html_content: string
+          id: string
+          is_active: boolean | null
+          subject: string
+          template_id: string
+          text_content: string
+          updated_at: string | null
+          version: number
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string | null
+          html_content: string
+          id?: string
+          is_active?: boolean | null
+          subject: string
+          template_id: string
+          text_content: string
+          updated_at?: string | null
+          version?: number
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string | null
+          html_content?: string
+          id?: string
+          is_active?: boolean | null
+          subject?: string
+          template_id?: string
+          text_content?: string
+          updated_at?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_templates_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_templates_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -941,12 +1099,21 @@ export type Database = {
       }
       email_campaigns: {
         Row: {
+          ab_test_variant_count: number | null
+          ab_test_winner_selected_at: string | null
+          ab_test_winner_version: number | null
+          campaign_design_json: Json | null
+          campaign_html_body: string | null
           completed_at: string | null
+          content_json: Json | null
           created_at: string | null
           description: string | null
           id: string
+          is_ab_test: boolean | null
           name: string
           scheduled_at: string | null
+          segment_ids: string[] | null
+          selected_template_id: string | null
           sender_email: string
           sender_name: string
           status: string
@@ -954,12 +1121,21 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          ab_test_variant_count?: number | null
+          ab_test_winner_selected_at?: string | null
+          ab_test_winner_version?: number | null
+          campaign_design_json?: Json | null
+          campaign_html_body?: string | null
           completed_at?: string | null
+          content_json?: Json | null
           created_at?: string | null
           description?: string | null
           id?: string
+          is_ab_test?: boolean | null
           name: string
           scheduled_at?: string | null
+          segment_ids?: string[] | null
+          selected_template_id?: string | null
           sender_email: string
           sender_name: string
           status?: string
@@ -967,12 +1143,21 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          ab_test_variant_count?: number | null
+          ab_test_winner_selected_at?: string | null
+          ab_test_winner_version?: number | null
+          campaign_design_json?: Json | null
+          campaign_html_body?: string | null
           completed_at?: string | null
+          content_json?: Json | null
           created_at?: string | null
           description?: string | null
           id?: string
+          is_ab_test?: boolean | null
           name?: string
           scheduled_at?: string | null
+          segment_ids?: string[] | null
+          selected_template_id?: string | null
           sender_email?: string
           sender_name?: string
           status?: string
@@ -980,6 +1165,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "email_campaigns_selected_template_id_fkey"
+            columns: ["selected_template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "email_campaigns_template_id_fkey"
             columns: ["template_id"]
@@ -1797,6 +1989,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      segments: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          rules: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          rules: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          rules?: Json
+          updated_at?: string
+        }
+        Relationships: []
       }
       Session: {
         Row: {
@@ -2805,6 +3024,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_segments: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          rules: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          rules: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          rules?: Json
+          updated_at?: string
+        }
+        Relationships: []
       }
       user_tags: {
         Row: {

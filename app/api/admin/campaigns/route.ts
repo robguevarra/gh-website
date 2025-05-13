@@ -6,6 +6,7 @@
 
 import { NextRequest } from 'next/server';
 import { createCampaign, getCampaigns } from '@/lib/supabase/data-access/campaign-management';
+import { getEmailTemplateById } from '@/lib/supabase/data-access/templates';
 import { validateAdminAccess, handleServerError } from '@/lib/supabase/route-handler';
 
 /**
@@ -62,7 +63,6 @@ export async function POST(request: NextRequest) {
       sender_name,
       is_ab_test,
       segment_ids,
-      content_json,
     } = body;
 
     // Validate required fields
@@ -73,17 +73,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create campaign
+    // Fetch the template details
+    const emailTemplate = await getEmailTemplateById(template_id);
+
+    if (!emailTemplate) {
+      return Response.json(
+        { error: `Template with id ${template_id} not found` },
+        { status: 404 }
+      );
+    }
+
+    // Create campaign using details from the fetched template
     const campaign = await createCampaign({
       name,
-      description,
+      description: description || undefined,
       status: 'draft',
-      template_id,
+      template_id, // Store the original template_id
+      selected_template_id: template_id, // Initially, selected is same as base template
+      campaign_design_json: emailTemplate.design_json || {},
+      campaign_html_body: emailTemplate.html_content || '',
       sender_email,
       sender_name,
       is_ab_test: is_ab_test || false,
+      // Add missing required fields from EmailCampaignInsert with defaults
+      scheduled_at: null,
+      completed_at: null,
+      ab_test_variant_count: null,
+      ab_test_winner_version: null,
+      ab_test_winner_selected_at: null,
+      // content_json is part of EmailCampaign in campaign-management.ts, default to null or empty if not used
+      content_json: null, 
       segment_ids: segment_ids || [],
-      content_json: content_json || {},
+      // user_id will be handled by RLS or createCampaign function internally
     });
 
     return Response.json({ campaign }, { status: 201 });

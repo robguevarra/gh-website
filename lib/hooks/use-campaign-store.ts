@@ -50,6 +50,7 @@ interface CampaignState {
   fetchCampaign: (id: string) => Promise<void>;
   createCampaign: (campaign: Partial<EmailCampaign>) => Promise<EmailCampaign>;
   updateCampaign: (id: string, updates: Partial<EmailCampaign>) => Promise<EmailCampaign>;
+  updateCampaignFields: (payload: { id: string; changes: Partial<EmailCampaign> }) => void;
   deleteCampaign: (id: string) => Promise<void>;
   scheduleCampaign: (id: string, scheduledAt: string) => Promise<EmailCampaign>;
   sendTestEmail: (id: string, testEmails: string[]) => Promise<{ success: boolean }>;
@@ -214,7 +215,22 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     }
   },
   
-  deleteCampaign: async (id) => {
+  updateCampaignFields: (payload) => {
+    const { id, changes } = payload;
+    set((state) => {
+      if (state.currentCampaign && state.currentCampaign.id === id) {
+        // Ensure we're updating the fields correctly, especially new ones
+        const updatedCampaign = { ...state.currentCampaign, ...changes };
+        return {
+          currentCampaign: updatedCampaign,
+        };
+      }
+      // If currentCampaign is null or ID doesn't match, return empty object to not change state
+      return {}; 
+    });
+  },
+  
+  deleteCampaign: async (id: string) => {
     try {
       const response = await fetch(`/api/admin/campaigns/${id}`, {
         method: 'DELETE',

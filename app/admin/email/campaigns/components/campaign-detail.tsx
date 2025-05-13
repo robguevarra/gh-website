@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCampaignStore } from '@/lib/hooks/use-campaign-store';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, Send, Calendar, ArrowLeft } from 'lucide-react';
+import { Loader2, Send, Calendar, ArrowLeft, FileText } from 'lucide-react';
+
+import { TemplateSelectionModal } from './template-selection-modal';
+import UnlayerEmailEditor, { EditorRef as UnlayerEditorRef } from '@/app/admin/email-templates/unlayer-email-editor';
 
 interface CampaignDetailProps {
   campaignId: string;
@@ -18,24 +21,30 @@ interface CampaignDetailProps {
 export function CampaignDetail({ campaignId }: CampaignDetailProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const { 
-    currentCampaign, 
-    currentCampaignLoading, 
-    currentCampaignError, 
+  const {
+    currentCampaign,
+    currentCampaignLoading,
+    currentCampaignError,
     fetchCampaign,
     campaignAnalytics,
     analyticsLoading,
     fetchCampaignAnalytics,
-    sendCampaign
+    sendCampaign,
+    updateCampaignFields,
   } = useCampaignStore();
-  
+
   const [isSending, setIsSending] = useState(false);
-  
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+
+  const unlayerEditorRef = useRef<UnlayerEditorRef>(null);
+
   useEffect(() => {
-    fetchCampaign(campaignId);
-    fetchCampaignAnalytics(campaignId);
+    if (campaignId) {
+      fetchCampaign(campaignId);
+      fetchCampaignAnalytics(campaignId);
+    }
   }, [fetchCampaign, fetchCampaignAnalytics, campaignId]);
-  
+
   const handleSendCampaign = async () => {
     setIsSending(true);
     try {
@@ -54,7 +63,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
       setIsSending(false);
     }
   };
-  
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'draft':
@@ -64,19 +73,82 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
       case 'sending':
         return <Badge variant="default">Sending</Badge>;
       case 'completed':
-        return <Badge variant="success">Completed</Badge>;
+        return <Badge variant="default">Completed</Badge>;
       case 'cancelled':
         return <Badge variant="destructive">Cancelled</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
   };
-  
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Not set';
     return new Date(dateString).toLocaleString();
   };
-  
+
+  const handleTemplateSelected = (template: { id: string; htmlBody: string; designJson: any }) => {
+    console.log('handleTemplateSelected called with template:', template); // Log received template data
+    if (updateCampaignFields && currentCampaign) {
+      console.log('Before updateCampaignFields - currentCampaign.id:', currentCampaign.id);
+      console.log('Before updateCampaignFields - changes to be applied:', {
+        selected_template_id: template.id,
+        campaign_html_body: template.htmlBody,
+        campaign_design_json: template.designJson,
+      });
+      updateCampaignFields({
+        id: currentCampaign.id,
+        changes: {
+          selected_template_id: template.id,
+          campaign_html_body: template.htmlBody,
+          campaign_design_json: template.designJson,
+        }
+      });
+      console.log('After updateCampaignFields was called.');
+    } else {
+      console.error('handleTemplateSelected: updateCampaignFields is not available or currentCampaign is null.');
+      if (!currentCampaign) console.error('currentCampaign is null/undefined');
+      if (!updateCampaignFields) console.error('updateCampaignFields is null/undefined');
+    }
+    setIsTemplateModalOpen(false);
+  };
+
+  const handleSaveCampaign = async () => {
+    if (!currentCampaign || !updateCampaignFields) {
+      toast({ title: 'Error', description: 'Campaign data not loaded or save action unavailable.', variant: 'destructive' });
+      return;
+    }
+
+    let latestHtml = currentCampaign.campaign_html_body;
+    let latestDesign = currentCampaign.campaign_design_json;
+
+    if (typeof window !== 'undefined' && (window as any).unlayerExportHtml) {
+      try {
+        const exportedData = await (window as any).unlayerExportHtml();
+        if (exportedData && exportedData.html && exportedData.design) {
+          latestHtml = exportedData.html;
+          latestDesign = exportedData.design;
+        }
+      } catch (exportError) {
+        console.error('Failed to export from Unlayer editor:', exportError);
+        toast({ title: 'Editor Export Error', description: 'Could not get latest content from editor.', variant: 'destructive' });
+      }
+    }
+
+    try {
+      updateCampaignFields({
+        id: currentCampaign.id,
+        changes: {
+          ...currentCampaign,
+          campaign_html_body: latestHtml,
+          campaign_design_json: latestDesign,
+        }
+      });
+      toast({ title: 'Campaign Saved', description: 'Your campaign details have been updated locally. API call pending.' });
+    } catch (error: any) {
+      toast({ title: 'Error Saving', description: error.message || 'Failed to save campaign.', variant: 'destructive' });
+    }
+  };
+
   if (currentCampaignLoading) {
     return (
       <div className="flex justify-center py-8">
@@ -84,7 +156,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
       </div>
     );
   }
-  
+
   if (currentCampaignError) {
     return (
       <div className="text-center py-8 text-destructive">
@@ -92,7 +164,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
       </div>
     );
   }
-  
+
   if (!currentCampaign) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -104,26 +176,27 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           onClick={() => router.push('/admin/email/campaigns')}
           className="flex items-center"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Campaigns
         </Button>
-        
+
         <div className="flex space-x-2">
           {currentCampaign.status === 'draft' && (
             <>
-              <Button 
+              <Button onClick={handleSaveCampaign} variant="outline">Save Draft</Button>
+              <Button
                 variant="outline"
                 onClick={() => router.push(`/admin/email/campaigns/${campaignId}/schedule`)}
               >
                 <Calendar className="mr-2 h-4 w-4" />
                 Schedule
               </Button>
-              <Button 
+              <Button
                 onClick={handleSendCampaign}
                 disabled={isSending}
               >
@@ -141,9 +214,9 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
               </Button>
             </>
           )}
-          
+
           {currentCampaign.status === 'scheduled' && (
-            <Button 
+            <Button
               onClick={handleSendCampaign}
               disabled={isSending}
             >
@@ -162,7 +235,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
           )}
         </div>
       </div>
-      
+
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
@@ -176,14 +249,14 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="overview">
+          <Tabs defaultValue="overview" className="mt-4">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="content">Content</TabsTrigger>
               <TabsTrigger value="targeting">Targeting</TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="overview" className="space-y-4 mt-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -216,19 +289,51 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                 </div>
               </div>
             </TabsContent>
-            
-            <TabsContent value="content" className="mt-4">
-              <div className="text-center py-4 text-muted-foreground">
-                Content editing interface will be implemented here.
+
+            <TabsContent value="content" className="space-y-4 mt-4">
+              <div className="flex justify-end mb-4">
+                <Button 
+                  onClick={() => {
+                    console.log('[CampaignDetail] Load from Template button CLICKED.');
+                    setIsTemplateModalOpen(true);
+                    // Log state immediately after setting (note: state updates might be async, 
+                    // so this log shows the value *before* potential re-render with new state)
+                    // A useEffect watching isTemplateModalOpen would be more definitive for seeing the *updated* state.
+                    console.log('[CampaignDetail] isTemplateModalOpen attempted to be set to true. Current value in this render cycle:', isTemplateModalOpen);
+                  }}
+                  variant="outline"
+                >
+                  <FileText className="mr-2 h-4 w-4" /> Load from Template
+                </Button>
               </div>
+
+              {(() => {
+                console.log('Rendering Content Tab: currentCampaign.campaign_design_json:', currentCampaign?.campaign_design_json);
+                console.log('Rendering Content Tab: currentCampaign.campaign_html_body:', currentCampaign?.campaign_html_body);
+                return null; // Ensure a valid ReactNode is returned
+              })()}
+
+              {currentCampaign.campaign_design_json !== undefined ? (
+                <UnlayerEmailEditor
+                  key={JSON.stringify(currentCampaign.campaign_design_json)} // Key ensures re-render if design_json object changes reference
+                  ref={unlayerEditorRef}
+                  initialDesign={currentCampaign.campaign_design_json}
+                  initialHtml={currentCampaign.campaign_html_body}
+                />
+              ) : (
+                <div className="text-center py-8 text-muted-foreground border rounded-md min-h-[300px] flex flex-col justify-center items-center">
+                  <p>No content loaded, or campaign is still loading.</p>
+                  <p className="text-sm">Load a template or ensure campaign data is fully fetched.</p>
+                </div>
+              )}
             </TabsContent>
-            
-            <TabsContent value="targeting" className="mt-4">
+
+            <TabsContent value="targeting" className="space-y-4 mt-4">
               <div className="text-center py-4 text-muted-foreground">
                 Segment targeting interface will be implemented here.
               </div>
             </TabsContent>
-            
+
             <TabsContent value="analytics" className="mt-4">
               {analyticsLoading ? (
                 <div className="flex justify-center py-8">
@@ -266,7 +371,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                       </CardContent>
                     </Card>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                     <Card>
                       <CardContent className="pt-6">
@@ -287,17 +392,17 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                       </CardContent>
                     </Card>
                   </div>
-                  
+
                   <div>
                     <h3 className="text-sm font-medium mb-2">Last Updated</h3>
                     <p className="text-sm text-muted-foreground">
                       {formatDate(campaignAnalytics.last_calculated_at)}
                     </p>
                   </div>
-                  
+
                   <div className="flex justify-end">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={() => fetchCampaignAnalytics(campaignId, true)}
                     >
                       Refresh Analytics
@@ -309,6 +414,15 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
           </Tabs>
         </CardContent>
       </Card>
+
+      <TemplateSelectionModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => {
+          console.log('[CampaignDetail] TemplateSelectionModal onClose called.');
+          setIsTemplateModalOpen(false);
+        }}
+        onTemplateSelect={handleTemplateSelected}
+      />
     </div>
   );
 }

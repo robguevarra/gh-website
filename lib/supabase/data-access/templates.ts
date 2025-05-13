@@ -132,6 +132,75 @@ export const getTemplateById = async ({
   };
 };
 
+// New Type for Detailed Email Templates
+export interface EmailTemplateDetail {
+  id: string;
+  name: string;
+  subject: string | null;
+  category: string | null;
+  html_content: string | null;
+  design_json: any | null; // Mapped from 'design' column
+  version: number | null;
+  tags: string[] | null;
+  created_at: string | null; 
+  updated_at: string | null; 
+}
+
+/**
+ * Get a specific email template by ID, including its design and content.
+ */
+export const getEmailTemplateById = async (
+  templateId: string
+): Promise<EmailTemplateDetail | null> => {
+  const supabase = createServerSupabaseClient();
+  
+  const { data, error } = await supabase
+    .from('email_templates') 
+    .select(`
+      id,
+      name,
+      subject,
+      category,
+      html_content,
+      design,  
+      version,
+      tags,
+      created_at,
+      updated_at
+    `)
+    .eq('id', templateId)
+    .single<Pick<Database['public']['Tables']['email_templates']['Row'], 'id' | 'name' | 'subject' | 'category' | 'html_content' | 'design' | 'version' | 'tags' | 'created_at' | 'updated_at'>>(); 
+    
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // Template not found
+      console.warn(`Email template with id ${templateId} not found.`);
+      return null;
+    }
+    console.error('Error fetching email template:', error);
+    throw error;
+  }
+  
+  if (!data) return null;
+  
+  // Ensure design_json is an object if it's null/undefined from DB
+  // to prevent issues with Unlayer expecting an object.
+  const designJson = data.design || {}; 
+
+  return {
+    id: data.id,
+    name: data.name,
+    subject: data.subject,
+    category: data.category,
+    html_content: data.html_content,
+    design_json: designJson, // Use the potentially defaulted design_json
+    version: data.version,
+    tags: data.tags,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+  };
+}; 
+
 /**
  * Increment download count for a template
  */

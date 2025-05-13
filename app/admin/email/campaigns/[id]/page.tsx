@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
-import { CampaignDetailClient } from './client';
+// Correct the import path and alias CampaignDetail as CampaignDetailClient
+import { CampaignDetail as CampaignDetailClient } from '../components/campaign-detail';
 
 interface CampaignDetailPageProps {
   params: {
@@ -7,10 +8,15 @@ interface CampaignDetailPageProps {
   };
 }
 
-export default function CampaignDetailPage({ params }: CampaignDetailPageProps) {
+// Make the component async
+export default async function CampaignDetailPage({ params }: CampaignDetailPageProps) {
+  // No explicit await needed here if just passing params.id, 
+  // but making the function async satisfies Next.js's expectation.
+  const { id } = await params; 
+
   return (
     <Suspense fallback={<div>Loading campaign details...</div>}>
-      <CampaignDetailClient id={params.id} />
+      <CampaignDetailClient campaignId={id} />
     </Suspense>
   );
 }
