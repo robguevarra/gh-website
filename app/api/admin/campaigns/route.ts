@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
     const {
       name,
       description,
+      subject,
       template_id,
       sender_email,
       sender_name,
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest) {
     const campaign = await createCampaign({
       name,
       description: description || undefined,
+      subject: subject || null,
       status: 'draft',
       template_id, // Store the original template_id
       selected_template_id: template_id, // Initially, selected is same as base template

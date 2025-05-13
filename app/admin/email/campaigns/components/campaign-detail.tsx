@@ -9,7 +9,21 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, Send, Calendar, ArrowLeft, FileText } from 'lucide-react';
+import { Loader2, Send, Calendar, ArrowLeft, FileText, Mail } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+// Import template utilities
+import { extractVariablesFromContent, generateDefaultVariableValues } from '@/lib/services/email/template-utils';
 
 import { TemplateSelectionModal } from './template-selection-modal';
 import UnlayerEmailEditor, { EditorRef as UnlayerEditorRef } from '@/app/admin/email-templates/unlayer-email-editor';
@@ -33,11 +47,13 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     sendCampaign,
     updateCampaign,
     createCampaign,
+    updateCampaignFields, // Destructure for cleaner use later if preferred
   } = useCampaignStore();
 
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [isTestSendModalOpen, setIsTestSendModalOpen] = useState(false);
 
   const unlayerEditorRef = useRef<UnlayerEditorRef>(null);
 
@@ -89,8 +105,8 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     return new Date(dateString).toLocaleString();
   };
 
-  const handleTemplateSelected = (template: { id: string; htmlBody: string; designJson: any }) => {
-    console.log('handleTemplateSelected called with template:', template); // Log received template data
+  const handleTemplateSelected = (template: { id: string; htmlBody: string | null; designJson: any }) => {
+    console.log('handleTemplateSelected called with template:', template);
     if (updateCampaign && currentCampaign) {
       console.log('Before updateCampaign - currentCampaign.id:', currentCampaign.id);
       console.log('Before updateCampaign - changes to be applied:', {
@@ -151,6 +167,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
       // Ensure to get current name, etc., from state if they are bound to input fields
       // For this example, assuming currentCampaign holds the latest editable fields like name
       name: currentCampaign.name, 
+      subject: currentCampaign.subject, // Add subject here
       // description: currentCampaign.description, // if you have this field
       selected_template_id: currentCampaign.selected_template_id,
       campaign_html_body: latestHtml,
@@ -178,6 +195,202 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     } finally {
       setIsSavingDraft(false);
     }
+  };
+
+  const CampaignTestSendModal = ({
+    isOpen,
+    onClose,
+    campaign,
+    getCampaignContent // Function to get current Unlayer content
+  }: {
+    isOpen: boolean;
+    onClose: () => void;
+    campaign: EmailCampaign | null;
+    getCampaignContent: () => Promise<{ html: string; design: any } | null>;
+  }) => {
+    const [recipientEmail, setRecipientEmail] = useState('');
+    const [isSendingTest, setIsSendingTest] = useState(false);
+    const [testSendError, setTestSendError] = useState<string | null>(null);
+    const { toast } = useToast();
+    const [variableValues, setVariableValues] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+      if (isOpen && campaign) {
+        const fetchAndUpdateVariables = async () => {
+          try {
+            let htmlContent = campaign.campaign_html_body; // Default to stored HTML
+            try {
+              const contentFromEditor = await getCampaignContent(); // Attempt to get latest from editor
+              if (contentFromEditor && contentFromEditor.html) {
+                htmlContent = contentFromEditor.html;
+              }
+            } catch (editorError) {
+              console.warn('Could not fetch live content from editor for test send, using stored HTML:', editorError);
+              // Fallback to campaign.campaign_html_body is already set
+            }
+
+            if (htmlContent) {
+              const extracted = extractVariablesFromContent(htmlContent);
+              const defaults = generateDefaultVariableValues(extracted);
+              setVariableValues(defaults);
+            } else {
+              setVariableValues({}); // No HTML content, so no variables
+            }
+          } catch (error) {
+            console.error("Error processing campaign variables:", error);
+            setTestSendError('Could not load email variables.');
+            setVariableValues({});
+          }
+        };
+        fetchAndUpdateVariables();
+      }
+    }, [isOpen, campaign, getCampaignContent, campaign?.campaign_html_body]); // Added campaign_html_body as a dep
+
+    const handleSendTest = async () => {
+      if (!campaign) {
+        setTestSendError('Campaign data is not available.');
+        return;
+      }
+      if (!recipientEmail) {
+        setTestSendError('Please enter a recipient email address.');
+        return;
+      }
+
+      setIsSendingTest(true);
+      setTestSendError(null);
+
+      try {
+        const content = await getCampaignContent();
+        if (!content) {
+          throw new Error('Could not retrieve campaign content from editor.');
+        }
+
+        const campaignSubject = campaign.subject || campaign.name || 'Test Email'; // Use subject, fallback to name or default
+
+        const response = await fetch(`/api/admin/campaigns/${campaign.id}/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipientEmail,
+            subject: campaignSubject,
+            html_content: content.html,
+            placeholder_data: variableValues, // Send the current variable values
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || `Failed to send test email (${response.status})`);
+        }
+
+        toast({
+          title: 'Test Email Sent',
+          description: `Successfully sent test email to ${recipientEmail}.`,
+        });
+        onClose(); // Close modal on success
+      } catch (error: any) {
+        console.error('Error sending test email:', error);
+        setTestSendError(error.message || 'An unknown error occurred.');
+        toast({
+          title: 'Error Sending Test Email',
+          description: error.message || 'An unknown error occurred.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsSendingTest(false);
+      }
+    };
+
+    if (!isOpen) return null;
+
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-[525px]">
+          <DialogHeader>
+            <DialogTitle>Send Test Email</DialogTitle>
+            <DialogDescription>
+              Send a test version of this campaign. Variables will be populated with sample data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="recipient-email" className="text-right">
+                Recipient Email
+              </Label>
+              <Input
+                id="recipient-email"
+                type="email"
+                value={recipientEmail}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRecipientEmail(e.target.value)}
+                placeholder="test@example.com"
+                className="col-span-3"
+              />
+            </div>
+            {/* Variable Inputs Section */}
+            {Object.keys(variableValues).length > 0 && (
+              <div className="my-4 pt-4 border-t">
+                <h4 className="mb-2 text-sm font-medium text-center">Email Variables (Sample Data)</h4>
+                <div className="max-h-60 overflow-y-auto space-y-3 pr-2">
+                  {Object.entries(variableValues).map(([name, value]) => (
+                    <div key={name} className="grid grid-cols-4 items-center gap-x-2 gap-y-1">
+                      <Label htmlFor={`var-${name}`} className="text-right text-xs truncate col-span-1" title={name}>
+                        {name}
+                      </Label>
+                      <Input
+                        id={`var-${name}`}
+                        value={value}
+                        onChange={(e) => setVariableValues(prev => ({ ...prev, [name]: e.target.value }))}
+                        className="col-span-3 h-8 text-xs"
+                        placeholder={`Sample for ${name}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {testSendError && (
+              <p className="text-sm text-destructive col-span-4 text-center mt-2">{testSendError}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="button" onClick={handleSendTest} disabled={isSendingTest}>
+              {isSendingTest ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Send Test
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
+  const getUnlayerContent = async () => {
+    if (unlayerEditorRef.current) {
+      return new Promise<{ html: string; design: any }>((resolve, reject) => {
+        unlayerEditorRef.current!.exportHtml(data => {
+          if (data && data.design && data.html) {
+            resolve(data);
+          } else {
+            reject(new Error('Failed to export valid data from Unlayer editor.'));
+          }
+        });
+      });
+    }
+    return null;
   };
 
   if (currentCampaignLoading) {
@@ -281,6 +494,27 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
               {getStatusBadge(currentCampaign.status)}
             </div>
           </div>
+          {currentCampaign && (
+            <div className="mt-4">
+              <Label htmlFor="campaignSubject" className="text-sm font-medium">
+                Campaign Subject
+              </Label>
+              <Input
+                id="campaignSubject"
+                placeholder="Enter campaign subject"
+                value={currentCampaign?.subject || ''}
+                onChange={(e) => {
+                  if (currentCampaign) {
+                    updateCampaignFields({ // Or useCampaignStore.getState().updateCampaignFields
+                      id: currentCampaign.id,
+                      changes: { subject: e.target.value }
+                    });
+                  }
+                }}
+                className="mt-1"
+              />
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="overview" className="mt-4">
@@ -330,24 +564,21 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                   onClick={() => {
                     console.log('[CampaignDetail] Load from Template button CLICKED.');
                     setIsTemplateModalOpen(true);
-                    // Log state immediately after setting (note: state updates might be async, 
-                    // so this log shows the value *before* potential re-render with new state)
-                    // A useEffect watching isTemplateModalOpen would be more definitive for seeing the *updated* state.
                     console.log('[CampaignDetail] isTemplateModalOpen attempted to be set to true. Current value in this render cycle:', isTemplateModalOpen);
                   }}
                   variant="outline"
                 >
                   <FileText className="mr-2 h-4 w-4" /> Load from Template
                 </Button>
+                <Button onClick={() => setIsTestSendModalOpen(true)} variant="secondary" disabled={!currentCampaign?.selected_template_id}>
+                  <Mail className="mr-2 h-4 w-4" />
+                  Send Test Email
+                </Button>
               </div>
-
-              {(() => {
-                return null; // Ensure a valid ReactNode is returned
-              })()}
 
               {currentCampaign.campaign_design_json !== undefined ? (
                 <UnlayerEmailEditor
-                  key={JSON.stringify(currentCampaign.campaign_design_json)} // Key ensures re-render if design_json object changes reference
+                  key={JSON.stringify(currentCampaign.campaign_design_json)} 
                   ref={unlayerEditorRef}
                   initialDesign={currentCampaign.campaign_design_json}
                   initialHtml={currentCampaign.campaign_html_body}
@@ -447,14 +678,20 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
         </CardContent>
       </Card>
 
-      <TemplateSelectionModal
-        isOpen={isTemplateModalOpen}
-        onClose={() => {
-          console.log('[CampaignDetail] TemplateSelectionModal onClose called.');
-          setIsTemplateModalOpen(false);
-        }}
-        onTemplateSelect={handleTemplateSelected}
+      <CampaignTestSendModal 
+        isOpen={isTestSendModalOpen}
+        onClose={() => setIsTestSendModalOpen(false)}
+        campaign={currentCampaign}
+        getCampaignContent={getUnlayerContent}
       />
+
+      {isTemplateModalOpen && currentCampaign && (
+        <TemplateSelectionModal
+          isOpen={isTemplateModalOpen}
+          onClose={() => setIsTemplateModalOpen(false)}
+          onTemplateSelect={handleTemplateSelected}
+        />
+      )}
     </div>
   );
 }

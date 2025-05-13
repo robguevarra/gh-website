@@ -99,9 +99,12 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
 - [x] Build campaign delivery system <span style="color: green;">(Completed 2025-05-12)</span>
   - [x] API endpoints for triggering campaign delivery
   - [x] Status tracking and updates
-- [x] Implement test sending functionality <span style="color: green;">(Completed 2025-05-12)</span>
-  - [x] Send to specific test email addresses
-  - [x] Validation for email formats
+- [x] Implement test sending functionality <span style="color: green;">(Completed 2025-05-13 - Enhanced with variable handling and direct API implementation. Email sending simulated.)</span>
+  - [x] Send to specific test email addresses <span style="color: green;">(Completed 2025-05-13 - Now single recipient, supports variables)</span>
+  - [x] Validation for email formats <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] **New:** API endpoint `/api/admin/campaigns/[id]/test` refactored for direct HTML/subject/variable input. <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] **New:** Variable substitution logic implemented in client and API. <span style="color: green;">(Completed 2025-05-13)</span>
+  - [ ] **New:** Actual email sending via a service (e.g., Resend) needs to be integrated into the API's `sendEmailUtility`. <span style="color: orange;">(To Do)</span>
 - [ ] Enhance delivery system <span style="color: orange;">(In progress)</span>
   - [ ] Create proper queue for scheduled campaigns
   - [ ] Implement batch processing for large recipient lists
@@ -124,17 +127,17 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
 ### 6. UI/UX Enhancements for Campaign Management (Based on Expert Review - 2025-05-13)
 
 #### A. Enhancements for `CampaignDetail.tsx` ("Content" Tab)
-- [ ] **Add "Send Test Email" Functionality:**
-  - [ ] Implement a "Send Test Email" button within the "Content" tab.
-  - [ ] Modal for inputting test email addresses.
-  - [ ] Test email uses current campaign subject and Unlayer editor content (even if unsaved).
-  - [ ] Provide clear success/error feedback (toast notifications).
-  - [ ] Integrate with `POST /api/admin/campaigns/[id]/test` endpoint.
-  - [ ] **Note:** Leverage UI patterns and potentially adapt logic from `app/admin/email-templates/template-tester.tsx` which uses `POST /api/admin/email-templates/test-send` for template testing. The core idea of a modal for recipient input and sending a test is similar.
-  - [ ] **Variable Presentation in Test Modal:**
-    - [ ] List all variables found in campaign content as editable fields (pre-filled with example data from `generateDefaultVariableValues` / `categorizeVariables`).
-    - [ ] Group variables by category (e.g., User, Course, Action, Other) for clarity.
-    - [ ] Use tooltips or subtle text for fields representing system-populated variables (e.g., `{{user.firstName}}`) explaining they use example data for this test and will be replaced by real data in actual sends.
+- [x] **Add "Send Test Email" Functionality:** <span style="color: green;">(Completed 2025-05-13 - Core functionality with variable handling and API integration. Email sending is simulated.)</span>
+  - [x] Implement a "Send Test Email" button within the "Content" tab. <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Modal for inputting test email addresses (now single recipient) and email variables. <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Test email uses current campaign subject and Unlayer editor content (even if unsaved). <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Provide clear success/error feedback (toast notifications). <span style="color: green;">(Completed 2025-05-13 - Basic UI feedback implemented)</span>
+  - [x] Integrate with `POST /api/admin/campaigns/[id]/test` endpoint. <span style="color: green;">(Completed 2025-05-13 - Client calls endpoint, API refactored)</span>
+  - [x] **Note:** Leverage UI patterns and potentially adapt logic from `app/admin/email-templates/template-tester.tsx`... <span style="color: green;">(Completed - Approach considered and adapted)</span>
+  - [x] **Variable Presentation in Test Modal:** <span style="color: green;">(Completed 2025-05-13 - Variables listed and editable. Grouping/tooltips are future enhancements.)</span>
+    - [x] List all variables found in campaign content as editable fields (pre-filled with example data from `generateDefaultVariableValues`). <span style="color: green;">(Completed 2025-05-13)</span>
+    - [ ] Group variables by category (e.g., User, Course, Action, Other) for clarity. <span style="color: orange;">(To Do - Future enhancement)</span>
+    - [ ] Use tooltips or subtle text for fields representing system-populated variables (e.g., `{{user.firstName}}`) explaining they use example data for this test and will be replaced by real data in actual sends. <span style="color: orange;">(To Do - Future enhancement)</span>
 - [ ] **Implement "Preview with Variables":**
   - [ ] "Preview As..." button/dropdown in the "Content" tab.
   - [ ] **Option 1 (Simpler - Recommended Start):** List available variables detected in the content.
@@ -147,12 +150,12 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
   - [ ] **Option 2 (Advanced):** Allow selection of a sample user profile (if available) or manual input of variable data in a modal to render the email with populated variables.
     - [ ] This would involve a more complex UI for data input, potentially reusing categorized input fields similar to `TemplateTester`.
     - [ ] Requires a client-side rendering mechanism or a backend preview generation endpoint.
-- [ ] **Dedicated Campaign Subject Line Field:**
-  - [ ] Add an editable input field for "Campaign Subject" (in "Content" or "Overview" tab).
-  - [ ] Auto-populate from selected template's subject initially.
-  - [ ] This field overrides the template subject for the specific campaign.
-  - [ ] Ensure this subject is used for actual sends and test sends.
-  - [ ] Update Zustand store and save/update logic to include campaign-specific subject.
+- [x] **Dedicated Campaign Subject Line Field:** <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Add an editable input field for "Campaign Subject" (in "Content" or "Overview" tab). <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Auto-populate from selected template's subject initially. <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] This field overrides the template subject for the specific campaign. <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Ensure this subject is used for actual sends and test sends. <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Update Zustand store and save/update logic to include campaign-specific subject. <span style="color: green;">(Completed 2025-05-13)</span>
 
 #### B. Build Out `CampaignDetail.tsx` ("Targeting" Tab)
 - [ ] **Implement Segment Selection Interface:**
@@ -225,6 +228,51 @@ After completing the remaining work on the campaign management system, we will m
 > 4. Follow the established folder structure, naming conventions, and coding standards
 > 5. Include this reminder in all future build notes to maintain consistency
 
+## Database Schema Modifications and Error Resolution (2025-05-13)
+
+During development and testing, two key issues were identified:
+1.  A runtime error: `"Could not find the 'subject' column of 'email_campaigns' in the schema cache"` when creating/updating campaigns.
+2.  A persistent lint error in `lib/supabase/data-access/campaign-management.ts`: `SelectQueryError<"column 'user_id' does not exist on 'user_segments'.">` (Lint ID: `c38fea2a-08fd-41d3-a84e-fe456ea8dbb2`).
+
+These issues were traced back to missing or incorrectly defined columns in the Supabase database. The following migrations were applied to resolve them:
+
+### 1. `email_campaigns` Table
+   - **Action:** Added a `subject` column.
+   - **SQL:**
+     ```sql
+     ALTER TABLE public.email_campaigns
+     ADD COLUMN subject TEXT;
+     ```
+   - **Outcome:** Resolved the runtime error related to the missing 'subject' column.
+
+### 2. `user_segments` Table
+   This table is used to link users to segments for campaign targeting.
+   - **Actions:**
+     - Added `user_id UUID` column.
+     - Added a foreign key constraint: `user_segments.user_id` -> `auth.users(id)`.
+     - Ensured `segment_id UUID` column exists and has a foreign key constraint: `user_segments.segment_id` -> `public.segments(id)`.
+     - Created indexes on `user_id` and `segment_id` for performance.
+   - **Key SQL Migrations Applied (summary of iterative steps):**
+     ```sql
+     -- Add subject to email_campaigns
+     ALTER TABLE public.email_campaigns ADD COLUMN subject TEXT;
+
+     -- Add user_id to user_segments
+     ALTER TABLE public.user_segments ADD COLUMN user_id UUID;
+     ALTER TABLE public.user_segments ADD CONSTRAINT fk_user_segments_user_id FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+     -- Add segment_id to user_segments
+     ALTER TABLE public.user_segments ADD COLUMN IF NOT EXISTS segment_id UUID REFERENCES public.segments(id) ON DELETE CASCADE;
+     
+     -- Create indexes
+     CREATE INDEX IF NOT EXISTS idx_user_segments_user_id ON public.user_segments(user_id);
+     CREATE INDEX IF NOT EXISTS idx_user_segments_segment_id ON public.user_segments(segment_id);
+     ```
+   - **Outcome:** Resolved the lint error concerning the `user_segments` table and its columns. The `addRecipientsFromSegments` function in `lib/supabase/data-access/campaign-management.ts` should now operate correctly.
+
+**Overall Status:**
+With these schema corrections, the identified database-related errors for campaign management should be resolved. Further testing of the application is recommended to confirm.
+
 ## 2025-05-13: Fixing Campaign Save Draft Functionality
 
 **Task Objective:** Resolve issues with the "Save Draft" functionality in the email campaign creation/editing process to ensure data is correctly persisted to the backend and Unlayer editor content is properly exported.
@@ -260,3 +308,26 @@ After completing the remaining work on the campaign management system, we will m
 
 1.  Thorough testing of the "Save Draft" functionality.
 2.  Testing of "Load from Template" to ensure it integrates with the save draft flow correctly.
+
+### 7. Development Log & Code Health
+
+#### 2025-05-13
+- **Campaign Subject Line Feature**:
+  - Confirmed full implementation. Users can set a dedicated subject line for each campaign in `CampaignDetail.tsx`, which overrides any template-defined subject. This subject is used for test sends.
+- **Send Test Email Functionality with Variable Handling**:
+  - Successfully enhanced the "Send Test Email" feature.
+  - The `CampaignTestSendModal` in `CampaignDetail.tsx` now dynamically extracts `{{variable}}` placeholders from the current campaign content.
+  - Users are presented with input fields for each detected variable, pre-filled with default values, allowing customization before sending a test.
+  - Integrated a new API endpoint `POST /api/admin/campaigns/[id]/test`. This endpoint accepts the recipient's email, the campaign subject, HTML content, and the customized placeholder data for server-side variable substitution.
+  - The previous `sendCampaignTest` function is no longer used for this UI-driven test send.
+  - Email dispatch is currently simulated by a placeholder `sendEmailUtility` function within the API route; integration with an actual email service (e.g., Resend) remains a future task (as noted in section 4).
+- **Lint Error Resolution Progress**:
+  - **Resolved in `app/admin/email/campaigns/components/campaign-detail.tsx`**:
+    - Addressed prop and type compatibility errors related to `TemplateSelectionModal` (original ID: `1c6cf482-92ee-4f6b-bc7e-4896d3810806`, and subsequent related errors `d7f2a4b9-d89a-43b9-8902-34c7c18b710b`, `f8229477-d0f2-4357-8fc1-66745ae7d910`). The component now correctly passes props to `TemplateSelectionModal`, and type definitions for callback handlers align.
+  - **Outstanding in `lib/supabase/data-access/campaign-management.ts`**:
+    - The lint error (current ID: `c38fea2a-08fd-41d3-a84e-fe456ea8dbb2`, previously `b1adfc8e-17e1-4242-8040-723f5c70d625`) concerning "Property 'user_id' does not exist on type 'SelectQueryError<\"column 'user_id' does not exist on 'user_segments'.\">'" persists.
+    - Attempts to resolve this by refining data handling around line 456 (e.g., ensuring `user_id`s are non-null strings) did not clear the error.
+    - This error likely points to a more fundamental issue: either a mismatch between the actual `user_segments` database table schema and the code's expectations (i.e., the column `user_id` might indeed be missing or named differently in the DB), or a complex type inference issue within the Supabase client library that is not immediately obvious.
+    - **Recommendation**: Further investigation should include verifying the `user_segments` table schema directly in the Supabase project to ensure column names (`user_id`, `segment_id`) align with the queries being made.
+
+```

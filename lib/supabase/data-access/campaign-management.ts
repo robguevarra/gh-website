@@ -17,6 +17,7 @@ export interface EmailCampaign {
   id: string;
   name: string;
   description: string | null;
+  subject: string | null; // Dedicated field for campaign subject
   status: string;
   scheduled_at: string | null;
   completed_at: string | null;
@@ -452,7 +453,9 @@ export const addRecipientsFromSegments = async (campaignId: string) => {
     throw new Error('No users found in the selected segments');
   }
   
-  const userIds = userSegments.map(segment => segment.user_id);
+  const userIds = userSegments
+    .map(segment => segment.user_id)
+    .filter((id): id is string => typeof id === 'string' && !!id);
   
   // Insert recipients
   const recipientsToInsert = userIds.map(userId => ({
