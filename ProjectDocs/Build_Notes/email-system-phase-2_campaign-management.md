@@ -121,6 +121,69 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
   - [ ] A/B test results visualization
   - [ ] Exportable reports
 
+### 6. UI/UX Enhancements for Campaign Management (Based on Expert Review - 2025-05-13)
+
+#### A. Enhancements for `CampaignDetail.tsx` ("Content" Tab)
+- [ ] **Add "Send Test Email" Functionality:**
+  - [ ] Implement a "Send Test Email" button within the "Content" tab.
+  - [ ] Modal for inputting test email addresses.
+  - [ ] Test email uses current campaign subject and Unlayer editor content (even if unsaved).
+  - [ ] Provide clear success/error feedback (toast notifications).
+  - [ ] Integrate with `POST /api/admin/campaigns/[id]/test` endpoint.
+  - [ ] **Note:** Leverage UI patterns and potentially adapt logic from `app/admin/email-templates/template-tester.tsx` which uses `POST /api/admin/email-templates/test-send` for template testing. The core idea of a modal for recipient input and sending a test is similar.
+  - [ ] **Variable Presentation in Test Modal:**
+    - [ ] List all variables found in campaign content as editable fields (pre-filled with example data from `generateDefaultVariableValues` / `categorizeVariables`).
+    - [ ] Group variables by category (e.g., User, Course, Action, Other) for clarity.
+    - [ ] Use tooltips or subtle text for fields representing system-populated variables (e.g., `{{user.firstName}}`) explaining they use example data for this test and will be replaced by real data in actual sends.
+- [ ] **Implement "Preview with Variables":**
+  - [ ] "Preview As..." button/dropdown in the "Content" tab.
+  - [ ] **Option 1 (Simpler - Recommended Start):** List available variables detected in the content.
+    - [ ] Use `extractVariablesFromContent(currentUnlayerContent)` from `lib/services/email/template-utils.ts` to get variable names.
+    - [ ] Use `categorizeVariables(variableNames)` from `lib/services/email/template-utils.ts` to display variables with descriptions and example values in a modal or dropdown.
+    - [ ] **UI for Listing Variables:**
+      - [ ] Group variables by category (e.g., User, Course, Action, System-Populated, Campaign-Specific, Other) as determined by `categorizeVariables`.
+      - [ ] For each variable, display its name (e.g., `{{user.email}}`), `description` (e.g., "User's email address"), and example `value` (e.g., "test@example.com").
+      - [ ] Add a visual cue or note (e.g., small icon, appended text like "(auto-filled from user data)") for categories typically system-populated (User, Course, Event data) to distinguish them from potentially campaign-specific or purely test variables.
+  - [ ] **Option 2 (Advanced):** Allow selection of a sample user profile (if available) or manual input of variable data in a modal to render the email with populated variables.
+    - [ ] This would involve a more complex UI for data input, potentially reusing categorized input fields similar to `TemplateTester`.
+    - [ ] Requires a client-side rendering mechanism or a backend preview generation endpoint.
+- [ ] **Dedicated Campaign Subject Line Field:**
+  - [ ] Add an editable input field for "Campaign Subject" (in "Content" or "Overview" tab).
+  - [ ] Auto-populate from selected template's subject initially.
+  - [ ] This field overrides the template subject for the specific campaign.
+  - [ ] Ensure this subject is used for actual sends and test sends.
+  - [ ] Update Zustand store and save/update logic to include campaign-specific subject.
+
+#### B. Build Out `CampaignDetail.tsx` ("Targeting" Tab)
+- [ ] **Implement Segment Selection Interface:**
+  - [ ] Allow selection of one or more existing User Segments.
+  - [ ] Include search/filter functionality for segments.
+  - [ ] Clearly display selected segments.
+- [ ] **Dynamic Audience Size Estimation:**
+  - [ ] Display total estimated recipients based on selected segments, updating in real-time.
+  - [ ] Show warnings for unexpectedly small/large audiences.
+- [ ] **(Optional) Segment Combination Logic:**
+  - [ ] Allow specifying AND/OR logic for multiple selected segments.
+- [ ] **(Optional) Exclusion Logic:**
+  - [ ] Allow selecting segments to exclude from the campaign.
+- [ ] **(Optional) Recipient Preview:**
+  - [ ] Button to "Preview Recipients" showing a sample list from target segments.
+- [ ] **State Management:** Store selected segment IDs and logic in campaign state and save to database.
+
+#### C. Introduce "Review & Confirm" Step/Tab in `CampaignDetail.tsx`
+- [ ] **Create a "Review" Tab or Pre-Send Modal:**
+  - [ ] Display a summary before sending/scheduling: Campaign Name, Final Subject Line, Sender Info, Target Audience (segments & estimated count), Content Snapshot/Preview Link, Scheduled Time (if any).
+  - [ ] Require a final "Confirm & Send" or "Confirm & Schedule" action.
+
+#### D. General UI/UX Polish
+- [ ] **`CampaignDetail.tsx` Polish:**
+  - [ ] Clarify "Schedule" button flow; consider a simple scheduling modal for basic cases.
+  - [ ] Add tooltips for icons and less obvious fields.
+  - [ ] Maintain consistent loading/disabled states for all actions.
+- [ ] **`CampaignList.tsx` Polish:**
+  - [ ] Consider adding key performance metrics (Sent, Open Rate, Click Rate) directly to the list for completed campaigns.
+  - [ ] Ensure badge colors for statuses are distinct and universally understandable.
+
 ## Technical Considerations
 
 ### Performance
@@ -148,100 +211,6 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
 - Implement intuitive interfaces for segment selection
 - Use progressive disclosure for advanced features
 - Provide helpful error messages and guidance
-
-## Completion Status
-
-> **Status Update (2025-05-12):**
-> - Core campaign management infrastructure is now implemented.
-> - Database schema, data access layer, and API endpoints are complete.
-> - Basic UI components for campaign creation, listing, detail view, and scheduling are implemented.
-> - The system follows the project's functional programming principles, mobile-first approach, and keeps files under 150 lines.
-> - Fixed build error related to admin client imports and type definitions by removing redundant admin-client.ts file and using the existing admin.ts functionality.
-> - Fixed Next.js dynamic API warnings by properly awaiting params in API routes.
-> - Implemented server/client component split architecture for campaign detail page to properly handle dynamic parameters.
-> - Updated all campaign management data access functions to use the admin client to bypass RLS policies.
-> - Added missing getCampaignAnalytics function to properly fetch campaign analytics data.
-> - Improved error handling in analytics functions to gracefully handle missing tables or data.
-> - Replaced unsupported Supabase query methods (like .group()) with compatible alternatives.
-> - Added defensive programming with fallback values and proper error logging throughout the codebase.
-> - Added proper TypeScript interfaces for campaign-related types to ensure type safety.
-> - Ensured proper integration with existing admin functionality.
-> - Implemented Zustand store for campaign state management with comprehensive actions for all CRUD operations.
-> - Remaining work focuses on template editor integration with the existing Unlayer editor, enhanced segment targeting UI, and advanced analytics features.
-
-> **Status Update (2025-05-13): Campaign Creation Flow Debugging & Schema Alignment**
-> - **Objective:** Resolve critical errors preventing the creation of new email campaigns via the `POST /api/admin/campaigns` API endpoint.
-> - **Initial Problem:** The campaign creation process was failing due to misalignments between the application code (TypeScript interfaces, data access functions) and the actual Supabase database schema for the `email_templates` and `email_campaigns` tables.
-> - **Debugging Journey & Key Issues Identified:**
->   - **Lint Errors & Type Mismatches:** Initial investigations, guided by TypeScript lint errors, pointed towards discrepancies in expected properties for email templates (e.g., `design_json`, `is_public`, `user_id`, `thumbnail_url`) within `lib/supabase/data-access/templates.ts`.
->   - **Runtime Error - `email_templates` Schema:** A persistent runtime error, `column email_templates.is_public does not exist` (and similar for `user_id`, `thumbnail_url`), confirmed that our data access layer was attempting to select columns that were not present in the `email_templates` table. It also highlighted that the template's design data was stored in a column named `design`, not `design_json`.
->   - **Runtime Error - `email_campaigns` Schema:** After resolving template fetching, a subsequent error `Could not find the 'subject' column of 'email_campaigns' in the schema cache` (PostgREST error PGRST204) indicated that the `email_campaigns` table did not, in fact, have a `subject` column, contrary to earlier assumptions.
-> - **Solutions & Fixes Implemented:**
->   - **Corrected `email_templates` Data Access (`lib/supabase/data-access/templates.ts`):**
->     - Modified the `EmailTemplateDetail` interface to accurately reflect the `email_templates` schema:
->       - Removed non-existent fields: `is_public`, `user_id` (template owner), `thumbnail_url`.
->       - Ensured the application logic maps the database's `design` column to an expected `design_json` field for use with Unlayer.
->     - Updated the `getEmailTemplateById` function's `select` statement to:
->       - Fetch only existing columns from `email_templates`.
->       - Use the correct column name `design` for fetching template layout data.
->   - **Corrected `email_campaigns` Data Access & API (`lib/supabase/data-access/campaign-management.ts`, `app/api/admin/campaigns/route.ts`):**
->     - Removed the `subject` field from the `EmailCampaign` interface and its associated `EmailCampaignInsert` and `EmailCampaignUpdate` types in `campaign-management.ts`, as this column does not exist in the database. The campaign subject is to be derived from the linked template at the point of use (e.g., sending, display).
->     - Removed the `subject` property from the payload passed to the `createCampaign` function within the `POST /api/admin/campaigns` API route.
->     - Ensured that the `createCampaign` call in the API route correctly provides default `null` values for other nullable fields expected by `EmailCampaignInsert` (e.g., `scheduled_at`, `completed_at`, `ab_test_variant_count`).
-> - **Outcome:** The campaign creation functionality (`POST /api/admin/campaigns`) is now operating correctly, successfully creating new campaigns by fetching necessary details from the selected email template and aligning with the true database schema.
-
-> **Status Update (2025-05-13): Template Selection Modal Integration & Fixes**
-> - **Objective:** Ensure the "Load from Template" functionality within the campaign creation/editing UI correctly fetches and utilizes real email template data.
-> - **Initial Problem:** The `TemplateSelectionModal` component (`app/admin/email/campaigns/components/template-selection-modal.tsx`) was using mock data. When attempting to switch to real data, it initially showed "No templates available."
-> - **Debugging Journey & Key Issues Identified:**
->   - **Mock Data Replacement:** The first step was to replace the mock data fetching logic in `TemplateSelectionModal` with an API call to `GET /api/admin/email/templates`.
->   - **API Returning Empty List:** Network inspection revealed the API endpoint `/api/admin/email/templates` was responding successfully (HTTP 200) but with an empty `templates` array: `{"templates":[],"total":0,...}`. This indicated the issue was with the API's ability to retrieve templates.
->   - **Incorrect Supabase Client:** The API route `app/api/admin/email/templates/route.ts` was using `createClient()` (the standard client-side/user-RLS-aware Supabase client). For an admin route needing to list all templates, this client might be restricted by RLS policies, leading to no templates being returned if none were publicly accessible or owned by the current (potentially anonymous or non-admin) user context of the client.
-> - **Solutions & Fixes Implemented:**
->   - **Standardized API Response for Templates (`app/api/admin/email/templates/route.ts`):**
->     - Modified the `GET` handler to explicitly map the `design` column from the database to a `design_json` field in the returned template objects. This ensures consistency with `getEmailTemplateById` and simplifies client-side consumption.
->   - **Corrected Supabase Client in API Route (`app/api/admin/email/templates/route.ts`):**
->     - Replaced `createClient()` with `createServiceRoleClient()` (imported from `@/lib/supabase/server`). This ensures the API uses a Supabase client with service role privileges, bypassing RLS and allowing it to fetch all templates from the `email_templates` table.
->   - **Updated `TemplateSelectionModal` (`app/admin/email/campaigns/components/template-selection-modal.tsx`):**
->     - Implemented the API call to `GET /api/admin/email/templates`.
->     - Defined appropriate TypeScript interfaces (`ApiEmailTemplate`, `EmailTemplateSummary`) to handle the API response.
->     - Ensured the `onTemplateSelect` callback receives the `id`, `html_content` (as `htmlBody`), and `design_json` (as `designJson`) from the selected template.
-> - **Outcome:** The "Load from Template" modal now correctly fetches and displays the list of available email templates from the database. Selecting a template in the modal successfully provides its details to the parent campaign component.
-
-### Completed Components
-- **Database Schema**: All required tables (`campaign_segments`, `campaign_templates`, `campaign_analytics`) and modifications to existing tables are complete.
-- **Data Access Layer**: Full CRUD operations, scheduling, analytics, and segment/template management functions are implemented.
-- **API Endpoints**: All required endpoints for campaign management, scheduling, testing, and delivery are implemented.
-- **UI Components**: Campaign list, creation form, detail view, and scheduler components are implemented.
-
-### Remaining Work
-1. **Template Editor Integration**:
-   - Connect the campaign content tab with the existing Unlayer editor (`/app/admin/email-templates/unlayer-email-editor.tsx`)
-   - Implement the template selection UI in the campaign creation flow
-   - Add support for template versioning and A/B testing variants in the campaign context
-   - Implement content preview functionality using the existing `TemplatePreview` component
-   - Ensure proper variable replacement for campaign-specific content
-
-2. **Segment Targeting UI**:
-   - Complete the UI for selecting and managing segments in campaigns using the existing segmentation system
-   - Leverage the tagging system's core infrastructure that was completed on 2025-05-12
-   - Implement recipient preview functionality to show a sample of users who will receive the campaign
-   - Add audience size estimation to display the potential reach of the campaign
-   - Create an intuitive interface for complex segment combinations (AND/OR/NOT operations)
-
-3. **Enhanced Analytics**:
-   - Implement the campaign analytics dashboard with real-time data
-   - Add time-series charts for engagement metrics (opens, clicks, bounces over time)
-   - Implement campaign comparison features to compare performance across campaigns
-   - Create exportable reports for campaign performance analysis
-   - Visualize A/B test results when applicable
-
-4. **Background Processing**:
-   - Implement proper queuing for scheduled campaigns using a reliable background job system
-   - Add batch processing for large recipient lists to prevent timeouts and rate limiting
-   - Create monitoring dashboard for delivery progress and real-time status updates
-   - Implement retry mechanisms for failed deliveries
-   - Add comprehensive logging for debugging and auditing purposes
 
 ## Next Steps After Completion
 
@@ -273,14 +242,19 @@ After completing the remaining work on the campaign management system, we will m
     *   **`handleSaveCampaign` Reworked:**
         *   Now correctly uses `unlayerEditorRef.current.exportHtml()` (promisified) to retrieve the latest HTML and design JSON from the Unlayer editor.
         *   Calls the `updateCampaign` action (for existing campaigns) or `createCampaign` action (for new campaigns, identified by `campaignId === 'new'`) from the `useCampaignStore`. These actions make the necessary API calls (`PATCH` or `POST`) to the backend, ensuring data persistence.
-        *   The payload for saving now explicitly includes `status: 'draft'`.
+        *   The payload for saving (`campaignDataToSave`) now explicitly includes:
+            *   `name: currentCampaign.name` (from the editable Campaign Name input field in the UI).
+            *   `campaign_html_body: latestHtml` (from Unlayer editor).
+            *   `campaign_design_json: latestDesign` (from Unlayer editor).
+            *   `selected_template_id: currentCampaign.selected_template_id` (updated when a template is chosen).
+            *   `status: 'draft'`.
         *   Added a loading state (`isSavingDraft`) and spinner to the "Save Draft" button for better UX.
-    *   **`handleTemplateSelected` Updated:** This function was also modified to call `updateCampaign` (instead of `updateCampaignFields`) to ensure that selecting a template immediately saves its content to the backend as part of the current draft.
+    *   **`handleTemplateSelected` Updated:** This function was also modified to call `updateCampaign` (instead of `updateCampaignFields`) to ensure that selecting a template immediately saves its content (HTML, design JSON) and the `selected_template_id` to the backend as part of the current draft.
     *   **Type Import Added:** Imported `EmailCampaign` from `@/lib/supabase/data-access/campaign-management` to resolve the lint error.
 *   **Zustand Store (`useCampaignStore`) Utilized:** Relied on the existing `updateCampaign` and `createCampaign` actions in the store which already handle API interactions.
 *   **Unlayer Editor (`UnlayerEmailEditor`) Interaction:** Confirmed that the editor component exposes an `exportHtml` method via its `ref`, which is now being used.
 
-**Outcome:** The "Save Draft" functionality should now correctly save all relevant campaign data, including the latest Unlayer editor content, to the database. Selecting a template also persists its content to the backend immediately.
+**Outcome:** The "Save Draft" functionality should now correctly save relevant campaign data (Campaign Name, Unlayer content, selected template ID), including the latest Unlayer editor content, to the database. Selecting a template also persists its content to the backend immediately.
 
 **Next Steps:**
 
