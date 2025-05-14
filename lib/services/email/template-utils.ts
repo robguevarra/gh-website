@@ -63,6 +63,28 @@ export const extractVariablesFromContent = (content: string): string[] => {
 };
 
 /**
+ * Substitutes variable placeholders in a string with their corresponding values.
+ * Placeholders are in the format {{variableName}}.
+ * 
+ * @param content The string content containing variable placeholders.
+ * @param values An object mapping variable names to their substitution values.
+ * @returns The content string with all recognized placeholders substituted.
+ */
+export const substituteVariables = (content: string, values: Record<string, string>): string => {
+  if (!content) {
+    return '';
+  }
+  let substitutedContent = content;
+  for (const key in values) {
+    // Ensure a global replacement for each key
+    // Regex: {{ key }} or {{key}} (allowing for optional spaces around the key)
+    const regex = new RegExp(`\\{\{\\s*${key.trim()}\\s*\\}\}`, 'g');
+    substitutedContent = substitutedContent.replace(regex, values[key] || ''); // Default to empty string if value is null/undefined
+  }
+  return substitutedContent;
+};
+
+/**
  * Generate appropriate test values for variables based on name patterns
  * 
  * @param variables Array of variable names

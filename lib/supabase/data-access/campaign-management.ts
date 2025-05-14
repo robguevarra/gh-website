@@ -271,15 +271,25 @@ export const scheduleCampaign = async (id: string, scheduledAt: string) => {
  * Add a segment to a campaign
  */
 export const addCampaignSegment = async (campaignSegment: CampaignSegmentInsert) => {
-  const supabase = createClient();
+  const supabase = getAdminClient(); // Use admin client for this operation
   
+  // Log the input to the function
+  console.log('[addCampaignSegment] Attempting to add:', JSON.stringify(campaignSegment, null, 2)); 
+
   const { data, error } = await supabase
     .from('campaign_segments')
     .insert(campaignSegment)
     .select()
     .single();
     
-  if (error) throw error;
+  if (error) {
+    // Log the full Supabase error object
+    console.error('[addCampaignSegment] Supabase error:', JSON.stringify(error, null, 2)); 
+    throw error;
+  }
+
+  // Log the successful result
+  console.log('[addCampaignSegment] Successfully added:', JSON.stringify(data, null, 2)); 
   return data;
 };
 
@@ -287,13 +297,13 @@ export const addCampaignSegment = async (campaignSegment: CampaignSegmentInsert)
  * Get segments for a campaign
  */
 export const getCampaignSegments = async (campaignId: string) => {
-  const supabase = createClient();
+  const supabase = getAdminClient(); // Use admin client
   
   const { data, error } = await supabase
     .from('campaign_segments')
     .select(`
       *,
-      segment:user_segments(*)
+      segment:segments(*)
     `)
     .eq('campaign_id', campaignId);
     
@@ -305,16 +315,22 @@ export const getCampaignSegments = async (campaignId: string) => {
  * Remove a segment from a campaign
  */
 export const removeCampaignSegment = async (campaignId: string, segmentId: string) => {
-  const supabase = createClient();
+  const supabase = getAdminClient(); // Use admin client
   
+  console.log('[removeCampaignSegment] Attempting to remove:', { campaignId, segmentId });
+
   const { error } = await supabase
     .from('campaign_segments')
     .delete()
     .eq('campaign_id', campaignId)
     .eq('segment_id', segmentId);
     
-  if (error) throw error;
-  return true;
+  if (error) {
+    console.error('[removeCampaignSegment] Supabase error:', JSON.stringify(error, null, 2));
+    throw error;
+  }
+  console.log('[removeCampaignSegment] Successfully removed:', { campaignId, segmentId });
+  return true; // Or return some data if .select() was chained after .delete()
 };
 
 // Campaign Templates functions

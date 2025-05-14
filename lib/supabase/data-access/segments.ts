@@ -2,9 +2,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import type { Database } from '@/lib/supabase/database.types';
 
 // Define more specific types based on the generated Database types
-export type Segment = Database['public']['Tables']['user_segments']['Row'];
-export type SegmentInsert = Database['public']['Tables']['user_segments']['Insert'];
-export type SegmentUpdate = Database['public']['Tables']['user_segments']['Update'];
+export type Segment = Database['public']['Tables']['segments']['Row'];
+export type SegmentInsert = Database['public']['Tables']['segments']['Insert'];
+export type SegmentUpdate = Database['public']['Tables']['segments']['Update'];
 
 /**
  * Creates a new segment.
@@ -16,7 +16,7 @@ export async function createSegment(
 ): Promise<Segment | null> {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
-    .from('user_segments')
+    .from('segments')
     .insert(segmentData)
     .select()
     .single();
@@ -38,7 +38,7 @@ export async function getSegmentById(
 ): Promise<Segment | null> {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
-    .from('user_segments')
+    .from('segments')
     .select('*')
     .eq('id', segmentId)
     .single();
@@ -60,7 +60,7 @@ export async function getSegmentById(
 export async function listSegments(): Promise<Segment[] | null> {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
-    .from('user_segments')
+    .from('segments')
     .select('*')
     .order('name', { ascending: true });
 
@@ -83,7 +83,7 @@ export async function updateSegment(
 ): Promise<Segment | null> {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
-    .from('user_segments')
+    .from('segments')
     .update(updates)
     .eq('id', segmentId)
     .select()
@@ -107,7 +107,7 @@ export async function updateSegment(
 export async function deleteSegment(segmentId: string): Promise<boolean> {
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase
-    .from('user_segments')
+    .from('segments')
     .delete()
     .eq('id', segmentId);
 

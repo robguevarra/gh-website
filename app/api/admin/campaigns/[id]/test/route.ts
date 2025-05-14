@@ -10,6 +10,7 @@ import {
   getCampaignById,
 } from '@/lib/supabase/data-access/campaign-management';
 import { validateAdminAccess, handleServerError, handleNotFound } from '@/lib/supabase/route-handler';
+import { substituteVariables as SVariables } from '@/lib/services/email/template-utils';
 
 // Actual email sending utility using Postmark
 async function sendEmailUtility(options: { 
@@ -73,17 +74,6 @@ async function sendEmailUtility(options: {
   }
 }
 
-function substituteVariables(html: string, variables: Record<string, string>): string {
-  let processedHtml = html;
-  if (variables) {
-    for (const key in variables) {
-      const regex = new RegExp(`\\{\\{\s*${key}\s*\\}\\}`, 'g');
-      processedHtml = processedHtml.replace(regex, variables[key]);
-    }
-  }
-  return processedHtml;
-}
-
 /**
  * POST /api/admin/campaigns/[id]/test
  * Send a test email for a campaign with variable substitution
@@ -133,7 +123,7 @@ export async function POST(
     }
 
     // Perform variable substitution
-    const finalHtml = substituteVariables(html_content, placeholder_data || {});
+    const finalHtml = SVariables(html_content, placeholder_data || {});
 
     // Construct 'From' email address
     const fromEmail = campaign.sender_name 

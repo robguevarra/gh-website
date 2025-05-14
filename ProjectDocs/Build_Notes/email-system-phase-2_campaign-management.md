@@ -158,12 +158,19 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
   - [x] Update Zustand store and save/update logic to include campaign-specific subject. <span style="color: green;">(Completed 2025-05-13)</span>
 
 #### B. Build Out `CampaignDetail.tsx` ("Targeting" Tab)
-- [ ] **Implement Segment Selection Interface:**
-  - [ ] Allow selection of one or more existing User Segments.
-  - [ ] Include search/filter functionality for segments.
-  - [ ] Clearly display selected segments.
-- [ ] **Dynamic Audience Size Estimation:**
-  - [ ] Display total estimated recipients based on selected segments, updating in real-time.
+- [x] **Implement Segment Selection Interface:** <span style="color: green;">(Completed 2025-05-14)</span>
+  - [x] Allow selection of one or more existing User Segments. <span style="color: green;">(Completed 2025-05-14)</span>
+  - [x] Include search/filter functionality for segments. <span style="color: green;">(Completed - Part of available segments display)</span>
+  - [x] Clearly display selected segments. <span style="color: green;">(Completed 2025-05-14)</span>
+  - [x] **Resolved issues with adding/removing segments (2025-05-14):**
+    - [x] Fixed "Failed to add segment to campaign - duplicate key" error by ensuring data-access functions (`getCampaignSegments`, `addCampaignSegment`, `removeCampaignSegment`) use the admin Supabase client (`getAdminClient()`) to bypass RLS. This ensures the UI accurately reflects existing segment associations, preventing attempts to re-add.
+    - [x] Fixed "Unexpected token '<'" error when removing segments by creating the missing API route handler for `DELETE /api/admin/campaigns/[id]/segments/[segment_id]`.
+    - [x] Verified that `useCampaignStore` correctly calls the new `DELETE` endpoint.
+- [ ] **Dynamic Audience Size Estimation:** <span style="color: orange;">(In progress)</span>
+  - [x] **Investigation (2025-05-14):** Audience estimation in campaign "Targeting" tab relies on `user_segments` table. Discrepancy found where this table was empty for selected segments, causing a '0' estimate, while the segmentation page's "Preview" feature (which uses dynamic calculation) showed correct counts after a fix.
+  - [x] **Fix (2025-05-14):** Corrected `lib/segmentation/engine.ts` (`getSegmentPreview` function) to fetch segment rules from the `segments` table instead of `user_segments`. This ensures the "Preview" button on the segmentation page accurately calculates and displays user counts dynamically.
+  - [ ] Display total estimated recipients in Campaign Targeting tab based on selected segments (currently reads from `user_segments`, which may be empty). <span style="color: orange;">(To Do - UI element exists but shows 0 if `user_segments` is not populated)</span>
+  - [ ] Implement a robust mechanism to populate/update the `user_segments` table based on segment rules and user tag changes. This is crucial for the campaign audience estimation to work correctly. <span style="color: red;">(High Priority - To Do)</span>
   - [ ] Show warnings for unexpectedly small/large audiences.
 - [ ] **(Optional) Segment Combination Logic:**
   - [ ] Allow specifying AND/OR logic for multiple selected segments.
@@ -319,15 +326,82 @@ With these schema corrections, the identified database-related errors for campai
   - The `CampaignTestSendModal` in `CampaignDetail.tsx` now dynamically extracts `{{variable}}` placeholders from the current campaign content.
   - Users are presented with input fields for each detected variable, pre-filled with default values, allowing customization before sending a test.
   - Integrated a new API endpoint `POST /api/admin/campaigns/[id]/test`. This endpoint accepts the recipient's email, the campaign subject, HTML content, and the customized placeholder data for server-side variable substitution.
-  - The previous `sendCampaignTest` function is no longer used for this UI-driven test send.
-  - Email dispatch is currently simulated by a placeholder `sendEmailUtility` function within the API route; integration with an actual email service (e.g., Resend) remains a future task (as noted in section 4).
-- **Lint Error Resolution Progress**:
-  - **Resolved in `app/admin/email/campaigns/components/campaign-detail.tsx`**:
-    - Addressed prop and type compatibility errors related to `TemplateSelectionModal` (original ID: `1c6cf482-92ee-4f6b-bc7e-4896d3810806`, and subsequent related errors `d7f2a4b9-d89a-43b9-8902-34c7c18b710b`, `f8229477-d0f2-4357-8fc1-66745ae7d910`). The component now correctly passes props to `TemplateSelectionModal`, and type definitions for callback handlers align.
-  - **Outstanding in `lib/supabase/data-access/campaign-management.ts`**:
-    - The lint error (current ID: `c38fea2a-08fd-41d3-a84e-fe456ea8dbb2`, previously `b1adfc8e-17e1-4242-8040-723f5c70d625`) concerning "Property 'user_id' does not exist on type 'SelectQueryError<\"column 'user_id' does not exist on 'user_segments'.\">'" persists.
-    - Attempts to resolve this by refining data handling around line 456 (e.g., ensuring `user_id`s are non-null strings) did not clear the error.
-    - This error likely points to a more fundamental issue: either a mismatch between the actual `user_segments` database table schema and the code's expectations (i.e., the column `user_id` might indeed be missing or named differently in the DB), or a complex type inference issue within the Supabase client library that is not immediately obvious.
-    - **Recommendation**: Further investigation should include verifying the `user_segments` table schema directly in the Supabase project to ensure column names (`user_id`, `segment_id`) align with the queries being made.
+  - The previous Next.js warning regarding `await params` in the test email route was also addressed.
 
-```
+**Prerequisites:**
+- The `POSTMARK_SERVER_TOKEN` environment variable must be correctly configured for this functionality to work.
+
+## 2025-05-14: Live Preview Modal and Utility Consolidation
+
+**Task Objective:**
+1. Implement a "Live Preview with Variables" modal in the campaign content editor.
+2. Consolidate duplicated `substituteVariables` utility functions.
+
+**1. "Live Preview with Variables" Feature (in `CampaignDetail.tsx`):**
+   - **UI Changes:**
+     - Added a "Live Preview" button to the "Content" tab of the campaign detail view.
+   - **Modal Implementation (`LivePreviewModal`):**
+     - Triggers a modal displaying the campaign's subject line.
+     - Dynamically extracts `{{variable}}` placeholders from the current Unlayer email HTML content using `extractVariablesFromContent` from `lib/services/email/template-utils.ts`.
+     - Generates and pre-fills input fields for each detected variable with sample data using `generateDefaultVariableValues`.
+     - Allows users to modify sample data for variables.
+     - Renders a live HTML preview of the email, updating in real-time as sample data is changed, using the `substituteVariables` utility.
+     - The modal features a two-column layout for variable inputs and the HTML preview.
+   - **Error Handling:** Includes toast notifications for errors during HTML export from the editor.
+
+**2. Consolidation of `substituteVariables` Utility:**
+   - **Centralized Function:** The `substituteVariables` function, responsible for replacing `{{variable}}` placeholders with actual values, has been moved to `lib/services/email/template-utils.ts`.
+   - **Updated Consumers:**
+     - The API route `app/api/admin/campaigns/[id]/test/route.ts` now imports and uses this centralized function.
+     - The `CampaignTestSendModal` component within `CampaignDetail.tsx` has been updated to use the centralized function.
+     - The new `LivePreviewModal` component within `CampaignDetail.tsx` also uses this centralized function.
+   - **Benefit:** This refactoring reduces code duplication and centralizes the variable substitution logic, improving maintainability.
+
+**Persistent Lint Note:**
+- A minor, non-blocking TypeScript lint error (ID: `f0076cb6-206e-4758-a90c-b9c481c95db5`) persists in `CampaignDetail.tsx` related to the "Send Campaign" button's `disabled` logic and conditional text. The button's functionality is correct, and this will be monitored.
+
+**Outcome:**
+- Users can now get a more accurate, real-time preview of their email campaigns with sample data before sending tests or actual campaigns.
+- The codebase is cleaner with the `substituteVariables` utility consolidated.
+
+## Development Log & Fixes
+
+### 2025-05-14: Troubleshooting Segmentation and Campaign API Issues
+
+#### 1. `user_segments` Table Population (Edge Function `update-all-user-segments`)
+- **Initial Issue:** The `user_segments` table was not being populated by the `update-all-user-segments` Edge Function. This was critical as the campaign audience estimation feature relies on this table.
+- **Troubleshooting Steps & Resolution:**
+    - Enhanced the Edge Function with detailed logging to trace data flow and query execution for segment rule processing (especially tag-based conditions).
+    - Identified that the function was correctly finding users (e.g., 184 users for a test segment) but failing during the insert into `user_segments`.
+    - Analyzed API logs and function logs which revealed sequential `400 Bad Request` errors from PostgREST, indicating `NOT NULL` constraint violations.
+    - Used direct SQL queries against `information_schema.columns` to get the definitive schema for `user_segments` after initial attempts to parse `list_tables` output were incomplete.
+    - Iteratively fixed the Edge Function by adding the missing required fields to the insert payload:
+        1. Added `name: segment.name` to satisfy the `name` column's `NOT NULL` constraint.
+        2. Added `rules: segment.rules` to satisfy the `rules` column's `NOT NULL` constraint.
+- **Outcome:** The `user_segments` table is now being correctly populated by the `update-all-user-segments` Edge Function. This directly addresses a key part of the "Dynamic Audience Size Estimation" functionality.
+
+#### 2. Campaign Segments API (`GET /api/admin/campaigns/[campaignId]/segments`)
+- **Issue:** The API endpoint responsible for fetching segments linked to a campaign was returning a 500 error. The error message "Could not find a relationship between 'campaign_segments' and 'user_segments'" indicated an incorrect Supabase query.
+- **Resolution:**
+    - Located the faulty query within the `getCampaignSegments` function in `lib/supabase/data-access/campaign-management.ts`.
+    - The query was incorrectly attempting to join `campaign_segments` with `user_segments` (i.e., `select('segment:user_segments(*)')`).
+    - Corrected the query to join with the `segments` table (i.e., `select('segment:segments(*)')`), which holds the segment definitions.
+- **Outcome:** The API endpoint now successfully fetches and returns the segments associated with a campaign, resolving the 500 error.
+
+#### 3. General Observation & Recommendation for `user_segments` Table
+- **Observation:** The `user_segments` table currently stores `name`, `description`, and `rules`, which are redundant as these are primary attributes of the `segments` table. It also has `segment_id` and `user_id` as nullable, which is not ideal for a junction table.
+- **Recommendation:** For improved data integrity and efficiency, the `user_segments` table should be refactored into a pure junction table. This would involve:
+    - Removing `name`, `description`, and `rules` columns.
+    - Ensuring `user_id` and `segment_id` are `NOT NULL`.
+    - The Edge Function would then only insert `{ user_id, segment_id }` pairs.
+
+### 2025-05-14: Refactoring `user_segments` Table and Edge Function
+
+- **Objective:** To improve data integrity and efficiency by refactoring `user_segments` into a pure junction table.
+- **Database Schema Changes (`refactor_user_segments_junction_table` migration):
+    - Removed redundant columns: `name`, `description`, `rules` from `public.user_segments`.
+    - Enforced `NOT NULL` constraints on `user_id` and `segment_id` columns in `public.user_segments`.
+- **Edge Function `update-all-user-segments` Update:
+    - Modified the function to only insert `{segment_id, user_id}` pairs into `user_segments`, aligning with the new schema.
+    - Successfully deployed the updated Edge Function (version 5).
+- **Outcome:** The `user_segments` table now adheres to best practices for a junction table, reducing data redundancy and improving schema clarity. The associated Edge Function is updated and operational.

@@ -21,9 +21,11 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Import template utilities
-import { extractVariablesFromContent, generateDefaultVariableValues } from '@/lib/services/email/template-utils';
+import { extractVariablesFromContent, generateDefaultVariableValues, substituteVariables } from '@/lib/services/email/template-utils';
 
 import { TemplateSelectionModal } from './template-selection-modal';
 import UnlayerEmailEditor, { EditorRef as UnlayerEditorRef } from '@/app/admin/email-templates/unlayer-email-editor';
@@ -48,12 +50,30 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     updateCampaign,
     createCampaign,
     updateCampaignFields, // Destructure for cleaner use later if preferred
+    // Segments related state and actions
+    availableSegments,
+    availableSegmentsLoading,
+    availableSegmentsError,
+    campaignSegments, // Segments linked to the current campaign
+    segmentsLoading,  // Loading state for current campaign's segments
+    segmentsError,    // Error state for current campaign's segments
+    fetchAvailableSegments,
+    fetchCampaignSegments,
+    addCampaignSegment,
+    removeCampaignSegment,
+    // Audience size related state and actions
+    estimatedAudienceSize, // Destructure for display
+    audienceSizeLoading,   // Destructure for display
+    audienceSizeError,     // Destructure for display
+    fetchEstimatedAudienceSize, // Destructure the action
   } = useCampaignStore();
 
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isTestSendModalOpen, setIsTestSendModalOpen] = useState(false);
+  const [isLivePreviewModalOpen, setIsLivePreviewModalOpen] = useState(false);
+  const [livePreviewInitialData, setLivePreviewInitialData] = useState<{ html: string; subject: string }>({ html: '', subject: '' });
 
   const unlayerEditorRef = useRef<UnlayerEditorRef>(null);
 
@@ -61,8 +81,11 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     if (campaignId) {
       fetchCampaign(campaignId);
       fetchCampaignAnalytics(campaignId);
+      fetchCampaignSegments(campaignId); // Fetch segments for the current campaign
+      fetchAvailableSegments(); // Fetch all available segments for selection
+      fetchEstimatedAudienceSize(campaignId); // Call the action here
     }
-  }, [fetchCampaign, fetchCampaignAnalytics, campaignId]);
+  }, [fetchCampaign, fetchCampaignAnalytics, fetchCampaignSegments, fetchAvailableSegments, fetchEstimatedAudienceSize, campaignId]); // Add to dependency array
 
   const handleSendCampaign = async () => {
     setIsSending(true);
@@ -194,6 +217,40 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
       toast({ title: 'Error Saving Draft', description: error.message || 'Failed to save campaign draft.', variant: 'destructive' });
     } finally {
       setIsSavingDraft(false);
+    }
+  };
+
+  const handleOpenLivePreview = async () => {
+    if (!currentCampaign || !unlayerEditorRef.current) {
+      toast({
+        title: 'Cannot Open Preview',
+        description: 'Campaign data or editor not ready.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    try {
+      const exportedData = await new Promise<{ design: any; html: string }>((resolve, reject) => {
+        if (unlayerEditorRef.current) {
+          unlayerEditorRef.current.exportHtml(data => {
+            if (data && data.html) {
+              resolve(data);
+            } else {
+              reject(new Error('Failed to export HTML from editor for preview.'));
+            }
+          });
+        } else {
+          reject(new Error('Editor reference is not available for preview.'));
+        }
+      });
+      setLivePreviewInitialData({ html: exportedData.html, subject: currentCampaign.subject || 'No Subject Set' });
+      setIsLivePreviewModalOpen(true);
+    } catch (error: any) {
+      toast({
+        title: 'Error Preparing Preview',
+        description: error.message || 'Could not get content for live preview.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -393,6 +450,89 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     return null;
   };
 
+  const LivePreviewModal = ({
+    isOpen,
+    onClose,
+    initialHtml,
+    initialSubject,
+  }: {
+    isOpen: boolean;
+    onClose: () => void;
+    initialHtml: string;
+    initialSubject: string;
+  }) => {
+    const [extractedVariables, setExtractedVariables] = useState<string[]>([]);
+    const [variableValues, setVariableValues] = useState<Record<string, string>>({});
+    const [previewHtml, setPreviewHtml] = useState<string>('');
+
+    useEffect(() => {
+      if (isOpen && initialHtml) {
+        const vars = extractVariablesFromContent(initialHtml);
+        setExtractedVariables(vars);
+        setVariableValues(generateDefaultVariableValues(vars));
+      }
+    }, [isOpen, initialHtml]);
+
+    useEffect(() => {
+      if (initialHtml && Object.keys(variableValues).length > 0) {
+        setPreviewHtml(substituteVariables(initialHtml, variableValues));
+      } else if (initialHtml) {
+        // If no variables or values, show initial HTML
+        setPreviewHtml(initialHtml);
+      }
+    }, [initialHtml, variableValues]);
+
+    const handleVariableChange = (variableName: string, value: string) => {
+      setVariableValues(prev => ({ ...prev, [variableName]: value }));
+    };
+
+    if (!isOpen) return null;
+
+    return (
+      <Dialog open={isOpen} onOpenChange={onClose}>
+        <DialogContent className="sm:max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Live Email Preview: {initialSubject}</DialogTitle>
+            <DialogDescription>
+              Enter sample data for the detected variables to see a live preview. Changes here are not saved.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-grow min-h-0">
+            <div className="md:col-span-1 space-y-4 overflow-y-auto pr-2 border-r">
+              <h3 className="text-lg font-semibold mb-2">Variables</h3>
+              {extractedVariables.length === 0 && <p className="text-sm text-muted-foreground">No variables detected in content.</p>}
+              {extractedVariables.map(variable => (
+                <div key={variable} className="space-y-1">
+                  <Label htmlFor={`var-${variable}`}>{variable}</Label>
+                  <Input
+                    id={`var-${variable}`}
+                    value={variableValues[variable] || ''}
+                    onChange={(e) => handleVariableChange(variable, e.target.value)}
+                    placeholder={`Sample ${variable}`}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="md:col-span-2 overflow-y-auto pl-2">
+              <h3 className="text-lg font-semibold mb-2">Preview</h3>
+              <div
+                className="border rounded-md p-4 bg-white h-full min-h-[300px] prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: previewHtml }}
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-auto pt-4">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Close
+              </Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
   if (currentCampaignLoading) {
     return (
       <div className="flex justify-center py-8">
@@ -417,6 +557,9 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     );
   }
 
+  const canSendOrSchedule = currentCampaign?.status === 'draft' || currentCampaign?.status === 'scheduled';
+  const sendButtonText = currentCampaign?.status === 'scheduled' ? 'Reschedule/Send Now' : 'Send Campaign';
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -432,32 +575,19 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
         <div className="flex space-x-2">
           {currentCampaign.status === 'draft' && (
             <>
-              <Button onClick={handleSaveCampaign} variant="outline" disabled={isSavingDraft}>
-                {isSavingDraft && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+              <Button onClick={handleSaveCampaign} disabled={isSavingDraft || currentCampaignLoading} className="mr-2">
+                {isSavingDraft ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Save Draft
               </Button>
-              <Button
-                variant="outline"
-                onClick={() => router.push(`/admin/email/campaigns/${campaignId}/schedule`)}
-              >
-                <Calendar className="mr-2 h-4 w-4" />
-                Schedule
+              <Button onClick={() => setIsTestSendModalOpen(true)} variant="outline" className="mr-2">
+                <Mail className="mr-2 h-4 w-4" /> Send Test Email
               </Button>
-              <Button
-                onClick={handleSendCampaign}
-                disabled={isSending}
-              >
-                {isSending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Send Now
-                  </>
-                )}
+              <Button onClick={handleOpenLivePreview} variant="outline" className="mr-2">
+                <FileText className="mr-2 h-4 w-4" /> Live Preview
+              </Button>
+              <Button onClick={handleSendCampaign} disabled={isSending || !canSendOrSchedule} >
+                {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                {sendButtonText}
               </Button>
             </>
           )}
@@ -580,8 +710,8 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                 <UnlayerEmailEditor
                   key={JSON.stringify(currentCampaign.campaign_design_json)} 
                   ref={unlayerEditorRef}
-                  initialDesign={currentCampaign.campaign_design_json}
-                  initialHtml={currentCampaign.campaign_html_body}
+                  initialDesign={currentCampaign.campaign_design_json ?? undefined}
+                  initialHtml={currentCampaign.campaign_html_body ?? undefined}
                 />
               ) : (
                 <div className="text-center py-8 text-muted-foreground border rounded-md min-h-[300px] flex flex-col justify-center items-center">
@@ -591,13 +721,76 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
               )}
             </TabsContent>
 
-            <TabsContent value="targeting" className="space-y-4 mt-4">
-              <div className="text-center py-4 text-muted-foreground">
-                Segment targeting interface will be implemented here.
-              </div>
+            <TabsContent value="targeting">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Audience Targeting</CardTitle>
+                  <CardDescription>
+                    Select user segments to target with this campaign.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">Select Segments</h3>
+                    {(availableSegmentsLoading || segmentsLoading) && <p><Loader2 className="mr-2 h-4 w-4 animate-spin inline" /> Loading segments...</p>}
+                    {availableSegmentsError && <p className="text-red-500">Error loading available segments: {availableSegmentsError}</p>}
+                    {segmentsError && <p className="text-red-500">Error loading campaign segments: {segmentsError}</p>}
+                    
+                    {!availableSegmentsLoading && !availableSegmentsError && availableSegments && availableSegments.length === 0 && (
+                      <p>No segments available to select.</p>
+                    )}
+
+                    {!availableSegmentsLoading && !segmentsLoading && availableSegments && availableSegments.length > 0 && (
+                      <div className="space-y-2 max-h-96 overflow-y-auto border rounded-md p-4">
+                        {availableSegments.map(segment => {
+                          const isSelected = campaignSegments.some(cs => cs.segment_id === segment.id);
+                          return (
+                            <div key={segment.id} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`segment-${segment.id}`}
+                                checked={isSelected}
+                                onCheckedChange={(checked) => {
+                                  if (!currentCampaign) return;
+                                  if (checked) {
+                                    addCampaignSegment(currentCampaign.id, segment.id)
+                                      .catch(err => toast({ title: 'Error adding segment', description: err.message, variant: 'destructive' }));
+                                  } else {
+                                    removeCampaignSegment(currentCampaign.id, segment.id)
+                                      .catch(err => toast({ title: 'Error removing segment', description: err.message, variant: 'destructive' }));
+                                  }
+                                }}
+                              />
+                              <Label htmlFor={`segment-${segment.id}`} className="font-normal">
+                                {segment.name}
+                                {segment.description && <span className="text-sm text-muted-foreground ml-2">({segment.description})</span>}
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Display Estimated Audience Size */}
+                  <Separator className="my-4" />
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">Estimated Audience Size</h3>
+                    {audienceSizeLoading && <p><Loader2 className="mr-2 h-4 w-4 animate-spin inline" /> Calculating...</p>}
+                    {audienceSizeError && <p className="text-red-500">Error estimating audience: {audienceSizeError}</p>}
+                    {!audienceSizeLoading && !audienceSizeError && estimatedAudienceSize !== null && (
+                      <p className="text-2xl font-bold">{estimatedAudienceSize.toLocaleString()}</p>
+                    )}
+                    {!audienceSizeLoading && !audienceSizeError && estimatedAudienceSize === null && (
+                      <p className="text-muted-foreground">Select segments to see an estimate.</p>
+                    )}
+                  </div>
+                  {/* TODO: Dynamic Audience Size Estimation (II.B) - This is now implemented above */}
+                  {/* TODO: (Optional) Advanced Logic: Segment AND/OR, exclusion (II.C) */}
+                </CardContent>
+              </Card>
             </TabsContent>
 
-            <TabsContent value="analytics" className="mt-4">
+            <TabsContent value="analytics">
               {analyticsLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -692,6 +885,13 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
           onTemplateSelect={handleTemplateSelected}
         />
       )}
+
+      <LivePreviewModal 
+        isOpen={isLivePreviewModalOpen}
+        onClose={() => setIsLivePreviewModalOpen(false)}
+        initialHtml={livePreviewInitialData.html}
+        initialSubject={livePreviewInitialData.subject}
+      />
     </div>
   );
 }

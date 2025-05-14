@@ -193,7 +193,7 @@ export async function getSegmentPreview(
   
   // Get the segment rules
   const { data: segment, error } = await supabase
-    .from('user_segments')
+    .from('segments')
     .select('rules')
     .eq('id', segmentId)
     .single();

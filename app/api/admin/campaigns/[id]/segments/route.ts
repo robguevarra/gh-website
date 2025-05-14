@@ -27,7 +27,7 @@ export async function GET(
       return Response.json({ error: validation.error }, { status: validation.status });
     }
 
-    const { id } = params;
+    const { id } = await params;
     
     // Validate campaign exists
     const campaign = await getCampaignById(id);
@@ -59,7 +59,7 @@ export async function POST(
       return Response.json({ error: validation.error }, { status: validation.status });
     }
 
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     const { segmentId } = body;
     
