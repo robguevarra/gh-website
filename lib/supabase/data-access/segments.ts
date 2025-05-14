@@ -54,21 +54,49 @@ export async function getSegmentById(
 }
 
 /**
- * Retrieves all segments.
+ * Retrieves all segments with pagination support.
  * @returns An array of segments or null if an error occurred.
  */
 export async function listSegments(): Promise<Segment[] | null> {
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase
-    .from('segments')
-    .select('*')
-    .order('name', { ascending: true });
+  
+  // Implement pagination to handle potentially large number of segments
+  let allSegments: Segment[] = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+  
+  try {
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('segments')
+        .select('*')
+        .order('name', { ascending: true })
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
-  if (error) {
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        // Add this page's results to our collection
+        allSegments = [...allSegments, ...data];
+        
+        // Check if we've reached the end of the results
+        if (data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        // No more results
+        hasMore = false;
+      }
+    }
+    
+    return allSegments;
+  } catch (error: any) {
     console.error('Error listing segments:', error.message);
     return null;
   }
-  return data;
 }
 
 /**

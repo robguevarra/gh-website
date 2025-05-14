@@ -378,19 +378,67 @@ With these schema corrections, the identified database-related errors for campai
     - Iteratively fixed the Edge Function by adding the missing required fields to the insert payload:
         1. Added `name: segment.name` to satisfy the `name` column's `NOT NULL` constraint.
         2. Added `rules: segment.rules` to satisfy the `rules` column's `NOT NULL` constraint.
+    - Discovered the `user_segments` table schema had been refactored to a proper junction table structure, so updated the insert payload to only include `segment_id` and `user_id` fields.
 - **Outcome:** The `user_segments` table is now being correctly populated by the `update-all-user-segments` Edge Function. This directly addresses a key part of the "Dynamic Audience Size Estimation" functionality.
 
 #### 2. Campaign Segments API (`GET /api/admin/campaigns/[campaignId]/segments`)
 - **Issue:** The API endpoint responsible for fetching segments linked to a campaign was returning a 500 error. The error message "Could not find a relationship between 'campaign_segments' and 'user_segments'" indicated an incorrect Supabase query.
 - **Resolution:**
     - Located the faulty query within the `getCampaignSegments` function in `lib/supabase/data-access/campaign-management.ts`.
-    - The query was incorrectly attempting to join `campaign_segments` with `user_segments` (i.e., `select('segment:user_segments(*)')`).
+    - The query was incorrectly attempting to join `campaign_segments` with `user_segments` (i.e., `select('segment:user_segments(*))`),.
     - Corrected the query to join with the `segments` table (i.e., `select('segment:segments(*)')`), which holds the segment definitions.
 - **Outcome:** The API endpoint now successfully fetches and returns the segments associated with a campaign, resolving the 500 error.
 
-#### 3. General Observation & Recommendation for `user_segments` Table
-- **Observation:** The `user_segments` table currently stores `name`, `description`, and `rules`, which are redundant as these are primary attributes of the `segments` table. It also has `segment_id` and `user_id` as nullable, which is not ideal for a junction table.
-- **Recommendation:** For improved data integrity and efficiency, the `user_segments` table should be refactored into a pure junction table. This would involve:
-    - Removing `name`, `description`, and `rules` columns.
-    - Ensuring `user_id` and `segment_id` are `NOT NULL`.
-    - The Edge Function would then only insert `{ user_id, segment_id }` pairs.
+#### 3. Handling Large Tag Sets in Edge Function (414 Request-URI Too Large Error)
+- **Issue:** When processing tags with many users (e.g., 2,898 entries), the Edge Function was hitting a Cloudflare "414 Request-URI Too Large" error. This occurred because the function was attempting to create a PostgREST URL with thousands of UUIDs in a single `.in('id', userIds)` filter.
+- **Troubleshooting Steps & Resolution:**
+    - Initially attempted using `.or()` with batched IDs, but this didn't fully resolve the URL length issue.
+    - Implemented a comprehensive paginated approach for tag conditions:
+        1. Fetch all user IDs for a tag using pagination (`limit` and `.range()`) to overcome the default 1000 record limit.
+        2. Process user IDs across multiple pages and accumulate them in an `allUserIds` array.
+        3. Use proper pagination controls with logic to detect when all records have been fetched.
+        4. For large tag sets (>100 users), use a direct approach that bypasses URL construction entirely.
+        5. Return the user IDs directly via `{ type: 'direct_user_ids', userIds: allUserIds }` to the main function.
+        6. Modify the main processing logic to handle this special case by skipping query execution for large sets.
+    - Added detailed logging throughout the pagination process to aid debugging.
+- **Outcome:** The Edge Function now successfully handles tags of any size, including those with thousands of users. It properly populates the `user_segments` table with all matching users, ensuring accurate audience estimation for campaigns.
+
+#### 4. Current `user_segments` Table Schema
+- **Validation:** Confirmed via direct SQL query that the `user_segments` table has been properly refactored to a clean junction table design with the following structure:
+  ```
+  - id (uuid, NOT NULL, default: gen_random_uuid())
+  - created_at (timestamp with time zone, NOT NULL, default: now())
+  - updated_at (timestamp with time zone, NOT NULL, default: now()) 
+  - segment_id (uuid, NOT NULL)
+  - user_id (uuid, NOT NULL)
+  ```
+- **Observation:** This is the optimal schema design for a junction table, removing previous redundancy and enforcing proper constraints.
+
+#### 5. Comprehensive Pagination Improvements (2025-05-15)
+- **Issue:** Multiple components in the segmentation system were limited by Supabase's default 1000 record limit, causing potential data truncation with larger user segments.
+- **Components Affected and Resolved:**
+  1. **Edge Function `update-all-user-segments`:**
+     - Implemented paginated fetching of all user IDs across tag pages
+     - Added direct processing for large user ID sets to avoid URL length limits
+     - Added proper termination logic to detect when all records have been fetched
+  
+  2. **API Endpoint `estimate-audience`:** 
+     - Implemented pagination for retrieving users from segments
+     - Collected and de-duplicated user IDs across all pages
+     - Ensured accurate audience size counts regardless of segment size
+  
+  3. **Campaign Management `addRecipientsFromSegments`:**
+     - Added pagination support when fetching users from selected segments
+     - Ensured all recipients are added to campaigns, not just the first 1000
+     - Maintained proper error handling throughout the pagination process
+  
+  4. **Segment Listing Functions:**
+     - Updated `listSegments` to use pagination for potentially large segment collections
+     - Ensured all queries properly handle page boundaries and termination conditions
+     - Improved error handling and reporting during multi-page operations
+- **Implementation Pattern:** Each pagination implementation follows a consistent pattern:
+  - Initialize an accumulator array and pagination variables (page number, page size, continuation flag)
+  - Loop through pages with a termination condition (receive fewer records than requested or empty result)
+  - Process each page of results and add to the accumulator array
+  - After collecting all pages, process the complete dataset
+- **Outcome:** The segmentation system now correctly handles datasets of any size, ensuring accurate audience targeting and estimation for all campaigns regardless of segment or tag size.

@@ -455,21 +455,42 @@ export const addRecipientsFromSegments = async (campaignId: string) => {
   
   const segmentIds = campaignSegments.map(segment => segment.segment_id);
   
-  // Get users from segments
-  // In a real implementation, we would use a more sophisticated query
-  // that handles complex segment rules
-  const { data: userSegments, error: userSegmentError } = await admin
-    .from('user_segments')
-    .select('user_id')
-    .in('segment_id', segmentIds);
-    
-  if (userSegmentError) throw userSegmentError;
+  // Get users from segments with pagination to handle more than 1000 users
+  let allUserSegments: Array<{user_id: string | null}> = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
   
-  if (!userSegments || userSegments.length === 0) {
+  while (hasMore) {
+    const { data: userSegmentsPage, error: userSegmentError } = await admin
+      .from('user_segments')
+      .select('user_id')
+      .in('segment_id', segmentIds)
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+      
+    if (userSegmentError) throw userSegmentError;
+    
+    if (userSegmentsPage && userSegmentsPage.length > 0) {
+      // Add this page's results to our collection
+      allUserSegments = [...allUserSegments, ...userSegmentsPage];
+      
+      // Check if we've reached the end of the results
+      if (userSegmentsPage.length < pageSize) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+    } else {
+      // No more results
+      hasMore = false;
+    }
+  }
+  
+  if (allUserSegments.length === 0) {
     throw new Error('No users found in the selected segments');
   }
   
-  const userIds = userSegments
+  const userIds = allUserSegments
     .map(segment => segment.user_id)
     .filter((id): id is string => typeof id === 'string' && !!id);
   

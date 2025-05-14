@@ -51,22 +51,43 @@ export async function GET(request: NextRequest) {
     const segmentIds = campaignSegments.map((cs) => cs.segment_id);
     console.log('[AUDIENCE_ESTIMATE] Extracted segmentIds:', JSON.stringify(segmentIds, null, 2));
 
-    const { data: userSegmentsData, error: userSegmentsError } = await adminSupabase
-      .from('user_segments')
-      .select('user_id')
-      .in('segment_id', segmentIds);
-
-    console.log('[AUDIENCE_ESTIMATE] Fetched userSegmentsData:', JSON.stringify(userSegmentsData, null, 2));
-    if (userSegmentsError) {
-      console.error('[AUDIENCE_ESTIMATE] Error fetching user segments:', userSegmentsError);
-      return handleServerError(userSegmentsError, 'Failed to fetch user segments');
-    }
+    // Implement pagination to handle more than 1000 users
+    let allUserSegments: UserSegmentRow[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
     
-    const userSegments: UserSegmentRow[] = userSegmentsData || [];
-    console.log('[AUDIENCE_ESTIMATE] Parsed userSegments:', JSON.stringify(userSegments, null, 2));
+    while (hasMore) {
+      const { data: userSegmentsPage, error: userSegmentsError } = await adminSupabase
+        .from('user_segments')
+        .select('user_id')
+        .in('segment_id', segmentIds)
+        .range(page * pageSize, (page + 1) * pageSize - 1);
 
+      if (userSegmentsError) {
+        console.error(`[AUDIENCE_ESTIMATE] Error fetching user segments (page ${page+1}):`, userSegmentsError);
+        return handleServerError(userSegmentsError, 'Failed to fetch user segments');
+      }
+
+      if (userSegmentsPage && userSegmentsPage.length > 0) {
+        // Add this page's results to our collection
+        allUserSegments = [...allUserSegments, ...userSegmentsPage];
+        
+        // Check if we've reached the end of the results
+        if (userSegmentsPage.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      } else {
+        // No more results
+        hasMore = false;
+      }
+    }
+
+    const userSegments: UserSegmentRow[] = allUserSegments;
+    
     if (userSegments.length === 0) {
-      console.log('[AUDIENCE_ESTIMATE] No user segments found for the given segmentIds. Returning 0.');
       return NextResponse.json({ estimatedAudienceSize: 0 });
     }
 
