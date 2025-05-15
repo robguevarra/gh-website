@@ -422,13 +422,38 @@ export const getCampaignRecipients = async (campaignId: string, {
 }) => {
   const supabase = createClient();
   
-  const { data, error, count } = await supabase
+  // First get the recipient records
+  const { data: recipientData, error: recipientError, count } = await supabase
     .from('campaign_recipients')
-    .select('*, user:users!inner(*)', { count: 'exact' })
+    .select('id, user_id', { count: 'exact' })
     .eq('campaign_id', campaignId)
     .range(offset, offset + limit - 1);
     
-  if (error) throw error;
+  if (recipientError) throw recipientError;
+  
+  if (!recipientData || recipientData.length === 0) {
+    return { data: [], count: 0 };
+  }
+  
+  // Then fetch the user details for those recipients
+  const userIds = recipientData.map(recipient => recipient.user_id);
+  
+  const { data: userData, error: userError } = await supabase
+    .from('users')
+    .select('id, email, first_name, last_name')
+    .in('id', userIds);
+    
+  if (userError) throw userError;
+  
+  // Combine the data
+  const data = recipientData.map(recipient => {
+    const user = userData?.find(u => u.id === recipient.user_id);
+    return {
+      id: recipient.id,
+      user: user || { id: recipient.user_id, email: 'unknown@example.com' }
+    };
+  });
+  
   return { data, count };
 };
 

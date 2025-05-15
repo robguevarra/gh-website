@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
+import { AudienceWarning } from './audience-warning';
+import { RecipientPreviewModal } from './recipient-preview-modal';
 import { Loader2, Send, Calendar, ArrowLeft, FileText, Mail } from 'lucide-react';
 import {
   Dialog,
@@ -73,6 +75,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isTestSendModalOpen, setIsTestSendModalOpen] = useState(false);
   const [isLivePreviewModalOpen, setIsLivePreviewModalOpen] = useState(false);
+  const [isRecipientPreviewModalOpen, setIsRecipientPreviewModalOpen] = useState(false);
   const [livePreviewInitialData, setLivePreviewInitialData] = useState<{ html: string; subject: string }>({ html: '', subject: '' });
 
   const unlayerEditorRef = useRef<UnlayerEditorRef>(null);
@@ -778,7 +781,20 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                     {audienceSizeLoading && <p><Loader2 className="mr-2 h-4 w-4 animate-spin inline" /> Calculating...</p>}
                     {audienceSizeError && <p className="text-red-500">Error estimating audience: {audienceSizeError}</p>}
                     {!audienceSizeLoading && !audienceSizeError && estimatedAudienceSize !== null && (
-                      <p className="text-2xl font-bold">{estimatedAudienceSize.toLocaleString()}</p>
+                      <>
+                        <div className="flex items-center gap-2">
+                          <p className="text-2xl font-bold">{estimatedAudienceSize.toLocaleString()}</p>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => setIsRecipientPreviewModalOpen(true)}
+                            disabled={estimatedAudienceSize === 0}
+                          >
+                            Preview Recipients
+                          </Button>
+                        </div>
+                        <AudienceWarning size={estimatedAudienceSize} />
+                      </>
                     )}
                     {!audienceSizeLoading && !audienceSizeError && estimatedAudienceSize === null && (
                       <p className="text-muted-foreground">Select segments to see an estimate.</p>
@@ -892,6 +908,14 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
         initialHtml={livePreviewInitialData.html}
         initialSubject={livePreviewInitialData.subject}
       />
+
+      {currentCampaign && (
+        <RecipientPreviewModal
+          isOpen={isRecipientPreviewModalOpen}
+          onClose={() => setIsRecipientPreviewModalOpen(false)}
+          campaignId={currentCampaign.id}
+        />
+      )}
     </div>
   );
 }

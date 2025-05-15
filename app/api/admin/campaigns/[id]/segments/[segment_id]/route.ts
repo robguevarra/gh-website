@@ -23,7 +23,7 @@ export async function DELETE(
       return NextResponse.json({ error: validation.error }, { status: validation.status });
     }
 
-    const { id: campaignId, segment_id: segmentId } = params;
+    const { id: campaignId, segment_id: segmentId } = await params;
 
     if (!campaignId || !segmentId) {
       return NextResponse.json(

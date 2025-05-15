@@ -166,12 +166,25 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
     - [x] Fixed "Failed to add segment to campaign - duplicate key" error by ensuring data-access functions (`getCampaignSegments`, `addCampaignSegment`, `removeCampaignSegment`) use the admin Supabase client (`getAdminClient()`) to bypass RLS. This ensures the UI accurately reflects existing segment associations, preventing attempts to re-add.
     - [x] Fixed "Unexpected token '<'" error when removing segments by creating the missing API route handler for `DELETE /api/admin/campaigns/[id]/segments/[segment_id]`.
     - [x] Verified that `useCampaignStore` correctly calls the new `DELETE` endpoint.
-- [ ] **Dynamic Audience Size Estimation:** <span style="color: orange;">(In progress)</span>
+- [x] **Dynamic Audience Size Estimation:** <span style="color: green;">(Completed 2025-05-15)</span>
   - [x] **Investigation (2025-05-14):** Audience estimation in campaign "Targeting" tab relies on `user_segments` table. Discrepancy found where this table was empty for selected segments, causing a '0' estimate, while the segmentation page's "Preview" feature (which uses dynamic calculation) showed correct counts after a fix.
   - [x] **Fix (2025-05-14):** Corrected `lib/segmentation/engine.ts` (`getSegmentPreview` function) to fetch segment rules from the `segments` table instead of `user_segments`. This ensures the "Preview" button on the segmentation page accurately calculates and displays user counts dynamically.
-  - [ ] Display total estimated recipients in Campaign Targeting tab based on selected segments (currently reads from `user_segments`, which may be empty). <span style="color: orange;">(To Do - UI element exists but shows 0 if `user_segments` is not populated)</span>
-  - [ ] Implement a robust mechanism to populate/update the `user_segments` table based on segment rules and user tag changes. This is crucial for the campaign audience estimation to work correctly. <span style="color: red;">(High Priority - To Do)</span>
-  - [ ] Show warnings for unexpectedly small/large audiences.
+  - [x] Display total estimated recipients in Campaign Targeting tab based on selected segments. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] Implement a robust mechanism to populate/update the `user_segments` table based on segment rules and user tag changes. <span style="color: green;">(Completed 2025-05-14)</span>
+  - [x] **Fix (2025-05-15):** Enhanced audience estimation endpoint to properly count all selected segments using the service role client. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] **Fix (2025-05-15):** Implemented pagination in audience estimation to handle large user sets (>1000) across multiple segments. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] **Fix (2025-05-15):** Added proper deduplication of users who belong to multiple segments to ensure accurate audience counts. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] Show warnings for unexpectedly small/large audiences. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] Implement functional utility to determine if audience size is 'small' (≤ 5) or 'large' (≥ 5000) and return appropriate warning message/type. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] Render a visually distinct, non-blocking warning (e.g., Shadcn Alert) in the Targeting tab if present. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] Ensure warning logic is DRY and reusable for future analytics or send confirmation. <span style="color: green;">(Completed 2025-05-15)</span>
+- [x] **(Optional) Recipient Preview:** <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] Add a "Preview Recipients" button next to the audience estimate in the Targeting tab. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] On click, open a modal and fetch a sample (10–20) of user emails/names from the selected segments. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] Display the sample in a paginated or scrollable modal list, with clear UX for loading/error states. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] Ensure performance: never fetch the full audience list, only a small sample. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] Use the same segment selection logic as the audience estimator, but fetch user records instead of just a count. <span style="color: green;">(Completed 2025-05-15)</span>
+  - [x] Ensure modal is responsive and accessible. <span style="color: green;">(Completed 2025-05-15)</span>
 - [ ] **(Optional) Segment Combination Logic:**
   - [ ] Allow specifying AND/OR logic for multiple selected segments.
 - [ ] **(Optional) Exclusion Logic:**
