@@ -265,6 +265,28 @@ export const scheduleCampaign = async (id: string, scheduledAt: string) => {
   return data;
 };
 
+// Segment functions
+
+/**
+ * Get a segment by ID
+ */
+export const getSegmentById = async (id: string) => {
+  const supabase = getAdminClient(); // Use admin client to bypass RLS
+  
+  const { data, error } = await supabase
+    .from('segments')
+    .select('*')
+    .eq('id', id)
+    .single();
+    
+  if (error) {
+    console.error('[getSegmentById] Error fetching segment:', JSON.stringify(error, null, 2));
+    throw error;
+  }
+  
+  return data;
+};
+
 // Campaign Segments functions
 
 /**

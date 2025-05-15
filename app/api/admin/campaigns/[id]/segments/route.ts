@@ -8,9 +8,11 @@ import { NextRequest } from 'next/server';
 import { 
   getCampaignById,
   getCampaignSegments,
-  addCampaignSegment
+  addCampaignSegment,
+  getSegmentById
 } from '@/lib/supabase/data-access/campaign-management';
 import { validateAdminAccess, handleServerError, handleNotFound } from '@/lib/supabase/route-handler';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 /**
  * GET /api/admin/campaigns/[id]/segments
@@ -82,6 +84,34 @@ export async function POST(
       campaign_id: id,
       segment_id: segmentId
     });
+    
+    // Get the segment to check if it exists
+    const segment = await getSegmentById(segmentId);
+    if (!segment) {
+      return handleNotFound('Segment');
+    }
+    
+    // Call the Edge Function to update user_segments for this segment
+    try {
+      const supabase = await createServiceRoleClient();
+      const { data: functionResponse, error: functionError } = await supabase.functions.invoke(
+        'update-all-user-segments',
+        {
+          body: { segmentIds: [segmentId] }
+        }
+      );
+      
+      if (functionError) {
+        console.error('Error calling update-all-user-segments function:', functionError);
+        // We don't want to fail the whole request if just the function call fails
+        // So we log the error but continue
+      } else {
+        console.log('Successfully called update-all-user-segments function:', functionResponse);
+      }
+    } catch (functionCallError) {
+      console.error('Exception calling update-all-user-segments function:', functionCallError);
+      // Again, don't fail the whole request
+    }
 
     return Response.json({ 
       segment: campaignSegment,

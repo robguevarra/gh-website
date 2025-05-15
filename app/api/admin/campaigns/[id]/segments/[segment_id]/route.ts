@@ -10,8 +10,10 @@ import {
 } from '@/lib/supabase/route-handler';
 import { 
   removeCampaignSegment,
-  getCampaignById // To verify campaign exists
+  getCampaignById, // To verify campaign exists
+  getSegmentById // To verify segment exists
 } from '@/lib/supabase/data-access/campaign-management';
+import { createServiceRoleClient } from '@/lib/supabase/server';
 
 export async function DELETE(
   request: NextRequest,
@@ -38,6 +40,12 @@ export async function DELETE(
       return handleNotFound('Campaign');
     }
 
+    // Verify the segment exists
+    const segment = await getSegmentById(segmentId);
+    if (!segment) {
+      return handleNotFound('Segment');
+    }
+    
     // Call the data access function to remove the segment
     const success = await removeCampaignSegment(campaignId, segmentId);
 
@@ -49,6 +57,29 @@ export async function DELETE(
         { error: 'Failed to remove segment from campaign for an unknown reason' }, 
         { status: 500 }
       );
+    }
+    
+    // Call the Edge Function to update user_segments for this segment
+    // This ensures the user_segments table stays in sync
+    try {
+      const supabase = await createServiceRoleClient();
+      const { data: functionResponse, error: functionError } = await supabase.functions.invoke(
+        'update-all-user-segments',
+        {
+          body: { segmentIds: [segmentId] }
+        }
+      );
+      
+      if (functionError) {
+        console.error('Error calling update-all-user-segments function:', functionError);
+        // We don't want to fail the whole request if just the function call fails
+        // So we log the error but continue
+      } else {
+        console.log('Successfully called update-all-user-segments function:', functionResponse);
+      }
+    } catch (functionCallError) {
+      console.error('Exception calling update-all-user-segments function:', functionCallError);
+      // Again, don't fail the whole request
     }
 
     return NextResponse.json({ message: 'Segment removed from campaign successfully' }, { status: 200 });
