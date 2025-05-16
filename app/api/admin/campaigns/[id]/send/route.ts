@@ -11,7 +11,7 @@ import {
   getActiveCampaignTemplate,
   getCampaignRecipients,
   addRecipientsFromSegments,
-  initCampaignAnalytics
+  CampaignAnalytics
 } from '@/lib/supabase/data-access/campaign-management';
 import { validateAdminAccess, handleServerError, handleNotFound } from '@/lib/supabase/route-handler';
 
@@ -70,7 +70,7 @@ export async function POST(
     }
     
     // Initialize analytics for the campaign
-    await initCampaignAnalytics(id);
+    await CampaignAnalytics(id);
     
     // Trigger campaign send
     const result = await triggerCampaignSend(id);

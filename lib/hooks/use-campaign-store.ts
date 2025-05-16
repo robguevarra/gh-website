@@ -489,23 +489,33 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     set({ segmentsLoading: true, segmentsError: null });
     
     try {
+      console.log(`[addCampaignSegment] Adding segment ${segmentId} to campaign ${campaignId}`);
+      
       const response = await fetch(`/api/admin/campaigns/${campaignId}/segments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ segmentId }),
       });
       
+      const responseData = await response.json();
+      
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to add segment');
+        console.error('[addCampaignSegment] API Error:', responseData);
+        throw new Error(responseData.error || 'Failed to add segment');
       }
+      
+      console.log('[addCampaignSegment] Success:', responseData);
       
       // Refresh campaign segments and then fetch audience estimate
       await get().fetchCampaignSegments(campaignId);
       await get().fetchEstimatedAudienceSize(campaignId);
+      
+      return responseData.segment;
     } catch (error: any) {
-      set({ segmentsLoading: false, segmentsError: error.message });
-      throw error; // Re-throw for component to handle with toast
+      console.error('[addCampaignSegment] Error:', error);
+      const errorMessage = error.message || 'Failed to add segment';
+      set({ segmentsLoading: false, segmentsError: errorMessage });
+      throw new Error(errorMessage);
     } finally {
       set({ segmentsLoading: false });
     }
@@ -515,21 +525,31 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     set({ segmentsLoading: true, segmentsError: null });
     
     try {
+      console.log(`[removeCampaignSegment] Removing segment ${segmentId} from campaign ${campaignId}`);
+      
       const response = await fetch(`/api/admin/campaigns/${campaignId}/segments/${segmentId}`, {
         method: 'DELETE',
       });
       
+      const responseData = await response.json();
+      
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to remove segment');
+        console.error('[removeCampaignSegment] API Error:', responseData);
+        throw new Error(responseData.error || 'Failed to remove segment');
       }
+      
+      console.log('[removeCampaignSegment] Success:', responseData);
       
       // Refresh campaign segments and then fetch audience estimate
       await get().fetchCampaignSegments(campaignId);
       await get().fetchEstimatedAudienceSize(campaignId);
+      
+      return responseData.message || 'Segment removed successfully';
     } catch (error: any) {
-      set({ segmentsLoading: false, segmentsError: error.message });
-      throw error; // Re-throw for component to handle with toast
+      console.error('[removeCampaignSegment] Error:', error);
+      const errorMessage = error.message || 'Failed to remove segment';
+      set({ segmentsLoading: false, segmentsError: errorMessage });
+      throw new Error(errorMessage);
     } finally {
       set({ segmentsLoading: false });
     }

@@ -1178,12 +1178,12 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                               <Checkbox
                                 id={`segment-${segment.id}`}
                                 checked={isSelected}
-                                onChange={(checked) => {
+                                onCheckedChange={(checked) => {
                                   if (!currentCampaign) return;
-                                  if (checked) {
+                                  if (checked === true) {
                                     addCampaignSegment(currentCampaign.id, segment.id)
                                       .catch(err => toast({ title: 'Error adding segment', description: err.message, variant: 'destructive' }));
-                                  } else {
+                                  } else if (checked === false) {
                                     removeCampaignSegment(currentCampaign.id, segment.id)
                                       .catch(err => toast({ title: 'Error removing segment', description: err.message, variant: 'destructive' }));
                                   }

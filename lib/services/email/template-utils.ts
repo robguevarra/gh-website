@@ -109,12 +109,12 @@ export const generateDefaultVariableValues = (variables: string[]): Record<strin
       defaultValues[variable] = 'Test User';
     }
     else if (variable.match(/email|mail/i)) {
-      defaultValues[variable] = 'test@example.com';
+      defaultValues[variable] = 'rob@gracefulhomeschooling.com';
     }
     // Instructor/teacher patterns
     else if (variable.match(/instructor|teacher/i)) {
       if (variable.match(/name/i)) {
-        defaultValues[variable] = 'Jane Smith';
+        defaultValues[variable] = 'Emigrace Guevarra';
       } else {
         defaultValues[variable] = `[${variable}]`;
       }
@@ -122,7 +122,7 @@ export const generateDefaultVariableValues = (variables: string[]): Record<strin
     // Class/course patterns
     else if (variable.match(/class/i)) {
       if (variable.match(/name/i)) {
-        defaultValues[variable] = 'Homeschooling Essentials';
+        defaultValues[variable] = 'Papers to Profits Class 1';
       }
       else if (variable.match(/date/i)) {
         defaultValues[variable] = new Date().toLocaleDateString();

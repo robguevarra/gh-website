@@ -238,6 +238,102 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
   - [ ] Button to "Preview Recipients" showing a sample list from target segments.
 - [ ] **State Management:** Store selected segment IDs and logic in campaign state and save to database.
 
+
+#### A. Database Schema for Queue System
+- [x] **Create `email_queue` table** <span style="color: green;">(Completed 2025-05-16)</span>
+  - [x] `id`: UUID primary key
+  - [x] `campaign_id`: UUID foreign key to email_campaigns
+  - [x] `status`: enum('pending', 'processing', 'sent', 'failed')
+  - [x] `priority`: integer (higher = higher priority)
+  - [x] `recipient_email`: text
+  - [x] `recipient_data`: jsonb (for personalization)
+  - [x] `scheduled_at`: timestamp with time zone
+  - [x] `sent_at`: timestamp with time zone (nullable)
+  - [x] `error_message`: text (nullable)
+  - [x] `retry_count`: integer
+  - [x] `created_at`: timestamp with time zone
+  - [x] `updated_at`: timestamp with time zone
+
+- [x] **Create `email_batches` table** <span style="color: green;">(Completed 2025-05-16)</span>
+  - [x] `id`: UUID primary key
+  - [x] `campaign_id`: UUID foreign key to email_campaigns
+  - [x] `status`: enum('pending', 'processing', 'completed', 'failed')
+  - [x] `total_emails`: integer
+  - [x] `emails_processed`: integer
+  - [x] `started_at`: timestamp with time zone (nullable)
+  - [x] `completed_at`: timestamp with time zone (nullable)
+  - [x] `error_message`: text (nullable)
+  - [x] `created_at`: timestamp with time zone
+
+- [x] **Create `email_processing_locks` table** <span style="color: green;">(Completed 2025-05-16)</span>
+  - [x] `id`: UUID primary key
+  - [x] `resource_id`: text (e.g., 'campaign:123')
+  - [x] `locked_until`: timestamp with time zone
+  - [x] `locked_by`: text (worker ID)
+  - [x] `created_at`: timestamp with time zone
+
+#### B. Queue Processing Implementation
+- [x] **Create Queue Utility Functions** <span style="color: green;">(Completed 2025-05-16)</span>
+  - [x] Implemented `addToQueue` function to add emails to the queue
+  - [x] Created `processQueue` function to process pending emails
+  - [x] Implemented rate limiting and batch processing
+  - [x] Added error handling and retry logic
+
+#### C. Update Send Endpoint
+- [x] **Modified `/api/admin/campaigns/send`** <span style="color: green;">(Completed 2025-05-16)</span>
+  - [x] Updated to use the new queue system
+  - [x] Added recipient batching (100 emails per batch)
+  - [x] Implemented proper status updates (queued → sending → completed/failed)
+  - [x] Added comprehensive error handling and validation
+  - [x] Integrated with existing campaign status tracking
+  - [x] Added detailed logging for queue operations
+
+## What Was Done (2025-05-16)
+
+1. **Queue System Implementation**
+   - Created database schema for email queue system
+   - Implemented queue utility functions with batch processing and rate limiting
+   - Updated the send endpoint to use the new queue system
+   - Added comprehensive error handling and status tracking
+
+2. **Code Improvements**
+   - Fixed TypeScript type issues
+   - Improved error handling and logging
+   - Optimized batch processing for better performance
+   - Ensured proper campaign status transitions
+
+3. **Integration**
+   - Connected queue system with existing campaign management
+   - Ensured proper handling of campaign status updates
+   - Added detailed logging for troubleshooting
+
+## Next Steps
+
+1. **Background Queue Processor**
+   - Implement a background worker to process the email queue
+   - Add support for scheduled campaigns
+   - Implement retry logic for failed emails
+
+2. **Testing**
+   - Write unit tests for queue operations
+   - Test with large recipient lists
+   - Verify error handling and retries
+
+3. **Monitoring and Alerts**
+   - Add metrics for queue depth and processing times
+   - Set up alerts for failed jobs
+   - Implement a dashboard for monitoring queue health
+
+4. **Documentation**
+   - Document the queue system architecture
+   - Add API documentation for the updated endpoints
+   - Create runbooks for common operations and troubleshooting
+
+5. **Performance Optimization**
+   - Optimize database queries for queue processing
+   - Implement connection pooling
+   - Consider horizontal scaling for high volume
+
 #### C. Introduce "Review & Confirm" Step/Tab in `CampaignDetail.tsx`
 -#### III. "Review & Confirm" Step/Tab:
    A. **New "Review" Tab Implementation:**
@@ -430,18 +526,284 @@ After a campaign is scheduled, recipients need to be populated and emails sent. 
    - Create an API endpoint to process campaigns when triggered
    - Advantages: offloads scheduling logic to dedicated service
 
+### Email Queue Processor Implementation and Monitoring (2025-05-16)
+
+The Email Queue Processor has been implemented as a Supabase Edge Function with comprehensive monitoring capabilities. This implementation provides robust email delivery with monitoring, logging, and error handling.
+
+#### Key Features Implemented:
+
+1. **Reliable Queue Processing**
+   - Batch processing with configurable size (currently 50 emails per batch)
+   - Processing lock mechanism to prevent concurrent execution issues
+   - Optimized database queries with proper indexes
+
+2. **Advanced Retry Logic**
+   - Exponential backoff for retries (5, 15, 60 minutes)
+   - Configurable maximum retry attempts (currently 3)
+   - Detailed failure tracking and error messages
+   - Random jitter to prevent thundering herd issues on retries
+
+3. **Comprehensive Monitoring System**
+   - Real-time metrics collection in new `email_processing_metrics` table
+   - Alert system with dedicated `email_alerts` table for issues
+   - Enhanced health check endpoint with queue metrics
+   - Structured logging with configurable log levels
+
+4. **Performance Optimization**
+   - Processing time tracking
+   - Automatic alerts for slow processing
+   - Parallel processing with rate limiting
+
+5. **Integration with Postmark**
+   - Fixed ServerClient integration with proper error handling
+   - Tracking for opens, clicks via MessageStream
+   - Metadata support for campaign and email tracking
+
+#### Database Schema Added:
+
+```sql
+-- Performance metrics table for tracking email batch processing
+CREATE TABLE IF NOT EXISTS email_processing_metrics (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  batch_size INTEGER NOT NULL,
+  success_count INTEGER NOT NULL,
+  failure_count INTEGER NOT NULL,
+  retry_count INTEGER NOT NULL,
+  execution_time_ms INTEGER NOT NULL,
+  timestamp TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Alerts table for storing system alerts
+CREATE TABLE IF NOT EXISTS email_alerts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  alert_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  data JSONB,
+  timestamp TIMESTAMPTZ NOT NULL,
+  resolved BOOLEAN DEFAULT FALSE,
+  resolved_at TIMESTAMPTZ,
+  resolved_by UUID REFERENCES auth.users(id),
+  resolution_notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+#### Monitoring Alerts Implemented:
+
+1. **High Failure Rate Detection**
+   - Triggers when failures exceed configured threshold
+   - Records detailed error information for diagnosis
+   - Alerts admins via the `email_alerts` table
+
+2. **Slow Processing Detection**
+   - Monitors batch processing time
+   - Alerts on processing times exceeding 30 seconds
+   - Calculates emails-per-second for performance monitoring
+
+3. **Queue Health Metrics**
+   - Real-time counts of emails by status (pending, processing, sent, failed, retrying)
+   - Oldest pending email tracking
+   - Last successful send timestamp
+
+#### Deployment Configuration:
+
+- Edge function deployed with JWT verification disabled
+- Configured to run on a 5-minute schedule
+- Service role access to ensure proper database permissions
+
+#### Implementation Fixes (2025-05-16):
+
+During deployment, the following issues were identified and fixed:
+
+1. **Postmark Client Integration Fix:**
+   - Fixed the `PostmarkClient` import to use `ServerClient` from the Postmark module
+   - Updated from `import { PostmarkClient } from 'https://esm.sh/postmark'` to `import * as postmarkModule from 'https://esm.sh/postmark'`
+   - Changed client instantiation to `const postmark = new postmarkModule.ServerClient(CONFIG.POSTMARK_SERVER_TOKEN)`
+
+2. **Missing `processing_locks` Table Creation:**
+```sql
+CREATE TABLE IF NOT EXISTS processing_locks (
+  id UUID PRIMARY KEY,
+  lock_name TEXT NOT NULL UNIQUE,
+  acquired_at TIMESTAMPTZ NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_processing_locks_expires_at ON processing_locks (expires_at);
+```
+
+3. **Schema Upgrade for `email_queue` Table:**
+   - Added missing columns required by the processor:
+```sql
+ALTER TABLE email_queue 
+  ADD COLUMN IF NOT EXISTS sender_email TEXT,
+  ADD COLUMN IF NOT EXISTS sender_name TEXT,
+  ADD COLUMN IF NOT EXISTS subject TEXT,
+  ADD COLUMN IF NOT EXISTS html_content TEXT,
+  ADD COLUMN IF NOT EXISTS text_content TEXT,
+  ADD COLUMN IF NOT EXISTS error_message TEXT,
+  ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;
+```
+
+4. **Testing and Validation:**
+   - Added test email to queue with proper campaign reference
+   - Validated email processing and monitoring metrics
+
+5. **Lock ID Generation Fix (2025-05-16):**
+   - Identified issue with process lock acquisition that was preventing email processing
+   - Fixed lock ID generation to use proper UUID instead of string format
+   - Corrected code:
+   ```typescript
+   // Before - Invalid UUID format causing constraint violation
+   const lockId = `lock:${name}`
+   
+   // After - Using proper UUID format
+   const lockId = crypto.randomUUID()
+   ```
+   - Redeployed and verified proper lock acquisition
+
+6. **Email Status Enum Fix (2025-05-16):**
+   - Discovered missing 'retrying' status in email_status enum causing processing failures
+   - Error: `invalid input value for enum email_status: "retrying"`
+   - Applied SQL migration to add the missing enum value:
+   ```sql
+   ALTER TYPE email_status ADD VALUE IF NOT EXISTS 'retrying';
+   ```
+   - Added test email with valid recipient to verify processing works end-to-end
+
+## Email Campaign System Architecture and Data Flow
+
+### Overview of Email Campaign System
+
+The email campaign system follows a comprehensive workflow that spans from campaign creation to email delivery and monitoring. Below is a detailed breakdown of each stage, including related tables and data flows.
+
+### 1. Campaign Creation and Management
+
+**Tables involved:**
+- `email_campaigns` - Stores core campaign data
+- `campaign_templates` - Stores the email templates linked to campaigns
+- `campaign_segments` - Junction table linking campaigns to user segments
+- `user_segments` - Stores user segment definitions and criteria
+
+**Flow:**
+1. **Admin creates/edits a campaign** in the UI (`CampaignDetail.tsx`)
+   - Campaign data is saved to the `email_campaigns` table via API calls
+   - Selected template version is stored in `campaign_templates`
+   - Selected segments are stored in `campaign_segments` (junction table)
+
+2. **Targeting user segments:**
+   - Admin selects segments via checkboxes in the UI
+   - API endpoints at `/api/admin/campaigns/[id]/segments` handle:
+     - Adding segments (`POST`) - Writes to `campaign_segments`
+     - Removing segments (`DELETE`) - Removes from `campaign_segments`
+
+3. **Test email sending:**
+   - Admin uses "Send Test Email" modal in the UI
+   - API endpoint at `/api/admin/campaigns/[id]/test` processes the request
+   - Creates a direct entry in `email_queue` with status 'pending'
+
+### 2. Campaign Scheduling and Queueing
+
+**Tables involved:**
+- `email_campaigns` - Updated with scheduling information
+- `campaign_recipients` - Stores individual recipients generated from segments
+- `email_queue` - Stores individual emails ready for delivery
+
+**Flow:**
+1. **Admin schedules a campaign** using the campaign scheduling interface
+   - `scheduled_at` and `status` are updated in `email_campaigns`
+   - Campaign status changes to "scheduled"
+
+2. **Recipient population** (happens when campaign status changes to "scheduled")
+   - Function `addRecipientsFromSegments` runs to:
+     - Query all segments linked to the campaign from `campaign_segments`
+     - For each segment, fetch eligible users from `user_segments`
+     - Insert each recipient into `campaign_recipients` table
+
+3. **Email queueing** (happens after recipient population or directly for test emails)
+   - For each recipient in `campaign_recipients`, a record is created in `email_queue`
+   - The record includes:
+     - `campaign_id` - Links to the source campaign
+     - `recipient_email` - Target recipient email
+     - `sender_email` and `sender_name` - From address and name
+     - `subject` and content fields - Email content
+     - `status` - Set to 'pending'
+     - `scheduled_at` - When to send it
+
+### 3. Email Processing and Delivery
+
+**Tables involved:**
+- `email_queue` - Updated as emails are processed
+- `processing_locks` - Manages concurrent processing
+- `email_processing_metrics` - Stores performance metrics
+- `email_alerts` - Stores alerts for issues
+
+**Flow:**
+1. **Email queue processor** runs on schedule (every 5 minutes)
+   - First acquires a lock by inserting a record into `processing_locks`
+   - Queries `email_queue` for 'pending' emails with `scheduled_at` <= current time
+
+2. **Processing emails:**
+   - For each email in the batch:
+     - Updates status to 'processing' in `email_queue`
+     - Sends via Postmark API
+     - Updates status to 'sent' and sets `sent_at` on success in `email_queue`
+     - On failure, either:
+       - Updates to 'retrying' with incremented `retry_count` and new `scheduled_at`
+       - Updates to 'failed' if max retries reached
+
+3. **Metrics & monitoring:**
+   - After batch processing, inserts a record into `email_processing_metrics` with:
+     - Batch size, success/failure counts, processing time
+   - If issues are detected (high failures, slow processing):
+     - Inserts alert record into `email_alerts` table
+   - Releases lock in `processing_locks` table when done
+
+### 4. Database Operations Summary
+
+| Action | Table Written | Timing | Data Written |
+|--------|---------------|--------|---------------|
+| Campaign creation | `email_campaigns` | When admin saves campaign | Campaign details, status='draft' |
+| Template selection | `campaign_templates` | When template is chosen | Template HTML, subject, etc. |
+| Segment targeting | `campaign_segments` | When admin adds/removes segments | campaign_id, segment_id pairs |
+| Campaign scheduling | `email_campaigns` | When admin schedules | status='scheduled', scheduled_at |
+| Recipient generation | `campaign_recipients` | After campaign scheduling | recipient data for each user |
+| Email queueing | `email_queue` | After recipient generation | Delivery details, status='pending' |
+| Processing start | `email_queue`, `processing_locks` | When processor runs | status='processing', lock record |
+| Delivery success | `email_queue` | After Postmark sends | status='sent', sent_at |
+| Delivery failure | `email_queue` | After Postmark fails | status='retrying'/'failed', error_message |
+| Metrics recording | `email_processing_metrics` | After batch processing | Batch statistics |
+| Alert generation | `email_alerts` | When issues detected | Alert details, timestamp |
+
+### 5. Deployment and Verification Requirements
+
+**Required Environment Variables:**
+- `POSTMARK_SERVER_TOKEN` - API token for the Postmark service
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` - For database access
+
+**Deployment Considerations:**
+- The Edge Function is deployed with JWT verification disabled for testing
+- Email domain used for sending must be verified in Postmark account
+- Proper error handling ensures metrics capture failures
+
+**Monitoring and Alerts:**
+- System tracks important metrics including success rates and processing times
+- Alerts are generated for high failure rates or slow processing
+- Future improvements will include admin dashboard for monitoring
+
 ### Next Development Steps
 
-1. Implement the background job for processing scheduled campaigns
-2. Add campaign recipient population at the scheduled time
-3. Integrate with email service for batch sending
-4. Add tracking and analytics for sent campaigns
-5. Implement error handling and retry logic for failed sends
+1. Create an admin dashboard UI for monitoring queue health and alerts
+2. Implement notification system for critical alerts (email/Slack)
+3. Continue to develop the campaign scheduling logic to trigger email sending at specified times
 
 ## Database Schema Modifications and Error Resolution (2025-05-13)
 
 During development and testing, two key issues were identified:
 1.  A runtime error: `"Could not find the 'subject' column of 'email_campaigns' in the schema cache"` when creating/updating campaigns.
+{{ ... }}
 2.  A persistent lint error in `lib/supabase/data-access/campaign-management.ts`: `SelectQueryError<"column 'user_id' does not exist on 'user_segments'.">` (Lint ID: `c38fea2a-08fd-41d3-a84e-fe456ea8dbb2`).
 
 These issues were traced back to missing or incorrectly defined columns in the Supabase database. The following migrations were applied to resolve them:
