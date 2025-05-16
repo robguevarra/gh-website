@@ -165,13 +165,14 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
   - [ ] Add pagination or infinite scroll where needed
 
 #### A. Enhancements for `CampaignDetail.tsx` ("Content" Tab)
-- [x] **Add "Send Test Email" Functionality:** <span style="color: green;">(Completed 2025-05-16 - Fully implemented with Postmark integration)</span>
+- [x] **Add "Send Test Email" Functionality:** <span style="color: green;">(Completed 2025-05-16 - Fully implemented with Postmark integration and UI fixes)</span>
   - [x] Implement a "Send Test Email" button within the "Content" tab. <span style="color: green;">(Completed 2025-05-13)</span>
   - [x] Modal for inputting test email addresses (now single recipient) and email variables. <span style="color: green;">(Completed 2025-05-13)</span>
   - [x] Test email uses current campaign subject and Unlayer editor content (even if unsaved). <span style="color: green;">(Completed 2025-05-13)</span>
   - [x] Provide clear success/error feedback (toast notifications). <span style="color: green;">(Completed 2025-05-13)</span>
   - [x] Integrate with `POST /api/admin/campaigns/[id]/test` endpoint. <span style="color: green;">(Completed 2025-05-13)</span>
   - [x] Integrated with Postmark for actual email sending. <span style="color: green;">(Completed 2025-05-16)</span>
+  - [x] Fixed UI layout issues with button placement and modal interactions. <span style="color: green;">(Completed 2025-05-16)</span>
   - [x] **Variable Presentation in Test Modal:** <span style="color: green;">(Completed 2025-05-16)</span>
     - [x] List all variables found in campaign content as editable fields (pre-filled with example data from `generateDefaultVariableValues`). <span style="color: green;">(Completed 2025-05-13)</span>
     - [x] Group variables by category (e.g., User, Course, Action, Other) for clarity. <span style="color: green;">(Completed 2025-05-16)</span>
@@ -238,6 +239,42 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
 - [ ] **State Management:** Store selected segment IDs and logic in campaign state and save to database.
 
 #### C. Introduce "Review & Confirm" Step/Tab in `CampaignDetail.tsx`
+-#### III. "Review & Confirm" Step/Tab:
+   A. **New "Review" Tab Implementation:**
+      - [x] Basic tab structure with campaign details
+      - [x] Audience summary with segment list
+      - [x] Content preview with variable substitution
+      - [x] Schedule options with timezone support
+      - [x] Recurring campaign configuration
+      - [x] Send/schedule confirmation dialog
+   B. **Variables Handling:**
+      - [x] Automatic detection of variables in email content
+      - [x] Display of detected variables with sample values
+      - [x] Preview of content with variables substituted
+      - [x] Support for common variable types (name, email, etc.)
+      - [x] Content preview section
+      - [ ] Action buttons (Back, Send Now, Schedule)
+      - [ ] Form validation summary
+      - [ ] Confirmation dialog
+      - [ ] Scheduling interface
+      - [ ] Loading states and error handling
+   
+   B. **Validation Requirements:**
+      - [ ] Required fields (subject, content, segments)
+      - [ ] Audience size verification
+      - [ ] Content validation
+      - [ ] Schedule validation (if scheduled)
+   
+   C. **Confirmation Flow:**
+      - [ ] Confirmation dialog with campaign summary
+      - [ ] Recipient count warning
+      - [ ] Final confirmation before sending
+
+  - [ ] Display a summary with the following sections:
+    - [ ] Campaign Details: Name, Subject, Sender Info
+    - [ ] Audience: Selected segments, estimated recipient count, audience size warning
+    - [ ] Content: Preview of the email with variables substituted
+    - [ ] Schedule: Send time (immediate or scheduled)
 - [ ] **Create a "Review" Tab or Pre-Send Modal:**
   - [ ] Add a new tab between "Targeting" and "Analytics" for the review step
   - [ ] Display a summary with the following sections:
@@ -303,6 +340,103 @@ After completing the remaining work on the campaign management system, we will m
 > 3. Align your work with the project context and design context guidelines
 > 4. Follow the established folder structure, naming conventions, and coding standards
 > 5. Include this reminder in all future build notes to maintain consistency
+
+## Campaign Scheduling and Email Delivery Workflow Documentation (2025-05-16)
+
+### 1. Campaign Scheduling Process
+
+The campaign scheduling process has been implemented and tested successfully. Here's a detailed breakdown of how it works:
+
+#### Database Tables Involved:
+
+- **`email_campaigns`**: Stores campaign data including status and scheduled_at timestamp
+- **`campaign_templates`**: Stores the active template version used for sending
+- **`campaign_segments`**: Links campaigns to specific user segments
+- **`campaign_recipients`**: Stores individual recipients for each campaign
+
+#### Scheduling Workflow:
+
+1. **User Action**: Admin selects schedule date/time in the UI and clicks "Schedule" button
+2. **Frontend Validation**:
+   - Verifies campaign has HTML content
+   - Checks if template_id is set
+   - Confirms at least one segment is selected
+   - May auto-save pending changes before scheduling
+
+3. **Template Creation**:
+   - Frontend checks for an active template in `campaign_templates`
+   - If none exists, creates one automatically with:
+     - HTML content from campaign_html_body
+     - Plain text version generated by stripping HTML tags
+     - Subject line from campaign.subject or campaign.name
+     - template_id from selected_template_id or template_id
+   - Uses the /api/admin/campaigns/[id]/templates endpoint
+
+4. **Schedule API Call**:
+   - POST request to /api/admin/campaigns/[id]/schedule
+   - Validates campaign exists and is in draft status
+   - Double-checks for active template
+   - Updates campaign status to "scheduled" and sets scheduled_at timestamp
+
+#### Implementation Notes:
+
+- Admin client is used throughout to bypass RLS policies
+- Both frontend and API have fallbacks to create templates if missing
+- All functions include error handling and meaningful error messages
+- Additional logging aids in debugging the scheduling process
+
+### 2. Email Delivery Post-Scheduling (PENDING IMPLEMENTATION)
+
+After a campaign is scheduled, recipients need to be populated and emails sent. This part is currently **not implemented** and needs to be added to our workflow:
+
+#### Required Implementation:
+
+1. **Recipient Population**:
+   - The `addRecipientsFromSegments(campaignId)` function exists but needs to be triggered
+   - This function:
+     - Gets all segment IDs associated with the campaign
+     - Fetches users from these segments with pagination (handles 1000+ users)
+     - Inserts recipients into the `campaign_recipients` table with status "pending"
+     - Uses upsert with conflict handling to avoid duplicates
+
+2. **Background Job Implementation (TODO)**:
+   - Need to create a scheduled background process
+   - Should check for campaigns with status "scheduled" and scheduled_at <= current time
+   - For each ready campaign:
+     - Call addRecipientsFromSegments(campaignId)
+     - Update campaign status from "scheduled" to "sending"
+     - Process recipients in batches to avoid rate limits
+     - Update campaign status to "sent" when complete
+
+3. **Integration with Email Service (TODO)**:
+   - Current codebase uses Postmark for email delivery
+   - Need to integrate campaign sending with the existing email service
+   - Include tracking pixels and click tracking for analytics
+
+#### Suggested Implementation Options:
+
+1. **Supabase Edge Function**:
+   - Create a scheduled Edge Function that runs every X minutes
+   - Checks for campaigns ready to send and processes them
+   - Advantages: serverless, scales automatically
+
+2. **External Scheduling Service**:
+   - Use a service like Inngest or a custom solution
+   - Set up recurring jobs to process scheduled campaigns
+   - Advantages: more control over scheduling, better monitoring
+
+3. **Webhook Integration**:
+   - Use a third-party scheduling service to trigger webhooks
+   - Create an API endpoint to process campaigns when triggered
+   - Advantages: offloads scheduling logic to dedicated service
+
+### Next Development Steps
+
+1. Implement the background job for processing scheduled campaigns
+2. Add campaign recipient population at the scheduled time
+3. Integrate with email service for batch sending
+4. Add tracking and analytics for sent campaigns
+5. Implement error handling and retry logic for failed sends
 
 ## Database Schema Modifications and Error Resolution (2025-05-13)
 

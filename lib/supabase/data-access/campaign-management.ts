@@ -53,9 +53,12 @@ export type CampaignSegmentInsert = Omit<CampaignSegment, 'id' | 'created_at' | 
 export interface CampaignTemplate {
   id: string;
   campaign_id: string;
+  template_id: string; // Reference to the original template
   version: number;
   html_content: string;
-  design_json: any;
+  text_content: string; // Plain text version of the email
+  subject: string; // Email subject line
+  design_json?: any; // Optional design JSON
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -361,16 +364,41 @@ export const removeCampaignSegment = async (campaignId: string, segmentId: strin
  * Create a campaign template version
  */
 export const createCampaignTemplate = async (template: CampaignTemplateInsert) => {
-  const supabase = createClient();
+  // Use admin client to bypass RLS policies for admin operations
+  const admin = getAdminClient();
   
-  const { data, error } = await supabase
-    .from('campaign_templates')
-    .insert(template)
-    .select()
-    .single();
+  try {
+    // First check if an active template already exists for this campaign
+    const { data: existingTemplates } = await admin
+      .from('campaign_templates')
+      .select('*')
+      .eq('campaign_id', template.campaign_id)
+      .eq('is_active', true);
     
-  if (error) throw error;
-  return data;
+    // If an active template exists, return it instead of creating a new one
+    if (existingTemplates && existingTemplates.length > 0) {
+      console.log(`Active template already exists for campaign ${template.campaign_id}, using existing template`);
+      return existingTemplates[0];
+    }
+    
+    // Insert the new template
+    const { data, error } = await admin
+      .from('campaign_templates')
+      .insert(template)
+      .select();
+    
+    if (error) throw error;
+    
+    // Check if we have data and return the first item
+    if (!data || data.length === 0) {
+      throw new Error('Failed to create campaign template - no data returned');
+    }
+    
+    return data[0];
+  } catch (error) {
+    console.error('Error in createCampaignTemplate:', error);
+    throw error;
+  }
 };
 
 /**
@@ -393,41 +421,79 @@ export const getCampaignTemplates = async (campaignId: string) => {
  * Get active template for a campaign
  */
 export const getActiveCampaignTemplate = async (campaignId: string) => {
-  const supabase = createClient();
+  // Use admin client to bypass RLS policies for admin operations
+  const admin = getAdminClient();
   
-  const { data, error } = await supabase
-    .from('campaign_templates')
-    .select('*')
-    .eq('campaign_id', campaignId)
-    .eq('is_active', true)
-    .single();
+  try {
+    console.log(`Looking for active template for campaign ${campaignId}`);
     
-  if (error) throw error;
-  return data;
+    const { data, error } = await admin
+      .from('campaign_templates')
+      .select('*')
+      .eq('campaign_id', campaignId)
+      .eq('is_active', true)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') { // PostgREST error for 'Fetched zero rows'
+        console.log(`No active template found for campaign ${campaignId}`);
+        return null;
+      }
+      throw error;
+    }
+    
+    console.log(`Found active template ${data.id} for campaign ${campaignId}`);
+    return data;
+  } catch (error) {
+    console.error(`Error finding active template for campaign ${campaignId}:`, error);
+    throw error;
+  }
 };
 
 /**
  * Set a template version as active
  */
 export const setActiveTemplate = async (templateId: string, campaignId: string) => {
-  const supabase = createClient();
+  // Use admin client to bypass RLS policies for admin operations
+  const admin = getAdminClient();
   
-  // First, set all templates for this campaign as inactive
-  await supabase
-    .from('campaign_templates')
-    .update({ is_active: false })
-    .eq('campaign_id', campaignId);
-  
-  // Then set the specified template as active
-  const { data, error } = await supabase
-    .from('campaign_templates')
-    .update({ is_active: true })
-    .eq('id', templateId)
-    .select()
-    .single();
+  try {
+    console.log(`Setting template ${templateId} as active for campaign ${campaignId}`);
     
-  if (error) throw error;
-  return data;
+    // First, set all templates for this campaign as inactive
+    const { error: deactivateError } = await admin
+      .from('campaign_templates')
+      .update({ is_active: false })
+      .eq('campaign_id', campaignId);
+    
+    if (deactivateError) {
+      console.error('Error deactivating templates:', deactivateError);
+      throw deactivateError;
+    }
+    
+    // Then set the specified template as active
+    const { data, error: activateError } = await admin
+      .from('campaign_templates')
+      .update({ is_active: true })
+      .eq('id', templateId)
+      .select();
+    
+    if (activateError) {
+      console.error('Error activating template:', activateError);
+      throw activateError;
+    }
+    
+    if (!data || data.length === 0) {
+      console.error(`No template found with ID ${templateId}`);
+      throw new Error(`Template with ID ${templateId} not found`);
+    }
+    
+    console.log(`Successfully set template ${templateId} as active`);
+    return data[0];
+  } catch (error) {
+    console.error('Error in setActiveTemplate:', error);
+    throw error;
+  }
 };
 
 // Campaign Recipients functions

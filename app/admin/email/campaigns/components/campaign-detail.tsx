@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { AudienceWarning } from './audience-warning';
 import { RecipientPreviewModal } from './recipient-preview-modal';
-import { Loader2, Send, Calendar, ArrowLeft, FileText, Mail, CheckCircle, Save } from 'lucide-react';
+import { Loader2, Send, Calendar, ArrowLeft, FileText, Mail, CheckCircle, Save, AlertCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -78,6 +78,71 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
   const [isTestSendModalOpen, setIsTestSendModalOpen] = useState(false);
   const [isLivePreviewModalOpen, setIsLivePreviewModalOpen] = useState(false);
   const [isRecipientPreviewModalOpen, setIsRecipientPreviewModalOpen] = useState(false);
+  const [isSendConfirmationOpen, setIsSendConfirmationOpen] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState<string>('');
+  const [timezone, setTimezone] = useState<string>(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [isRecurring, setIsRecurring] = useState<boolean>(false);
+  const [recurrence, setRecurrence] = useState<{frequency: 'daily' | 'weekly' | 'monthly', days: number[]}>({frequency: 'weekly', days: []});
+  const [detectedVariables, setDetectedVariables] = useState<string[]>([]);
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({});
+  
+  // Extract variables from content using double curly braces pattern: {{variable}}
+  const extractVariablesFromContent = (content: string): string[] => {
+    if (!content) return [];
+    
+    const regex = /\{\{([^}]+)\}\}/g;
+    const matches: string[] = [];
+    let match: RegExpExecArray | null;
+    
+    while ((match = regex.exec(content)) !== null) {
+      // Extract the variable name without the curly braces and any whitespace
+      const varName = match[1].trim();
+      if (varName && !matches.includes(varName)) {
+        matches.push(varName);
+      }
+    }
+    
+    return matches;
+  };
+
+  // Replace variables in content with their values
+  const substituteVariables = (content: string, values: Record<string, string>): string => {
+    if (!content) return '';
+    
+    return content.replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
+      const trimmedVar = varName.trim();
+      return values[trimmedVar] || `{{${trimmedVar}}}`; // Return original if not found
+    });
+  };
+
+  // Generate default values for variables
+  const generateDefaultVariableValues = (variables: string[]): Record<string, string> => {
+    const defaults: Record<string, string> = {};
+    
+    variables.forEach(variable => {
+      // Map common variable names to sample values
+      const lowerVar = variable.toLowerCase();
+      
+      if (lowerVar.includes('name') || lowerVar.includes('firstname') || lowerVar.includes('lastname')) {
+        defaults[variable] = 'John Doe';
+      } else if (lowerVar.includes('email')) {
+        defaults[variable] = 'user@example.com';
+      } else if (lowerVar.includes('company')) {
+        defaults[variable] = 'Acme Inc.';
+      } else if (lowerVar.includes('date')) {
+        defaults[variable] = new Date().toLocaleDateString();
+      } else if (lowerVar.includes('link') || lowerVar.includes('url')) {
+        defaults[variable] = 'https://example.com';
+      } else {
+        // Default fallback
+        defaults[variable] = `[${variable}]`;
+      }
+    });
+    
+    return defaults;
+  };
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [livePreviewInitialData, setLivePreviewInitialData] = useState<{ html: string; subject: string }>({ html: '', subject: '' });
   const [activeTab, setActiveTab] = useState<string>('overview');
 
@@ -90,11 +155,57 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
       fetchCampaignSegments(campaignId); // Fetch segments for the current campaign
       fetchAvailableSegments(); // Fetch all available segments for selection
       fetchEstimatedAudienceSize(campaignId); // Call the action here
-    }
-  }, [fetchCampaign, fetchCampaignAnalytics, fetchCampaignSegments, fetchAvailableSegments, fetchEstimatedAudienceSize, campaignId]); // Add to dependency array
 
-  const handleSendCampaign = async () => {
+      // Extract variables from content
+      if (currentCampaign?.campaign_html_body) {
+        const vars = extractVariablesFromContent(currentCampaign.campaign_html_body);
+        setDetectedVariables(vars);
+        if (vars.length > 0) {
+          const defaults = generateDefaultVariableValues(vars);
+          setVariableValues(defaults);
+        }
+      }
+    }
+  }, [fetchCampaign, fetchCampaignAnalytics, fetchCampaignSegments, fetchAvailableSegments, fetchEstimatedAudienceSize, campaignId, currentCampaign?.campaign_html_body]); // Add to dependency array
+
+  // Validate campaign before sending/scheduling
+  const validateCampaign = () => {
+    const errors: string[] = [];
+    
+    if (!currentCampaign?.subject?.trim()) {
+      errors.push('Campaign subject is required');
+    }
+    
+    if (!currentCampaign?.campaign_html_body?.trim()) {
+      errors.push('Campaign content is required');
+    }
+    
+    if (!campaignSegments?.length) {
+      errors.push('At least one audience segment is required');
+    } else if (estimatedAudienceSize === 0) {
+      errors.push('Selected segments have no recipients');
+    }
+    
+    setValidationErrors(errors);
+    return errors.length === 0;
+  };
+
+  const handleSendConfirmation = () => {
+    if (validateCampaign()) {
+      setIsSendConfirmationOpen(true);
+    }
+  };
+
+  const handleScheduleClick = () => {
+    if (validateCampaign()) {
+      setIsScheduling(true);
+    }
+  };
+
+  const handleConfirmSend = async () => {
     setIsSending(true);
+    setIsSendConfirmationOpen(false);
+    
     try {
       await sendCampaign(campaignId);
       toast({
@@ -659,6 +770,195 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
   const canSendOrSchedule = currentCampaign?.status === 'draft' || currentCampaign?.status === 'scheduled';
   const sendButtonText = currentCampaign?.status === 'scheduled' ? 'Reschedule/Send Now' : 'Send Campaign';
 
+  const handleSendCampaign = async () => {
+    setIsSending(true);
+    try {
+      await sendCampaign(campaignId);
+      toast({
+        title: 'Campaign sending initiated',
+        description: 'Your campaign is now being sent to recipients.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to send campaign',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const scheduleCampaign = async (campaignId: string, scheduledAt: string) => {
+    try {
+      setIsSending(true);
+      
+      // First, ensure all campaign data is valid and ready for scheduling
+      try {
+        // 1. Validate campaign data
+        if (!currentCampaign) {
+          throw new Error('Campaign data not available. Please refresh the page and try again.');
+        }
+        
+        // 2. Verify campaign has HTML content
+        if (!currentCampaign.campaign_html_body) {
+          throw new Error('Campaign must have HTML content before scheduling. Please add content to your campaign.');
+        }
+        
+        // 3. Verify campaign has template ID
+        if (!currentCampaign.template_id) {
+          throw new Error('Campaign is missing a template ID. Please save the campaign before scheduling.');
+        }
+        
+        // 4. Check if campaign has segments selected
+        if (!campaignSegments || campaignSegments.length === 0) {
+          throw new Error('Please select at least one audience segment before scheduling your campaign.');
+        }
+        
+        // 5. First save any pending changes to the campaign before scheduling
+        console.log('Saving current campaign state before scheduling...');
+        if (updateCampaign && currentCampaign) {
+          try {
+            await updateCampaign(currentCampaign.id, {
+              campaign_html_body: currentCampaign.campaign_html_body,
+              campaign_design_json: currentCampaign.campaign_design_json,
+              subject: currentCampaign.subject,
+            });
+            console.log('Campaign changes saved successfully.');
+          } catch (saveError) {
+            console.error('Error saving campaign before scheduling:', saveError);
+            throw new Error('Failed to save campaign changes before scheduling.');
+          }
+        }
+        
+        // 6. Check if an active template already exists for this campaign
+        console.log('Checking for existing active templates...');
+        const templateCheckResponse = await fetch(`/api/admin/campaigns/${campaignId}/templates`);
+        
+        if (!templateCheckResponse.ok) {
+          const errorData = await templateCheckResponse.json();
+          throw new Error(errorData.error || 'Failed to check for existing templates');
+        }
+        
+        const templateData = await templateCheckResponse.json();
+        const hasActiveTemplate = templateData.templates && 
+                             templateData.templates.some((t: any) => t.is_active === true);
+        
+        console.log('Active template exists:', hasActiveTemplate);
+        
+        // 7. If no active template exists, create one from the current campaign data
+        if (!hasActiveTemplate) {
+          console.log('Creating active template for campaign...');
+          
+          // Get required fields for template creation
+          const templateSubject = currentCampaign.subject || currentCampaign.name || 'Untitled Campaign';
+          
+          // Create a plain text version by stripping HTML tags
+          const plainTextContent = currentCampaign.campaign_html_body
+            .replace(/<[^>]*>/g, '') // Remove HTML tags
+            .replace(/\s+/g, ' ')   // Replace multiple spaces with single space
+            .trim();
+          
+          // Ensure we have at least some text content
+          const textContent = plainTextContent || 'Campaign content';
+          
+          // Make API call to create a campaign template
+          console.log('Creating campaign template with fields:', {
+            template_id: currentCampaign.template_id,
+            subject: templateSubject,
+            html_content: 'HTML content available', // Not logging the full content
+            text_content: 'Text content available', // Not logging the full content
+          });
+          
+          // Ensure we're using the original selected template if available, otherwise fall back to template_id
+          const templateId = currentCampaign.selected_template_id || currentCampaign.template_id;
+          
+          if (!templateId) {
+            throw new Error('No template ID found for this campaign. Please save the campaign with a template first.');
+          }
+          
+          const templateResponse = await fetch(`/api/admin/campaigns/${campaignId}/templates`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              html_content: currentCampaign.campaign_html_body,
+              text_content: textContent,
+              subject: templateSubject,
+              template_id: templateId,
+              version: 1
+            }),
+          });
+          
+          if (!templateResponse.ok) {
+            const templateError = await templateResponse.json();
+            throw new Error(templateError.error || 'Failed to create template for campaign');
+          }
+          
+          // Store the response JSON to avoid parsing it twice
+          let templateResult;
+          try {
+            templateResult = await templateResponse.json();
+            console.log('Successfully created active template for campaign:', templateResult.template?.id);
+          } catch (jsonError) {
+            console.log('Template creation succeeded but could not parse result');
+          }
+        }
+      } catch (templateError) {
+        console.error('Error preparing campaign for scheduling:', templateError);
+        throw new Error(
+          templateError instanceof Error 
+            ? templateError.message 
+            : 'Failed to prepare campaign for scheduling'
+        );
+      }
+      
+      // Now call the API endpoint to schedule the campaign
+      console.log('Calling schedule API endpoint...');
+      const response = await fetch(`/api/admin/campaigns/${campaignId}/schedule`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          scheduledAt: new Date(scheduledAt).toISOString(),
+          timezone,
+          isRecurring,
+          ...(isRecurring && { recurrence })
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to schedule campaign');
+      }
+      
+      console.log('Campaign scheduled successfully:', data);
+      
+      // Refresh campaign data to get the updated status and scheduled time
+      await fetchCampaign(campaignId);
+      
+      toast({
+        title: 'Campaign scheduled',
+        description: `Campaign is scheduled for ${new Date(scheduledAt).toLocaleString()}`,
+      });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error scheduling campaign:', error);
+      toast({
+        title: 'Error scheduling campaign',
+        description: error instanceof Error ? error.message : 'An error occurred',
+        variant: 'destructive',
+      });
+      return { success: false };
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -690,7 +990,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
         </div>
         <div className="flex space-x-2">
           <Button
-            onClick={handleSendCampaign}
+            onClick={handleConfirmSend}
             disabled={isSending || currentCampaignLoading}
             className="bg-green-600 hover:bg-green-700"
           >
@@ -1124,15 +1424,63 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                     </div>
                     <div className="mt-2 border rounded-md p-4 bg-muted/20">
                       <h4 className="font-medium mb-1">{currentCampaign.subject || 'No subject'}</h4>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        {currentCampaign.campaign_html_body 
-                          ? `${currentCampaign.campaign_html_body.substring(0, 150)}${currentCampaign.campaign_html_body.length > 150 ? '...' : ''}` 
-                          : 'No content'}
-                      </p>
+                      
+                      {/* Show detected variables */}
+                      {detectedVariables.length > 0 && (
+                        <div className="mb-3 p-3 bg-background rounded border">
+                          <h5 className="text-sm font-medium mb-2 flex items-center">
+                            <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full mr-2">
+                              {detectedVariables.length}
+                            </span>
+                            Variables detected in content
+                          </h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                            {detectedVariables.map((variable) => (
+                              <div key={variable} className="flex items-start">
+                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs mr-2">
+                                  {`{{${variable}}}`}
+                                </span>
+                                <span className="text-muted-foreground text-xs truncate" title={variableValues[variable] || 'No sample data'}>
+                                  {variableValues[variable]?.substring(0, 30) || 'No sample data'}
+                                  {variableValues[variable]?.length > 30 ? '...' : ''}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="space-y-4">
+                        <div className="border rounded-md p-4 bg-background">
+                          <h5 className="text-sm font-medium mb-2">Content Preview</h5>
+                          {currentCampaign.campaign_html_body ? (
+                            <div className="prose prose-sm max-w-none">
+                              <div 
+                                className="text-sm text-foreground/80"
+                                dangerouslySetInnerHTML={{ 
+                                  __html: substituteVariables(
+                                    currentCampaign.campaign_html_body.substring(0, 500) + 
+                                    (currentCampaign.campaign_html_body.length > 500 ? '...' : ''), 
+                                    variableValues
+                                  ) 
+                                }} 
+                              />
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No content</p>
+                          )}
+                        </div>
+                        
+                        <p className="text-sm text-muted-foreground">
+                          {currentCampaign.campaign_html_body 
+                            ? `${currentCampaign.campaign_html_body.substring(0, 150)}${currentCampaign.campaign_html_body.length > 150 ? '...' : ''}` 
+                            : 'No content'}
+                        </p>
+                      </div>
                       <Button 
                         variant="link" 
                         size="sm" 
-                        className="p-0 h-auto"
+                        className="p-0 h-auto text-primary"
                         onClick={() => {
                           setActiveTab('content');
                           // Smooth scroll to content section after a small delay to allow tab switch
@@ -1162,8 +1510,273 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                       </p>
                     )}
                   </div>
+
+                  {/* Validation Errors */}
+                  {validationErrors.length > 0 && (
+                    <div className="bg-destructive/10 border border-destructive/30 rounded-md p-4">
+                      <h4 className="text-sm font-medium text-destructive flex items-center gap-2 mb-2">
+                        <AlertCircle className="h-4 w-4" />
+                        Please fix the following issues:
+                      </h4>
+                      <ul className="text-sm text-destructive list-disc pl-5 space-y-1">
+                        {validationErrors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4 border-t">
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setActiveTab('targeting')}
+                    >
+                      Back to Edit
+                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button 
+                        variant="outline"
+                        onClick={handleScheduleClick}
+                        disabled={isSending}
+                      >
+                        {isSending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Scheduling...
+                          </>
+                        ) : (
+                          'Schedule Send'
+                        )}
+                      </Button>
+                      <Button 
+                        onClick={handleSendConfirmation}
+                        disabled={isSending}
+                      >
+                        {isSending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          'Send Now'
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
+
+              {/* Send Confirmation Dialog */}
+              <Dialog open={isSendConfirmationOpen} onOpenChange={setIsSendConfirmationOpen}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Send Campaign</DialogTitle>
+                    <DialogDescription>
+                      Are you sure you want to send this campaign to {estimatedAudienceSize?.toLocaleString() || '0'} recipients?
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="bg-muted/50 p-4 rounded-md">
+                      <h4 className="font-medium mb-2">Campaign Summary</h4>
+                      <div className="space-y-2 text-sm">
+                        <p><span className="text-muted-foreground">Subject:</span> {currentCampaign.subject || 'No subject'}</p>
+                        <p><span className="text-muted-foreground">Recipients:</span> {estimatedAudienceSize?.toLocaleString() || '0'}</p>
+                        <p><span className="text-muted-foreground">Segments:</span> {campaignSegments?.length || '0'}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      This action cannot be undone. The campaign will be sent immediately.
+                    </p>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsSendConfirmationOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleConfirmSend}>
+                      Send Now
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Schedule Dialog */}
+              <Dialog open={isScheduling} onOpenChange={setIsScheduling}>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Schedule Campaign</DialogTitle>
+                    <DialogDescription>
+                      Choose when to send this campaign to {estimatedAudienceSize?.toLocaleString() || '0'} recipients.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-6 py-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="schedule-date">Date & Time</Label>
+                          <Input
+                            id="schedule-date"
+                            type="datetime-local"
+                            value={scheduledAt}
+                            min={new Date().toISOString().slice(0, 16)}
+                            onChange={(e) => setScheduledAt(e.target.value)}
+                            className="w-full"
+                          />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="timezone">Time Zone</Label>
+                          <select
+                            id="timezone"
+                            value={timezone}
+                            onChange={(e) => setTimezone(e.target.value)}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {Intl.supportedValuesOf('timeZone').map((tz) => (
+                              <option key={tz} value={tz}>
+                                {tz.replace(/_/g, ' ')} (GMT{new Date().toLocaleTimeString('en-us', {timeZone: tz, timeZoneName: 'short'}).split(' ')[2]})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2 pt-2">
+                          <Checkbox 
+                            id="recurring" 
+                            checked={isRecurring} 
+                            onCheckedChange={(checked) => setIsRecurring(checked === true)}
+                          />
+                          <label
+                            htmlFor="recurring"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            Recurring schedule
+                          </label>
+                        </div>
+                      </div>
+                      
+                      {isRecurring && (
+                        <div className="space-y-4 p-4 bg-muted/30 rounded-md">
+                          <h4 className="font-medium">Recurrence Settings</h4>
+                          <div className="space-y-2">
+                            <Label>Frequency</Label>
+                            <div className="flex gap-2">
+                              {['daily', 'weekly', 'monthly'].map((freq) => (
+                                <Button
+                                  key={freq}
+                                  type="button"
+                                  variant={recurrence.frequency === freq ? 'default' : 'outline'}
+                                  size="sm"
+                                  onClick={() => setRecurrence({...recurrence, frequency: freq as any})}
+                                >
+                                  {freq.charAt(0).toUpperCase() + freq.slice(1)}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                          
+                          {recurrence.frequency === 'weekly' && (
+                            <div className="space-y-2">
+                              <Label>Days of the week</Label>
+                              <div className="flex flex-wrap gap-2">
+                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+                                  <Button
+                                    key={day}
+                                    type="button"
+                                    variant={recurrence.days?.includes(index) ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => {
+                                      setRecurrence(prev => ({
+                                        ...prev,
+                                        days: prev.days?.includes(index)
+                                          ? prev.days.filter(d => d !== index)
+                                          : [...(prev.days || []), index]
+                                      }));
+                                    }}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    {day[0]}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="bg-muted/50 p-4 rounded-md">
+                      <h4 className="font-medium mb-2">Schedule Summary</h4>
+                      <div className="text-sm space-y-1">
+                        <p><span className="text-muted-foreground">Next Send:</span> {scheduledAt ? new Date(scheduledAt).toLocaleString() : 'Not set'}</p>
+                        <p><span className="text-muted-foreground">Time Zone:</span> {timezone}</p>
+                        {isRecurring && (
+                          <p>
+                            <span className="text-muted-foreground">Recurrence:</span> {recurrence.frequency}
+                            {recurrence.frequency === 'weekly' && recurrence.days?.length > 0 && (
+                              <span> on {recurrence.days.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ')}</span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setIsScheduling(false);
+                        setScheduledAt('');
+                        setIsRecurring(false);
+                        setRecurrence({frequency: 'weekly', days: []});
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      onClick={async () => {
+                        if (!scheduledAt) {
+                          toast({
+                            title: 'Please select a date and time',
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+                        
+                        if (isRecurring && recurrence.frequency === 'weekly' && (!recurrence.days || recurrence.days.length === 0)) {
+                          toast({
+                            title: 'Please select at least one day for weekly recurrence',
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+                        
+                        try {
+                          const result = await scheduleCampaign(campaignId, scheduledAt);
+                          if (result.success) {
+                            setIsScheduling(false);
+                            setScheduledAt('');
+                            setIsRecurring(false);
+                            setRecurrence({frequency: 'weekly', days: []});
+                          }
+                        } catch (error) {
+                          // Error handling is done in the scheduleCampaign function
+                        }
+                      }}
+                      disabled={isSending}
+                    >
+                      {isSending ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Scheduling...
+                        </>
+                      ) : (
+                        'Schedule Campaign'
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </TabsContent>
           </Tabs>
         </CardContent>
