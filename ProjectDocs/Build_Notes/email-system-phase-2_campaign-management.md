@@ -441,7 +441,7 @@ After completing the remaining work on the campaign management system, we will m
 
 ### 1. Campaign Scheduling Process
 
-The campaign scheduling process has been implemented and tested successfully. Here's a detailed breakdown of how it works:
+The campaign scheduling process has been implemented, tested, and enhanced with anti-spam measures. Here's a detailed breakdown of how it works:
 
 #### Database Tables Involved:
 
@@ -495,14 +495,16 @@ After a campaign is scheduled, recipients need to be populated and emails sent. 
      - Inserts recipients into the `campaign_recipients` table with status "pending"
      - Uses upsert with conflict handling to avoid duplicates
 
-2. **Background Job Implementation (TODO)**:
-   - Need to create a scheduled background process
-   - Should check for campaigns with status "scheduled" and scheduled_at <= current time
+2. **Background Job Implementation (Completed 2025-05-16)**:
+   - Created `process-scheduled-campaigns` Edge Function as a scheduled background process
+   - Function checks for campaigns with status "scheduled" and scheduled_at <= current time
    - For each ready campaign:
-     - Call addRecipientsFromSegments(campaignId)
-     - Update campaign status from "scheduled" to "sending"
-     - Process recipients in batches to avoid rate limits
-     - Update campaign status to "sent" when complete
+     - Updates campaign status from "scheduled" to "processing"
+     - Gets segments and template associated with the campaign
+     - Processes recipients in batches (100 at a time) to avoid memory issues
+     - Adds personalized emails to the `email_queue` table
+     - Updates campaign status to "sent" when complete
+   - Scheduled to run every 5 minutes via CRON job: `*/5 * * * *`
 
 3. **Integration with Email Service (TODO)**:
    - Current codebase uses Postmark for email delivery
@@ -612,7 +614,57 @@ CREATE TABLE IF NOT EXISTS email_alerts (
 - Configured to run on a 5-minute schedule
 - Service role access to ensure proper database permissions
 
-#### Implementation Fixes (2025-05-16):
+### Anti-Spam & Processing Locks Implementation (2025-05-16)
+
+#### 1. Locking Mechanism
+To prevent duplicate campaign processing and email sending, we implemented a robust locking system:
+
+- **Database Changes:**
+  - Created `processing_locks` table to track active processing jobs
+  - Implemented proper expiry and cleanup for stale locks
+
+- **Lock Acquisition Logic:**
+  - Added `acquireProcessingLock` and `releaseProcessingLock` functions
+  - Implemented transaction-level validation to prevent race conditions
+  - Added support for lock timeouts and automatic cleanup of expired locks
+
+#### 2. Anti-Spam Measures
+Implemented industry-standard anti-spam safeguards to maintain sender reputation and recipient experience:
+
+- **De-duplication at Multiple Levels:**
+  - **Campaign Level:** Check if a user already has an email in the queue for this specific campaign before adding them
+  - **Lock-based Prevention:** Prevents duplicate campaign processing with atomic database operations
+  - **Status Tracking:** Uses database transaction checks to prevent race conditions
+
+- **Frequency Capping:**
+  - Added a 24-hour frequency check that limits users to maximum 3 emails per day
+  - Prevents recipient fatigue and protects sender reputation
+  - Configurable frequency limits to adapt to changing business requirements
+
+- **Detailed Logging:**
+  - Records precise information about skipped emails and why they were skipped
+  - Logs both duplicates and frequency cap exceeds for monitoring
+  - Aids in troubleshooting and provides audit trail for compliance
+
+#### 3. CRON Scheduler Configuration
+- Configured proper CRON jobs in Supabase to automate campaign processing:
+  - Email queue processor runs every 3 minutes
+  - Campaign scheduler runs every 5 minutes
+- Added proper scheduled event payload with `{ "scheduled": true }` to indicate CRON invocation
+
+### Database Changes & Schema Updates
+
+#### 1. Processing Locks Table (2025-05-16)
+```sql
+CREATE TABLE IF NOT EXISTS processing_locks (
+  id TEXT PRIMARY KEY,
+  lock_name TEXT UNIQUE NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL
+);
+```
+
+#### 2. Email Status Field Updates (2025-05-12):
 
 During deployment, the following issues were identified and fixed:
 
