@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/components/ui/use-toast';
 import { AudienceWarning } from './audience-warning';
 import { RecipientPreviewModal } from './recipient-preview-modal';
-import { Loader2, Send, Calendar, ArrowLeft, FileText, Mail } from 'lucide-react';
+import { Loader2, Send, Calendar, ArrowLeft, FileText, Mail, CheckCircle, Save } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -72,11 +72,14 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
 
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [isEditorReady, setIsEditorReady] = useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [editorKey, setEditorKey] = useState(Date.now());
   const [isTestSendModalOpen, setIsTestSendModalOpen] = useState(false);
   const [isLivePreviewModalOpen, setIsLivePreviewModalOpen] = useState(false);
   const [isRecipientPreviewModalOpen, setIsRecipientPreviewModalOpen] = useState(false);
   const [livePreviewInitialData, setLivePreviewInitialData] = useState<{ html: string; subject: string }>({ html: '', subject: '' });
+  const [activeTab, setActiveTab] = useState<string>('overview');
 
   const unlayerEditorRef = useRef<UnlayerEditorRef>(null);
 
@@ -131,21 +134,25 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     return new Date(dateString).toLocaleString();
   };
 
-  const handleTemplateSelected = (template: { id: string; htmlBody: string | null; designJson: any }) => {
+  const handleTemplateSelected = async (template: { id: string; htmlBody: string | null; designJson: any }) => {
     console.log('handleTemplateSelected called with template:', template);
-    if (updateCampaign && currentCampaign) {
-      console.log('Before updateCampaign - currentCampaign.id:', currentCampaign.id);
-      console.log('Before updateCampaign - changes to be applied:', {
-        selected_template_id: template.id,
-        campaign_html_body: template.htmlBody,
-        campaign_design_json: template.designJson,
-      });
-      updateCampaign(currentCampaign.id, {
-        selected_template_id: template.id,
-        campaign_html_body: template.htmlBody,
-        campaign_design_json: template.designJson,
-      });
-      console.log('After updateCampaign was called.');
+    if (currentCampaign && updateCampaign) {
+      try {
+        await updateCampaign(currentCampaign.id, {
+          selected_template_id: template.id,
+          campaign_design_json: template.designJson,
+          campaign_html_body: template.htmlBody,
+        });
+        // Reset the editor to apply the new template
+        resetEditor();
+      } catch (error) {
+        console.error('Failed to update campaign with template:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to apply template',
+          variant: 'destructive',
+        });
+      }
     } else {
       console.error('handleTemplateSelected: updateCampaign is not available or currentCampaign is null.');
       if (!currentCampaign) console.error('currentCampaign is null/undefined');
@@ -154,34 +161,85 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     setIsTemplateModalOpen(false);
   };
 
+  const handleEditorLoad = () => {
+    console.log('Unlayer editor loaded and ready');
+    setIsEditorReady(true);
+  };
+
+  const resetEditor = () => {
+    console.log('Resetting editor...');
+    setIsEditorReady(false);
+    setEditorKey(Date.now());
+  };
+
   const handleSaveCampaign = async () => {
-    if (!currentCampaign || !unlayerEditorRef.current || (!updateCampaign && campaignId !== 'new') || (!createCampaign && campaignId === 'new') ) {
-      toast({ title: 'Error', description: 'Campaign data not loaded, editor not ready, or save action unavailable.', variant: 'destructive' });
+    console.log('handleSaveCampaign called');
+    console.log('currentCampaign:', currentCampaign);
+    console.log('unlayerEditorRef.current:', unlayerEditorRef.current);
+    console.log('isEditorReady:', isEditorReady);
+    console.log('updateCampaign available:', !!updateCampaign);
+    console.log('createCampaign available:', !!createCampaign);
+    
+    // Check if editor is ready
+    if (!isEditorReady) {
+      const errorMsg = 'Editor is still loading. Please wait a moment and try again.';
+      console.error('Cannot save campaign:', errorMsg);
+      toast({ 
+        title: 'Editor Not Ready', 
+        description: errorMsg, 
+        variant: 'destructive' 
+      });
       return;
     }
+    
+    // Check other conditions
+    if (!currentCampaign || !unlayerEditorRef.current || 
+        (!updateCampaign && campaignId !== 'new') || 
+        (!createCampaign && campaignId === 'new')) {
+      const errorMsg = !currentCampaign ? 'No current campaign' : 
+                        !unlayerEditorRef.current ? 'Editor reference not available' : 
+                        (!updateCampaign && campaignId !== 'new') ? 'Update function not available' : 'Create function not available';
+      console.error('Cannot save campaign:', errorMsg);
+      toast({ 
+        title: 'Error', 
+        description: `Cannot save campaign: ${errorMsg}`, 
+        variant: 'destructive' 
+      });
+      return;
+    }
+    
     setIsSavingDraft(true);
+    console.log('Starting save process...');
 
     let latestHtml = currentCampaign.campaign_html_body;
     let latestDesign = currentCampaign.campaign_design_json;
+    console.log('Initial HTML and design loaded from current campaign');
 
     try {
+      console.log('Starting Unlayer export...');
       const exportedData = await new Promise<{ design: any; html: string }>((resolve, reject) => {
         if (unlayerEditorRef.current) {
+          console.log('Exporting HTML and design from Unlayer...');
           unlayerEditorRef.current.exportHtml(data => {
+            console.log('Unlayer export callback received data:', !!data);
             if (data && data.design && data.html) {
+              console.log('Successfully exported data from Unlayer');
               resolve(data);
             } else {
-              reject(new Error('Failed to export valid data from Unlayer editor.')); 
+              const error = new Error('Failed to export valid data from Unlayer editor.');
+              console.error('Unlayer export error:', error, 'Data received:', data);
+              reject(error);
             }
           });
         } else {
-          reject(new Error('Editor reference is not available.'));
+          const error = new Error('Editor reference is not available.');
+          console.error('Unlayer editor reference error:', error);
+          reject(error);
         }
-        // Optional: Add a timeout for robustness
-        // setTimeout(() => reject(new Error('Unlayer export timed out')), 5000);
       });
       latestHtml = exportedData.html;
       latestDesign = exportedData.design;
+      console.log('Successfully updated latest HTML and design from Unlayer export');
     } catch (exportError: any) {
       console.error('Failed to export from Unlayer editor:', exportError);
       toast({ title: 'Editor Export Error', description: exportError.message || 'Could not get latest content from editor.', variant: 'destructive' });
@@ -200,58 +258,104 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
       campaign_design_json: latestDesign,
       status: 'draft', 
     };
+    
+    console.log('Prepared campaign data to save:', {
+      ...campaignDataToSave,
+      campaign_html_body: '[HTML content]',  // Don't log full HTML
+      campaign_design_json: '[Design JSON]'  // Don't log full design
+    });
 
     try {
-      if (campaignId === 'new' && createCampaign) { // Assuming 'new' is the identifier for a new campaign
-        // Remove 'id' if it was part of currentCampaign for a 'new' scenario, or ensure createCampaign handles it.
-        const { id, ...newData } = campaignDataToSave; // Basic way to omit id, ensure EmailCampaign partial accepts this
+      if (campaignId === 'new' && createCampaign) {
+        console.log('Creating new campaign...');
+        const { id, ...newData } = campaignDataToSave;
+        console.log('Calling createCampaign with data:', newData);
+        
         const newCampaign = await createCampaign(newData);
-        toast({ title: 'Campaign Draft Created', description: 'New campaign draft saved successfully.' });
-        // Optionally, navigate to the new campaign's edit page
+        console.log('Campaign created successfully:', newCampaign);
+        
+        toast({ 
+          title: 'Campaign Draft Created', 
+          description: 'New campaign draft saved successfully.' 
+        });
+        
+        // Navigate to the new campaign's edit page
+        console.log('Navigating to new campaign:', newCampaign.id);
         router.push(`/admin/email/campaigns/${newCampaign.id}`);
       } else if (updateCampaign) {
+        console.log('Updating existing campaign:', currentCampaign.id);
+        console.log('Calling updateCampaign with data:', {
+          ...campaignDataToSave,
+          campaign_html_body: '[HTML content]',
+          campaign_design_json: '[Design JSON]'
+        });
+        
         await updateCampaign(currentCampaign.id, campaignDataToSave);
-        toast({ title: 'Campaign Draft Saved', description: 'Your campaign draft has been updated.' });
+        console.log('Campaign updated successfully');
+        
+        toast({ 
+          title: 'Campaign Draft Saved', 
+          description: 'Your campaign draft has been updated.' 
+        });
+      } else {
+        console.error('No valid action available for saving');
+        throw new Error('No valid save action available');
       }
-      // Re-fetch campaign data to ensure UI is consistent with DB, especially if createCampaign doesn't update currentCampaign
-      if (campaignId && campaignId !== 'new') fetchCampaign(campaignId);
+      
+      // Re-fetch campaign data to ensure UI is consistent with DB
+      if (campaignId && campaignId !== 'new') {
+        console.log('Refreshing campaign data...');
+        await fetchCampaign(campaignId);
+      }
+      
+      console.log('Save process completed successfully');
 
     } catch (error: any) {
-      toast({ title: 'Error Saving Draft', description: error.message || 'Failed to save campaign draft.', variant: 'destructive' });
+      console.error('Error in handleSaveCampaign:', error);
+      toast({ 
+        title: 'Error Saving Draft', 
+        description: error.message || 'Failed to save campaign draft.', 
+        variant: 'destructive' 
+      });
     } finally {
+      console.log('Cleaning up save process');
       setIsSavingDraft(false);
     }
   };
 
   const handleOpenLivePreview = async () => {
-    if (!currentCampaign || !unlayerEditorRef.current) {
-      toast({
-        title: 'Cannot Open Preview',
-        description: 'Campaign data or editor not ready.',
-        variant: 'destructive',
-      });
-      return;
-    }
     try {
-      const exportedData = await new Promise<{ design: any; html: string }>((resolve, reject) => {
-        if (unlayerEditorRef.current) {
-          unlayerEditorRef.current.exportHtml(data => {
-            if (data && data.html) {
+      if (!currentCampaign) {
+        throw new Error('Campaign data not ready');
+      }
+
+      let content;
+      if (unlayerEditorRef.current) {
+        content = await new Promise<{ html: string; design: any }>((resolve, reject) => {
+          unlayerEditorRef.current?.exportHtml((data: any) => {
+            if (data && data.design && data.html) {
               resolve(data);
             } else {
-              reject(new Error('Failed to export HTML from editor for preview.'));
+              reject(new Error('Invalid content from editor'));
             }
           });
-        } else {
-          reject(new Error('Editor reference is not available for preview.'));
-        }
+        });
+      } else if (currentCampaign.campaign_html_body) {
+        content = { html: currentCampaign.campaign_html_body, design: null };
+      } else {
+        throw new Error('No content available for preview');
+      }
+      
+      setLivePreviewInitialData({
+        html: content.html,
+        subject: currentCampaign.subject || 'Email Preview'
       });
-      setLivePreviewInitialData({ html: exportedData.html, subject: currentCampaign.subject || 'No Subject Set' });
       setIsLivePreviewModalOpen(true);
-    } catch (error: any) {
+    } catch (error) {
+      console.error('Error preparing live preview:', error);
       toast({
-        title: 'Error Preparing Preview',
-        description: error.message || 'Could not get content for live preview.',
+        title: 'Preview Error',
+        description: 'Could not prepare email preview. ' + (error instanceof Error ? error.message : 'Please try again.'),
         variant: 'destructive',
       });
     }
@@ -502,7 +606,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-grow min-h-0">
             <div className="md:col-span-1 space-y-4 overflow-y-auto pr-2 border-r">
-              <h3 className="text-lg font-semibold mb-2">Variables</h3>
+              <h3 className="text-lg font-medium mb-2">Variables</h3>
               {extractedVariables.length === 0 && <p className="text-sm text-muted-foreground">No variables detected in content.</p>}
               {extractedVariables.map(variable => (
                 <div key={variable} className="space-y-1">
@@ -517,7 +621,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
               ))}
             </div>
             <div className="md:col-span-2 overflow-y-auto pl-2">
-              <h3 className="text-lg font-semibold mb-2">Preview</h3>
+              <h3 className="text-lg font-medium mb-2">Preview</h3>
               <div
                 className="border rounded-md p-4 bg-white h-full min-h-[300px] prose prose-sm max-w-none"
                 dangerouslySetInnerHTML={{ __html: previewHtml }}
@@ -544,14 +648,6 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
     );
   }
 
-  if (currentCampaignError) {
-    return (
-      <div className="text-center py-8 text-destructive">
-        {currentCampaignError}
-      </div>
-    );
-  }
-
   if (!currentCampaign) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -566,79 +662,65 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <Button
-          variant="ghost"
-          onClick={() => router.push('/admin/email/campaigns')}
-          className="flex items-center"
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Campaigns
-        </Button>
-
-        <div className="flex space-x-2">
-          {currentCampaign.status === 'draft' && (
-            <>
-              <Button onClick={handleSaveCampaign} disabled={isSavingDraft || currentCampaignLoading} className="mr-2">
-                {isSavingDraft ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save Draft
-              </Button>
-              <Button onClick={() => setIsTestSendModalOpen(true)} variant="outline" className="mr-2">
-                <Mail className="mr-2 h-4 w-4" /> Send Test Email
-              </Button>
-              <Button onClick={handleOpenLivePreview} variant="outline" className="mr-2">
-                <FileText className="mr-2 h-4 w-4" /> Live Preview
-              </Button>
-              <Button onClick={handleSendCampaign} disabled={isSending || !canSendOrSchedule} >
-                {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                {sendButtonText}
-              </Button>
-            </>
-          )}
-
-          {currentCampaign.status === 'scheduled' && (
+        <div>
+          <div className="flex items-center space-x-2">
             <Button
-              onClick={handleSendCampaign}
-              disabled={isSending}
+              variant="ghost"
+              onClick={() => router.push('/admin/email/campaigns')}
+              className="h-8 w-8 p-0"
             >
-              {isSending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Send Now
-                </>
-              )}
+              <ArrowLeft className="h-4 w-4" />
+              <span className="sr-only">Back</span>
             </Button>
-          )}
+            <h1 className="text-2xl font-bold">{currentCampaign?.name || 'Loading...'}</h1>
+          </div>
+          <div className="flex items-center space-x-4 mt-1">
+            {currentCampaign?.status && (
+              <div className="flex items-center text-sm text-muted-foreground">
+                <span className="capitalize">{currentCampaign.status}</span>
+                {currentCampaign.updated_at && (
+                  <span className="mx-2">•</span>
+                )}
+                {currentCampaign.updated_at && (
+                  <span>Last saved: {formatDate(currentCampaign.updated_at)}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex space-x-2">
+          <Button
+            onClick={handleSendCampaign}
+            disabled={isSending || currentCampaignLoading}
+            className="bg-green-600 hover:bg-green-700"
+          >
+            {isSending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="mr-2 h-4 w-4" />
+                {sendButtonText}
+              </>
+            )}
+          </Button>
         </div>
       </div>
-
       <Card>
         <CardHeader>
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+          <CardTitle>Campaign Details</CardTitle>
+          <div className="space-y-4">
             <div>
-              <CardTitle className="text-2xl">{currentCampaign.name}</CardTitle>
-              <CardDescription>{currentCampaign.description}</CardDescription>
-            </div>
-            <div className="mt-2 md:mt-0">
-              {getStatusBadge(currentCampaign.status)}
-            </div>
-          </div>
-          {currentCampaign && (
-            <div className="mt-4">
-              <Label htmlFor="campaignSubject" className="text-sm font-medium">
-                Campaign Subject
-              </Label>
+              <Label htmlFor="campaignSubject">Subject</Label>
               <Input
                 id="campaignSubject"
                 placeholder="Enter campaign subject"
                 value={currentCampaign?.subject || ''}
                 onChange={(e) => {
                   if (currentCampaign) {
-                    updateCampaignFields({ // Or useCampaignStore.getState().updateCampaignFields
+                    updateCampaignFields({
                       id: currentCampaign.id,
                       changes: { subject: e.target.value }
                     });
@@ -647,14 +729,21 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                 className="mt-1"
               />
             </div>
-          )}
+          </div>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="overview" className="mt-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
             <TabsList>
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="content">Content</TabsTrigger>
               <TabsTrigger value="targeting">Targeting</TabsTrigger>
+              <TabsTrigger 
+                value="review" 
+                className={`flex items-center gap-1 ${activeTab === 'review' ? 'bg-primary text-primary-foreground' : ''}`}
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span>Review & Send</span>
+              </TabsTrigger>
               <TabsTrigger value="analytics">Analytics</TabsTrigger>
             </TabsList>
 
@@ -691,31 +780,68 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
               </div>
             </TabsContent>
 
-            <TabsContent value="content" className="space-y-4 mt-4">
-              <div className="flex justify-end mb-4">
-                <Button 
-                  onClick={() => {
-                    console.log('[CampaignDetail] Load from Template button CLICKED.');
-                    setIsTemplateModalOpen(true);
-                    console.log('[CampaignDetail] isTemplateModalOpen attempted to be set to true. Current value in this render cycle:', isTemplateModalOpen);
-                  }}
-                  variant="outline"
-                >
-                  <FileText className="mr-2 h-4 w-4" /> Load from Template
-                </Button>
-                <Button onClick={() => setIsTestSendModalOpen(true)} variant="secondary" disabled={!currentCampaign?.selected_template_id}>
-                  <Mail className="mr-2 h-4 w-4" />
-                  Send Test Email
-                </Button>
+            <TabsContent value="content" id="content-section" className="space-y-4 mt-4">
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={handleSaveCampaign}
+                    disabled={isSavingDraft || !isEditorReady}
+                    variant="outline"
+                  >
+                    {isSavingDraft ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="mr-2 h-4 w-4" />
+                        Save Draft
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <div className="flex space-x-2">
+                  <Button 
+                    onClick={() => {
+                      console.log('[CampaignDetail] Load from Template button CLICKED.');
+                      setIsTemplateModalOpen(true);
+                      console.log('[CampaignDetail] isTemplateModalOpen attempted to be set to true. Current value in this render cycle:', isTemplateModalOpen);
+                    }}
+                    variant="outline"
+                  >
+                    <FileText className="mr-2 h-4 w-4" /> Load from Template
+                  </Button>
+                  <Button 
+                    onClick={() => setIsTestSendModalOpen(true)} 
+                    variant="secondary" 
+                    disabled={!currentCampaign?.selected_template_id}
+                  >
+                    <Mail className="mr-2 h-4 w-4" />
+                    Send Test Email
+                  </Button>
+                </div>
               </div>
 
               {currentCampaign.campaign_design_json !== undefined ? (
-                <UnlayerEmailEditor
-                  key={JSON.stringify(currentCampaign.campaign_design_json)} 
-                  ref={unlayerEditorRef}
-                  initialDesign={currentCampaign.campaign_design_json ?? undefined}
-                  initialHtml={currentCampaign.campaign_html_body ?? undefined}
-                />
+                <div className="relative h-full">
+                  {!isEditorReady && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-8 w-8 animate-spin" />
+                        <p className="text-sm text-muted-foreground">Loading editor...</p>
+                      </div>
+                    </div>
+                  )}
+                  <UnlayerEmailEditor
+                    key={editorKey}
+                    ref={unlayerEditorRef}
+                    onLoad={handleEditorLoad}
+                    initialDesign={currentCampaign.campaign_design_json ?? undefined}
+                    initialHtml={currentCampaign.campaign_html_body ?? undefined}
+                    minHeight="600px"
+                  />
+                </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground border rounded-md min-h-[300px] flex flex-col justify-center items-center">
                   <p>No content loaded, or campaign is still loading.</p>
@@ -752,7 +878,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                               <Checkbox
                                 id={`segment-${segment.id}`}
                                 checked={isSelected}
-                                onCheckedChange={(checked) => {
+                                onChange={(checked) => {
                                   if (!currentCampaign) return;
                                   if (checked) {
                                     addCampaignSegment(currentCampaign.id, segment.id)
@@ -883,6 +1009,162 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
                 </div>
               )}
             </TabsContent>
+
+            <TabsContent value="review" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Review & Send Campaign</CardTitle>
+                  <CardDescription>
+                    Review all campaign details before sending to your audience.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Campaign Details */}
+                  <div>
+                    <h3 className="text-lg font-medium mb-2">Campaign Details</h3>
+                    <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Campaign Name</p>
+                        <p>{currentCampaign.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Subject Line</p>
+                        <p>{currentCampaign.subject || 'No subject set'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">From</p>
+                        <p>{currentCampaign.sender_name} &lt;{currentCampaign.sender_email}&gt;</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Scheduled For</p>
+                        <p>{currentCampaign.scheduled_at ? formatDate(currentCampaign.scheduled_at) : 'Send immediately'}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Audience Summary */}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">Audience</h3>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setActiveTab('targeting')}
+                        className="text-primary"
+                      >
+                        Edit
+                      </Button>
+                    </div>
+                    <div className="mt-2 space-y-2">
+                      {campaignSegments && campaignSegments.length > 0 ? (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Targeting {campaignSegments.length} segment(s)</p>
+                          <ul className="list-disc list-inside text-sm mt-1 space-y-1">
+                            {campaignSegments.map(segment => (
+                              <li key={segment.id} className="flex items-center gap-2">
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                <span className="text-sm font-medium">{segment.segment?.name || 'Unnamed Segment'}</span>
+                                {segment.segment?.description && (
+                                  <span className="text-xs text-muted-foreground">
+                                    ({segment.segment.description})
+                                  </span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="mt-2">
+                            <span className="font-medium">Estimated recipients:</span>{' '}
+                            {audienceSizeLoading ? (
+                              <span><Loader2 className="inline h-3 w-3 animate-spin mr-1" />Calculating...</span>
+                            ) : audienceSizeError ? (
+                              <span className="text-destructive">Error loading estimate</span>
+                            ) : (
+                              <span>{estimatedAudienceSize?.toLocaleString() || 0} recipients</span>
+                            )}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No segments selected</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Content Preview */}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-medium">Content Preview</h3>
+                      <div className="space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => {
+                            setActiveTab('content');
+                            // Smooth scroll to content section after a small delay to allow tab switch
+                            setTimeout(() => {
+                              const contentSection = document.getElementById('content-section');
+                              if (contentSection) {
+                                window.scrollTo({
+                                  top: contentSection.offsetTop - 20,
+                                  behavior: 'smooth'
+                                });
+                              }
+                            }, 100);
+                          }}
+                        >
+                          Edit Content
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={handleOpenLivePreview}
+                        >
+                          Live Preview
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="mt-2 border rounded-md p-4 bg-muted/20">
+                      <h4 className="font-medium mb-1">{currentCampaign.subject || 'No subject'}</h4>
+                      <p className="text-sm text-muted-foreground mb-3">
+                        {currentCampaign.campaign_html_body 
+                          ? `${currentCampaign.campaign_html_body.substring(0, 150)}${currentCampaign.campaign_html_body.length > 150 ? '...' : ''}` 
+                          : 'No content'}
+                      </p>
+                      <Button 
+                        variant="link" 
+                        size="sm" 
+                        className="p-0 h-auto"
+                        onClick={() => {
+                          setActiveTab('content');
+                          // Smooth scroll to content section after a small delay to allow tab switch
+                          setTimeout(() => {
+                            const contentSection = document.getElementById('content-section');
+                            if (contentSection) {
+                              window.scrollTo({
+                                top: contentSection.offsetTop - 20,
+                                behavior: 'smooth'
+                              });
+                            }
+                          }, 100);
+                        }}
+                      >
+                        View full content
+                      </Button>
+                    </div>
+                    {audienceSizeLoading && (
+                      <p className="text-sm text-muted-foreground mt-2 flex items-center">
+                        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                        Verifying audience size...
+                      </p>
+                    )}
+                    {!audienceSizeLoading && !estimatedAudienceSize && (
+                      <p className="text-sm text-destructive mt-2">
+                        Please select at least one segment with recipients.
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
@@ -894,28 +1176,24 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
         getCampaignContent={getUnlayerContent}
       />
 
-      {isTemplateModalOpen && currentCampaign && (
-        <TemplateSelectionModal
-          isOpen={isTemplateModalOpen}
-          onClose={() => setIsTemplateModalOpen(false)}
-          onTemplateSelect={handleTemplateSelected}
-        />
-      )}
-
-      <LivePreviewModal 
+      <LivePreviewModal
         isOpen={isLivePreviewModalOpen}
         onClose={() => setIsLivePreviewModalOpen(false)}
         initialHtml={livePreviewInitialData.html}
         initialSubject={livePreviewInitialData.subject}
       />
 
-      {currentCampaign && (
-        <RecipientPreviewModal
-          isOpen={isRecipientPreviewModalOpen}
-          onClose={() => setIsRecipientPreviewModalOpen(false)}
-          campaignId={currentCampaign.id}
-        />
-      )}
+      <RecipientPreviewModal
+        isOpen={isRecipientPreviewModalOpen}
+        onClose={() => setIsRecipientPreviewModalOpen(false)}
+        campaignId={campaignId}
+      />
+
+      <TemplateSelectionModal
+        isOpen={isTemplateModalOpen}
+        onClose={() => setIsTemplateModalOpen(false)}
+        onTemplateSelect={handleTemplateSelected}
+      />
     </div>
   );
 }

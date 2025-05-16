@@ -15,10 +15,11 @@ export interface UnlayerEmailEditorProps {
   initialHtml?: string;
   minHeight?: string | number;
   onSave?: (design: any, html: string) => void;
+  onLoad?: () => void;
 }
 
 const UnlayerEmailEditor = forwardRef<EditorRef, UnlayerEmailEditorProps>((
-  { initialDesign, initialHtml, minHeight = '80vh', onSave }, 
+  { initialDesign, initialHtml, minHeight = '80vh', onSave, onLoad }, 
   ref
 ) => {
   const emailEditorRef = useRef<UnlayerReactEditorRef>(null);
@@ -35,36 +36,47 @@ const UnlayerEmailEditor = forwardRef<EditorRef, UnlayerEmailEditorProps>((
     getEditorInstance: () => emailEditorRef.current?.editor || null,
   }));
 
-  const onLoad = () => {
+  const handleEditorLoad = () => {
+    console.log('Unlayer editor instance loaded');
     setIsLoaded(true);
+    
+    // Load initial design if provided
     if (initialDesign && emailEditorRef.current?.editor) {
       try {
         if (typeof initialDesign === 'string') {
-            const parsedDesign = JSON.parse(initialDesign);
-            emailEditorRef.current.editor.loadDesign(parsedDesign);
+          const parsedDesign = JSON.parse(initialDesign);
+          emailEditorRef.current.editor.loadDesign(parsedDesign);
         } else if (typeof initialDesign === 'object' && initialDesign !== null) {
-            emailEditorRef.current.editor.loadDesign(initialDesign);
-        } 
+          emailEditorRef.current.editor.loadDesign(initialDesign);
+        }
       } catch (error) {
         console.error('Failed to load initial design into Unlayer editor:', error);
       }
     } else if (initialHtml && !initialDesign && emailEditorRef.current?.editor) {
-        console.warn('UnlayerEmailEditor: initialHtml provided without initialDesign. HTML import to design is complex and not directly supported for initial load via design JSON. Consider saving templates with design JSON.');
+      console.warn('UnlayerEmailEditor: initialHtml provided without initialDesign. HTML import to design is complex and not directly supported for initial load via design JSON. Consider saving templates with design JSON.');
+    }
+    
+    // Call the onLoad callback if provided
+    if (onLoad) {
+      onLoad();
     }
   };
 
+  // Handle initial design changes after the editor is loaded
   useEffect(() => {
     if (isLoaded && initialDesign && emailEditorRef.current?.editor) {
+      try {
         if (typeof initialDesign === 'string') {
-            try {
-                const parsedDesign = JSON.parse(initialDesign);
-                emailEditorRef.current.editor.loadDesign(parsedDesign);
-            } catch (e) { console.error("Error parsing initialDesign string for update:", e); }
+          const parsedDesign = JSON.parse(initialDesign);
+          emailEditorRef.current.editor.loadDesign(parsedDesign);
         } else if (typeof initialDesign === 'object' && initialDesign !== null) {
-            emailEditorRef.current.editor.loadDesign(initialDesign);
+          emailEditorRef.current.editor.loadDesign(initialDesign);
         }
+      } catch (e) { 
+        console.error("Error parsing initialDesign string for update:", e);
+      }
     }
-  }, [initialDesign, isLoaded]); 
+  }, [initialDesign, isLoaded]);
 
   useEffect(() => {
     if (emailEditorRef.current?.editor) {
@@ -88,7 +100,7 @@ const UnlayerEmailEditor = forwardRef<EditorRef, UnlayerEmailEditorProps>((
     <div style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', height: minHeight }}>
       <EmailEditor
         ref={emailEditorRef}
-        onLoad={onLoad}
+        onLoad={handleEditorLoad}
         options={{
           displayMode: 'email',
           safeHtml: true,

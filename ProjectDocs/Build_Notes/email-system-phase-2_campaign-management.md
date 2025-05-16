@@ -86,10 +86,10 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
   - [x] Content tab structure
   - [x] Targeting tab structure
   - [x] Analytics tab with metrics
-- [ ] Implement template editor integration <span style="color: orange;">(In progress)</span>
-  - [ ] Connect campaign content tab with Unlayer editor
-  - [ ] Add support for template versioning
-  - [ ] Implement A/B testing variant creation
+- [x] Implement template editor integration <span style="color: green;">(Completed 2025-05-16)</span>
+  - [x] Connect campaign content tab with Unlayer editor
+  - [x] Add support for template versioning
+  - [x] Implement A/B testing variant creation
 
 ### 4. Campaign Scheduling & Delivery System
 - [x] Implement scheduling functionality <span style="color: green;">(Completed 2025-05-12)</span>
@@ -99,12 +99,13 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
 - [x] Build campaign delivery system <span style="color: green;">(Completed 2025-05-12)</span>
   - [x] API endpoints for triggering campaign delivery
   - [x] Status tracking and updates
-- [x] Implement test sending functionality <span style="color: green;">(Completed 2025-05-13 - Enhanced with variable handling and direct API implementation. Email sending simulated.)</span>
+  - [x] Integrated with Postmark for email delivery
+- [x] Implement test sending functionality <span style="color: green;">(Completed 2025-05-16 - Fully implemented with Postmark integration)</span>
   - [x] Send to specific test email addresses <span style="color: green;">(Completed 2025-05-13 - Now single recipient, supports variables)</span>
   - [x] Validation for email formats <span style="color: green;">(Completed 2025-05-13)</span>
-  - [x] **New:** API endpoint `/api/admin/campaigns/[id]/test` refactored for direct HTML/subject/variable input. <span style="color: green;">(Completed 2025-05-13)</span>
-  - [x] **New:** Variable substitution logic implemented in client and API. <span style="color: green;">(Completed 2025-05-13)</span>
-  - [ ] **New:** Actual email sending via a service (e.g., Resend) needs to be integrated into the API's `sendEmailUtility`. <span style="color: orange;">(To Do)</span>
+  - [x] API endpoint `/api/admin/campaigns/[id]/test` refactored for direct HTML/subject/variable input. <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Variable substitution logic implemented in client and API. <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Integrated with Postmark for actual email sending. <span style="color: green;">(Completed 2025-05-16)</span>
 - [ ] Enhance delivery system <span style="color: orange;">(In progress)</span>
   - [ ] Create proper queue for scheduled campaigns
   - [ ] Implement batch processing for large recipient lists
@@ -119,34 +120,70 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
   - [x] Rate calculations (open rate, click rate, bounce rate)
   - [x] Last updated timestamp
 - [ ] Enhance analytics dashboard <span style="color: orange;">(In progress)</span>
-  - [ ] Time-series charts for engagement over time
-  - [ ] Comparison with previous campaigns
-  - [ ] A/B test results visualization
-  - [ ] Exportable reports
+  - [ ] **Engagement Metrics**
+    - [ ] Time-series charts for opens/clicks over first 7 days
+    - [ ] Device and client breakdown (desktop/mobile, email clients)
+    - [ ] Geographic distribution of opens/clicks
+  - [ ] **A/B Testing**
+    - [ ] Side-by-side comparison of A/B test variants
+    - [ ] Statistical significance indicators
+    - [ ] Performance metrics per variant
+  - [ ] **Export & Reporting**
+    - [ ] Export to CSV/PDF functionality
+    - [ ] Scheduled report generation
+    - [ ] Custom date range selection
+  - [ ] **Integration**
+    - [ ] Webhook for real-time updates
+    - [ ] API for programmatic access to metrics
 
 ### 6. UI/UX Enhancements for Campaign Management (Based on Expert Review - 2025-05-13)
 
+#### D. General UI/UX Polish
+- [ ] **Loading States**
+  - [ ] Add skeleton loaders for data fetching
+  - [ ] Implement optimistic UI updates where appropriate
+  - [ ] Add loading spinners for async operations
+
+- [ ] **Error Handling**
+  - [ ] Consistent error messages and toasts
+  - [ ] Retry mechanism for failed operations
+  - [ ] Clear validation messages for forms
+
+- [ ] **Accessibility**
+  - [ ] Ensure all interactive elements are keyboard navigable
+  - [ ] Add ARIA labels and roles where needed
+  - [ ] Test with screen readers
+
+- [ ] **Responsive Design**
+  - [ ] Optimize for mobile and tablet views
+  - [ ] Test on various screen sizes
+  - [ ] Ensure modals and dialogs work well on mobile
+
+- [ ] **Performance**
+  - [ ] Implement virtualization for long lists
+  - [ ] Optimize image and asset loading
+  - [ ] Add pagination or infinite scroll where needed
+
 #### A. Enhancements for `CampaignDetail.tsx` ("Content" Tab)
-- [x] **Add "Send Test Email" Functionality:** <span style="color: green;">(Completed 2025-05-13 - Core functionality with variable handling and API integration. Email sending is simulated.)</span>
+- [x] **Add "Send Test Email" Functionality:** <span style="color: green;">(Completed 2025-05-16 - Fully implemented with Postmark integration)</span>
   - [x] Implement a "Send Test Email" button within the "Content" tab. <span style="color: green;">(Completed 2025-05-13)</span>
   - [x] Modal for inputting test email addresses (now single recipient) and email variables. <span style="color: green;">(Completed 2025-05-13)</span>
   - [x] Test email uses current campaign subject and Unlayer editor content (even if unsaved). <span style="color: green;">(Completed 2025-05-13)</span>
-  - [x] Provide clear success/error feedback (toast notifications). <span style="color: green;">(Completed 2025-05-13 - Basic UI feedback implemented)</span>
-  - [x] Integrate with `POST /api/admin/campaigns/[id]/test` endpoint. <span style="color: green;">(Completed 2025-05-13 - Client calls endpoint, API refactored)</span>
-  - [x] **Note:** Leverage UI patterns and potentially adapt logic from `app/admin/email-templates/template-tester.tsx`... <span style="color: green;">(Completed - Approach considered and adapted)</span>
-  - [x] **Variable Presentation in Test Modal:** <span style="color: green;">(Completed 2025-05-13 - Variables listed and editable. Grouping/tooltips are future enhancements.)</span>
+  - [x] Provide clear success/error feedback (toast notifications). <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Integrate with `POST /api/admin/campaigns/[id]/test` endpoint. <span style="color: green;">(Completed 2025-05-13)</span>
+  - [x] Integrated with Postmark for actual email sending. <span style="color: green;">(Completed 2025-05-16)</span>
+  - [x] **Variable Presentation in Test Modal:** <span style="color: green;">(Completed 2025-05-16)</span>
     - [x] List all variables found in campaign content as editable fields (pre-filled with example data from `generateDefaultVariableValues`). <span style="color: green;">(Completed 2025-05-13)</span>
-    - [ ] Group variables by category (e.g., User, Course, Action, Other) for clarity. <span style="color: orange;">(To Do - Future enhancement)</span>
-    - [ ] Use tooltips or subtle text for fields representing system-populated variables (e.g., `{{user.firstName}}`) explaining they use example data for this test and will be replaced by real data in actual sends. <span style="color: orange;">(To Do - Future enhancement)</span>
-- [ ] **Implement "Preview with Variables":**
-  - [ ] "Preview As..." button/dropdown in the "Content" tab.
-  - [ ] **Option 1 (Simpler - Recommended Start):** List available variables detected in the content.
-    - [ ] Use `extractVariablesFromContent(currentUnlayerContent)` from `lib/services/email/template-utils.ts` to get variable names.
-    - [ ] Use `categorizeVariables(variableNames)` from `lib/services/email/template-utils.ts` to display variables with descriptions and example values in a modal or dropdown.
-    - [ ] **UI for Listing Variables:**
-      - [ ] Group variables by category (e.g., User, Course, Action, System-Populated, Campaign-Specific, Other) as determined by `categorizeVariables`.
-      - [ ] For each variable, display its name (e.g., `{{user.email}}`), `description` (e.g., "User's email address"), and example `value` (e.g., "test@example.com").
-      - [ ] Add a visual cue or note (e.g., small icon, appended text like "(auto-filled from user data)") for categories typically system-populated (User, Course, Event data) to distinguish them from potentially campaign-specific or purely test variables.
+    - [x] Group variables by category (e.g., User, Course, Action, Other) for clarity. <span style="color: green;">(Completed 2025-05-16)</span>
+    - [x] Use tooltips for fields representing system-populated variables. <span style="color: green;">(Completed 2025-05-16)</span>
+- [x] **Implement "Preview with Variables":** <span style="color: green;">(Completed 2025-05-16)</span>
+  - [x] Added "Preview As..." button in the "Content" tab.
+  - [x] Implemented variable detection and display:
+    - [x] Uses `extractVariablesFromContent` to identify variables in content
+    - [x] Groups variables by category using `categorizeVariables`
+    - [x] Displays variables in a modal with descriptions and example values
+  - [x] Added tooltips and visual indicators for system-populated variables
+  - [x] Integrated with the existing variable substitution system
   - [ ] **Option 2 (Advanced):** Allow selection of a sample user profile (if available) or manual input of variable data in a modal to render the email with populated variables.
     - [ ] This would involve a more complex UI for data input, potentially reusing categorized input fields similar to `TemplateTester`.
     - [ ] Requires a client-side rendering mechanism or a backend preview generation endpoint.
@@ -162,6 +199,13 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
   - [x] Allow selection of one or more existing User Segments. <span style="color: green;">(Completed 2025-05-14)</span>
   - [x] Include search/filter functionality for segments. <span style="color: green;">(Completed - Part of available segments display)</span>
   - [x] Clearly display selected segments. <span style="color: green;">(Completed 2025-05-14)</span>
+- [ ] **Implement Segment Combination Logic:**
+  - [ ] Add UI for combining segments with AND/OR logic
+  - [ ] Implement segment exclusion capability
+  - [ ] Update audience estimation to respect combination logic
+  - [ ] Add validation to prevent invalid combinations
+  - [ ] Update the data model to store combination rules
+  - [ ] Modify API endpoints to handle combined segments
   - [x] **Resolved issues with adding/removing segments (2025-05-14):**
     - [x] Fixed "Failed to add segment to campaign - duplicate key" error by ensuring data-access functions (`getCampaignSegments`, `addCampaignSegment`, `removeCampaignSegment`) use the admin Supabase client (`getAdminClient()`) to bypass RLS. This ensures the UI accurately reflects existing segment associations, preventing attempts to re-add.
     - [x] Fixed "Unexpected token '<'" error when removing segments by creating the missing API route handler for `DELETE /api/admin/campaigns/[id]/segments/[segment_id]`.
@@ -195,8 +239,20 @@ From the `ProjectContext.md`, the following key points inform our campaign manag
 
 #### C. Introduce "Review & Confirm" Step/Tab in `CampaignDetail.tsx`
 - [ ] **Create a "Review" Tab or Pre-Send Modal:**
-  - [ ] Display a summary before sending/scheduling: Campaign Name, Final Subject Line, Sender Info, Target Audience (segments & estimated count), Content Snapshot/Preview Link, Scheduled Time (if any).
-  - [ ] Require a final "Confirm & Send" or "Confirm & Schedule" action.
+  - [ ] Add a new tab between "Targeting" and "Analytics" for the review step
+  - [ ] Display a summary with the following sections:
+    - [ ] Campaign Details: Name, Subject, Sender Info
+    - [ ] Audience: Selected segments, estimated recipient count, audience size warning
+    - [ ] Content: Preview of the email with variables substituted
+    - [ ] Schedule: Send time (immediate or scheduled)
+  - [ ] Add action buttons:
+    - [ ] "Back to Edit" to return to previous tab
+    - [ ] "Confirm & Send Now" for immediate sending
+    - [ ] "Confirm & Schedule" for scheduled sends
+  - [ ] Add a confirmation modal with warning for large audiences
+  - [ ] Implement validation to ensure all required fields are filled
+  - [ ] Add loading states during send/schedule operations
+  - [ ] Show success/error messages after submission
 
 #### D. General UI/UX Polish
 - [ ] **`CampaignDetail.tsx` Polish:**
