@@ -614,6 +614,37 @@ CREATE TABLE IF NOT EXISTS email_alerts (
 - Configured to run on a 5-minute schedule
 - Service role access to ensure proper database permissions
 
+## Future Work & Enhancements (2025-05-16)
+
+### 1. Campaign Completion Tracking
+Currently, our system updates campaign status to "sent" after emails are added to the queue, but doesn't have a mechanism to track when all emails in a campaign are actually processed. We need to implement:
+
+- **Campaign Completion Detector:**
+  - Add process to check if all emails for a campaign have been processed (sent or failed)
+  - Update campaign status from "sent" to "completed" when finished
+  - Record final campaign metrics in `campaign_analytics` table
+
+- **Implementation Approach:**
+  - Create a stored procedure `get_completed_campaigns()` to find campaigns where all emails are processed
+  - Add completion tracking logic to the email queue processor
+  - Update campaign status and record final metrics
+  - Add timestamp for campaign completion for reporting
+
+### 2. Email Variable Standardization
+Currently, the system has inconsistency in email variable syntax and handling:
+
+- **Current Issues:**
+  - Variables in template show up as `{{firstName}}` but processor expects `{{first_name}}`
+  - No clear documentation on available variables for email creators
+  - Test emails don't properly render variables
+
+- **Standardization Plan:**
+  - Adopt snake_case as standard format for all variables (e.g., `{{first_name}}`, `{{last_name}}`)
+  - Create documentation on available variables and their formats
+  - Update variable replacement in both campaign processor and testing functions
+  - Add variable preview functionality in template editor
+  - Implement intelligent fallbacks for missing variables
+
 ### Anti-Spam & Processing Locks Implementation (2025-05-16)
 
 #### 1. Locking Mechanism
