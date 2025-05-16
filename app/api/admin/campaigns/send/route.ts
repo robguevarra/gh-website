@@ -14,7 +14,7 @@ import {
 } from '@/lib/supabase/data-access/campaign-management';
 import { validateAdminAccess, handleServerError, handleNotFound } from '@/lib/supabase/route-handler';
 import { createClient } from '@/lib/supabase/client';
-import { createAdminClient } from '@/lib/supabase/admin-client';
+import { getAdminClient } from '@/lib/supabase/admin';
 
 /**
  * POST /api/admin/campaigns/send
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     // 2. Creating a log entry
     
     const supabase = createClient();
-    const adminClient = createAdminClient();
+    const adminClient = getAdminClient();
     
     // Log campaign sending
     await supabase.from('email_logs').insert({
