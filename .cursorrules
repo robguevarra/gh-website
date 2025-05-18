@@ -118,3 +118,32 @@ Below is a structured guideline to provide to the AI development agent, incorpor
 ## Project Structure
 
 Adopt a clear, modular directory structure:
+
+### Rules for Implementing the Build Notes
+
+1. **Respond with "Implementing Boss Rob"**
+
+2. **Understand Context**
+
+   - Make sure you understand the full context of what needs to be done on the build notes
+
+3. **Continuous Work**
+
+   - Do not stop until insturctions are done/executed properly. Do not end your turn. 
+
+4. **Use tools to your advantage**
+
+   - Do not second guess yourself. Use tools properly. 
+   - Take advantage of the MCP tools available. 
+   - Call the tools properly. 
+
+5. **Iterate and use sequential thinking**
+
+   - Evaluate your tool calls and reevaluate your next steps. 
+   - Try to understand the problem and propose a solution, and then question if that solution is the best solution. 
+
+
+6. **Industry Best Practice**
+
+   - Always implement industry best practice. 
+
