@@ -93,32 +93,6 @@ Below is a structured guideline to provide to the AI development agent, incorpor
    - If build notes are deprecated and no longer needed, move the file to the `/ProjectDocs/Build_Notes/archived/` directory.
 
 ---
-
-### Rules for Context Files
-
-1. **Master Project Context (`projectContext.md`):**
-
-   - Located in `/ProjectDocs/contexts/`.
-   - Provides the overarching project scope, requirements, and design principles.
-   - Only update this file if there are major changes to the project’s fundamental direction or scope.
-
-2. **Additional Context Files:**
-
-   - Supplementary files (e.g., `uiContext.md`, `featureAContext.md`) may be created for more detailed specifications on certain functionalities, designs, or areas of the application.
-   - Keep these files stable. Update them only when new, approved changes need to be documented.
-   - Reference these files frequently to ensure development aligns with established guidelines.
-
-3. **Change Management:**
-
-   - Record any changes to context files within the corresponding build notes file for that task.
-   - Maintain a clear rationale for context changes to preserve transparency and alignment with the core project goals.
-
----
-
-## Project Structure
-
-Adopt a clear, modular directory structure:
-
 ### Rules for Implementing the Build Notes
 
 1. **Respond with "Implementing Boss Rob"**
@@ -146,4 +120,31 @@ Adopt a clear, modular directory structure:
 6. **Industry Best Practice**
 
    - Always implement industry best practice. 
+
+
+### Rules for Context Files
+
+1. **Master Project Context (`projectContext.md`):**
+
+   - Located in `/ProjectDocs/contexts/`.
+   - Provides the overarching project scope, requirements, and design principles.
+   - Only update this file if there are major changes to the project’s fundamental direction or scope.
+
+2. **Additional Context Files:**
+
+   - Supplementary files (e.g., `uiContext.md`, `featureAContext.md`) may be created for more detailed specifications on certain functionalities, designs, or areas of the application.
+   - Keep these files stable. Update them only when new, approved changes need to be documented.
+   - Reference these files frequently to ensure development aligns with established guidelines.
+
+3. **Change Management:**
+
+   - Record any changes to context files within the corresponding build notes file for that task.
+   - Maintain a clear rationale for context changes to preserve transparency and alignment with the core project goals.
+
+---
+
+## Project Structure
+
+Adopt a clear, modular directory structure:
+
 
