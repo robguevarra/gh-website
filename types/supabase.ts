@@ -488,9 +488,11 @@ export type Database = {
           total_clicks: number | null
           total_complaints: number | null
           total_delivered: number | null
+          total_failed: number | null
           total_opens: number | null
           total_recipients: number | null
           total_sent: number | null
+          total_spam_complaints: number | null
           total_unsubscribes: number | null
           updated_at: string | null
         }
@@ -506,9 +508,11 @@ export type Database = {
           total_clicks?: number | null
           total_complaints?: number | null
           total_delivered?: number | null
+          total_failed?: number | null
           total_opens?: number | null
           total_recipients?: number | null
           total_sent?: number | null
+          total_spam_complaints?: number | null
           total_unsubscribes?: number | null
           updated_at?: string | null
         }
@@ -524,9 +528,11 @@ export type Database = {
           total_clicks?: number | null
           total_complaints?: number | null
           total_delivered?: number | null
+          total_failed?: number | null
           total_opens?: number | null
           total_recipients?: number | null
           total_sent?: number | null
+          total_spam_complaints?: number | null
           total_unsubscribes?: number | null
           updated_at?: string | null
         }
@@ -618,7 +624,7 @@ export type Database = {
             foreignKeyName: "campaign_segments_segment_id_fkey"
             columns: ["segment_id"]
             isOneToOne: false
-            referencedRelation: "user_segments"
+            referencedRelation: "segments"
             referencedColumns: ["id"]
           },
         ]
@@ -1056,6 +1062,45 @@ export type Database = {
           },
         ]
       }
+      email_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string | null
+          data: Json | null
+          id: string
+          message: string
+          resolution_notes: string | null
+          resolved: boolean | null
+          resolved_at: string | null
+          resolved_by: string | null
+          timestamp: string
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+          message: string
+          resolution_notes?: string | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          timestamp: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string | null
+          data?: Json | null
+          id?: string
+          message?: string
+          resolution_notes?: string | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          timestamp?: string
+        }
+        Relationships: []
+      }
       email_automations: {
         Row: {
           created_at: string | null
@@ -1097,6 +1142,63 @@ export type Database = {
           },
         ]
       }
+      email_batches: {
+        Row: {
+          batch_size: number
+          campaign_id: string
+          completed_at: string | null
+          created_at: string
+          fail_count: number
+          id: string
+          processed_count: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["batch_status"]
+          success_count: number
+          updated_at: string
+        }
+        Insert: {
+          batch_size: number
+          campaign_id: string
+          completed_at?: string | null
+          created_at?: string
+          fail_count?: number
+          id?: string
+          processed_count?: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["batch_status"]
+          success_count?: number
+          updated_at?: string
+        }
+        Update: {
+          batch_size?: number
+          campaign_id?: string
+          completed_at?: string | null
+          created_at?: string
+          fail_count?: number
+          id?: string
+          processed_count?: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["batch_status"]
+          success_count?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_batches_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_campaign"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_campaigns: {
         Row: {
           ab_test_variant_count: number | null
@@ -1113,6 +1215,7 @@ export type Database = {
           name: string
           scheduled_at: string | null
           segment_ids: string[] | null
+          segment_rules: Json | null
           selected_template_id: string | null
           sender_email: string
           sender_name: string
@@ -1136,6 +1239,7 @@ export type Database = {
           name: string
           scheduled_at?: string | null
           segment_ids?: string[] | null
+          segment_rules?: Json | null
           selected_template_id?: string | null
           sender_email: string
           sender_name: string
@@ -1159,6 +1263,7 @@ export type Database = {
           name?: string
           scheduled_at?: string | null
           segment_ids?: string[] | null
+          segment_rules?: Json | null
           selected_template_id?: string | null
           sender_email?: string
           sender_name?: string
@@ -1194,7 +1299,10 @@ export type Database = {
           message_id: string | null
           metadata: Json | null
           payload: Json | null
+          provider_message_id: string | null
+          received_at: string
           recipient: string | null
+          recipient_email: string | null
           timestamp: string
           updated_at: string
           user_id: string | null
@@ -1208,7 +1316,10 @@ export type Database = {
           message_id?: string | null
           metadata?: Json | null
           payload?: Json | null
+          provider_message_id?: string | null
+          received_at?: string
           recipient?: string | null
+          recipient_email?: string | null
           timestamp?: string
           updated_at?: string
           user_id?: string | null
@@ -1222,7 +1333,10 @@ export type Database = {
           message_id?: string | null
           metadata?: Json | null
           payload?: Json | null
+          provider_message_id?: string | null
+          received_at?: string
           recipient?: string | null
+          recipient_email?: string | null
           timestamp?: string
           updated_at?: string
           user_id?: string | null
@@ -1233,6 +1347,150 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "unified_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_processing_locks: {
+        Row: {
+          created_at: string
+          id: string
+          lock_key: string
+          locked_until: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lock_key: string
+          locked_until: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lock_key?: string
+          locked_until?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      email_processing_metrics: {
+        Row: {
+          batch_size: number
+          created_at: string | null
+          execution_time_ms: number
+          failure_count: number
+          id: string
+          retry_count: number
+          success_count: number
+          timestamp: string
+        }
+        Insert: {
+          batch_size: number
+          created_at?: string | null
+          execution_time_ms: number
+          failure_count: number
+          id?: string
+          retry_count: number
+          success_count: number
+          timestamp: string
+        }
+        Update: {
+          batch_size?: number
+          created_at?: string | null
+          execution_time_ms?: number
+          failure_count?: number
+          id?: string
+          retry_count?: number
+          success_count?: number
+          timestamp?: string
+        }
+        Relationships: []
+      }
+      email_queue: {
+        Row: {
+          campaign_id: string
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          html_content: string | null
+          id: string
+          last_error: string | null
+          priority: number
+          processing_started_at: string | null
+          provider_message_id: string | null
+          recipient_data: Json | null
+          recipient_email: string
+          retry_count: number
+          scheduled_at: string
+          sender_email: string | null
+          sender_name: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["email_status"]
+          subject: string | null
+          text_content: string | null
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          html_content?: string | null
+          id?: string
+          last_error?: string | null
+          priority?: number
+          processing_started_at?: string | null
+          provider_message_id?: string | null
+          recipient_data?: Json | null
+          recipient_email: string
+          retry_count?: number
+          scheduled_at?: string
+          sender_email?: string | null
+          sender_name?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["email_status"]
+          subject?: string | null
+          text_content?: string | null
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          html_content?: string | null
+          id?: string
+          last_error?: string | null
+          priority?: number
+          processing_started_at?: string | null
+          provider_message_id?: string | null
+          recipient_data?: Json | null
+          recipient_email?: string
+          retry_count?: number
+          scheduled_at?: string
+          sender_email?: string | null
+          sender_name?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["email_status"]
+          subject?: string | null
+          text_content?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_queue_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_campaign"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
             referencedColumns: ["id"]
           },
         ]
@@ -1792,6 +2050,30 @@ export type Database = {
           message_id?: string | null
           payload?: Json
           record_type?: string
+        }
+        Relationships: []
+      }
+      processing_locks: {
+        Row: {
+          acquired_at: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          lock_name: string
+        }
+        Insert: {
+          acquired_at: string
+          created_at?: string | null
+          expires_at: string
+          id: string
+          lock_name: string
+        }
+        Update: {
+          acquired_at?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          lock_name?: string
         }
         Relationships: []
       }
@@ -2627,6 +2909,8 @@ export type Database = {
           created_at: string
           email: string
           email_bounced: boolean
+          email_last_spam_at: string | null
+          email_spam_complained: boolean | null
           first_name: string | null
           id: string
           last_login_at: string | null
@@ -2643,6 +2927,8 @@ export type Database = {
           created_at?: string
           email: string
           email_bounced?: boolean
+          email_last_spam_at?: string | null
+          email_spam_complained?: boolean | null
           first_name?: string | null
           id: string
           last_login_at?: string | null
@@ -2659,6 +2945,8 @@ export type Database = {
           created_at?: string
           email?: string
           email_bounced?: boolean
+          email_last_spam_at?: string | null
+          email_spam_complained?: boolean | null
           first_name?: string | null
           id?: string
           last_login_at?: string | null
@@ -3031,33 +3319,24 @@ export type Database = {
       user_segments: {
         Row: {
           created_at: string
-          description: string | null
           id: string
-          name: string
-          rules: Json
-          segment_id: string | null
+          segment_id: string
           updated_at: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string
-          description?: string | null
           id?: string
-          name: string
-          rules: Json
-          segment_id?: string | null
+          segment_id: string
           updated_at?: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string
-          description?: string | null
           id?: string
-          name?: string
-          rules?: Json
-          segment_id?: string | null
+          segment_id?: string
           updated_at?: string
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -3431,6 +3710,10 @@ export type Database = {
       }
     }
     Functions: {
+      acquire_lock: {
+        Args: { p_key: string; p_timeout_seconds?: number }
+        Returns: boolean
+      }
       add_jsonb_column: {
         Args: { table_name: string; column_name: string }
         Returns: undefined
@@ -3551,6 +3834,14 @@ export type Database = {
         Args: { user_id: string; required_permission: string }
         Returns: boolean
       }
+      increment_campaign_metric: {
+        Args: {
+          p_campaign_id: string
+          p_metric_name: string
+          p_increment_value?: number
+        }
+        Returns: undefined
+      }
       log_admin_action: {
         Args: {
           p_admin_id: string
@@ -3601,6 +3892,10 @@ export type Database = {
           p_new_position: number
         }
         Returns: undefined
+      }
+      release_lock: {
+        Args: { p_key: string }
+        Returns: boolean
       }
       reorder_lessons: {
         Args: { p_module_id: string; p_lesson_order: Json }
@@ -3697,7 +3992,8 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      batch_status: "pending" | "processing" | "completed" | "failed"
+      email_status: "pending" | "processing" | "sent" | "failed" | "retrying"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3812,6 +4108,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      batch_status: ["pending", "processing", "completed", "failed"],
+      email_status: ["pending", "processing", "sent", "failed", "retrying"],
+    },
   },
 } as const

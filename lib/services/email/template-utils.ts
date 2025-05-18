@@ -85,8 +85,30 @@ export const substituteVariables = (content: string, values: Record<string, stri
 };
 
 /**
+ * Provides default sample values for a predefined set of standard (snake_case) variables.
+ * These are used for populating test/preview modals.
+ *
+ * @returns Object mapping standard snake_case variable names to default test values.
+ */
+export const getStandardVariableDefaults = (): Record<string, string> => {
+  const defaultValues: Record<string, string> = {
+    'first_name': 'Test',
+    'last_name': 'User',
+    'email': 'rob@gracefulhomeschooling.com',
+    // 'full_name' is typically derived, so not included here as a direct value.
+    // Add other globally available standard variables here as they are defined.
+    // For example:
+    // 'current_date': new Date().toLocaleDateString(),
+    // 'company_name': 'Graceful Homeschooling',
+  };
+  
+  console.debug('Standard variable defaults requested', { defaultValues });
+  return defaultValues;
+};
+
+/**
  * Generate appropriate test values for variables based on name patterns
- * 
+ * @deprecated Prefer getStandardVariableDefaults and guide users to use standard {{snake_case}} variables.
  * @param variables Array of variable names
  * @returns Object mapping variable names to default test values
  */
@@ -94,71 +116,72 @@ export const generateDefaultVariableValues = (variables: string[]): Record<strin
   const defaultValues: Record<string, string> = {};
   
   // Make sure we actually have all the variables detected
-  console.log('Generating default values for variables:', variables);
+  console.warn('Deprecated generateDefaultVariableValues called. Use getStandardVariableDefaults.', { variables });
   
   variables.forEach(variable => {
-    // Smart pattern matching for more contextual default values
-    // User information patterns
-    if (variable.match(/^firstName$/i) || variable.match(/^first[_\s]?name$/i)) {
-      defaultValues[variable] = 'Test';
+    const varLower = variable.toLowerCase();
+    // User information patterns - attempting to map common variants to snake_case for the key if possible,
+    // but primarily for demonstration if non-standard vars are extracted.
+    if (varLower.includes('firstname') || varLower.includes('first_name')) {
+      defaultValues[variable] = 'Test'; // Keeps original key for this deprecated func
     } 
-    else if (variable.match(/^lastName$/i) || variable.match(/^last[_\s]?name$/i)) {
+    else if (varLower.includes('lastname') || varLower.includes('last_name')) {
       defaultValues[variable] = 'User';
     }
-    else if (variable.match(/fullName|userName|name$/i)) {
+    else if (varLower.includes('fullname') || varLower.includes('username') || (varLower.includes('name') && !varLower.includes('company') && !varLower.includes('course'))) {
       defaultValues[variable] = 'Test User';
     }
-    else if (variable.match(/email|mail/i)) {
+    else if (varLower.includes('email') || varLower.includes('mail')) {
       defaultValues[variable] = 'rob@gracefulhomeschooling.com';
     }
     // Instructor/teacher patterns
-    else if (variable.match(/instructor|teacher/i)) {
-      if (variable.match(/name/i)) {
+    else if (varLower.includes('instructor') || varLower.includes('teacher')) {
+      if (varLower.includes('name')) {
         defaultValues[variable] = 'Emigrace Guevarra';
       } else {
         defaultValues[variable] = `[${variable}]`;
       }
     }
     // Class/course patterns
-    else if (variable.match(/class/i)) {
-      if (variable.match(/name/i)) {
-        defaultValues[variable] = 'Papers to Profits Class 1';
+    else if (varLower.includes('class') || varLower.includes('course')) {
+      if (varLower.includes('name')) {
+        defaultValues[variable] = 'Sample Course Name';
       }
-      else if (variable.match(/date/i)) {
+      else if (varLower.includes('date')) {
         defaultValues[variable] = new Date().toLocaleDateString();
       }
-      else if (variable.match(/time/i)) {
+      else if (varLower.includes('time')) {
         defaultValues[variable] = '10:00 AM';
       }
-      else if (variable.match(/url|link/i)) {
-        defaultValues[variable] = 'https://gracefulhomeschooling.com/class/123';
+      else if (varLower.includes('url') || varLower.includes('link')) {
+        defaultValues[variable] = 'https://gracefulhomeschooling.com/course/sample';
       }
-      else if (variable.match(/duration/i)) {
+      else if (varLower.includes('duration')) {
         defaultValues[variable] = '60 minutes';
       }
       else {
-        defaultValues[variable] = `Test Class ${variable.replace('class', '')}`;
+        defaultValues[variable] = `[Test ${variable}]`;
       }
     }
     // Time-related patterns  
-    else if (variable.match(/date/i)) {
+    else if (varLower.includes('date')) {
       defaultValues[variable] = new Date().toLocaleDateString();
     }
-    else if (variable.match(/time/i)) {
+    else if (varLower.includes('time')) {
       defaultValues[variable] = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
     }
-    else if (variable.match(/duration/i)) {
+    else if (varLower.includes('duration')) {
       defaultValues[variable] = '60 minutes';
     }
-    else if (variable.match(/timezone/i)) {
+    else if (varLower.includes('timezone')) {
       defaultValues[variable] = 'PHT';
     }
     // URL and link patterns
-    else if (variable.match(/url|link/i)) {
-      if (variable.match(/account/i)) {
+    else if (varLower.includes('url') || varLower.includes('link')) {
+      if (varLower.includes('account')) {
         defaultValues[variable] = 'https://gracefulhomeschooling.com/account';
       }
-      else if (variable.match(/material|resource/i)) {
+      else if (varLower.includes('material') || varLower.includes('resource')) {
         defaultValues[variable] = `https://gracefulhomeschooling.com/materials/example-${variable}`;
       }
       else {
@@ -166,8 +189,8 @@ export const generateDefaultVariableValues = (variables: string[]): Record<strin
       }
     }
     // Content/material patterns
-    else if (variable.match(/material|resource/i)) {
-      if (variable.match(/name/i)) {
+    else if (varLower.includes('material') || varLower.includes('resource')) {
+      if (varLower.includes('name')) {
         const materialMatch = variable.match(/\d+/);
         const materialNum = materialMatch ? materialMatch[0] : '';
         defaultValues[variable] = `Study Material ${materialNum || '1'}`;
@@ -176,7 +199,7 @@ export const generateDefaultVariableValues = (variables: string[]): Record<strin
       }
     }
     // Token patterns
-    else if (variable.match(/token/i)) {
+    else if (varLower.includes('token')) {
       defaultValues[variable] = 'test-token-123456789';
     }
     // All other variables - use semantic placeholder
@@ -185,7 +208,7 @@ export const generateDefaultVariableValues = (variables: string[]): Record<strin
     }
   });
   
-  console.log('Final default values:', defaultValues);
+  console.debug('Deprecated default values generated', { defaultValues });
   return defaultValues;
 };
 
