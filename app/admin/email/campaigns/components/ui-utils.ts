@@ -82,7 +82,18 @@ export const inputStyles = {
   search: "pl-9 pr-4", // Search input with magnifying glass icon
   textarea: "min-h-[80px] flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
   fileInput: "cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90",
-  labelAdd: "text-sm font-medium",
+  labelAdd: "text-sm font-medium", // Renamed from label for clarity, can be used for general labels
+};
+
+// Form-specific styling, including labels
+export const formStyles = {
+  label: "text-sm font-medium text-foreground", // Standard form label style
+  input: inputStyles.default, // Re-export for convenience or use inputStyles.default directly
+  inputError: "border-destructive focus-visible:ring-destructive",
+  errorMessage: "text-xs text-destructive mt-1",
+  formGroup: "space-y-1.5", // Adjusted spacing for form groups
+  fieldSet: "space-y-3 p-4 border border-border rounded-md",
+  legend: "text-base font-medium text-foreground px-1",
 };
 
 // Spacing utilities for consistent layout

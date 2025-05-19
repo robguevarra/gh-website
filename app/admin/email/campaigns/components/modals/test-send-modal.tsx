@@ -53,27 +53,35 @@ export function TestSendModal({
       setIsLoading(true);
       const fetchAndUpdateVariables = async () => {
         try {
-          let htmlContent = campaign.campaign_html_body; // Default to stored HTML
-          try {
-            const contentFromEditor = await getCampaignContent(); // Attempt to get latest from editor
-            if (contentFromEditor && contentFromEditor.html) {
-              htmlContent = contentFromEditor.html;
+          let htmlContentForVariableExtraction = campaign.campaign_html_body; // Default to stored HTML
+          
+          // Try to get live content for variable display purposes only, if function is available and editor might be active
+          // This does not affect what is actually SENT.
+          if (typeof getCampaignContent === 'function') { 
+            try {
+              const contentFromEditor = await getCampaignContent();
+              if (contentFromEditor && contentFromEditor.html) {
+                htmlContentForVariableExtraction = contentFromEditor.html;
+                console.log('[TestSendModal] Using live editor content for variable display.');
+              } else {
+                console.log('[TestSendModal] getCampaignContent returned no HTML, using stored HTML for variable display.');
+              }
+            } catch (editorError) {
+              console.warn('[TestSendModal] Could not fetch live content from editor for variable display, using stored HTML. Error:', editorError);
             }
-          } catch (editorError) {
-            console.warn('Could not fetch live content from editor for test send, using stored HTML:', editorError);
-            // Fallback to campaign.campaign_html_body is already set
+          } else {
+            console.log('[TestSendModal] getCampaignContent function not available, using stored HTML for variable display.');
           }
 
-          if (htmlContent) {
-            // Though extractVariablesFromContent is available, for test sends with standardized defaults,
-            // we primarily need the defaults themselves. Extracted variables might be useful for UI listing if desired later.
-            const defaults = getStandardVariableDefaults(); // Use standardized defaults
+          if (htmlContentForVariableExtraction) {
+            const defaults = getStandardVariableDefaults(); 
             setVariableValues(defaults);
           } else {
-            setVariableValues({}); // No HTML content, so no variables
+            console.warn('[TestSendModal] No HTML content available (neither stored nor live) for variable extraction.');
+            setVariableValues({});
           }
         } catch (error) {
-          console.error("Error processing campaign variables:", error);
+          console.error("[TestSendModal] Error processing campaign variables:", error);
           setTestSendError('Could not load email variables.');
           setVariableValues({});
         } finally {
@@ -82,7 +90,7 @@ export function TestSendModal({
       };
       fetchAndUpdateVariables();
     }
-  }, [isOpen, campaign, getCampaignContent, campaign?.campaign_html_body]);
+  }, [isOpen, campaign, getCampaignContent]); // Removed campaign.campaign_html_body from deps as it's part of 'campaign' object
 
   const handleSendTest = async () => {
     if (!campaign) {
@@ -98,12 +106,19 @@ export function TestSendModal({
     setTestSendError(null);
 
     try {
-      const content = await getCampaignContent();
-      if (!content) {
-        throw new Error('Could not retrieve campaign content from editor.');
+      // ALWAYS use saved/fallback content for the actual test send payload
+      const htmlContentForSend = campaign.campaign_html_body;
+      // const designJsonForSend = campaign.campaign_design_json; // If your API needs the design JSON
+
+      if (!htmlContentForSend) {
+        // This implies the campaign itself has no saved content, which is a fundamental issue.
+        throw new Error('No saved HTML content available for this campaign to send a test.');
       }
 
       const campaignSubject = campaign.subject || campaign.name || 'Test Email';
+
+      // Log what we are about to send for clarity
+      console.log(`[TestSendModal] Sending test email. Subject: "${campaignSubject}". Recipient: ${recipientEmail}. Using stored HTML content.`);
 
       const response = await fetch(`/api/admin/campaigns/${campaign.id}/test`, {
         method: 'POST',
@@ -111,8 +126,9 @@ export function TestSendModal({
         body: JSON.stringify({
           recipientEmail,
           subject: campaignSubject,
-          html_content: content.html,
-          placeholder_data: variableValues, // Send the current variable values from getStandardVariableDefaults
+          html_content: htmlContentForSend, // Send the SAVED HTML content
+          // design_json: designJsonForSend, // Uncomment if API uses this
+          placeholder_data: variableValues, // These are from getStandardVariableDefaults, fetched in useEffect
         }),
       });
 
@@ -128,7 +144,7 @@ export function TestSendModal({
       });
       onClose(); // Close modal on success
     } catch (error: any) {
-      console.error('Error sending test email:', error);
+      console.error('[TestSendModal] Error sending test email:', error);
       setTestSendError(error.message || 'An unknown error occurred.');
       toast({
         title: 'Error Sending Test Email',

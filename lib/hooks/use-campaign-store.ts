@@ -534,32 +534,36 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       if (!response.ok) {
         let errorData = { error: 'Failed to remove segment. Server returned an error.' };
         let parsedJsonError: any = null;
-        let rawResponseText: string | null = null;
+        // let rawResponseText: string | null = null; // Removed as it's not strictly necessary with robust JSON parsing
 
         try {
-          const responseCloneForJson = response.clone(); // Clone for JSON parsing
-          const responseCloneForText = response.clone(); // Clone for text parsing
-
-          parsedJsonError = await responseCloneForJson.json();
+          // It's generally safe to call .json() directly on the response.
+          // If it fails, the catch block will handle it.
+          // Cloning is only necessary if you need to read the body multiple times, which we don't here for the error path.
+          parsedJsonError = await response.json();
           errorData.error = parsedJsonError.error || parsedJsonError.message || errorData.error;
         } catch (e) {
+          // If JSON parsing fails, try to get text as a last resort.
+          // This catch block is primarily for network errors or non-JSON responses.
           try {
-            rawResponseText = await response.text(); // Use original response if json parsing failed on clone
-            errorData.error = rawResponseText || errorData.error;
+            // const responseCloneForText = response.clone(); // Not needed if response.json() already consumed/failed
+            const rawText = await response.text(); // Try reading the original response as text
+            errorData.error = rawText || errorData.error;
+            console.warn('[removeCampaignSegment] API error response was not JSON. Raw text:', rawText);
           } catch (textE) {
-            console.error('[removeCampaignSegment] Failed to parse error response as JSON or text.');
+            console.error('[removeCampaignSegment] Failed to parse error response as JSON or text, and failed to read as text.');
           }
         }
         
-        // Detailed Debugging Logs
-        console.log('[removeCampaignSegment] Response Status:', response.status);
-        // console.log('[removeCampaignSegment] Response Headers:', JSON.stringify(Object.fromEntries(response.headers.entries()))); // Can be verbose
-        console.log('[removeCampaignSegment] Parsed JSON Error from Server:', parsedJsonError);
-        console.log('[removeCampaignSegment] Raw Response Text (if JSON parse failed):', rawResponseText);
-        console.log('[removeCampaignSegment] Final errorData object:', JSON.stringify(errorData));
-        console.log('[removeCampaignSegment] Final errorData.error string:', errorData.error);
+        // The detailed logs that helped us diagnose can now be removed or commented out.
+        // console.log('[removeCampaignSegment] Response Status:', response.status);
+        // console.log('[removeCampaignSegment] Parsed JSON Error from Server:', parsedJsonError);
+        // console.log('[removeCampaignSegment] Raw Response Text (if JSON parse failed):', rawResponseText);
+        // console.log('[removeCampaignSegment] Final errorData object:', JSON.stringify(errorData));
+        // console.log('[removeCampaignSegment] Final errorData.error string:', errorData.error);
 
-        console.error('[removeCampaignSegment] API Error (Original Log Format):', { status: response.status, errorData });
+        // This log is still useful for a concise error summary on the client.
+        console.error('[removeCampaignSegment] API Error to be thrown:', { status: response.status, message: errorData.error });
         throw new Error(errorData.error);
       }
 
