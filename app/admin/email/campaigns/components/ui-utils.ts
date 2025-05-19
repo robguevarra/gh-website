@@ -10,6 +10,9 @@ export const cardStyles = {
   highlighted: "border border-primary/20 bg-card shadow-md hover:shadow-lg hover:border-primary/40 transition-all duration-200",
   dashboard: "border border-border bg-card shadow-sm rounded-lg",
   metrics: "border border-border bg-primary/5 shadow-sm rounded-lg hover:shadow-md transition-shadow duration-200",
+  accent: "border border-secondary/20 bg-secondary/5 shadow-sm hover:shadow-md transition-shadow duration-200",
+  glowing: "border border-primary/30 bg-primary/5 shadow-[0_0_15px_rgba(var(--primary)/0.15)] hover:shadow-[0_0_20px_rgba(var(--primary)/0.25)]",
+  modal: "bg-background p-6 rounded-lg shadow-lg border border-border",
 };
 
 // Button styling with consistent hover effects and transitions
@@ -28,6 +31,14 @@ export const buttonStyles = {
   ghost: "hover:bg-accent hover:text-accent-foreground transition-colors duration-200",
   // Link buttons (navigation, related content)
   link: "text-primary underline-offset-4 hover:underline transition-colors duration-200",
+  // Icon buttons (toolbar actions)
+  icon: "h-9 w-9 p-0 flex items-center justify-center rounded-md",
+  // Toggle buttons (on/off, active/inactive)
+  toggle: "border-2 data-[state=on]:bg-primary/10 data-[state=on]:border-primary data-[state=on]:text-primary",
+  // Action buttons with icon and text
+  withIcon: "inline-flex items-center gap-2",
+  // Button with subtle hover effect
+  subtle: "bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors duration-200",
 };
 
 // Badge styling for status indicators
@@ -44,18 +55,34 @@ export const badgeStyles = {
   outline: "border border-border bg-transparent hover:bg-muted/50",
 };
 
-// Typography styles for consistent text styling
+// Typography system for consistent text styling
 export const typography = {
-  h1: "scroll-m-20 text-3xl font-semibold tracking-tight",
-  h2: "scroll-m-20 text-2xl font-semibold tracking-tight",
-  h3: "scroll-m-20 text-xl font-semibold tracking-tight",
-  h4: "scroll-m-20 text-lg font-semibold tracking-tight",
+  h1: "scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl",
+  h2: "scroll-m-20 text-3xl font-semibold tracking-tight first:mt-0",
+  h3: "scroll-m-20 text-2xl font-semibold tracking-tight",
+  h4: "scroll-m-20 text-xl font-semibold tracking-tight",
   p: "leading-7 [&:not(:first-child)]:mt-6",
+  subtle: "text-sm text-muted-foreground",
   lead: "text-xl text-muted-foreground",
   large: "text-lg font-semibold",
   small: "text-sm font-medium leading-none",
-  subtle: "text-sm text-muted-foreground",
   muted: "text-sm text-muted-foreground",
+  code: "relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold",
+  emphasis: "font-medium text-foreground",
+  success: "text-green-600",
+  error: "text-destructive",
+  warning: "text-amber-600",
+  info: "text-blue-600",
+};
+
+// Input element styling
+export const inputStyles = {
+  default: "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+  withIcon: "pl-9", // Used with an icon positioned at left
+  search: "pl-9 pr-4", // Search input with magnifying glass icon
+  textarea: "min-h-[80px] flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+  fileInput: "cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90",
+  labelAdd: "text-sm font-medium",
 };
 
 // Spacing utilities for consistent layout
@@ -69,6 +96,12 @@ export const spacing = {
   row: "flex flex-row items-center gap-4",
   grid: "grid grid-cols-1 md:grid-cols-2 gap-4",
   page: "container mx-auto py-6 space-y-8",
+  tight: "gap-2",
+  normal: "gap-4",
+  loose: "gap-6",
+  indent: "ml-4",
+  verticalRhythm: "my-2",
+  gutters: "px-4 md:px-6",
 };
 
 // Animation and transition utilities
@@ -80,6 +113,15 @@ export const transitions = {
   pulse: "animate-pulse",
   spin: "animate-spin",
   bounce: "animate-bounce",
+  slideInLeft: "animate-in slide-in-from-left-4 duration-500",
+  slideInRight: "animate-in slide-in-from-right-4 duration-500",
+  slideInTop: "animate-in slide-in-from-top-4 duration-500",
+  slideInBottom: "animate-in slide-in-from-bottom-4 duration-500",
+  scaleUp: "animate-in zoom-in-95 duration-300",
+  scaleDown: "animate-out zoom-out-95 duration-300",
+  delayShort: "delay-150",
+  delayMedium: "delay-300",
+  delayLong: "delay-500",
 };
 
 // Status-based styling (success, error, warning, info)
@@ -108,6 +150,18 @@ export const statusStyles = {
     text: "text-blue-800",
     icon: "text-blue-500",
   },
+  neutral: {
+    background: "bg-muted",
+    border: "border-border",
+    text: "text-muted-foreground",
+    icon: "text-muted-foreground",
+  },
+  highlight: {
+    background: "bg-primary/5",
+    border: "border-primary/20",
+    text: "text-primary",
+    icon: "text-primary",
+  },
 };
 
 // Layout utilities (grids, flexbox configurations)
@@ -120,6 +174,10 @@ export const layouts = {
   stackedForm: "flex flex-col gap-4",
   centeredContent: "flex items-center justify-center",
   flowContent: "flow-root",
+  stickyHeader: "sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b",
+  responsiveGrid: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4",
+  nestedLayout: "grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr]",
+  masonry: "columns-1 sm:columns-2 xl:columns-3 gap-4 space-y-4",
 };
 
 // Responsive utilities
@@ -130,6 +188,12 @@ export const responsive = {
   mobileReverse: "flex flex-col-reverse md:flex-row gap-4",
   mobileFullWidth: "w-full md:w-auto",
   mobileCenter: "text-center md:text-left",
+  adaptiveFont: "text-sm md:text-base",
+  adaptiveSpacing: "p-3 md:p-6",
+  adaptiveLayout: "space-y-3 md:space-y-6",
+  stackedToInline: "flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-4",
+  inlineToStacked: "flex flex-row md:flex-col items-center md:items-start gap-4 md:gap-2",
+  conditionalWrap: "flex flex-wrap md:flex-nowrap",
 };
 
 // Misc utilities (z-index layers, border radius, etc.)
@@ -139,6 +203,15 @@ export const miscUtils = {
   tooltip: "z-[70]",
   popover: "z-[40]",
   dropdown: "z-[30]",
+  overlayBlur: "backdrop-blur-sm",
+  elevate: "relative z-10",
+  hidden: "hidden",
+  screenReaderOnly: "sr-only",
+  truncate: "truncate",
+  noWrap: "whitespace-nowrap",
+  break: "break-words",
+  divider: "h-px w-full bg-border my-4",
+  separator: "h-4 w-px bg-border mx-2",
 };
 
 // Data visualization
@@ -146,15 +219,41 @@ export const dataViz = {
   barChart: "h-4 rounded-full overflow-hidden bg-muted",
   progress: "h-2 rounded-full overflow-hidden bg-muted", 
   statsCard: "p-4 rounded-lg border border-border bg-card",
+  progressBar: "h-2 bg-primary rounded-full transition-all duration-500 ease-out",
+  progressBarLarge: "h-4 bg-primary rounded-full transition-all duration-500 ease-out",
+  progressTrack: "h-2 w-full bg-muted rounded-full overflow-hidden",
+  progressTrackLarge: "h-4 w-full bg-muted rounded-full overflow-hidden",
+  segmentBlock: "inline-block h-3 w-3 rounded-[2px] mx-0.5",
+  percentageText: "text-xs font-medium text-muted-foreground",
+  pieChart: "w-24 h-24 rounded-full overflow-hidden relative",
+  gaugeChart: "w-24 h-12 rounded-t-full overflow-hidden relative border-2 border-border",
+  metricChange: {
+    up: "text-green-600 flex items-center gap-1",
+    down: "text-red-600 flex items-center gap-1",
+    neutral: "text-muted-foreground flex items-center gap-1",
+  },
+  tooltip: "absolute -translate-x-1/2 -translate-y-full p-2 rounded bg-popover text-popover-foreground text-xs shadow-md animate-in fade-in",
 };
 
-// Form field styling
-export const formStyles = {
-  label: "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
-  input: "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-  select: "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-  checkbox: "h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary",
-  radio: "h-4 w-4 border-gray-300 text-primary focus:ring-primary",
+// Accessibility helpers
+export const a11y = {
+  focusRing: "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+  screenReaderOnly: "sr-only",
+  focusWithin: "focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2",
+  keyboardOnly: "focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+  interactiveArea: "min-h-[44px] min-w-[44px]", // Minimum touch target size
+  contrastText: "text-foreground bg-background",
+  highContrast: "text-foreground",
+  reducedMotion: "motion-reduce:transform-none motion-reduce:animate-none motion-reduce:transition-none",
+};
+
+// Device mockups for different viewport sizes
+export const deviceMockups = {
+  mobile: "max-w-[375px] h-[667px] mx-auto border-8 rounded-[36px] border-foreground/10 shadow-lg overflow-hidden",
+  tablet: "max-w-[768px] h-[1024px] mx-auto border-8 rounded-[36px] border-foreground/10 shadow-lg overflow-hidden",
+  desktop: "max-w-full border-t-8 rounded-t-lg border-foreground/10 shadow-lg overflow-hidden",
+  deviceFrame: "w-full h-full bg-background overflow-y-auto",
+  deviceBar: "h-6 bg-muted/20 flex items-center justify-center",
 };
 
 // Helper function to conditionally join classes

@@ -4,10 +4,23 @@ import React, { useImperativeHandle, useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import UnlayerEmailEditor, { EditorRef as UnlayerEditorRef } from '@/app/admin/email-templates/unlayer-email-editor';
 import { EmailCampaign } from '@/lib/supabase/data-access/campaign-management';
-import { Loader2, Save, FileText } from 'lucide-react';
+import { Loader2, Save, FileText, RefreshCw, Image, Info, Type } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useCampaignStore } from '@/lib/hooks/use-campaign-store';
 import { extractVariablesFromContent, getStandardVariableDefaults } from '@/lib/services/email/template-utils';
+import { cn } from '@/lib/utils';
+import { 
+  cardStyles, 
+  buttonStyles, 
+  typography, 
+  transitions, 
+  spacing,
+  inputStyles 
+} from '../ui-utils';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { VariableListModal } from '@/components/admin/email/VariableListModal';
 
 // Define and export the Ref type for this component
 export interface ContentTabContentRef {
@@ -27,31 +40,31 @@ export interface ContentTabContentProps {
 export const ContentTabContent = React.forwardRef<ContentTabContentRef, ContentTabContentProps>(
   (props, ref) => {
     const { 
-      currentCampaign,
-      campaignId,
-      setIsTemplateModalOpen,
-      onNewCampaignCreated,
+      currentCampaign, 
+      campaignId, 
+      setIsTemplateModalOpen, 
+      onNewCampaignCreated 
     } = props;
-
-    const { toast } = useToast();
-    const { createCampaign, updateCampaign, fetchCampaign } = useCampaignStore();
-
-    // Internal state for the editor
-    const unlayerEditorRef = useRef<UnlayerEditorRef>(null);
+    
     const [isEditorReady, setIsEditorReady] = useState(false);
-    const [editorKey, setEditorKey] = useState(Date.now()); // Used to force re-render of Unlayer
-    const [isSavingDraft, setIsSavingDraft] = useState(false);
-
-    // Internal state for variables
-    const [detectedVariables, setDetectedVariables] = useState<string[]>([]);
-    const [variableValues, setVariableValues] = useState<Record<string, string>>({});
-
-    // Store initial values from prop to compare for re-initialization
-    const [initialDesignLoaded, setInitialDesignLoaded] = useState<any>(null);
-    const [initialHtmlLoaded, setInitialHtmlLoaded] = useState<string | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+    const [editorKey, setEditorKey] = useState<number>(Date.now()); // Used to force re-render of editor
+    const [initialDesignLoaded, setInitialDesignLoaded] = useState<any>(null); // Track design JSON to prevent unnecessary re-renders
+    const [initialHtmlLoaded, setInitialHtmlLoaded] = useState<string | null>(null); // Track HTML to prevent unnecessary re-renders
+    const [subject, setSubject] = useState<string>(currentCampaign?.subject || '');
+    
+    const unlayerEditorRef = useRef<UnlayerEditorRef>(null);
+    const { toast } = useToast();
+    
+    // For New Campaigns, using store to update is cleaner than prop callbacks in many cases
+    const updateCampaign = useCampaignStore(state => state.updateCampaign);
+    const createCampaign = useCampaignStore(state => state.createCampaign);
 
     useEffect(() => {
       if (currentCampaign) {
+        // Update subject when campaign changes
+        setSubject(currentCampaign.subject || '');
+        
         // Only re-key the editor if the actual campaign's content has changed from what was last loaded
         // This prevents re-initializing if only other campaign metadata changes
         const designChanged = JSON.stringify(currentCampaign.campaign_design_json) !== JSON.stringify(initialDesignLoaded);
@@ -72,64 +85,176 @@ export const ContentTabContent = React.forwardRef<ContentTabContentRef, ContentT
           setInitialHtmlLoaded(null);
         }
       }
-    }, [currentCampaign?.campaign_design_json, currentCampaign?.campaign_html_body, currentCampaign?.id, initialDesignLoaded, initialHtmlLoaded]);
+    }, [currentCampaign?.campaign_design_json, currentCampaign?.campaign_html_body, currentCampaign?.id, currentCampaign?.subject, initialDesignLoaded, initialHtmlLoaded]);
 
-    // New useEffect for managing variables based on campaign content or explicit trigger
-    useEffect(() => {
-      const updateVars = (htmlContent: string | null | undefined) => {
-        if (htmlContent) {
-          const vars = extractVariablesFromContent(htmlContent);
-          setDetectedVariables(vars);
-          // Only set defaults if variables are detected and current values are empty,
-          // to avoid overwriting user-modified preview values if we were to implement that here.
-          // For now, always setting defaults if vars exist.
-          if (vars.length > 0) {
-            setVariableValues(getStandardVariableDefaults());
-          } else {
-            setVariableValues({});
+    const handleEditorLoad = () => {
+      console.log('ContentTabContent: Unlayer editor loaded');
+      setIsEditorReady(true);
+    };
+
+    const handleSaveContent = async () => {
+      if (!unlayerEditorRef.current || !currentCampaign) return;
+  
+      try {
+        setIsSaving(true);
+        
+        // Get design JSON from editor
+        let editorContent: any;
+        try {
+          editorContent = await new Promise<any>((resolve, reject) => {
+            const editorInstance = unlayerEditorRef.current?.getEditorInstance();
+            if (!editorInstance) {
+              reject(new Error("Editor instance not available"));
+              return;
+            }
+            
+            editorInstance.saveDesign((design: any) => {
+              if (design) {
+                resolve(design);
+              } else {
+                reject(new Error("Could not retrieve design from editor"));
+              }
+            });
+          });
+        } catch (error) {
+          throw new Error("Could not retrieve content from editor");
+        }
+        
+        // Get HTML from editor
+        let editorHtml: { html: string; design?: any };
+        try {
+          editorHtml = await new Promise<{ html: string; design?: any }>((resolve, reject) => {
+            const editorInstance = unlayerEditorRef.current?.getEditorInstance();
+            if (!editorInstance) {
+              reject(new Error("Editor instance not available"));
+              return;
+            }
+            
+            editorInstance.exportHtml((data) => {
+              if (data && data.html) {
+                resolve(data);
+              } else {
+                reject(new Error("Could not generate HTML from editor"));
+              }
+            });
+          });
+        } catch (error) {
+          throw new Error("Could not generate HTML from editor");
+        }
+        
+        // For new campaigns, we need to create it first
+        if (campaignId === 'new') {
+          let newlyCreatedCampaignId = "";
+          try {
+            // Create a new campaign with the editor content
+            const result = await createCampaign({
+              name: currentCampaign.name || 'New Campaign', 
+              subject: subject || 'New Campaign Subject',
+              campaign_design_json: editorContent,
+              campaign_html_body: editorHtml.html,
+              status: 'draft'
+            });
+            
+            newlyCreatedCampaignId = result.id;
+            
+            toast({
+              title: "Campaign Created",
+              description: "New campaign has been created with your content.",
+            });
+            
+            // Notify parent so it can redirect to the new campaign's page
+            if (onNewCampaignCreated) onNewCampaignCreated(newlyCreatedCampaignId);
+          } catch (createError) {
+            console.error('Error creating new campaign:', createError);
+            toast({
+              title: "Error",
+              description: "Failed to create new campaign with your content.",
+              variant: "destructive"
+            });
           }
         } else {
-          setDetectedVariables([]);
-          setVariableValues({});
+          // Existing campaign, just update the content
+          try {
+            await updateCampaign(campaignId, {
+              subject,
+              campaign_design_json: editorContent,
+              campaign_html_body: editorHtml.html
+            });
+            
+            // Update what we consider "loaded" to prevent unnecessary re-renders
+            setInitialDesignLoaded(editorContent);
+            setInitialHtmlLoaded(editorHtml.html);
+            
+            toast({
+              title: "Content Saved",
+              description: "Your campaign content has been saved.",
+            });
+          } catch (updateError) {
+            console.error('Error updating campaign content:', updateError);
+            toast({
+              title: "Error",
+              description: "Failed to save your campaign content.",
+              variant: "destructive"
+            });
+          }
         }
-      };
-
-      // Initial load from currentCampaign
-      if (currentCampaign?.campaign_html_body) {
-        updateVars(currentCampaign.campaign_html_body);
-      }
-      
-      // This effect will also re-run if onContentChangedForVariableExtraction identity changes,
-      // but its primary job is to call updateVars if the callback itself is invoked.
-      // The actual HTML for onContentChangedForVariableExtraction comes from its invocation.
-      // This might be slightly redundant if currentCampaign.campaign_html_body is updated by parent
-      // at the same time onContentChangedForVariableExtraction is called.
-      
-      // The `onContentChangedForVariableExtraction` prop should ideally be an Effect hook itself if it were complex,
-      // or the logic it performs should be here.
-
-    }, [currentCampaign?.campaign_html_body]);
-
-    const getEditorContentInternal = async (): Promise<{ html: string; design: any } | null> => {
-      if (unlayerEditorRef.current) {
-        return new Promise((resolve, reject) => {
-          // Added non-null assertion as it's checked above
-          unlayerEditorRef.current!.exportHtml(data => { 
-            if (data && data.design && data.html) {
-              resolve(data);
-            } else {
-              reject(new Error('Failed to export valid data from Unlayer editor.'));
-            }
-          });
+      } catch (error) {
+        console.error('ContentTabContent: Error getting editor content:', error);
+        toast({
+          title: "Error",
+          description: "There was a problem retrieving content from the editor. Please try again.",
+          variant: "destructive"
         });
+      } finally {
+        setIsSaving(false);
       }
-      console.warn('getEditorContentInternal: unlayerEditorRef not available');
-      return null;
     };
 
     useImperativeHandle(ref, () => ({
-      getInnerEditorContent: getEditorContentInternal, // Use the internal function
-      dangerouslyUpdateEditorContent: (newContent: { designJSON: any; htmlContent: string | null }) => {
+      getInnerEditorContent: async () => {
+        if (!unlayerEditorRef.current) return null;
+        try {
+          const design: any = await new Promise((resolve, reject) => {
+            const editorInstance = unlayerEditorRef.current?.getEditorInstance();
+            if (!editorInstance) {
+              reject(new Error("Editor instance not available"));
+              return;
+            }
+            
+            editorInstance.saveDesign((design: any) => {
+              if (design) {
+                resolve(design);
+              } else {
+                reject(new Error("Could not retrieve design from editor"));
+              }
+            });
+          });
+          
+          const htmlExport: { html: string } = await new Promise((resolve, reject) => {
+            const editorInstance = unlayerEditorRef.current?.getEditorInstance();
+            if (!editorInstance) {
+              reject(new Error("Editor instance not available"));
+              return;
+            }
+            
+            editorInstance.exportHtml((data) => {
+              if (data && data.html) {
+                resolve(data);
+              } else {
+                reject(new Error("Could not generate HTML from editor"));
+              }
+            });
+          });
+          
+          return { design, html: htmlExport.html };
+        } catch (error) {
+          console.error('ContentTabContent: Error in getInnerEditorContent:', error);
+          return null;
+        }
+      },
+      
+      dangerouslyUpdateEditorContent: 
+      (newContent: { designJSON: any; htmlContent: string | null }) => {
         // This method is called by the parent when a template is selected.
         // It forces the editor to re-initialize with this new content.
         console.log('ContentTabContent: dangerouslyUpdateEditorContent called', newContent);
@@ -152,160 +277,161 @@ export const ContentTabContent = React.forwardRef<ContentTabContentRef, ContentT
       }
     }));
 
-    const handleEditorLoad = () => {
-      console.log('ContentTabContent: Unlayer Editor Loaded.');
-      setIsEditorReady(true);
-      // Extract variables when editor is ready with content
-      if (unlayerEditorRef.current) {
-        unlayerEditorRef.current.exportHtml(data => {
-          if (data && data.html) {
-            const vars = extractVariablesFromContent(data.html);
-            setDetectedVariables(vars);
-            if (vars.length > 0) {
-              setVariableValues(getStandardVariableDefaults());
-            } else {
-              setVariableValues({});
-            }
-          }
-        });
-      }
-    };
-    
-    const internalHandleSaveCampaign = async () => {
-      if (!isEditorReady) {
-        toast({ title: 'Editor Not Ready', description: 'Editor is still loading. Please wait.', variant: 'destructive' });
-        return;
-      }
-      if (!currentCampaign || !unlayerEditorRef.current) {
-        toast({ title: 'Error', description: 'Cannot save: campaign data or editor not available.', variant: 'destructive' });
-        return;
-      }
-    
-      setIsSavingDraft(true);
-      let latestHtml: string | null = null;
-      let latestDesign: any = null;
-    
-      try {
-        const exportedData = await getEditorContentInternal(); // Use the internal function directly
-        if (!exportedData) throw new Error('Could not get content from editor.'); // Simplified error
-        latestHtml = exportedData.html;
-        latestDesign = exportedData.design;
-        
-        // Notify parent about content change for variable extraction AFTER successful export
-        if (latestHtml) {
-            const vars = extractVariablesFromContent(latestHtml);
-            setDetectedVariables(vars);
-            if (vars.length > 0) {
-              setVariableValues(getStandardVariableDefaults());
-            } else {
-              setVariableValues({});
-            }
-        }
-
-      } catch (exportError: any) {
-        toast({ title: 'Editor Export Error', description: exportError.message || 'Could not get latest content.', variant: 'destructive' });
-        setIsSavingDraft(false);
-        return; 
-      }
-    
-      const campaignDataToSave: Partial<EmailCampaign> = {
-        name: currentCampaign.name, 
-        subject: currentCampaign.subject, 
-        selected_template_id: currentCampaign.selected_template_id,
-        campaign_html_body: latestHtml,
-        campaign_design_json: latestDesign,
-        status: 'draft', 
-      };
-      
-      try {
-        if (campaignId === 'new') {
-          const newCampaign = await createCampaign(campaignDataToSave as Omit<EmailCampaign, 'id' | 'created_at' | 'updated_at'>);
-          toast({ title: 'Campaign Draft Created', description: 'New campaign draft saved successfully.' });
-          if (onNewCampaignCreated) onNewCampaignCreated(newCampaign.id);
-        } else {
-          await updateCampaign(campaignId, campaignDataToSave); // campaignId is currentCampaign.id
-          toast({ title: 'Campaign Draft Saved', description: 'Your campaign draft has been updated.' });
-          await fetchCampaign(campaignId); // Re-fetch to ensure UI consistency
-        }
-      } catch (error: any) {
-        toast({ title: 'Error Saving Draft', description: error.message || 'Failed to save draft.', variant: 'destructive' });
-      } finally {
-        setIsSavingDraft(false);
-      }
+    const handleOpenTemplateModal = () => {
+      setIsTemplateModalOpen(true);
     };
 
+    // Select appropriate content to load
+    const designToLoad = currentCampaign?.campaign_design_json || undefined;
+    const htmlToLoad = currentCampaign?.campaign_html_body || undefined;
 
-    if (!currentCampaign && campaignId !== 'new') { // Stricter check for existing campaigns
-      return (
-        <div className="flex items-center justify-center py-10">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="ml-2 text-muted-foreground">Loading campaign data...</p>
-        </div>
-      );
-    }
-    
-    // For 'new' campaign, currentCampaign might be null until basic details are set by parent
-    // or it might be pre-filled with defaults. Unlayer should still render if campaignId is 'new'.
-    const designToLoad = currentCampaign?.campaign_design_json ?? initialDesignLoaded ?? undefined;
-    const htmlToLoad = currentCampaign?.campaign_html_body ?? initialHtmlLoaded ?? undefined;
+    const extractedVariables = 
+      currentCampaign?.campaign_html_body 
+        ? extractVariablesFromContent(currentCampaign.campaign_html_body) 
+        : [];
 
     return (
-      <div className="space-y-6">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex space-x-2">
+      <div className={cn("space-y-6", transitions.fadeIn)}>
+        {/* Action Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-2 border-b">
+          <div className="flex items-center gap-2">
+            <h3 className={typography.h4}>Email Content</h3>
+            {extractedVariables.length > 0 && (
+              <Badge variant="outline" className="ml-2 bg-secondary/10">
+                {extractedVariables.length} Variable{extractedVariables.length !== 1 ? 's' : ''}
+              </Badge>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-3">
             <Button
-              onClick={internalHandleSaveCampaign}
-              disabled={isSavingDraft || !isEditorReady}
               variant="outline"
+              size="sm"
+              className={cn(buttonStyles.outline, "gap-1.5")}
+              onClick={handleOpenTemplateModal}
             >
-              {isSavingDraft ? (
+              <Image className="h-4 w-4" />
+              Select Template
+            </Button>
+            
+            <Button
+              onClick={handleSaveContent}
+              size="sm"
+              className={cn(buttonStyles.primary, "gap-1.5")}
+              disabled={isSaving || !isEditorReady}
+            >
+              {isSaving ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Saving...
                 </>
               ) : (
                 <>
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Draft
+                  <Save className="h-4 w-4" />
+                  Save Content
                 </>
               )}
             </Button>
           </div>
-          <div className="flex space-x-2">
-            <Button 
-              onClick={() => setIsTemplateModalOpen(true)}
-              variant="outline"
-            >
-              <FileText className="mr-2 h-4 w-4" /> Load from Template
-            </Button>
-          </div>
         </div>
 
-        {(campaignId === 'new' || designToLoad !== undefined) ? ( // Render editor if new or design is available
-          <div className="relative h-full">
-            {!isEditorReady && (
-              <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="h-8 w-8 animate-spin" />
-                  <p className="text-sm text-muted-foreground">Loading editor...</p>
-                </div>
-              </div>
-            )}
-            <UnlayerEmailEditor
-              key={editorKey}
-              ref={unlayerEditorRef}
-              onLoad={handleEditorLoad}
-              initialDesign={designToLoad}
-              initialHtml={htmlToLoad}
-              minHeight="600px"
+        {/* Subject Field */}
+        <div className={cn("space-y-2", transitions.fadeIn)}>
+          <Label htmlFor="email-subject" className="flex items-center gap-1.5">
+            <Type className="h-4 w-4 text-primary" />
+            Email Subject
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="email-subject"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Enter email subject line..."
+              className={cn(inputStyles.default, "flex-1")}
             />
+            <VariableListModal />
           </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground border rounded-md min-h-[300px] flex flex-col justify-center items-center">
-            <p>No content loaded. Current campaign might be missing design JSON.</p>
-            <p className="text-sm">Load a template or ensure campaign data is fully fetched if this is an existing campaign.</p>
+          <p className={typography.subtle}>
+            A compelling subject line significantly impacts open rates. Keep it concise and relevant.
+          </p>
+        </div>
+
+        {/* Variables Info - if found in content */}
+        {extractedVariables.length > 0 && (
+          <div className={cn("p-3 border rounded-md bg-muted/30", transitions.fadeIn)}>
+            <div className="flex items-start gap-2">
+              <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <div>
+                <p className={typography.p}>
+                  <span className="font-medium">Variables detected:</span>{' '}
+                  {extractedVariables.map((v, i) => (
+                    <span key={v} className="inline-flex items-center mx-1 px-1.5 py-0.5 rounded-md bg-muted text-sm font-mono">
+                      {v}
+                    </span>
+                  ))}
+                </p>
+                <p className={cn(typography.subtle, "mt-1")}>
+                  These variables will be replaced with actual values when emails are sent.
+                </p>
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Email Editor */}
+        <div className={cn("mt-4 transition-all duration-300", isEditorReady ? "opacity-100" : "opacity-70")}>
+          {/* Editor Container with improved styling */}
+          <div className={cn("border rounded-lg overflow-hidden", cardStyles.elevated)}>
+            {(campaignId === 'new' || designToLoad !== undefined) ? ( 
+              <div className="relative h-full rounded-lg">
+                {!isEditorReady && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm z-10 rounded-lg transition-opacity duration-300">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="relative">
+                        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                        <div className="absolute inset-0 h-10 w-10 animate-pulse opacity-30 rounded-full bg-primary/20" />
+                      </div>
+                      <p className={cn(typography.p, "text-center")}>
+                        Initializing email editor<span className="animate-pulse">...</span>
+                      </p>
+                      <p className={typography.subtle}>This may take a moment</p>
+                    </div>
+                  </div>
+                )}
+                
+                <UnlayerEmailEditor
+                  key={editorKey}
+                  ref={unlayerEditorRef}
+                  onLoad={handleEditorLoad}
+                  initialDesign={designToLoad}
+                  initialHtml={htmlToLoad}
+                  minHeight="700px"
+                />
+              </div>
+            ) : (
+              <div className={cn(
+                "flex flex-col justify-center items-center py-12 px-6 rounded-lg", 
+                transitions.fadeIn,
+                "bg-muted/20 border-dashed border-2"
+              )}>
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                  <FileText className="h-8 w-8 text-primary/60" />
+                </div>
+                <h3 className={cn(typography.h3, "text-center mb-2")}>No Content Found</h3>
+                <p className={cn(typography.p, "text-center max-w-md mb-6")}>
+                  Get started by selecting a template or creating your content from scratch in the editor.
+                </p>
+                <Button 
+                  onClick={handleOpenTemplateModal}
+                  className={cn(buttonStyles.secondary, "gap-1.5")}
+                >
+                  <Image className="h-4 w-4" />
+                  Choose a Template
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   }
