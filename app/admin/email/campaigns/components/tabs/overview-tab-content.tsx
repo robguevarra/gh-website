@@ -114,24 +114,24 @@ export function OverviewTabContent({
               <dl className="grid grid-cols-1 gap-3">
                 <div className="flex flex-col">
                   <dt className="text-muted-foreground text-sm">Name</dt>
-                  <dd className={cn(typography.body, "font-medium")}>{currentCampaign.name}</dd>
+                  <dd className={cn(typography.p, "font-medium")}>{currentCampaign.name}</dd>
                 </div>
                 <div className="flex flex-col">
                   <dt className="text-muted-foreground text-sm">Subject</dt>
-                  <dd className={typography.body}>{currentCampaign.subject || 'Not set'}</dd>
+                  <dd className={typography.p}>{currentCampaign.subject || 'Not set'}</dd>
                 </div>
                 <div className="flex flex-col">
                   <dt className="text-muted-foreground text-sm">Created</dt>
                   <dd className="flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className={typography.body}>{formatDate(currentCampaign.created_at)}</span>
+                    <span className={typography.p}>{formatDate(currentCampaign.created_at)}</span>
                   </dd>
                 </div>
                 <div className="flex flex-col">
                   <dt className="text-muted-foreground text-sm">Last Updated</dt>
                   <dd className="flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className={typography.body}>{formatDate(currentCampaign.updated_at)}</span>
+                    <span className={typography.p}>{formatDate(currentCampaign.updated_at)}</span>
                   </dd>
                 </div>
                 {currentCampaign.status === 'scheduled' && currentCampaign.scheduled_at && (
@@ -139,7 +139,16 @@ export function OverviewTabContent({
                     <dt className="text-muted-foreground text-sm">Scheduled For</dt>
                     <dd className="flex items-center gap-1.5">
                       <Send className="h-3.5 w-3.5 text-secondary" />
-                      <span className={cn(typography.body, "text-secondary font-medium")}>{formatDate(currentCampaign.scheduled_at)}</span>
+                      <span className={cn(typography.p, "text-secondary font-medium")}>{formatDate(currentCampaign.scheduled_at)}</span>
+                    </dd>
+                  </div>
+                )}
+                {currentCampaign.status === 'completed' && currentCampaign.completed_at && (
+                  <div className="flex flex-col">
+                    <dt className="text-muted-foreground text-sm">Completed At</dt>
+                    <dd className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-green-600" />
+                      <span className={cn(typography.p, "text-green-700 font-semibold")}>{formatDate(currentCampaign.completed_at)}</span>
                     </dd>
                   </div>
                 )}
@@ -171,7 +180,7 @@ export function OverviewTabContent({
                               variant="secondary" 
                               className={cn(
                                 "hover:bg-secondary/30 transition-colors duration-150",
-                                transitions.scale
+                                transitions.scaleIn
                               )}
                             >
                               {segment.name}

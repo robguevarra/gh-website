@@ -102,10 +102,42 @@ export const handleNotFound = (resource = 'Resource') => {
 };
 
 // Helper function to handle server errors
-export const handleServerError = (error: unknown, message = 'Internal server error') => {
-  console.error(`Server error: ${message}`, error);
+export const handleServerError = (error: unknown, defaultMessage = 'Internal server error') => {
+  console.error(`Server error: ${defaultMessage}`, error);
+
+  let errorMessage = defaultMessage;
+  let errorStatus = 500;
+
+  // Check for Supabase PostgrestError (from database operations)
+  if (error && typeof error === 'object') {
+    if ('code' in error && 'message' in error && 'details' in error && 'hint' in error) {
+      // This looks like a PostgrestError
+      // We can provide more specific details if needed
+      const pgError = error as { code: string; message: string; details: string; hint: string };
+      errorMessage = pgError.message || defaultMessage;
+      // You could map pgError.code to specific HTTP status codes if desired
+      // For example, 'PGRST116' (not found) could be 404, '23505' (unique violation) could be 409
+      // For now, we'll keep it as 500 for general server errors unless specified
+      if (pgError.code === 'PGRST116') { // Not found
+        errorStatus = 404;
+        errorMessage = `${defaultMessage}: Resource not found. Details: ${pgError.details}`;
+      } else if (pgError.code === '23503') { // Foreign key violation
+        errorStatus = 409; // Conflict
+        errorMessage = `${defaultMessage}: Conflict due to data integrity. Details: ${pgError.details}`;
+      } else if (pgError.code === '23505') { // Unique violation
+        errorStatus = 409; // Conflict
+        errorMessage = `${defaultMessage}: Conflict, item already exists or unique constraint violated. Details: ${pgError.details}`;
+      }
+      // Add more specific Supabase error code mappings as needed
+    } else if ('message' in error && typeof (error as { message: unknown }).message === 'string') {
+      // General error object with a message property
+      errorMessage = (error as { message: string }).message;
+    }
+  }
+
+
   return Response.json(
-    { error: message },
-    { status: 500 }
+    { error: errorMessage },
+    { status: errorStatus }
   );
 }; 

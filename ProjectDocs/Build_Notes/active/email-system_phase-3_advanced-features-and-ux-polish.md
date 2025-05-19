@@ -69,6 +69,19 @@ A mature, user-friendly email campaign system that provides:
      - [x] Update the `email_campaigns.status` to `completed` once all associated emails are processed. (Logic implemented in `checkAndFinalizeCampaigns`)
      - [x] Ensure final, aggregated analytics for the campaign are calculated and stored in `campaign_analytics` upon completion. (Basic `total_sent`, `total_failed`, `total_recipients` upserted by `checkAndFinalizeCampaigns`)
      - [ ] Update relevant UI (campaign list, detail view) to reflect the `completed` status.
+       - [x] **Data Check:** Verified that `email_campaigns.status` can be `'completed'` and `email_campaigns.completed_at` timestamp is populated by the backend logic (`checkAndFinalizeCampaigns` in `process-email-queue`).
+       - [x] **Campaign List View (e.g., `app/admin/email/campaigns/page.tsx` or its list rendering component):**
+         - [x] Ensured the data fetching mechanism for the campaign list includes the `status` and `completed_at` fields.
+         - [x] Modified the UI to display a "Completed" status indicator (badge) when `email_campaigns.status === 'completed'`, using `badgeStyles.completed` from `ui-utils.ts` and matching the design system.
+         - [x] Added a "Completed At" column that displays the formatted `completed_at` timestamp for completed campaigns.
+       - [x] **Campaign Detail View (e.g., `app/admin/email/campaigns/[id]/page.tsx` and its `overview-tab-content.tsx`):**
+         - [x] Ensured `useCampaignStore` or the data fetching for campaign details includes `status` and `completed_at`.
+         - [x] In the campaign overview/summary section (within `overview-tab-content.tsx`), display the "Completed" status badge using the design system.
+         - [x] Display the formatted `completed_at` timestamp in a new row labeled "Completed At" when the campaign is completed.
+       - [ ] **(Future Consideration for Enhanced UX - Log as separate task if pursued):** For a richer UX, consider a future enhancement for a detailed campaign activity log/timeline. This log could display intermediate statuses ('sending', 'sent', 'failed', etc.) and provide more granular tracking. This is beyond the scope of the current item but noted for potential future planning.
+
+**Summary of Implementation:**
+We updated the campaign list and detail views to clearly display a "Completed" status badge and the completion date, using the design system and standardized UI utilities. All changes were minimal, well-commented, and focused only on the relevant UI. This ensures users can easily see when a campaign is fully processed, aligning with industry best practice and providing a clear, elegant experience.
    - **B. Email Variable Standardization:**
      - [x] Define `{{snake_case}}` (e.g., `{{first_name}}`, `{{user_email}}`) as the official variable syntax. (Decision made and functions updated to align)
      - [ ] Create comprehensive documentation listing all available standard variables (user properties, course properties, action URLs, etc.) and their data types/sources.

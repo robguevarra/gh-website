@@ -531,19 +531,57 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
         method: 'DELETE',
       });
       
-      const responseData = await response.json();
-      
       if (!response.ok) {
-        console.error('[removeCampaignSegment] API Error:', responseData);
-        throw new Error(responseData.error || 'Failed to remove segment');
+        let errorData = { error: 'Failed to remove segment. Server returned an error.' };
+        let parsedJsonError: any = null;
+        let rawResponseText: string | null = null;
+
+        try {
+          const responseCloneForJson = response.clone(); // Clone for JSON parsing
+          const responseCloneForText = response.clone(); // Clone for text parsing
+
+          parsedJsonError = await responseCloneForJson.json();
+          errorData.error = parsedJsonError.error || parsedJsonError.message || errorData.error;
+        } catch (e) {
+          try {
+            rawResponseText = await response.text(); // Use original response if json parsing failed on clone
+            errorData.error = rawResponseText || errorData.error;
+          } catch (textE) {
+            console.error('[removeCampaignSegment] Failed to parse error response as JSON or text.');
+          }
+        }
+        
+        // Detailed Debugging Logs
+        console.log('[removeCampaignSegment] Response Status:', response.status);
+        // console.log('[removeCampaignSegment] Response Headers:', JSON.stringify(Object.fromEntries(response.headers.entries()))); // Can be verbose
+        console.log('[removeCampaignSegment] Parsed JSON Error from Server:', parsedJsonError);
+        console.log('[removeCampaignSegment] Raw Response Text (if JSON parse failed):', rawResponseText);
+        console.log('[removeCampaignSegment] Final errorData object:', JSON.stringify(errorData));
+        console.log('[removeCampaignSegment] Final errorData.error string:', errorData.error);
+
+        console.error('[removeCampaignSegment] API Error (Original Log Format):', { status: response.status, errorData });
+        throw new Error(errorData.error);
+      }
+
+      // Handle successful responses, including 204 No Content which has no body
+      let responseData = {}; // Default to empty object for non-JSON responses
+      if (response.status !== 204) { // 204 No Content means success but no body
+        try {
+          responseData = await response.json();
+        } catch (e) {
+          // If JSON parsing fails for a successful response (should not happen with 200/201 usually)
+          // Log it but don't necessarily throw an error if it was a 2xx status.
+          console.warn('[removeCampaignSegment] Successful response but failed to parse JSON body:', e);
+        }
       }
       
-      console.log('[removeCampaignSegment] Success:', responseData);
+      console.log('[removeCampaignSegment] Success:', { status: response.status, responseData });
       
       // Refresh campaign segments and then fetch audience estimate
       await get().fetchCampaignSegments(campaignId);
       await get().fetchEstimatedAudienceSize(campaignId);
       
+      // @ts-ignore TODO: Fix this type error if responseData can have a message property
       return responseData.message || 'Segment removed successfully';
     } catch (error: any) {
       console.error('[removeCampaignSegment] Error:', error);

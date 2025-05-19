@@ -36,6 +36,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { badgeStyles } from './ui-utils';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -100,17 +101,17 @@ export function CampaignList() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'draft':
-        return <Badge variant="outline">Draft</Badge>;
+        return <span className={badgeStyles.draft + ' px-2 py-1 rounded-full text-xs'}>Draft</span>;
       case 'scheduled':
-        return <Badge variant="secondary">Scheduled</Badge>;
+        return <span className={badgeStyles.scheduled + ' px-2 py-1 rounded-full text-xs'}>Scheduled</span>;
       case 'sending':
-        return <Badge variant="default">Sending</Badge>;
+        return <span className={badgeStyles.sending + ' px-2 py-1 rounded-full text-xs'}>Sending</span>;
       case 'completed':
-        return <Badge variant="success">Completed</Badge>;
+        return <span className={badgeStyles.completed + ' px-2 py-1 rounded-full text-xs'}>Completed</span>;
       case 'cancelled':
-        return <Badge variant="destructive">Cancelled</Badge>;
+        return <span className={badgeStyles.cancelled + ' px-2 py-1 rounded-full text-xs'}>Cancelled</span>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <span className={badgeStyles.draft + ' px-2 py-1 rounded-full text-xs'}>{status}</span>;
     }
   };
   
@@ -166,6 +167,7 @@ export function CampaignList() {
                     <TableHead>Status</TableHead>
                     <TableHead className="hidden md:table-cell">Created</TableHead>
                     <TableHead className="hidden md:table-cell">Scheduled</TableHead>
+                    <TableHead className="hidden md:table-cell">Completed At</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -181,6 +183,9 @@ export function CampaignList() {
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
                         {formatDate(campaign.scheduled_at)}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {campaign.status === 'completed' ? formatDate(campaign.completed_at) : '—'}
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">

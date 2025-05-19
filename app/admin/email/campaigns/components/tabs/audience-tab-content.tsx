@@ -216,7 +216,7 @@ export function AudienceTabContent({
                           key={cs.id} 
                           className={cn(
                             "flex items-center justify-between p-3 hover:bg-muted/40 relative overflow-hidden",
-                            removingSegment === cs.id && "opacity-60",
+                            removingSegment === cs.segment_id && "opacity-60",
                             transitions.hover
                           )}
                         >
@@ -240,11 +240,11 @@ export function AudienceTabContent({
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            onClick={() => handleRemoveSegment(cs.id)}
-                            disabled={removingSegment === cs.id}
+                            onClick={() => handleRemoveSegment(cs.segment_id)}
+                            disabled={removingSegment === cs.segment_id}
                             className="shrink-0 text-muted-foreground hover:text-destructive"
                           >
-                            {removingSegment === cs.id ? (
+                            {removingSegment === cs.segment_id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               <X className="h-4 w-4" />
