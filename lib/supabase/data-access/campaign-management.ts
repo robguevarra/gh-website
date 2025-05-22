@@ -6,9 +6,11 @@
  */
 
 import { createClient } from '@/lib/supabase/client';
-import { Database } from '@/types/supabase';
+import { Database, Json } from '@/types/supabase';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { getEmailTemplateById } from './templates';
+import { SegmentRules } from '@/types/campaigns';
+import { SupabaseClient } from '@supabase/supabase-js';
 
 // Type definitions
 // Using custom type definitions since these tables might not be in the Database type yet
@@ -19,6 +21,7 @@ export interface EmailCampaign {
   description: string | null;
   subject: string | null; // Dedicated field for campaign subject
   status: string;
+  status_message: string | null; // Added to match DB schema and allow status context
   scheduled_at: string | null;
   completed_at: string | null;
   template_id: string; // This might be the originally selected template or the active version's template_id if versions are used directly on campaigns
@@ -35,6 +38,8 @@ export interface EmailCampaign {
   selected_template_id?: string | null; // ID of the user-selected EmailTemplate
   campaign_html_body?: string | null;   // HTML content from Unlayer
   campaign_design_json?: any | null;    // Design JSON from Unlayer
+  segment_rules?: SegmentRules; // Rules for advanced audience segmentation
+  priority?: number; // Added priority
 }
 
 export type EmailCampaignInsert = Omit<EmailCampaign, 'id' | 'created_at' | 'updated_at'> & { id?: string };
@@ -121,9 +126,16 @@ export const createCampaign = async (campaign: EmailCampaignInsert) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
   
+  const { segment_rules, ...restOfCampaign } = campaign;
+  const campaignDataForSupabase: any = { ...restOfCampaign };
+
+  if (campaign.hasOwnProperty('segment_rules')) {
+    campaignDataForSupabase.segment_rules = segment_rules as unknown as Json;
+  }
+  
   const { data, error } = await admin
     .from('email_campaigns')
-    .insert(campaign)
+    .insert(campaignDataForSupabase)
     .select()
     .single();
     
@@ -220,9 +232,16 @@ export const updateCampaign = async (id: string, updates: EmailCampaignUpdate) =
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
   
+  const { segment_rules, ...restOfUpdates } = updates;
+  const updateDataForSupabase: any = { ...restOfUpdates };
+
+  if (updates.hasOwnProperty('segment_rules')) {
+    updateDataForSupabase.segment_rules = segment_rules as unknown as Json;
+  }
+  
   const { data, error } = await admin
     .from('email_campaigns')
-    .update(updates)
+    .update(updateDataForSupabase)
     .eq('id', id)
     .select()
     .single();
@@ -546,84 +565,64 @@ export const getCampaignRecipients = async (campaignId: string, {
 };
 
 /**
- * Add recipients to a campaign from segments
- * This should be called by an admin function
+ * Populates the campaign_recipients table based on segment_rules evaluation.
+ * This function invokes the 'resolve-audience-from-rules' Edge Function.
  */
-export const addRecipientsFromSegments = async (campaignId: string) => {
-  // This requires admin privileges to query users based on segments
-  const admin = getAdminClient();
-  const supabase = createClient();
-  
-  // Get the segments for this campaign
-  const { data: campaignSegments, error: segmentError } = await supabase
-    .from('campaign_segments')
-    .select('segment_id')
-    .eq('campaign_id', campaignId);
-    
-  if (segmentError) throw segmentError;
-  
-  if (!campaignSegments || campaignSegments.length === 0) {
-    throw new Error('No segments associated with this campaign');
+export const populateCampaignRecipientsFromRules = async (campaignId: string, adminSupabaseClient: SupabaseClient) => {
+  console.log(`[populateCampaignRecipientsFromRules] Starting for campaignId: ${campaignId}`);
+
+  // 1. Invoke the 'resolve-audience-from-rules' Edge Function to get the list of userIds (profileIds)
+  const { data: resolvedAudienceResponse, error: functionInvokeError } = await adminSupabaseClient.functions.invoke(
+    'resolve-audience-from-rules',
+    { body: { campaign_id: campaignId } }
+  );
+
+  if (functionInvokeError) {
+    console.error('[populateCampaignRecipientsFromRules] Error invoking resolve-audience-from-rules:', functionInvokeError);
+    throw new Error(`Failed to invoke resolve-audience-from-rules Edge Function: ${functionInvokeError.message}`);
+  }
+
+  // resolvedAudienceResponse should be { data: string[] | null, error: any } from the Edge Function itself
+  if (resolvedAudienceResponse && resolvedAudienceResponse.error) {
+    console.error(`[populateCampaignRecipientsFromRules] Edge function 'resolve-audience-from-rules' returned an error:`, resolvedAudienceResponse.error);
+    const errMessage = typeof resolvedAudienceResponse.error === 'string' 
+      ? resolvedAudienceResponse.error 
+      : (resolvedAudienceResponse.error as Error).message || JSON.stringify(resolvedAudienceResponse.error);
+    throw new Error(`Audience resolution Edge Function failed: ${errMessage}`);
   }
   
-  const segmentIds = campaignSegments.map(segment => segment.segment_id);
-  
-  // Get users from segments with pagination to handle more than 1000 users
-  let allUserSegments: Array<{user_id: string | null}> = [];
-  let page = 0;
-  const pageSize = 1000;
-  let hasMore = true;
-  
-  while (hasMore) {
-    const { data: userSegmentsPage, error: userSegmentError } = await admin
-      .from('user_segments')
-      .select('user_id')
-      .in('segment_id', segmentIds)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
-      
-    if (userSegmentError) throw userSegmentError;
-    
-    if (userSegmentsPage && userSegmentsPage.length > 0) {
-      // Add this page's results to our collection
-      allUserSegments = [...allUserSegments, ...userSegmentsPage];
-      
-      // Check if we've reached the end of the results
-      if (userSegmentsPage.length < pageSize) {
-        hasMore = false;
-      } else {
-        page++;
-      }
-    } else {
-      // No more results
-      hasMore = false;
-    }
+  const userIds = resolvedAudienceResponse?.data as string[] | null;
+
+  if (!userIds || userIds.length === 0) {
+    console.log('[populateCampaignRecipientsFromRules] No users found by resolve-audience-from-rules for campaign:', campaignId);
+    return { count: 0 }; // No users to add
   }
-  
-  if (allUserSegments.length === 0) {
-    throw new Error('No users found in the selected segments');
-  }
-  
-  const userIds = allUserSegments
-    .map(segment => segment.user_id)
-    .filter((id): id is string => typeof id === 'string' && !!id);
-  
-  // Insert recipients
+  console.log(`[populateCampaignRecipientsFromRules] Resolved ${userIds.length} user IDs from rules for campaign: ${campaignId}`);
+
+  // 2. Prepare recipients for insertion into campaign_recipients table
   const recipientsToInsert = userIds.map(userId => ({
     campaign_id: campaignId,
     user_id: userId,
-    status: 'pending'
+    status: 'pending' // Default status
   }));
-  
-  // Insert recipients, ignoring duplicates
-  const { error, count } = await supabase
+
+  // 3. Upsert these userIds into the campaign_recipients table
+  const { error: upsertError, count } = await adminSupabaseClient
     .from('campaign_recipients')
-    .upsert(recipientsToInsert, { 
-      onConflict: 'campaign_id,user_id',
+    .upsert(recipientsToInsert, {
+      onConflict: 'campaign_id,user_id', 
       ignoreDuplicates: true 
     });
-    
-  if (error) throw error;
-  return { count };
+
+  if (upsertError) {
+    console.error('[populateCampaignRecipientsFromRules] Error upserting campaign recipients:', upsertError);
+    throw upsertError;
+  }
+
+  console.log(`[populateCampaignRecipientsFromRules] Successfully upserted recipients for campaign: ${campaignId}. Upsert operation returned count: ${count}.`);
+  // Note: `count` from upsert with ignoreDuplicates:true might be the number of rows processed/matched, not strictly new rows.
+  // Returning the length of userIds that were intended for insert is a clearer indication of the resolved audience size.
+  return { count: userIds.length }; 
 };
 
 /**
@@ -873,37 +872,39 @@ export const sendCampaignTest = async (campaignId: string, testEmails: string[])
 
 /**
  * Trigger sending of a campaign
+ * This function is now primarily responsible for updating the campaign status.
+ * The actual audience resolution and queueing for immediate sends are handled by the
+ * specific API route (`/api/admin/campaigns/[id]/send`).
+ * For scheduled campaigns, `process-scheduled-campaigns` handles its own logic.
  */
 export const triggerCampaignSend = async (campaignId: string) => {
-  const supabase = createClient();
-  
+  const supabase = createClient(); // Standard client for user-context operations
+  const adminClient = getAdminClient(); // Admin client for direct DB updates if needed
+
+  console.log(`[triggerCampaignSend] Called for campaignId: ${campaignId}. Updating status to 'sending'.`);
+
   // Update campaign status to 'sending'
-  await supabase
+  // This is the primary role of this function now.
+  const { data: updatedCampaign, error: updateError } = await adminClient // Use adminClient for direct status update
     .from('email_campaigns')
     .update({ status: 'sending' })
-    .eq('id', campaignId);
-  
-  // Call the campaign send API endpoint
-  const response = await fetch('/api/admin/campaigns/send', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      campaignId,
-    }),
-  });
-  
-  if (!response.ok) {
-    // If sending fails, revert status to draft
-    await supabase
-      .from('email_campaigns')
-      .update({ status: 'draft' })
-      .eq('id', campaignId);
-      
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to send campaign');
+    .eq('id', campaignId)
+    .select('id, status')
+    .single();
+
+  if (updateError) {
+    console.error(`[triggerCampaignSend] Failed to update campaign ${campaignId} status to 'sending':`, updateError);
+    // Do NOT revert status here, as the caller (if any) might have its own error handling logic.
+    // This function's responsibility is just to attempt the status update.
+    throw new Error(`Failed to update campaign status to 'sending': ${updateError.message}`);
   }
-  
-  return await response.json();
+
+  console.log(`[triggerCampaignSend] Campaign ${campaignId} status successfully updated to 'sending'.`);
+
+  // Return the result of the status update
+  return { 
+    success: true, 
+    message: `Campaign ${campaignId} status updated to 'sending'.`, 
+    data: updatedCampaign 
+  };
 };

@@ -3,6 +3,7 @@ import { EmailCampaign } from '@/lib/supabase/data-access/campaign-management';
 import { getStandardVariableDefaults, substituteVariables } from '@/lib/services/email/template-utils';
 import { getAdminClient } from '@/lib/supabase/admin'; // Corrected: Use getAdminClient
 import type { Database } from '@/types/supabase'; // Import Database types for explicit typing
+import { SupabaseClient } from '@supabase/supabase-js'; // Ensure this is imported
 
 export interface QueueEmailParams {
   campaignId: string;
@@ -27,11 +28,14 @@ type CampaignDataForQueue = Pick<
 /**
  * Add an email to the queue
  */
-export async function addToQueue(params: QueueEmailParams): Promise<{ id: string } | { error: Error }> {
-  const supabase = createClient();
+export async function addToQueue(
+  supabaseAdmin: SupabaseClient, // Changed: Accept admin client
+  params: QueueEmailParams
+): Promise<{ id: string } | { error: Error }> {
+  // const supabase = createClient(); // Changed: Use passed admin client
   
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin // Changed: Use supabaseAdmin
       .from('email_queue')
       .insert([{
         campaign_id: params.campaignId,

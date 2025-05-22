@@ -11,6 +11,7 @@ import {
   DialogClose
 } from '@/components/ui/dialog';
 import { Loader2, AlertTriangle } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 
 export interface SendConfirmationModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export interface SendConfirmationModalProps {
   isSending: boolean; // Loading state for the send button
   audienceSize: number | null;
   campaignName: string | null;
+  campaignStatus: string; // Added campaignStatus prop
 }
 
 export function SendConfirmationModal({
@@ -28,10 +30,16 @@ export function SendConfirmationModal({
   isSending,
   audienceSize,
   campaignName,
+  campaignStatus, // Destructure new prop
 }: SendConfirmationModalProps) {
+  const { toast } = useToast();
 
   const handleConfirm = async () => {
-    // The isSending state will be managed by the parent through the onConfirmSend execution
+    toast({
+      title: "Initiating Campaign Send...",
+      description: `Your campaign "${campaignName || 'Selected Campaign'}" is being prepared for sending.`,
+    });
+
     await onConfirmSend(); 
     // Parent should handle closing on success/failure if desired, or toast display.
     // Modal could close itself if onConfirmSend is guaranteed to finish before unmount, 
@@ -64,7 +72,7 @@ export function SendConfirmationModal({
           <Button
             type="button"
             onClick={handleConfirm}
-            disabled={isSending}
+            disabled={isSending || campaignStatus === 'sending' || campaignStatus === 'sent' || campaignStatus === 'completed'}
             variant="destructive" // Or primary action color if preferred
           >
             {isSending ? (

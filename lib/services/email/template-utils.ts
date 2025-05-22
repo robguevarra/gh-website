@@ -26,7 +26,7 @@ export const ALL_EMAIL_VARIABLES: EmailVariable[] = [
     name: 'First Name', 
     placeholder: '{{first_name}}', 
     description: "The recipient's first name.", 
-    sampleValue: 'Alex', 
+    sampleValue: 'Rob', 
     category: 'Recipient Details', 
     dataKey: 'first_name', 
     notes: 'Source: unified_profiles.first_name' 
@@ -35,7 +35,7 @@ export const ALL_EMAIL_VARIABLES: EmailVariable[] = [
     name: 'Last Name', 
     placeholder: '{{last_name}}', 
     description: "The recipient's last name.", 
-    sampleValue: 'Vause', 
+    sampleValue: 'Guevarra', 
     category: 'Recipient Details', 
     dataKey: 'last_name', 
     notes: 'Source: unified_profiles.last_name' 
@@ -44,7 +44,7 @@ export const ALL_EMAIL_VARIABLES: EmailVariable[] = [
     name: 'Full Name', 
     placeholder: '{{full_name}}', 
     description: "The recipient's full name.", 
-    sampleValue: 'Alex Vause', 
+    sampleValue: 'Rob Guevarra', 
     category: 'Recipient Details', 
     dataKey: 'full_name', 
     notes: 'Constructed: unified_profiles.first_name + unified_profiles.last_name' 
@@ -53,7 +53,7 @@ export const ALL_EMAIL_VARIABLES: EmailVariable[] = [
     name: 'Email Address', 
     placeholder: '{{email_address}}', 
     description: "The recipient's email address.", 
-    sampleValue: 'alex.vause@example.com', 
+    sampleValue: 'robneil@gmail.com', 
     category: 'Recipient Details', 
     dataKey: 'email_address', 
     notes: 'Source: unified_profiles.email' 

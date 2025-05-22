@@ -68,7 +68,7 @@ A mature, user-friendly email campaign system that provides:
      - [x] Add a new status, e.g., `completed`, to the `email_campaigns` table. (Status column is TEXT, 'completed' value can be used; `completed_at` timestamp column exists. Added `total_failed` to `campaign_analytics`.)
      - [x] Update the `email_campaigns.status` to `completed` once all associated emails are processed. (Logic implemented in `checkAndFinalizeCampaigns`)
      - [x] Ensure final, aggregated analytics for the campaign are calculated and stored in `campaign_analytics` upon completion. (Basic `total_sent`, `total_failed`, `total_recipients` upserted by `checkAndFinalizeCampaigns`)
-     - [ ] Update relevant UI (campaign list, detail view) to reflect the `completed` status.
+     - [x] Update relevant UI (campaign list, detail view) to reflect the `completed` status.
        - [x] **Data Check:** Verified that `email_campaigns.status` can be `'completed'` and `email_campaigns.completed_at` timestamp is populated by the backend logic (`checkAndFinalizeCampaigns` in `process-email-queue`).
        - [x] **Campaign List View (e.g., `app/admin/email/campaigns/page.tsx` or its list rendering component):**
          - [x] Ensured the data fetching mechanism for the campaign list includes the `status` and `completed_at` fields.
@@ -85,10 +85,13 @@ We updated the campaign list and detail views to clearly display a "Completed" s
    - **B. Email Variable Standardization:**
      - [x] Define `{{snake_case}}` (e.g., `{{first_name}}`, `{{user_email}}`) as the official variable syntax. (Decision made and functions updated to align)
      - [ ] Create comprehensive documentation listing all available standard variables (user properties, course properties, action URLs, etc.) and their data types/sources.
+       - [x] **Initial Implementation:** The `ALL_EMAIL_VARIABLES` array in `lib/services/email/template-utils.ts` serves as the primary source of truth for available variables.
+       - [x] **User-Facing List:** The `components/admin/email/VariableListModal.tsx` component displays these variables, their descriptions, placeholders, and sample values to the user, acting as in-app documentation.
+       - [ ] **Developer Documentation (Optional):** Consider creating a separate Markdown document (`ProjectDocs/Documentation/email-template-variables.md`) for more detailed developer-specific notes on variable sources, data types, and extension if needed beyond the code comments in `template-utils.ts`.
      - [x] Update the `replaceVariables` function (used by `process-scheduled-campaigns`) and the centralized `substituteVariables` utility (`lib/services/email/template-utils.ts`) to correctly parse and replace only `{{snake_case}}` variables. (`process-scheduled-campaigns` already conformed. `substituteVariables` is generic and conforms if `values` keys are snake_case. Refactored `generateDefaultVariableValues` to `getStandardVariableDefaults` in `template-utils.ts` to provide snake_case default keys.)
      - [x] Ensure these functions handle cases where variable data might be missing (e.g., log a warning, use a fallback, or leave blank, based on defined strategy). (Current logic uses `|| \'\'` as fallback.)
-     - [ ] Update the Unlayer template saving/loading process if it influences variable syntax (unlikely, as variables are usually dynamic content).
-     - [ ] Modify example/default data used for previews and tests to use `snake_case` keys. (Done by `getStandardVariableDefaults`. UI components need to adopt this.)
+     - [ ] Update the Unlayer template saving/loading process if it influences variable syntax (unlikely, as variables are usually dynamic content). (Verification task)
+     - [ ] Modify example/default data used for previews and tests to use `snake_case` keys. (Partially done by `getStandardVariableDefaults`. UI components like `TestSendModal` variable display section and live preview panes need to consistently use `snake_case` keys/placeholders from `ALL_EMAIL_VARIABLES` or `getStandardVariableDefaults()`.)
 
 ### 2. Advanced Audience Targeting (Targeting Tab - `CampaignDetail.tsx`)
    - **A. Segment Combination Logic:**
@@ -96,15 +99,24 @@ We updated the campaign list and detail views to clearly display a "Completed" s
      - [x] Update the `email_campaigns` data model (or a related table) to store these combination rules (e.g., a JSONB field with the rule structure). (Verified `segment_rules JSONB` exists. Defined a structure: `{ version: 1, include: { operator: 'AND'|'OR', segmentIds: [] }, exclude: { segmentIds: [] } }`)
      - [ ] Modify the `POST /api/admin/campaigns/[id]/segments` endpoint (or create new ones) to save/update these combination rules. (Assumed campaign update PATCH endpoint will handle this. API changes pending.)
      - [x] Enhance the `addRecipientsToQueue` function in `process-scheduled-campaigns` to interpret these rules and fetch the correct combined audience. (Implemented in `process-scheduled-campaigns/index.ts` supporting include AND/OR and basic exclude. Fallback to old segment logic included.)
-     - [ ] Update the dynamic audience size estimation in the UI to reflect the combined logic. (UI - Defer)
+     - [x] Update the dynamic audience size estimation in the UI to reflect the combined logic. (Frontend store logic `fetchEstimatedAudienceSize` updated to send `segment_rules` and called on rule changes. UI displays this.)
+     - [x] Implement basic UI elements within the "Targeting" tab for selecting multiple segments, specifying AND/OR combination logic, and displaying selected segments. (`AudienceTabContent.tsx` updated with include/exclude lists, operator tabs, selection from available segments, and save button.)
+     - [x] Update campaign store (`useCampaignStore.ts`) to manage `segment_rules` state and actions for modification and saving. (Added `segment_rules` to `StoreEmailCampaign`, implemented actions: `setIncludeOperator`, `add/removeIncludeSegmentId`, `add/removeExcludeSegmentId`, `saveSegmentRules`.)
+     - [x] Update `CampaignDetail.tsx` to pass `segment_rules` state and actions to `AudienceTabContent.tsx`.
      - [ ] Implement validation to prevent invalid or overly complex combinations if necessary. (Backend validation within `addRecipientsToQueue` is basic; more can be added.)
    - **B. Segment Exclusion Logic:**
-     - [ ] Add UI elements to select segments to be explicitly excluded from the campaign audience. (UI - Defer)
-     - [x] Update data model and API(s) to store exclusion rules. (Data model for `segment_rules` includes `exclude` block. API changes pending as above.)
-     - [x] Modify audience fetching logic to apply exclusions. (Implemented in `addRecipientsToQueue` in `process-scheduled-campaigns/index.ts`)
-     - [ ] Update audience size estimation to account for exclusions. (UI - Defer)
+     - [x] Add UI elements to select segments to be explicitly excluded from the campaign audience. (Handled as part of 2.A UI updates in `AudienceTabContent.tsx`).
+     - [x] Update data model and API(s) to store exclusion rules. (Data model for `segment_rules` includes `exclude` block. API for estimation updated. Save via campaign update.)
+     - [x] Modify audience fetching logic (for estimation) to apply exclusions. (Implemented in `POST /api/admin/campaigns/estimate-audience` route.)
+     - [x] Update audience size estimation (UI and backend) to account for exclusions. (Handled as part of 2.A.)
    - **C. Review `update-all-user-segments` for Complex Logic:**
      - [x] Based on the audit (noted limited support for complex group/OR), assess if this Edge Function needs enhancements or if segment combination logic should primarily be handled by the campaign processing logic when fetching from `user_segments`. (Assessed: Current implementation handles combination logic in `process-scheduled-campaigns`. This is sufficient for now. `update-all-user-segments` will continue to populate `user_segments` based on individual segment definitions.)
+   - **D. Overview Tab UI Polish & Data Persistence for Audience Summary:** (New sub-item)
+     - [x] Enhanced `OverviewTabContent.tsx` to display loading (`audienceSizeLoading`) and error (`audienceSizeError`) states for the estimated audience count.
+     - [x] Updated `OverviewTabContent.tsx` to show a detailed breakdown of audience rules: Included Segments (with AND/OR operator clearly stated using `audienceRulesDisplay.include.operator`) and Excluded Segments, using `getSegmentDetails` for names.
+     - [x] Refactored data passing from `CampaignDetail.tsx` to `OverviewTabContent.tsx` to use the full `segmentRulesDisplay` object (derived from `currentCampaign.segment_rules` or defaults) and necessary helper functions/state (`audienceSizeLoading`, `audienceSizeError`, `getSegmentDetails`).
+     - [x] Addressed persistence issue for estimated audience on hard refresh by ensuring `fetchEstimatedAudienceSize` in `useCampaignStore.ts` is called immediately after campaign data (including `segment_rules`) is loaded or initialized within the `fetchCampaign` action.
+     - [x] Verified and corrected linter errors in `CampaignDetail.tsx` (updated import alias for `OverviewAudienceSegment` and removed deprecated `campaignSegments` prop) and `OverviewTabContent.tsx` (related to prop updates and UI rendering of segment rules) to ensure proper functionality.
 
 ### 3. "Review & Confirm" Tab Finalization (`CampaignDetail.tsx`)
    - [ ] Complete the UI for the "Review" tab, ensuring all summary sections (Campaign Details, Audience, Content Preview, Schedule) are populated accurately. (UI Task)
@@ -129,6 +141,13 @@ We updated the campaign list and detail views to clearly display a "Completed" s
    - **A. Comprehensive Error Handling & Logging:**
      - [x] Review all new and modified Edge Functions and API routes for consistent and detailed error logging. (Done progressively during implementation.)
      - [x] Implement a centralized alerting mechanism (e.g., to a Slack channel or admin email) for critical failures in Edge Functions. (`recordAlert` function in `process-email-queue` logs to DB. Notification delivery part is pending integration with a specific service.)
+     - [x] **Test Send Modal Stability:** Resolved runtime errors in `TestSendModal`:
+       - Fixed `Cannot read properties of undefined (reading 'label')` by adding `formStyles` to `ui-utils.ts`.
+       - Fixed `Could not retrieve campaign content from editor` by modifying the modal to always use saved campaign content for sending test emails, ensuring robustness regardless of the active editor tab.
+     - [x] **Runtime Error Fixes (Targeting UI & Store):**
+       - [x] Resolved "Cannot read properties of undefined (reading 'map')" in `CampaignDetail.tsx` by adding defensive checks for `segmentRulesToPass` structure before mapping.
+       - [x] Resolved "Cannot read properties of undefined (reading 'map')" in `AudienceTabContent.tsx` by adding defensive checks for `segmentRules` prop structure before mapping.
+       - [x] Resolved "Cannot read properties of undefined (reading 'includes')" in `useCampaignStore.ts` (`addIncludeSegmentId` and related actions) by adding granular checks for nested `segment_rules` structure and initializing if missing during add operations.
    - **B. Security Audit & Hardening:**
      - [x] Ensure RLS policies are robust for all tables accessed by these new features, especially `email_events` and `campaign_analytics`. (Guidance: RLS for `email_events`, `campaign_analytics`, `email_alerts` should restrict client access, allow admin/service roles. Actual RLS policy implementation pending.)
      - [x] Validate input for all API endpoints and Edge Function parameters. (Zod validation added to new API route. Edge Functions generally have controlled inputs.)
@@ -140,6 +159,11 @@ We updated the campaign list and detail views to clearly display a "Completed" s
    - **E. Testing Plan:**
      - [ ] Develop a comprehensive testing plan covering all new backend logic (segment rules, campaign completion, variable substitution, analytics data flow). (Planning needed)
      - [ ] Outline key UI testing scenarios for new frontend features. (Planning needed for UI)
+   - **F. Type Definition Consolidation:** (New sub-item)
+     - [x] Created `types/campaigns.ts` for shared campaign-related type definitions.
+     - [x] Defined `SegmentRules` interface in `types/campaigns.ts`.
+     - [x] Updated `lib/hooks/use-campaign-store.ts` to import `SegmentRules` from `types/campaigns.ts` and remove local definition.
+     - [x] Updated `app/api/admin/campaigns/estimate-audience/route.ts` to import `SegmentRules` from `types/campaigns.ts` and remove local definition.
 
 ### 6. Testing, Monitoring & Documentation
    - **A. Testing:**

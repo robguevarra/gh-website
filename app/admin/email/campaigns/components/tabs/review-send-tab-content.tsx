@@ -5,7 +5,7 @@ import { EmailCampaign } from '@/lib/supabase/data-access/campaign-management';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Send, Calendar, Mail, AlertTriangle, CheckCircle, Users, FileText, Clock, Info, Eye } from 'lucide-react';
+import { Send, Calendar, Mail, AlertTriangle, CheckCircle, Users, FileText, Clock, Info, Eye, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { Typography } from '@/components/ui/typography';
@@ -31,9 +31,16 @@ interface CampaignSegmentFromStore {
     };
 }
 
+// Define and export AudienceSummaryForReview as per Build Note Step 5.A & 5.B
+export interface AudienceSummaryForReview {
+  includeOperator: 'AND' | 'OR';
+  includedSegments: Array<{ id: string; name: string }>;
+  excludedSegments: Array<{ id: string; name: string }>;
+}
+
 export interface ReviewSendTabContentProps {
   currentCampaign: EmailCampaign | null;
-  campaignSegments: CampaignSegmentFromStore[] | null;
+  audienceSummary: AudienceSummaryForReview | null;
   estimatedAudienceSize: number | null;
   isSendingGlobal: boolean;
   canSendOrSchedule: boolean;
@@ -47,7 +54,7 @@ export interface ReviewSendTabContentProps {
 
 export function ReviewSendTabContent({
   currentCampaign,
-  campaignSegments,
+  audienceSummary,
   estimatedAudienceSize,
   isSendingGlobal,
   canSendOrSchedule,
@@ -78,10 +85,10 @@ export function ReviewSendTabContent({
     if (!currentCampaign?.campaign_html_body?.trim()) {
       errors.push('Campaign content is required (check Content & Design tab)');
     }
-    if (!campaignSegments?.length) {
-      errors.push('At least one audience segment is required');
-    } else if (estimatedAudienceSize === 0) {
-      errors.push('Selected segments have no recipients');
+    if (!audienceSummary || !audienceSummary.includedSegments || audienceSummary.includedSegments.length === 0) {
+      errors.push('At least one audience segment must be included in the rules (check Audience tab)');
+    } else if (estimatedAudienceSize === 0 && audienceSummary.includedSegments.length > 0) {
+      errors.push('Selected audience rules result in no recipients');
     }
     setValidationErrors(errors);
     return errors.length === 0;
@@ -119,7 +126,7 @@ export function ReviewSendTabContent({
 
     const hasSubject = !!currentCampaign?.subject?.trim();
     const hasContent = !!currentCampaign?.campaign_html_body?.trim();
-    const hasSegments = !!campaignSegments?.length;
+    const hasSegments = !!audienceSummary?.includedSegments?.length;
     const hasRecipients = estimatedAudienceSize !== null && estimatedAudienceSize > 0;
 
     if (hasSubject && hasContent && hasSegments && hasRecipients) {
@@ -174,6 +181,34 @@ export function ReviewSendTabContent({
                 </div>
               </div>
             </div>
+          ) : currentCampaign.status === 'sending' ? (
+            <div className={cn("p-4 border border-blue-200 rounded-md bg-blue-50 dark:bg-blue-900/10 dark:border-blue-900/30 mb-6", transitions.fadeIn)}>
+              <div className="flex items-start gap-3">
+                <Send className="h-5 w-5 text-blue-500 shrink-0 mt-0.5 animate-pulse" />
+                <div>
+                  <h4 className={cn(typography.h4, "text-blue-700 dark:text-blue-400 mb-1")}>Campaign Sending In Progress</h4>
+                  <p className="text-sm text-blue-600 dark:text-blue-300">
+                    This campaign is currently being processed. You can monitor its progress on the Overview tab.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : currentCampaign.status === 'sent' || currentCampaign.status === 'completed' ? (
+            <div className={cn("p-4 border border-green-200 rounded-md bg-green-50 dark:bg-green-900/10 dark:border-green-900/30 mb-6", transitions.fadeIn)}>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className={cn(typography.h4, "text-green-700 dark:text-green-400 mb-1")}>
+                    {currentCampaign.status === 'completed' ? 'Campaign Completed' : 'Campaign Sent'}
+                  </h4>
+                  <p className="text-sm text-green-600 dark:text-green-300">
+                    {currentCampaign.status === 'completed' 
+                      ? 'All emails for this campaign have been processed. Check the Overview tab for final statistics.'
+                      : 'This campaign has been sent and is processing. Check the Overview tab for progress and final statistics.'}
+                  </p>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className={cn("p-4 border border-green-200 rounded-md bg-green-50 dark:bg-green-900/10 dark:border-green-900/30 mb-6", transitions.fadeIn)}>
               <div className="flex items-start gap-3">
@@ -201,13 +236,13 @@ export function ReviewSendTabContent({
                 <dl className="grid gap-3 text-sm">
                   <div className="flex flex-col">
                     <dt className="text-muted-foreground">Campaign Name</dt>
-                    <dd className={cn(typography.body, "font-medium")}>
+                    <dd className={cn(typography.p, "font-medium mt-0")}>
                       {currentCampaign.name}
                     </dd>
                   </div>
                   <div className="flex flex-col">
                     <dt className="text-muted-foreground">Email Subject</dt>
-                    <dd className={typography.body}>
+                    <dd className={cn(typography.p, "mt-0")}>
                       {currentCampaign.subject ? (
                         <span className="flex items-center gap-1.5">
                           <Mail className="h-3.5 w-3.5 text-primary" />
@@ -226,7 +261,7 @@ export function ReviewSendTabContent({
                       <dt className="text-muted-foreground">Scheduled Send Time</dt>
                       <dd className="flex items-center gap-1.5">
                         <Calendar className="h-3.5 w-3.5 text-secondary" />
-                        <span className={cn(typography.body, "text-secondary font-medium")}>
+                        <span className={cn(typography.p, "text-secondary font-medium mt-0")}>
                           {formatDate(currentCampaign.scheduled_at)}
                         </span>
                       </dd>
@@ -249,32 +284,45 @@ export function ReviewSendTabContent({
                       {estimatedAudienceSize !== null ? estimatedAudienceSize.toLocaleString() : 'N/A'}
                     </dd>
                   </div>
-                  <div className="flex flex-col">
-                    <dt className="text-muted-foreground">Selected Segments</dt>
-                    <dd>
-                      {campaignSegments?.length ? (
-                        <div className="flex flex-wrap gap-1.5 mt-1">
-                          {campaignSegments.map(segment => (
-                            <Badge 
-                              key={segment.id} 
-                              variant="secondary" 
-                              className={cn(
-                                "hover:bg-secondary/30 transition-colors duration-150",
-                                transitions.scale
-                              )}
-                            >
-                              {segment.segment?.name}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-destructive flex items-center gap-1.5">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                          No segments selected
-                        </span>
-                      )}
-                    </dd>
-                  </div>
+                  {/* Display Audience Rules based on audienceSummary - Build Note Step 5.B.3 */}
+                  {audienceSummary && (
+                    <>
+                      <div className="flex flex-col col-span-full pt-2"> 
+                        <dt className="text-muted-foreground mb-1">Audience Rules:</dt>
+                        <dd className={cn("leading-7", "space-y-1.5", "mt-0")}>
+                          {audienceSummary.includedSegments.length > 0 && (
+                            <div className="flex items-start text-sm">
+                              <span className="font-medium mr-1.5 shrink-0">Include users who are in:</span>
+                              <div className="flex flex-wrap gap-1 items-center">
+                                {audienceSummary.includedSegments.map((segment, index) => (
+                                  <Badge key={segment.id} variant="outline" className="font-normal py-0.5 px-1.5 bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700 text-green-700 dark:text-green-300">
+                                    {segment.name}
+                                    {index < audienceSummary.includedSegments.length - 1 && 
+                                     <span className="font-semibold text-green-600 dark:text-green-400 ml-1.5 mr-0.5 text-xs">{audienceSummary.includeOperator}</span>}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {audienceSummary.excludedSegments.length > 0 && (
+                            <div className="flex items-start text-sm">
+                              <span className="font-medium mr-1.5 shrink-0">Exclude users who are in:</span>
+                              <div className="flex flex-wrap gap-1">
+                                {audienceSummary.excludedSegments.map((segment) => (
+                                  <Badge key={segment.id} variant="outline" className="font-normal py-0.5 px-1.5 bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300">
+                                    {segment.name}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {audienceSummary.includedSegments.length === 0 && audienceSummary.excludedSegments.length === 0 && (
+                            <p className="text-muted-foreground text-sm">No audience rules defined. Please configure on the Audience tab.</p>
+                          )}
+                        </dd>
+                      </div>
+                    </>
+                  )}
                 </dl>
               </div>
             </div>
@@ -333,64 +381,39 @@ export function ReviewSendTabContent({
           
           <Separator className="my-6" />
 
-          {/* Action Buttons */}
-          <div className="space-y-4">
-            <h3 className={typography.h4}>Campaign Actions</h3>
-            <div className="flex flex-wrap gap-3">
+          {/* Action Buttons - Conditionally render or disable based on status */}
+          {(currentCampaign.status === 'draft' || currentCampaign.status === 'scheduled') && !validationErrors.length && (
+            <CardFooter className="flex flex-col sm:flex-row justify-end gap-3 pt-6 border-t">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsTestSendModalOpen(true)}
+                disabled={isSendingGlobal || !canSendOrSchedule}
+                className={cn(buttonStyles.secondary, transitions.hover, "w-full sm:w-auto")}
+              >
+                <Mail className="h-4 w-4 mr-2" /> Send Test Email
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={internalHandleScheduleClick} 
+                disabled={isSendingGlobal || !canSendOrSchedule}
+                className={cn(buttonStyles.secondary, transitions.hover, "w-full sm:w-auto")}
+              >
+                <Calendar className="h-4 w-4 mr-2" /> Schedule Campaign
+              </Button>
               <Button 
                 onClick={internalHandleConfirmSend} 
-                disabled={isSendingGlobal || !canSendOrSchedule || currentCampaign.status === 'scheduled' || validationErrors.length > 0}
-                className={cn(buttonStyles.primary, validationErrors.length === 0 ? "animate-pulse" : "")}
-                size="lg"
+                disabled={isSendingGlobal || !canSendOrSchedule}
+                className={cn(buttonStyles.primary, transitions.hover, "w-full sm:w-auto")}
               >
-                <Send className="mr-2 h-5 w-5" /> 
+                {isSendingGlobal ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
                 Send Campaign Now
               </Button>
-              
-              {currentCampaign.status !== 'sending' && currentCampaign.status !== 'completed' && (
-                <Button 
-                  onClick={internalHandleScheduleClick} 
-                  variant="outline"
-                  className={buttonStyles.secondary}
-                  disabled={validationErrors.length > 0}
-                  size="lg"
-                >
-                  <Calendar className="mr-2 h-5 w-5" /> 
-                  Schedule for Later
-                </Button>
-              )}
-              
-              <div className="flex-1 md:text-right"></div>
-              
-              <Button 
-                onClick={() => setIsTestSendModalOpen(true)} 
-                variant="outline"
-                className={buttonStyles.outline}
-              >
-                <Send className="mr-2 h-4 w-4" /> 
-                Send Test Email
-              </Button>
-              
-              <Button 
-                onClick={handleOpenLivePreview} 
-                variant="outline"
-                className={buttonStyles.outline}
-              >
-                <Eye className="mr-2 h-4 w-4" /> 
-                Preview Content
-              </Button>
-            </div>
-            
-            {currentCampaign.status === 'scheduled' && currentCampaign.scheduled_at && (
-              <div className={cn("p-3 border border-secondary/30 rounded-md bg-secondary/10 flex items-start gap-2 mt-4", transitions.fadeIn)}>
-                <Calendar className="h-5 w-5 text-secondary shrink-0 mt-0.5" />
-                <p className="text-sm">
-                  This campaign is currently <strong>scheduled</strong> for {formatDate(currentCampaign.scheduled_at)}.
-                  Sending now will override the existing schedule.
-                </p>
-              </div>
-            )}
-          </div>
+            </CardFooter>
+          )}
         </CardContent>
       </Card>
     </div>

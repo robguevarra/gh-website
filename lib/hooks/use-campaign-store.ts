@@ -12,6 +12,13 @@ import {
   CampaignAnalytics,
   UserSegment
 } from '@/lib/supabase/data-access/campaign-management';
+import { SegmentRules } from '@/types/campaigns';
+
+// Add segment_rules to EmailCampaign type if it's not already part of it from backend
+// For now, we'll manage it within the store's representation of currentCampaign
+interface StoreEmailCampaign extends EmailCampaign {
+  segment_rules?: SegmentRules; // Optional because it might not come from DB initially for old campaigns
+}
 
 interface CampaignState {
   // Campaign list state
@@ -21,7 +28,7 @@ interface CampaignState {
   campaignsError: string | null;
   
   // Current campaign state
-  currentCampaign: EmailCampaign | null;
+  currentCampaign: StoreEmailCampaign | null;
   currentCampaignLoading: boolean;
   currentCampaignError: string | null;
   
@@ -55,11 +62,11 @@ interface CampaignState {
   fetchCampaign: (id: string) => Promise<void>;
   createCampaign: (campaign: Partial<EmailCampaign>) => Promise<EmailCampaign>;
   updateCampaign: (id: string, updates: Partial<EmailCampaign>) => Promise<EmailCampaign>;
-  updateCampaignFields: (payload: { id: string; changes: Partial<EmailCampaign> }) => void;
+  updateCampaignFields: (payload: { id: string; changes: Partial<StoreEmailCampaign> }) => void;
   deleteCampaign: (id: string) => Promise<void>;
   scheduleCampaign: (id: string, scheduledAt: string) => Promise<EmailCampaign>;
   sendTestEmail: (id: string, testEmails: string[]) => Promise<{ success: boolean }>;
-  sendCampaign: (id: string) => Promise<{ success: boolean }>;
+  sendCampaign: (id: string) => Promise<{ success: boolean; message?: string; details?: { queuedCount: number } }>;
   fetchCampaignTemplates: (campaignId: string) => Promise<void>;
   fetchCampaignSegments: (campaignId: string) => Promise<void>;
   fetchCampaignAnalytics: (campaignId: string, refresh?: boolean) => Promise<void>;
@@ -68,6 +75,13 @@ interface CampaignState {
   removeCampaignSegment: (campaignId: string, segmentId: string) => Promise<void>;
   fetchEstimatedAudienceSize: (campaignId: string) => Promise<void>;
   resetState: () => void;
+  setIncludeOperator: (operator: 'AND' | 'OR') => void;
+  addIncludeSegmentId: (segmentId: string) => void;
+  removeIncludeSegmentId: (segmentId: string) => void;
+  addExcludeSegmentId: (segmentId: string) => void;
+  removeExcludeSegmentId: (segmentId: string) => void;
+  getSegmentDetails: (segmentId: string) => UserSegment | undefined;
+  saveSegmentRules: () => Promise<void>;
 }
 
 export const useCampaignStore = create<CampaignState>((set, get) => ({
@@ -148,18 +162,29 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       const response = await fetch(`/api/admin/campaigns/${id}`);
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch campaign');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch campaign');
       }
       
       const data = await response.json();
+      const campaignData = data.campaign as StoreEmailCampaign;
+
+      if (!campaignData.segment_rules) {
+        campaignData.segment_rules = {
+          version: 1,
+          include: { operator: 'OR', segmentIds: [] },
+          exclude: { segmentIds: [] },
+        };
+      }
       
       set({ 
-        currentCampaign: data.campaign, 
+        currentCampaign: campaignData, 
         currentCampaignLoading: false 
       });
-      
-      return data.campaign;
+      // After setting currentCampaign and ensuring segment_rules are initialized, fetch audience size.
+      if (campaignData.id) { // Ensure campaignData.id is valid
+        get().fetchEstimatedAudienceSize(campaignData.id);
+      }
     } catch (error: any) {
       set({ 
         currentCampaignLoading: false, 
@@ -226,17 +251,19 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     }
   },
   
-  updateCampaignFields: (payload) => {
+  updateCampaignFields: (payload: { id: string; changes: Partial<StoreEmailCampaign> }) => {
     const { id, changes } = payload;
     set((state) => {
       if (state.currentCampaign && state.currentCampaign.id === id) {
-        // Ensure we're updating the fields correctly, especially new ones
-        const updatedCampaign = { ...state.currentCampaign, ...changes };
+        const updatedCampaign = { 
+          ...state.currentCampaign, 
+          ...changes,
+          segment_rules: changes.segment_rules !== undefined ? changes.segment_rules : state.currentCampaign.segment_rules
+        } as StoreEmailCampaign;
         return {
           currentCampaign: updatedCampaign,
         };
       }
-      // If currentCampaign is null or ID doesn't match, return empty object to not change state
       return {}; 
     });
   },
@@ -316,26 +343,24 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     }
   },
   
-  sendCampaign: async (id) => {
+  sendCampaign: async (id: string) => {
     try {
       const response = await fetch(`/api/admin/campaigns/${id}/send`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
-      
+
+      const data = await response.json();
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to send campaign');
+        throw new Error(data.error || data.message || 'Failed to send campaign');
       }
       
-      // Refresh campaign data
-      await get().fetchCampaign(id);
-      
-      return await response.json();
+      return data;
     } catch (error: any) {
-      throw new Error(error.message || 'Failed to send campaign');
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(String(error || 'An unknown error occurred while sending campaign'));
     }
   },
   
@@ -459,11 +484,23 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   },
   
   fetchEstimatedAudienceSize: async (campaignId: string) => {
-    if (!campaignId) return;
+    const { currentCampaign } = get();
+    if (!currentCampaign || !currentCampaign.segment_rules) {
+      console.warn('[fetchEstimatedAudienceSize] No current campaign or segment rules available.');
+      set({ estimatedAudienceSize: 0, audienceSizeLoading: false, audienceSizeError: null });
+      return;
+    }
+
     set({ audienceSizeLoading: true, audienceSizeError: null });
     
     try {
-      const response = await fetch(`/api/admin/campaigns/estimate-audience?campaignId=${campaignId}`);
+      const response = await fetch(`/api/admin/campaigns/estimate-audience`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(currentCampaign.segment_rules),
+      });
       
       if (!response.ok) {
         const error = await response.json();
@@ -622,5 +659,220 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       audienceSizeLoading: false,
       audienceSizeError: null,
     });
+  },
+
+  // New actions for segment_rules
+  setIncludeOperator: (operator) => {
+    set((state) => {
+      if (state.currentCampaign && state.currentCampaign.segment_rules) {
+        const updatedRules = {
+          ...state.currentCampaign.segment_rules,
+          include: {
+            ...state.currentCampaign.segment_rules.include,
+            operator: operator,
+          },
+        };
+        return {
+          currentCampaign: {
+            ...state.currentCampaign,
+            segment_rules: updatedRules,
+          },
+        };
+      }
+      return {};
+    });
+    // Fetch audience size after updating rules
+    if (get().currentCampaign?.id) {
+      get().fetchEstimatedAudienceSize(get().currentCampaign!.id);
+    }
+    // TODO: Consider calling a debounced saveSegmentRules action here
+  },
+
+  addIncludeSegmentId: (segmentId) => {
+    set((state) => {
+      if (
+        state.currentCampaign && 
+        state.currentCampaign.segment_rules && 
+        state.currentCampaign.segment_rules.include && // Check for include object
+        Array.isArray(state.currentCampaign.segment_rules.include.segmentIds) // Check if segmentIds is an array
+      ) {
+        // Avoid duplicates
+        if (state.currentCampaign.segment_rules.include.segmentIds.includes(segmentId)) {
+          return {};
+        }
+        const updatedRules = {
+          ...state.currentCampaign.segment_rules,
+          include: {
+            ...state.currentCampaign.segment_rules.include,
+            segmentIds: [...state.currentCampaign.segment_rules.include.segmentIds, segmentId],
+          },
+        };
+        return {
+          currentCampaign: {
+            ...state.currentCampaign,
+            segment_rules: updatedRules,
+          },
+        };
+      } else if (state.currentCampaign) {
+        // If segment_rules or its substructure is missing, initialize it properly
+        const initializedRules: SegmentRules = {
+          version: state.currentCampaign.segment_rules?.version || 1,
+          include: { 
+            operator: state.currentCampaign.segment_rules?.include?.operator || 'OR',
+            segmentIds: [segmentId] 
+          },
+          exclude: { 
+            segmentIds: state.currentCampaign.segment_rules?.exclude?.segmentIds || [] 
+          },
+        };
+        return {
+          currentCampaign: {
+            ...state.currentCampaign,
+            segment_rules: initializedRules,
+          }
+        }
+      }
+      return {};
+    });
+    if (get().currentCampaign?.id) {
+      get().fetchEstimatedAudienceSize(get().currentCampaign!.id);
+    }
+    // TODO: Consider calling a debounced saveSegmentRules action here
+  },
+
+  removeIncludeSegmentId: (segmentId) => {
+    set((state) => {
+      if (
+        state.currentCampaign && 
+        state.currentCampaign.segment_rules && 
+        state.currentCampaign.segment_rules.include && // Check for include object
+        Array.isArray(state.currentCampaign.segment_rules.include.segmentIds) // Check if segmentIds is an array
+      ) {
+        const updatedRules = {
+          ...state.currentCampaign.segment_rules,
+          include: {
+            ...state.currentCampaign.segment_rules.include,
+            segmentIds: state.currentCampaign.segment_rules.include.segmentIds.filter(id => id !== segmentId),
+          },
+        };
+        return {
+          currentCampaign: {
+            ...state.currentCampaign,
+            segment_rules: updatedRules,
+          },
+        };
+      }
+      // If structure is missing, there's nothing to remove, so return current state
+      return {};
+    });
+    if (get().currentCampaign?.id) {
+      get().fetchEstimatedAudienceSize(get().currentCampaign!.id);
+    }
+    // TODO: Consider calling a debounced saveSegmentRules action here
+  },
+
+  addExcludeSegmentId: (segmentId) => {
+    set((state) => {
+      if (
+        state.currentCampaign && 
+        state.currentCampaign.segment_rules && 
+        state.currentCampaign.segment_rules.exclude && // Check for exclude object
+        Array.isArray(state.currentCampaign.segment_rules.exclude.segmentIds) // Check if segmentIds is an array
+      ) {
+        // Avoid duplicates
+        if (state.currentCampaign.segment_rules.exclude.segmentIds.includes(segmentId)) {
+          return {};
+        }
+        const updatedRules = {
+          ...state.currentCampaign.segment_rules,
+          exclude: {
+            ...state.currentCampaign.segment_rules.exclude,
+            segmentIds: [...state.currentCampaign.segment_rules.exclude.segmentIds, segmentId],
+          },
+        };
+        return {
+          currentCampaign: {
+            ...state.currentCampaign,
+            segment_rules: updatedRules,
+          },
+        };
+      } else if (state.currentCampaign) {
+        // If segment_rules or its substructure is missing, initialize it properly
+        const initializedRules: SegmentRules = {
+          version: state.currentCampaign.segment_rules?.version || 1,
+          include: { 
+            operator: state.currentCampaign.segment_rules?.include?.operator || 'OR',
+            segmentIds: state.currentCampaign.segment_rules?.include?.segmentIds || []
+          },
+          exclude: { 
+            segmentIds: [segmentId] 
+          },
+        };
+        return {
+          currentCampaign: {
+            ...state.currentCampaign,
+            segment_rules: initializedRules,
+          }
+        }
+      }
+      return {};
+    });
+    if (get().currentCampaign?.id) {
+      get().fetchEstimatedAudienceSize(get().currentCampaign!.id);
+    }
+    // TODO: Consider calling a debounced saveSegmentRules action here
+  },
+
+  removeExcludeSegmentId: (segmentId) => {
+    set((state) => {
+      if (
+        state.currentCampaign && 
+        state.currentCampaign.segment_rules && 
+        state.currentCampaign.segment_rules.exclude && // Check for exclude object
+        Array.isArray(state.currentCampaign.segment_rules.exclude.segmentIds) // Check if segmentIds is an array
+      ) {
+        const updatedRules = {
+          ...state.currentCampaign.segment_rules,
+          exclude: {
+            ...state.currentCampaign.segment_rules.exclude,
+            segmentIds: state.currentCampaign.segment_rules.exclude.segmentIds.filter(id => id !== segmentId),
+          },
+        };
+        return {
+          currentCampaign: {
+            ...state.currentCampaign,
+            segment_rules: updatedRules,
+          },
+        };
+      }
+      // If structure is missing, there's nothing to remove, so return current state
+      return {};
+    });
+    if (get().currentCampaign?.id) {
+      get().fetchEstimatedAudienceSize(get().currentCampaign!.id);
+    }
+    // TODO: Consider calling a debounced saveSegmentRules action here
+  },
+
+  getSegmentDetails: (segmentId: string) => {
+    const state = get();
+    return state.availableSegments.find(segment => segment.id === segmentId);
+  },
+
+  saveSegmentRules: async () => {
+    const { currentCampaign, updateCampaign: storeUpdateCampaign } = get();
+    if (currentCampaign && currentCampaign.segment_rules) {
+      try {
+        console.log(`[useCampaignStore] Saving segment rules for campaign ${currentCampaign.id}:`, currentCampaign.segment_rules);
+        // The store's updateCampaign already handles API calls and state updates
+        await storeUpdateCampaign(currentCampaign.id, { segment_rules: currentCampaign.segment_rules });
+        // TODO: Consider adding a toast notification for success
+        console.log(`[useCampaignStore] Segment rules saved successfully for campaign ${currentCampaign.id}`);
+      } catch (error: any) {
+        // TODO: Consider adding a toast notification for error
+        console.error(`[useCampaignStore] Failed to save segment rules for campaign ${currentCampaign.id}:`, error.message);
+        throw error; // Re-throw to allow UI to handle it if necessary
+      }
+    }
   },
 }));

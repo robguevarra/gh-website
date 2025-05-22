@@ -1,10 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { EmailCampaign } from '@/lib/supabase/data-access/campaign-management';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, BarChart3, Users, Mail, Clock, Calendar, Send } from 'lucide-react';
+import { Loader2, BarChart3, Users, Mail, Clock, Calendar, Send, CheckCircle, AlertTriangle, MinusCircle, Check, Search } from 'lucide-react';
 import { Typography } from '@/components/ui/typography';
 import { cn } from '@/lib/utils';
 import { 
@@ -14,6 +15,9 @@ import {
   spacing, 
   transitions 
 } from '../ui-utils';
+import { SegmentRules } from '@/types/campaigns';
+import { AvailableSegmentFromStore } from './audience-tab-content';
+import { Progress } from '@/components/ui/progress';
 
 // Define a basic type for CampaignAnalytics if not already available globally
 export interface CampaignAnalyticsData {
@@ -32,11 +36,19 @@ export interface CampaignAnalyticsData {
   // Add other fields as necessary based on your actual analytics data structure
 }
 
-// Define a basic type for AudienceSegment if not already available globally
-export interface AudienceSegment {
-  id: string;
-  name: string;
-  // Add other fields as necessary
+// AudienceSegment is now AvailableSegmentFromStore for consistency with getSegmentDetails
+export type AudienceSegmentForDisplay = Pick<AvailableSegmentFromStore, 'id' | 'name'>;
+
+// Define type for the new sending stats
+interface SendingStats {
+  campaignId: string;
+  campaignStatus: string;
+  totalQueued: number;
+  processedCount: number;
+  failedPermanentCount: number;
+  retryingCount: number;
+  pendingCount: number;
+  totalSentByProvider: number;
 }
 
 export interface OverviewTabContentProps {
@@ -44,9 +56,12 @@ export interface OverviewTabContentProps {
   campaignAnalytics: CampaignAnalyticsData | null;
   analyticsLoading: boolean;
   estimatedAudienceSize: number | null;
-  campaignSegments: AudienceSegment[] | null;
   formatDate: (dateString: string | null) => string;
   getStatusBadge: (status: string) => JSX.Element;
+  audienceSizeLoading: boolean;
+  audienceSizeError: string | null;
+  audienceRulesDisplay: SegmentRules;
+  getSegmentDetails: (segmentId: string) => AvailableSegmentFromStore | undefined;
 }
 
 export function OverviewTabContent({
@@ -54,10 +69,55 @@ export function OverviewTabContent({
   campaignAnalytics,
   analyticsLoading,
   estimatedAudienceSize,
-  campaignSegments,
   formatDate,
   getStatusBadge,
+  audienceSizeLoading,
+  audienceSizeError,
+  audienceRulesDisplay,
+  getSegmentDetails,
 }: OverviewTabContentProps) {
+  const [sendingStats, setSendingStats] = useState<SendingStats | null>(null);
+  const [sendingStatsLoading, setSendingStatsLoading] = useState<boolean>(false);
+  const [sendingStatsError, setSendingStatsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | undefined;
+
+    const fetchStats = async () => {
+      if (currentCampaign && (currentCampaign.status === 'sending' || currentCampaign.status === 'sent')) {
+        setSendingStatsLoading(true);
+        setSendingStatsError(null);
+        try {
+          const response = await fetch(`/api/admin/campaigns/${currentCampaign.id}/sending-stats`);
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to fetch sending stats');
+          }
+          const data = await response.json();
+          setSendingStats(data.stats);
+        } catch (error: any) {
+          console.error("Error fetching sending stats:", error);
+          setSendingStatsError(error.message);
+          setSendingStats(null); // Clear stats on error
+        } finally {
+          setSendingStatsLoading(false);
+        }
+      }
+    };
+
+    fetchStats(); // Initial fetch
+
+    if (currentCampaign && (currentCampaign.status === 'sending' || currentCampaign.status === 'sent')) {
+      intervalId = setInterval(fetchStats, 15000); // Poll every 15 seconds
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [currentCampaign?.id, currentCampaign?.status]); // Dependencies: campaign ID and status
+
   if (!currentCampaign) {
     return (
       <div className="flex flex-col items-center justify-center py-10 gap-3">
@@ -66,6 +126,27 @@ export function OverviewTabContent({
       </div>
     );
   }
+
+  const renderEstimatedAudience = () => {
+    if (audienceSizeLoading) {
+      return <Loader2 className={cn(typography.h3, "h-6 w-6 animate-spin ml-2 text-primary")} />;
+    }
+    if (audienceSizeError) {
+      return <span className={cn(typography.p, "text-destructive text-sm ml-2 flex items-center")}><AlertTriangle className="h-4 w-4 mr-1" /> Error</span>;
+    }
+    if (estimatedAudienceSize !== null) {
+      return <span className={cn(typography.h3, "text-2xl font-semibold text-primary")}>{estimatedAudienceSize.toLocaleString()}</span>;
+    }
+    return <span className={cn(typography.h3, "text-2xl font-semibold text-muted-foreground")}>N/A</span>;
+  };
+
+  const includedSegments = audienceRulesDisplay?.include?.segmentIds
+    ?.map(id => getSegmentDetails(id))
+    .filter(Boolean) as AvailableSegmentFromStore[] || [];
+
+  const excludedSegments = audienceRulesDisplay?.exclude?.segmentIds
+    ?.map(id => getSegmentDetails(id))
+    .filter(Boolean) as AvailableSegmentFromStore[] || [];
 
   // Helper function to get status style based on status
   const getStatusClass = (status: string) => {
@@ -97,13 +178,11 @@ export function OverviewTabContent({
                 Summary of your email campaign
               </CardDescription>
             </div>
-            <Badge className={cn(getStatusClass(currentCampaign.status), "text-xs px-3 py-1 rounded-full")}>
-              {currentCampaign.status.charAt(0).toUpperCase() + currentCampaign.status.slice(1)}
-            </Badge>
+            {getStatusBadge(currentCampaign.status)}
           </div>
         </CardHeader>
         <CardContent className={spacing.card}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
             {/* Details Section */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -113,22 +192,22 @@ export function OverviewTabContent({
               <Separator className="my-2" />
               <dl className="grid grid-cols-1 gap-3">
                 <div className="flex flex-col">
-                  <dt className="text-muted-foreground text-sm">Name</dt>
-                  <dd className={cn(typography.p, "font-medium")}>{currentCampaign.name}</dd>
+                  <dt className={cn(typography.muted, "text-sm")}>Name</dt>
+                  <dd className={cn(typography.lead, "font-semibold")}>{currentCampaign.name}</dd>
                 </div>
                 <div className="flex flex-col">
-                  <dt className="text-muted-foreground text-sm">Subject</dt>
-                  <dd className={typography.p}>{currentCampaign.subject || 'Not set'}</dd>
+                  <dt className={cn(typography.muted, "text-sm")}>Subject</dt>
+                  <dd className={cn(typography.p, "font-medium")}>{currentCampaign.subject || 'Not set'}</dd>
                 </div>
                 <div className="flex flex-col">
-                  <dt className="text-muted-foreground text-sm">Created</dt>
+                  <dt className={cn(typography.muted, "text-sm")}>Created</dt>
                   <dd className="flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className={typography.p}>{formatDate(currentCampaign.created_at)}</span>
                   </dd>
                 </div>
                 <div className="flex flex-col">
-                  <dt className="text-muted-foreground text-sm">Last Updated</dt>
+                  <dt className={cn(typography.muted, "text-sm")}>Last Updated</dt>
                   <dd className="flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className={typography.p}>{formatDate(currentCampaign.updated_at)}</span>
@@ -136,7 +215,7 @@ export function OverviewTabContent({
                 </div>
                 {currentCampaign.status === 'scheduled' && currentCampaign.scheduled_at && (
                   <div className="flex flex-col">
-                    <dt className="text-muted-foreground text-sm">Scheduled For</dt>
+                    <dt className={cn(typography.muted, "text-sm")}>Scheduled For</dt>
                     <dd className="flex items-center gap-1.5">
                       <Send className="h-3.5 w-3.5 text-secondary" />
                       <span className={cn(typography.p, "text-secondary font-medium")}>{formatDate(currentCampaign.scheduled_at)}</span>
@@ -145,9 +224,9 @@ export function OverviewTabContent({
                 )}
                 {currentCampaign.status === 'completed' && currentCampaign.completed_at && (
                   <div className="flex flex-col">
-                    <dt className="text-muted-foreground text-sm">Completed At</dt>
+                    <dt className={cn(typography.muted, "text-sm")}>Completed At</dt>
                     <dd className="flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5 text-green-600" />
+                      <CheckCircle className="h-3.5 w-3.5 text-green-600" />
                       <span className={cn(typography.p, "text-green-700 font-semibold")}>{formatDate(currentCampaign.completed_at)}</span>
                     </dd>
                   </div>
@@ -162,31 +241,62 @@ export function OverviewTabContent({
                 <h3 className={typography.h4}>Audience</h3>
               </div>
               <Separator className="my-2" />
-              <dl className="grid grid-cols-1 gap-3">
+              <dl className="grid grid-cols-1 gap-4">
                 <div className="flex flex-col">
-                  <dt className="text-muted-foreground text-sm">Estimated Recipients</dt>
-                  <dd className={cn(typography.h3, "text-2xl font-semibold text-primary")}>
-                    {estimatedAudienceSize ? estimatedAudienceSize.toLocaleString() : 'N/A'}
+                  <dt className={cn(typography.muted, "text-sm mb-0.5")}>Estimated Recipients</dt>
+                  <dd className="flex items-center">
+                    {renderEstimatedAudience()}
                   </dd>
+                  {audienceSizeError && <p className={cn(typography.small, "text-destructive mt-1")}>Details: {audienceSizeError}</p>}
                 </div>
+                
                 <div className="flex flex-col">
-                  <dt className="text-muted-foreground text-sm">Segments</dt>
+                  <dt className={cn(typography.muted, "text-sm mb-1")}>
+                    Included Segments 
+                    {audienceRulesDisplay?.include?.segmentIds && audienceRulesDisplay.include.segmentIds.length > 0 && (
+                       <span className="text-xs font-normal"> (Match <span className="font-semibold">{audienceRulesDisplay.include.operator}</span>)</span>
+                    )}
+                  </dt>
                   <dd>
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {campaignSegments && campaignSegments.length > 0
-                        ? campaignSegments.map(segment => (
+                    <div className="flex flex-wrap gap-1.5">
+                      {includedSegments.length > 0
+                        ? includedSegments.map(segment => (
                             <Badge 
                               key={segment.id} 
                               variant="secondary" 
                               className={cn(
-                                "hover:bg-secondary/30 transition-colors duration-150",
+                                "hover:bg-secondary/30 transition-colors duration-150 font-normal text-xs py-0.5 px-2",
                                 transitions.scaleIn
                               )}
                             >
+                              <Check className="h-3 w-3 mr-1 text-green-600"/>
                               {segment.name}
                             </Badge>
                           ))
-                        : <span className="text-muted-foreground italic">No segments selected</span>}
+                        : <span className={cn(typography.muted, "text-xs italic")}>No segments specifically included.</span>}
+                    </div>
+                  </dd>
+                </div>
+
+                <div className="flex flex-col">
+                  <dt className={cn(typography.muted, "text-sm mb-1")}>Excluded Segments</dt>
+                  <dd>
+                    <div className="flex flex-wrap gap-1.5">
+                      {excludedSegments.length > 0
+                        ? excludedSegments.map(segment => (
+                            <Badge 
+                              key={segment.id} 
+                              variant="outline"
+                              className={cn(
+                                "border-destructive/50 text-destructive-foreground hover:bg-destructive/10 transition-colors duration-150 font-normal text-xs py-0.5 px-2",
+                                transitions.scaleIn
+                              )}
+                            >
+                              <MinusCircle className="h-3 w-3 mr-1"/>
+                              {segment.name}
+                            </Badge>
+                          ))
+                        : <span className={cn(typography.muted, "text-xs italic")}>No segments excluded.</span>}
                     </div>
                   </dd>
                 </div>
@@ -196,57 +306,87 @@ export function OverviewTabContent({
         </CardContent>
       </Card>
 
-      {/* Performance Metrics Section */}
-      <Card className={cardStyles.elevated}>
-        <CardHeader className="pb-2">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <CardTitle className={typography.h3}>Performance Metrics</CardTitle>
-          </div>
-          <CardDescription className="mt-1">
-            Key performance indicators for this campaign
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {analyticsLoading ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-primary/70" />
-              <p className={cn(typography.muted, "animate-pulse")}>Loading analytics data...</p>
+      {/* Sending Progress Section - NEW */}
+      {(currentCampaign.status === 'sending' || currentCampaign.status === 'sent') && (
+        <Card className={cn(cardStyles.elevated, "mt-6")}>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-primary animate-pulse" />
+              <CardTitle className={typography.h3}>Sending Progress</CardTitle>
             </div>
-          ) : campaignAnalytics ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <MetricCard 
-                title="Sent" 
-                value={campaignAnalytics.total_sent?.toLocaleString() || '0'} 
-                icon={<Send className="h-4 w-4" />}
-              />
-              <MetricCard 
-                title="Opens" 
-                value={campaignAnalytics.unique_opens?.toLocaleString() || '0'} 
-                rate={campaignAnalytics.open_rate !== undefined ? `${(campaignAnalytics.open_rate * 100).toFixed(1)}%` : undefined}
-                icon={<Mail className="h-4 w-4" />}
-              />
-              <MetricCard 
-                title="Clicks" 
-                value={campaignAnalytics.unique_clicks?.toLocaleString() || '0'} 
-                rate={campaignAnalytics.click_rate !== undefined ? `${(campaignAnalytics.click_rate * 100).toFixed(1)}%` : undefined}
-                icon={<Users className="h-4 w-4" />}
-              />
-              <MetricCard 
-                title="Bounces" 
-                value={campaignAnalytics.total_bounces?.toLocaleString() || '0'} 
-                rate={campaignAnalytics.bounce_rate !== undefined ? `${(campaignAnalytics.bounce_rate * 100).toFixed(1)}%` : undefined}
-                variant="warning"
-                icon={<Mail className="h-4 w-4" />}
-              />
-            </div>
-          ) : (
-            <div className="bg-muted/30 rounded-lg p-6 text-center">
-              <p className={typography.muted}>No analytics data available for this campaign yet.</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <CardDescription>
+              Live update of emails being processed through the queue.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className={spacing.card}>
+            {sendingStatsLoading && !sendingStats && (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="ml-3 text-muted-foreground">Loading progress...</p>
+              </div>
+            )}
+            {sendingStatsError && (
+              <div className="text-destructive text-sm p-4 border border-destructive/30 bg-destructive/10 rounded-md">
+                <AlertTriangle className="inline h-4 w-4 mr-2" /> Could not load sending progress: {sendingStatsError}
+              </div>
+            )}
+            {sendingStats && (
+              <div className="space-y-5">
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className={cn(typography.p, "font-medium")}>
+                      Overall Progress (Processed / Targeted)
+                    </span>
+                    <span className={cn(typography.p, "font-semibold text-primary")}>
+                      {sendingStats.processedCount.toLocaleString()} / {sendingStats.totalQueued.toLocaleString()}
+                    </span>
+                  </div>
+                  <Progress 
+                    value={(sendingStats.totalQueued > 0 ? (sendingStats.processedCount / sendingStats.totalQueued) * 100 : 0)} 
+                    className="h-3 rounded-full bg-primary/20" 
+                  />
+                  {sendingStats.campaignStatus === 'sent' && sendingStats.pendingCount === 0 && sendingStats.retryingCount === 0 && sendingStats.processedCount === sendingStats.totalQueued && (
+                     <p className={cn(typography.small, "text-green-600 mt-1.5 flex items-center")}><CheckCircle className="h-4 w-4 mr-1.5"/>All targeted emails have been processed by the queue.</p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 text-sm">
+                  <div className="p-3 border rounded-md bg-background">
+                    <dt className={cn(typography.muted, "text-sm mb-0.5")}>Targeted</dt>
+                    <dd className={cn(typography.h3, "font-bold")}>{sendingStats.totalQueued.toLocaleString()}</dd>
+                  </div>
+                  <div className="p-3 border rounded-md bg-background">
+                    <dt className={cn(typography.muted, "text-sm mb-0.5")}>Processed by Queue</dt>
+                    <dd className={cn(typography.h3, "font-bold text-green-600")}>{sendingStats.processedCount.toLocaleString()}</dd>
+                  </div>
+                  <div className="p-3 border rounded-md bg-background">
+                    <dt className={cn(typography.muted, "text-sm mb-0.5")}>Waiting in Queue</dt>
+                    <dd className={cn(typography.h3, "font-bold text-blue-600")}>{sendingStats.pendingCount.toLocaleString()}</dd>
+                  </div>
+                  <div className="p-3 border rounded-md bg-background">
+                    <dt className={cn(typography.muted, "text-sm mb-0.5")}>Pending Retry</dt>
+                    <dd className={cn(typography.h3, "font-bold text-amber-600")}>{sendingStats.retryingCount.toLocaleString()}</dd>
+                  </div>
+                  <div className="p-3 border rounded-md bg-background">
+                    <dt className={cn(typography.muted, "text-sm mb-0.5")}>Failed (No Retry)</dt>
+                    <dd className={cn(typography.h3, "font-bold text-destructive")}>{sendingStats.failedPermanentCount.toLocaleString()}</dd>
+                  </div>
+                </div>
+                {currentCampaign.status_message && (
+                  <div className="p-3 border-l-4 border-primary bg-primary/5 rounded-r-md mt-4">
+                    <p className={cn(typography.small, "text-primary/90")}>
+                      <span className="font-semibold">Campaign Status Message:</span> {currentCampaign.status_message}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Performance Metrics Section has been REMOVED to clear linter errors */}
+      
     </div>
   );
 }
@@ -263,28 +403,22 @@ function MetricCard({ title, value, rate, variant = 'default', icon }: MetricCar
   const getVariantClasses = () => {
     switch (variant) {
       case 'success':
-        return 'bg-primary/10 border-primary/20';
+        return 'bg-success/10 text-success-foreground';
       case 'warning':
-        return 'bg-destructive/10 border-destructive/20';
+        return 'bg-warning/10 text-warning-foreground';
       default:
-        return 'bg-muted/50 border-border';
+        return 'bg-muted/30';
     }
   };
 
   return (
-    <div className={cn(
-      "rounded-lg p-4 border transition-all duration-200 hover:shadow-sm", 
-      getVariantClasses(),
-      transitions.hover
-    )}>
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        {icon && <span className="text-muted-foreground">{icon}</span>}
+    <div className={cn("p-4 rounded-lg shadow-sm", getVariantClasses(), transitions.hover)}>
+      <div className="flex items-center justify-between mb-1">
+        <h4 className="text-sm font-medium">{title}</h4>
+        {icon && <div className="text-muted-foreground/70">{icon}</div>}
       </div>
-      <p className={cn(typography.h3, "text-2xl font-semibold")}>{value}</p>
-      {rate && (
-        <p className="text-xs text-muted-foreground mt-1">{rate} rate</p>
-      )}
+      <p className="text-2xl font-bold">{value}</p>
+      {rate && <p className="text-xs text-muted-foreground">{rate}</p>}
     </div>
   );
 } 

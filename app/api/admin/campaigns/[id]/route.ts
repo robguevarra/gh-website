@@ -11,6 +11,34 @@ import {
   deleteCampaign 
 } from '@/lib/supabase/data-access/campaign-management';
 import { validateAdminAccess, handleServerError, handleNotFound } from '@/lib/supabase/route-handler';
+import { SegmentRules } from '@/types/campaigns'; // Import SegmentRules
+
+// Helper function to validate SegmentRules structure
+const isValidSegmentRules = (rules: any): rules is SegmentRules => {
+  if (!rules || typeof rules !== 'object') return false;
+  // Check for version property
+  if (typeof rules.version !== 'number') return false;
+
+  // Validate 'include' property
+  if (!rules.include || typeof rules.include !== 'object') return false;
+  if (typeof rules.include.operator !== 'string' || !['AND', 'OR'].includes(rules.include.operator))
+    return false;
+  if (!Array.isArray(rules.include.segmentIds) || !rules.include.segmentIds.every((id: any) => typeof id === 'string'))
+    return false;
+
+  // Validate 'exclude' property
+  if (!rules.exclude || typeof rules.exclude !== 'object') return false;
+  if (!Array.isArray(rules.exclude.segmentIds) || !rules.exclude.segmentIds.every((id: any) => typeof id === 'string'))
+    return false;
+  
+  // Optional: Validate exclude operator if it exists
+  if (rules.exclude.operator !== undefined && 
+      (typeof rules.exclude.operator !== 'string' || !['AND', 'OR'].includes(rules.exclude.operator))) {
+    return false;
+  }
+
+  return true;
+};
 
 /**
  * GET /api/admin/campaigns/[id]
@@ -64,6 +92,13 @@ export async function PATCH(
     const { id } = resolvedParams;
     
     const body = await request.json();
+    
+    // Validate segment_rules if present in the body
+    if (body.hasOwnProperty('segment_rules') && body.segment_rules !== null) {
+      if (!isValidSegmentRules(body.segment_rules)) {
+        return Response.json({ error: 'Invalid segment_rules structure' }, { status: 400 });
+      }
+    }
     
     // Validate campaign exists
     const existingCampaign = await getCampaignById(id);
