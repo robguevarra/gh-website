@@ -70,6 +70,11 @@ The investigation into the email sending process has revealed a critical discrep
 *   The `process-email-queue` Edge Function (`supabase/functions/process-email-queue/index.ts`) **must be updated** (or confirmed to be correctly working) to fetch email template content (subject, HTML) based on `campaign_id` from the queue item, and perform variable substitution using `recipient_data` (also from the queue item) before sending via Postmark. This is a prerequisite for emails to be sent correctly with personalized content.
     - **Status (Update March 20, 2024):** This function has been significantly updated. It now correctly fetches campaign content (subject, HTML body) directly from the `email_campaigns` table. It correctly uses `substituteVariables` with `recipient_data`. Issues with template fetching logic and `email_events` logging (incorrect column names `email_address`, `status`, `template_id`, incorrect `event_type` values, and `raw_response` vs `payload` mismatch) have been resolved. Logic to update campaign status to 'completed' via `checkAndFinalizeCampaigns` has been implemented.
     - **Status (Update May 22, 2024):** The `process-email-queue` function now also updates the `campaign_recipients` table, setting `status` to 'sent' and `sent_at` to the current timestamp for the corresponding `user_id` and `campaign_id` after a successful send. This provides a more immediate reflection of send status in the `campaign_recipients` table.
+    - **Status (Update May 23, 2024):** Further debugging and corrections applied to `process-email-queue`:
+        - Corrected `substituteVariables` call to properly handle subject and HTML body substitutions, resolving a `TypeError` that was causing send failures.
+        - Fixed logging to `email_events` by storing `error_message` within the `payload` (JSONB) field due to a schema mismatch (non-existent `error_message` column). This resolved "Could not find column" errors.
+        - Corrected `updateEmailStatus` call for successful sends to use `provider_message_id` (the correct column name in `email_queue`) instead of `messageId`. This ensures `email_queue` status correctly updates to 'sent' and `provider_message_id` is populated.
+        - Removed internal operational logging (`sent`, `send_failed`) from `process-email-queue` to `email_events` table, reserving `email_events` for Postmark webhook data. This resolved `email_events_event_type_check` constraint violations.
 *   Utility functions should be created in `lib/` for shared logic like frequency capping to maintain DRY principles.
     - **Status (Update March 20, 2024):** Assumed to be in place and used by relevant API routes and Edge Functions.
 
@@ -132,6 +137,12 @@ The investigation into the email sending process has revealed a critical discrep
    - **Task**: Ensure `process-email-queue` correctly fetches templates and substitutes variables using `recipient_data`.
      - **Status (Update March 20, 2024):** **COMPLETED**. Issues with template fetching, variable substitution, and event logging resolved. Logic to mark campaigns 'completed' also added.
      - **Status (Update May 22, 2024):** **ENHANCED**. The function now also updates `campaign_recipients.status` to 'sent' and `campaign_recipients.sent_at` upon successful send, further improving data accuracy.
+     - **Status (Update May 23, 2024):** **FURTHER ENHANCED AND DEBUGGED.**
+        - Resolved `TypeError` during variable substitution by correcting how `substituteVariables` is called for subject and body.
+        - Fixed `email_events` logging for failures by correctly placing error information into the `payload` field (this was mainly about removing the direct logging that caused errors, as per previous fix).
+        - Corrected `email_queue` status updates for successful sends to use `provider_message_id` column.
+        - Removed internal send/fail logging from `process-email-queue` to `email_events` to prevent check constraint violations, aligning `email_events` for Postmark webhook data.
+        - As a result of these fixes, `email_queue` items should now correctly transition to 'sent' (with `provider_message_id`) or 'failed' (with `last_error`), and `campaign_recipients` are correctly updated upon successful send.
 
 **Additional UI/UX Enhancements (Implemented March 20, 2024):**
 - **Real-time Sending Progress:**

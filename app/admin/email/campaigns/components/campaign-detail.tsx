@@ -430,7 +430,7 @@ export function CampaignDetail({ campaignId }: CampaignDetailProps) {
           <Button 
             variant="outline" 
             size="icon" 
-            onClick={() => router.back()}
+            onClick={() => router.push('/admin/email/campaigns')}
             className={cn(buttonStyles.outline, "rounded-full h-9 w-9", transitions.hover)}
           >
             <ArrowLeft className="h-4 w-4" />
