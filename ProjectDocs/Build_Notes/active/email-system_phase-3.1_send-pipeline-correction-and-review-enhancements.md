@@ -187,3 +187,4 @@ The core objectives regarding `segment_rules` application for immediate sends, u
 > 3. Align your work with the project context (`ProjectContext.md`), design context (`designContext.md` if used), and these build notes guidelines (`ProjectDocs/build-notes-guidelines.md`).
 > 4. Follow the established folder structure, naming conventions, and coding standards.
 > 5. Include this reminder in all future build notes to maintain consistency. 
+> 6. 
