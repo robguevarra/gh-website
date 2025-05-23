@@ -5,7 +5,7 @@ import { EmailCampaign } from '@/lib/supabase/data-access/campaign-management';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, BarChart3, Users, Mail, Clock, Calendar, Send, CheckCircle, AlertTriangle, MinusCircle, Check, Search } from 'lucide-react';
+import { Loader2, BarChart3, Users, Mail, Clock, Calendar, Send, CheckCircle, AlertTriangle, MinusCircle, Check, Search, Info, Eye } from 'lucide-react';
 import { Typography } from '@/components/ui/typography';
 import { cn } from '@/lib/utils';
 import { 
@@ -385,8 +385,162 @@ export function OverviewTabContent({
         </Card>
       )}
 
-      {/* Performance Metrics Section has been REMOVED to clear linter errors */}
-      
+      {/* NEW: Campaign Performance Metrics Section */}
+      <Card className={cn(cardStyles.elevated, "mt-6")}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            <CardTitle className={typography.h3}>Performance Metrics</CardTitle>
+          </div>
+          <CardDescription>
+            Key performance indicators for this campaign.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {analyticsLoading && (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-8 w-8 animate-spin text-primary/70" />
+              <p className={cn(typography.muted, "ml-3")}>Loading performance data...</p>
+            </div>
+          )}
+          {!analyticsLoading && !campaignAnalytics && (
+            <div className="text-center py-10">
+              <Info className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+              <p className={cn(typography.muted)}>
+                Performance data is not yet available for this campaign or could not be loaded.
+              </p>
+            </div>
+          )}
+          {!analyticsLoading && campaignAnalytics && (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <MetricCard 
+                title="Delivered"
+                value={(campaignAnalytics.total_delivered ?? 0).toLocaleString()}
+                icon={<CheckCircle className="h-5 w-5 text-green-500" />}
+              />
+              <MetricCard 
+                title="Total Opens"
+                value={(campaignAnalytics.total_opens ?? 0).toLocaleString()}
+                rate={`${(campaignAnalytics.open_rate ?? 0).toFixed(1)}% Open Rate`}
+                icon={<Eye className="h-5 w-5 text-blue-500" />}
+              />
+              <MetricCard 
+                title="Total Clicks"
+                value={(campaignAnalytics.total_clicks ?? 0).toLocaleString()}
+                rate={`${(campaignAnalytics.click_rate ?? 0).toFixed(1)}% Click-to-Open Rate`}
+                icon={<Check className="h-5 w-5 text-indigo-500" />}
+              />
+               <MetricCard 
+                title="Bounces"
+                value={(campaignAnalytics.total_bounces ?? 0).toLocaleString()}
+                rate={`${(campaignAnalytics.bounce_rate ?? 0).toFixed(1)}% Bounce Rate`}
+                icon={<AlertTriangle className="h-5 w-5 text-orange-500" />}
+              />
+              <MetricCard 
+                title="Spam Complaints"
+                value={((campaignAnalytics as any).total_spam_complaints ?? campaignAnalytics.total_complaints ?? 0).toLocaleString()}
+                icon={<AlertTriangle className="h-5 w-5 text-red-500" />}
+              />
+              {/* Add more MetricCards as needed, e.g., for total_sent, unsubscribe_rate if available */}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Audience Section - REMAINS UNCHANGED */}
+      <Card className={cn(cardStyles.elevated, "mt-6")}>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-primary" />
+            <CardTitle className={typography.h3}>Audience</CardTitle>
+          </div>
+          <CardDescription>
+            Details about the audience for this campaign.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className={spacing.card}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+            {/* Audience Details */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-primary" />
+                <h3 className={typography.h4}>Audience Details</h3>
+              </div>
+              <Separator className="my-2" />
+              <dl className="grid grid-cols-1 gap-3">
+                <div className="flex flex-col">
+                  <dt className={cn(typography.muted, "text-sm")}>Estimated Recipients</dt>
+                  <dd className="flex items-center">
+                    {renderEstimatedAudience()}
+                  </dd>
+                  {audienceSizeError && <p className={cn(typography.small, "text-destructive mt-1")}>Details: {audienceSizeError}</p>}
+                </div>
+              </dl>
+            </div>
+
+            {/* Audience Segments */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                <h3 className={typography.h4}>Audience Segments</h3>
+              </div>
+              <Separator className="my-2" />
+              <dl className="grid grid-cols-1 gap-4">
+                <div className="flex flex-col">
+                  <dt className={cn(typography.muted, "text-sm mb-1")}>
+                    Included Segments 
+                    {audienceRulesDisplay?.include?.segmentIds && audienceRulesDisplay.include.segmentIds.length > 0 && (
+                       <span className="text-xs font-normal"> (Match <span className="font-semibold">{audienceRulesDisplay.include.operator}</span>)</span>
+                    )}
+                  </dt>
+                  <dd>
+                    <div className="flex flex-wrap gap-1.5">
+                      {includedSegments.length > 0
+                        ? includedSegments.map(segment => (
+                            <Badge 
+                              key={segment.id} 
+                              variant="secondary" 
+                              className={cn(
+                                "hover:bg-secondary/30 transition-colors duration-150 font-normal text-xs py-0.5 px-2",
+                                transitions.scaleIn
+                              )}
+                            >
+                              <Check className="h-3 w-3 mr-1 text-green-600"/>
+                              {segment.name}
+                            </Badge>
+                          ))
+                        : <span className={cn(typography.muted, "text-xs italic")}>No segments specifically included.</span>}
+                    </div>
+                  </dd>
+                </div>
+
+                <div className="flex flex-col">
+                  <dt className={cn(typography.muted, "text-sm mb-1")}>Excluded Segments</dt>
+                  <dd>
+                    <div className="flex flex-wrap gap-1.5">
+                      {excludedSegments.length > 0
+                        ? excludedSegments.map(segment => (
+                            <Badge 
+                              key={segment.id} 
+                              variant="outline"
+                              className={cn(
+                                "border-destructive/50 text-destructive-foreground hover:bg-destructive/10 transition-colors duration-150 font-normal text-xs py-0.5 px-2",
+                                transitions.scaleIn
+                              )}
+                            >
+                              <MinusCircle className="h-3 w-3 mr-1"/>
+                              {segment.name}
+                            </Badge>
+                          ))
+                        : <span className={cn(typography.muted, "text-xs italic")}>No segments excluded.</span>}
+                    </div>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

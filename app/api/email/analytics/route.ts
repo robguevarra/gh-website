@@ -98,9 +98,9 @@ export async function GET(req: NextRequest) {
   const { start, end } = getDateRange(searchParams);
 
   // Fetch all relevant fields for advanced analytics
-  let query = supabase.from('postmark_events').select('record_type, created_at, payload', { count: 'exact' });
-  if (start) query = query.gte('created_at', start.toISOString());
-  if (end) query = query.lte('created_at', end.toISOString());
+  let query = supabase.from('email_events').select('event_type, received_at, metadata', { count: 'exact' });
+  if (start) query = query.gte('received_at', start.toISOString());
+  if (end) query = query.lte('received_at', end.toISOString());
 
   const { data, error } = await query;
   if (error) {
@@ -122,16 +122,16 @@ export async function GET(req: NextRequest) {
   const bounceEmailCounts: Record<string, number> = {};
 
   for (const row of data || []) {
-    const { record_type, created_at, payload } = row;
-    // Date as YYYY-MM-DD
-    const date = created_at ? created_at.slice(0, 10) : 'unknown';
+    const { event_type, received_at, metadata } = row;
+    // Date as YYYY-MM-DD from received_at
+    const date = received_at ? new Date(received_at).toISOString().slice(0, 10) : 'unknown';
     // Init trend bucket
     if (!trendsMap.has(date)) {
       trendsMap.set(date, { date, delivered: 0, opened: 0, clicked: 0, bounced: 0, spam_complaints: 0 });
     }
     const trend = trendsMap.get(date)!;
-    // Count by type
-    switch (record_type) {
+    // Count by type using event_type
+    switch (event_type) {
       case 'Delivery':
         total_delivered++;
         trend.delivered++;
@@ -147,10 +147,14 @@ export async function GET(req: NextRequest) {
       case 'Bounce':
         total_bounced++;
         trend.bounced++;
-        // Try to extract email address from payload
-        const bounceEmail = payload?.Email || payload?.email || payload?.Recipient || null;
-        if (bounceEmail) {
-          bounceEmailCounts[bounceEmail] = (bounceEmailCounts[bounceEmail] || 0) + 1;
+        // Try to extract email address from metadata (original Postmark payload)
+        // Ensure metadata is treated as an object for property access
+        const bounceRecipientEmail = 
+          typeof metadata === 'object' && metadata !== null 
+            ? (metadata as any).Email || (metadata as any).email || (metadata as any).Recipient 
+            : null;
+        if (bounceRecipientEmail) {
+          bounceEmailCounts[bounceRecipientEmail] = (bounceEmailCounts[bounceRecipientEmail] || 0) + 1;
         }
         break;
       case 'SpamComplaint':
