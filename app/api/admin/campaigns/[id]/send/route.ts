@@ -13,7 +13,6 @@ import {
 } from '@/lib/supabase/data-access/campaign-management';
 import { validateAdminAccess, handleServerError, handleNotFound } from '@/lib/supabase/route-handler';
 import { getAdminClient } from '@/lib/supabase/admin';
-import { getPermittedProfileIds } from '@/lib/email/frequency-capping';
 import { addToQueue } from '@/lib/email/queue-utils';
 import { UnifiedProfile } from '@/types/users';
 import { SupabaseClient } from '@supabase/supabase-js';
@@ -116,9 +115,22 @@ export async function POST(
 
     // 4. Apply frequency capping
     const profileIdsForFreqCheck = profiles.map(p => p.id);
-    // Note: getPermittedProfileIds needs a logger. For API routes, can pass console or a custom route logger.
-    const routeLogger = { debug: console.debug, info: console.info, warn: console.warn, error: console.error };
-    const permittedProfileIds = await getPermittedProfileIds(profileIdsForFreqCheck, adminClient, routeLogger);
+    
+    // Call the check-frequency-limits Edge Function
+    const { data: frequencyCheckResponse, error: frequencyError } = await adminClient.functions.invoke(
+      'check-frequency-limits',
+      { body: { profile_ids: profileIdsForFreqCheck } }
+    );
+
+    if (frequencyError) {
+      return handleServerError(frequencyError, 'Failed to check frequency limits');
+    }
+
+    const permittedProfileIds = frequencyCheckResponse?.data as string[] | null;
+    if (!permittedProfileIds) {
+      return NextResponse.json({ error: 'No permitted profile IDs returned from frequency check.' }, { status: 400 });
+    }
+    
     const permittedProfiles = profiles.filter(p => permittedProfileIds.includes(p.id));
       
     if (permittedProfiles.length === 0) {
@@ -169,8 +181,29 @@ export async function POST(
     console.log(`[API SEND /${campaignId}] Ensuring campaign analytics record...`);
     await recalculateCampaignAnalytics(campaignId); // This function should handle creation if not exists
 
-    // --- NEW STEP: Update campaign status to 'sent' after successful queueing ---
-    if (successfullyQueuedCount > 0) { // Only update to 'sent' if emails were actually queued
+    // 8. Trigger immediate email processing (NEW)
+    if (successfullyQueuedCount > 0) {
+      console.log(`[API SEND /${campaignId}] Triggering immediate email processing...`);
+      try {
+        const { data: processResponse, error: processError } = await adminClient.functions.invoke(
+          'process-email-queue',
+          { body: { triggered_by: 'immediate_send' } }
+        );
+        
+        if (processError) {
+          console.warn(`[API SEND /${campaignId}] Warning: Failed to trigger immediate email processing:`, processError);
+          // Don't fail the entire request since emails are queued and will be processed by cron
+        } else {
+          console.log(`[API SEND /${campaignId}] Email processing triggered:`, processResponse);
+        }
+      } catch (triggerError) {
+        console.warn(`[API SEND /${campaignId}] Warning: Exception when triggering email processing:`, triggerError);
+        // Don't fail the entire request since emails are queued
+      }
+    }
+
+    // 9. Update campaign status to 'sent' after successful queueing
+    if (successfullyQueuedCount > 0) {
       try {
         await updateCampaign(campaignId, { 
           status: 'sent', 
@@ -187,7 +220,6 @@ export async function POST(
       // For now, leaving as 'sending' and relying on the main catch block for reverts on major errors.
       console.warn(`[API SEND /${campaignId}] No emails were successfully queued despite having profiles. Campaign status remains 'sending'.`);
     }
-    // --- END NEW STEP ---
 
     return NextResponse.json({ 
       success: true,

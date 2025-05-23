@@ -14,7 +14,6 @@ import {
 import { validateAdminAccess, handleServerError, handleNotFound } from '@/lib/supabase/route-handler';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { addToQueue } from '@/lib/email/queue-utils';
-import { getPermittedProfileIds } from '@/lib/email/frequency-capping';
 import { UnifiedProfile } from '@/types/users';
 import { SupabaseClient } from '@supabase/supabase-js';
 
@@ -112,8 +111,22 @@ export async function POST(request: NextRequest) {
 
     // 4. Frequency Capping
     const profileIdsForFreqCheck = profiles.map(p => p.id);
-    const routeLogger = { debug: console.debug, info: console.info, warn: console.warn, error: console.error };
-    const permittedProfileIds = await getPermittedProfileIds(profileIdsForFreqCheck, adminClient, routeLogger);
+    
+    // Call the check-frequency-limits Edge Function
+    const { data: frequencyCheckResponse, error: frequencyError } = await adminClient.functions.invoke(
+      'check-frequency-limits',
+      { body: { profile_ids: profileIdsForFreqCheck } }
+    );
+
+    if (frequencyError) {
+      return handleServerError(frequencyError, '[API GENERIC SEND] Failed to check frequency limits');
+    }
+
+    const permittedProfileIds = frequencyCheckResponse?.data as string[] | null;
+    if (!permittedProfileIds) {
+      return NextResponse.json({ error: 'No permitted profile IDs returned from frequency check.' }, { status: 400 });
+    }
+    
     const permittedProfiles = profiles.filter(p => permittedProfileIds.includes(p.id));
 
     if (permittedProfiles.length === 0) {
@@ -156,7 +169,28 @@ export async function POST(request: NextRequest) {
     }
     console.log(`[API GENERIC SEND /${campaignId}] Successfully queued ${successfullyQueuedCount} emails.`);
 
-    // 7. Update campaign status to 'sent' after successful queueing
+    // 7. Trigger immediate email processing (NEW)
+    if (successfullyQueuedCount > 0) {
+      console.log(`[API GENERIC SEND /${campaignId}] Triggering immediate email processing...`);
+      try {
+        const { data: processResponse, error: processError } = await adminClient.functions.invoke(
+          'process-email-queue',
+          { body: { triggered_by: 'immediate_send' } }
+        );
+        
+        if (processError) {
+          console.warn(`[API GENERIC SEND /${campaignId}] Warning: Failed to trigger immediate email processing:`, processError);
+          // Don't fail the entire request since emails are queued and will be processed by cron
+        } else {
+          console.log(`[API GENERIC SEND /${campaignId}] Email processing triggered:`, processResponse);
+        }
+      } catch (triggerError) {
+        console.warn(`[API GENERIC SEND /${campaignId}] Warning: Exception when triggering email processing:`, triggerError);
+        // Don't fail the entire request since emails are queued
+      }
+    }
+
+    // 8. Update campaign status to 'sent' after successful queueing
     if (successfullyQueuedCount > 0) { // Only update to 'sent' if emails were actually queued
       try {
         await updateCampaign(campaignId, { 
@@ -171,10 +205,10 @@ export async function POST(request: NextRequest) {
       console.warn(`[API GENERIC SEND /${campaignId}] No emails were successfully queued despite having profiles. Campaign status remains '${campaign.status}'.`);
     }
     
-    // 8. Ensure Analytics Record
+    // 9. Ensure Analytics Record
     await recalculateCampaignAnalytics(campaignId);
 
-    // 9. Logging to email_logs (adapted from original)
+    // 10. Logging to email_logs (adapted from original)
     // The original template access is removed, so some fields for email_logs might be missing or need to come from campaign.
     // Temporarily commented out due to potential type issues with 'email_logs' table not being in generated types.
     // TODO: Uncomment and verify once 'email_logs' table and Supabase types are confirmed.
