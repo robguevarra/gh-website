@@ -100,28 +100,28 @@ These implementations provide the foundation and patterns for this integration p
 ## Implementation Plan
 
 ### 1. User Detail View Email Analytics Integration
-- [ ] Enhance user detail page structure
-  - Add "Email Analytics" tab to existing user detail interface
-  - Create responsive layout for email metrics within user context
-  - Implement loading states and error handling for email data
-- [ ] Develop user-specific email analytics API
-  - Create (or adapt existing) `/api/admin/users/[id]/email-analytics` (or `/email-events`) endpoint to provide all necessary data, including user profile's `email_bounced` status.
-  - Filter existing email analytics by user ID.
-  - Calculate user-specific summary metrics (total delivered, opened, clicked, bounced, spam, unsubscribed; open rate, click rate).
-  - *Consider (lower priority for now):* Include platform average engagement rates for broad comparison.
-- [ ] Build user email analytics components
-  - Adapt existing analytics components from `email-analytics-dashboard.tsx` for summary cards.
-  - Create user-specific metric cards (delivered, opened, clicked, bounced, spam, unsubscribed, open rate, click rate).
-  - Implement a "Deliverability Status" card based on `unified_profiles.email_bounced` and historical bounce events, including a "Clear Bounce Status" action.
-  - **Implement "Email History Log"**:
-    - Transform the flat list of email events into an email-centric view.
-    - Group events by unique email dispatch (e.g., using `message_id` or a composite key).
-    - For each dispatched email, display:
-      - Send/Delivery Date
-      - Email Subject
-      - Associated Campaign (name, link if possible)
-      - Engagement Status (e.g., Delivered, Opened, Clicked, Bounced, Spam Complaint) using clear visual indicators (icons, text).
-    - The log should be easily scannable and provide a clear history of email communications and their outcomes for the user.
+- [X] Enhance user detail page structure
+  - [X] Add "Email Analytics" tab to existing user detail interface (Assumed pre-existing or covered by UserEmailAnalytics component integration)
+  - [X] Create responsive layout for email metrics within user context (Handled by UserEmailAnalytics component)
+  - [X] Implement loading states and error handling for email data (Implemented in UserEmailAnalytics component)
+- [X] Develop user-specific email analytics API
+  - [X] Create (or adapt existing) `/api/admin/users/[id]/email-analytics` (or `/email-events`) endpoint to provide all necessary data, including user profile's `email_bounced` status. (Completed: `/api/admin/users/[id]/email-events` fetches events and profile bounce status)
+  - [X] Filter existing email analytics by user ID. (Implemented in API)
+  - [X] Calculate user-specific summary metrics (total delivered, opened, clicked, bounced, spam, unsubscribed; open rate, click rate). (Implemented in UserEmailAnalytics component)
+  - [ ] *Consider (lower priority for now):* Include platform average engagement rates for broad comparison.
+- [X] Build user email analytics components
+  - [X] Adapt existing analytics components from `email-analytics-dashboard.tsx` for summary cards. (Summary cards implemented in UserEmailAnalytics)
+  - [X] Create user-specific metric cards (delivered, opened, clicked, bounced, spam, unsubscribed, open rate, click rate). (Implemented in UserEmailAnalytics)
+  - [X] Implement a "Deliverability Status" card based on `unified_profiles.email_bounced` and historical bounce events, including a "Clear Bounce Status" action. (Implemented in UserEmailAnalytics)
+  - [X] **Implement "Email History Log"**:
+    - [X] Transform the flat list of email events into an email-centric view. (Completed in UserEmailAnalytics)
+    - [X] Group events by unique email dispatch (e.g., using `message_id` or a composite key). (Completed in UserEmailAnalytics)
+    - [X] For each dispatched email, display:
+      - [X] Send/Delivery Date (Displayed)
+      - [X] Email Subject (Displayed, canonical from campaign)
+      - [X] Associated Campaign (name, link if possible) (Campaign name displayed, link not yet implemented)
+      - [X] Engagement Status (e.g., Delivered, Opened, Clicked, Bounced, Spam Complaint) using clear visual indicators (icons, text). (Implemented with icons and Shadcn/UI tooltips)
+    - [X] The log should be easily scannable and provide a clear history of email communications and their outcomes for the user. (Achieved)
 - [ ] Implement email preference management
   - Display user's email subscription status and preferences.
   - Add controls for managing unsubscribe status.

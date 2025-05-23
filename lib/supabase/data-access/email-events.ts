@@ -12,6 +12,8 @@ export interface EmailEvent {
   message_id?: string;
   recipient: string;
   campaign_id?: string | null;
+  campaign_name?: string;
+  campaign_subject?: string;
   metadata: Record<string, any>;
   created_at: string;
   updated_at: string;
@@ -60,7 +62,49 @@ export async function getUserEmailEvents(
     query = query.range(filters.offset, (filters.offset + (filters.limit || 50)) - 1);
   }
 
-  const { data, count, error } = await query;
-  if (error) throw error;
-  return { events: data as EmailEvent[], total: count || 0 };
+  const { data: emailEventsData, count, error: emailEventsError } = await query;
+  if (emailEventsError) throw emailEventsError;
+
+  if (!emailEventsData || emailEventsData.length === 0) {
+    return { events: [], total: 0 };
+  }
+
+  // Extract unique campaign IDs from the fetched events
+  const campaignIds = [
+    ...new Set(emailEventsData.map(event => event.campaign_id).filter(id => id !== null && id !== undefined) as string[])
+  ];
+
+  let augmentedEvents = [...emailEventsData] as EmailEvent[];
+
+  // If there are campaign IDs, fetch campaign details and augment the events
+  if (campaignIds.length > 0) {
+    const { data: campaignDetailsData, error: campaignDetailsError } = await supabase
+      .from('email_campaigns')
+      .select('id, name, subject')
+      .in('id', campaignIds);
+
+    if (campaignDetailsError) {
+      console.error('Error fetching campaign details:', campaignDetailsError);
+      // Proceed with events without campaign details if this fails
+    } else if (campaignDetailsData) {
+      const campaignDetailsMap: Record<string, { name: string; subject: string }> = {};
+      const validCampaignDetails = campaignDetailsData.filter(detail => typeof detail.id === 'string');
+      
+      for (const detail of validCampaignDetails) {
+        // After the filter, detail.id is known to be a string.
+        campaignDetailsMap[detail.id] = { name: detail.name, subject: detail.subject };
+      }
+
+      augmentedEvents = emailEventsData.map(event => {
+        const campaignDetails = event.campaign_id ? campaignDetailsMap[event.campaign_id] : null;
+        return {
+          ...event,
+          campaign_name: campaignDetails?.name,
+          campaign_subject: campaignDetails?.subject,
+        } as EmailEvent;
+      });
+    }
+  }
+
+  return { events: augmentedEvents, total: count || 0 };
 }
