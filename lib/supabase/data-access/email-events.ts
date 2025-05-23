@@ -30,7 +30,7 @@ export async function getUserEmailEvents(
   userId: string,
   filters: GetUserEmailEventsFilters = {}
 ): Promise<{ events: EmailEvent[]; total: number }> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   let query = supabase
     .from('email_events')
     .select('*', { count: 'exact' })

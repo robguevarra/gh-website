@@ -47,7 +47,33 @@ async function processAndStoreEmailEvent({
   linkedEmailInfo: { email_id: string; campaign_id: string; recipient_email: string } | null;
   supabase: any;
 }) {
+  let userIdToStore: string | null = null;
+  const recipientEmailForLookup = linkedEmailInfo?.recipient_email || event.Recipient;
+
+  if (recipientEmailForLookup) {
+    try {
+      const { data: userProfile, error: profileError } = await supabase
+        .from('unified_profiles')
+        .select('id')
+        .eq('email', recipientEmailForLookup)
+        .single();
+
+      if (profileError) {
+        // Log error but don't let it block event storage if user not found or other DB issue
+        console.warn(`[Postmark Webhook] Error fetching user_id for ${recipientEmailForLookup}:`, profileError.message);
+      } else if (userProfile) {
+        userIdToStore = userProfile.id;
+        console.info(`[Postmark Webhook] Found user_id '${userIdToStore}' for email '${recipientEmailForLookup}'`);
+      } else {
+        console.info(`[Postmark Webhook] No user_id found for email '${recipientEmailForLookup}'`);
+      }
+    } catch (lookupError) {
+      console.error(`[Postmark Webhook] Exception during user_id lookup for ${recipientEmailForLookup}:`, lookupError);
+    }
+  }
+
   const { error } = await supabase.from('email_events').insert({
+    user_id: userIdToStore,
     email_id: linkedEmailInfo?.email_id || null,
     campaign_id: linkedEmailInfo?.campaign_id || null,
     recipient_email: linkedEmailInfo?.recipient_email || event.Recipient || null, // Store recipient if available
