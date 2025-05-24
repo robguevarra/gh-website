@@ -34,7 +34,14 @@ import {
   Tag,
   ArrowUp,
   ArrowDown,
-  ArrowUpDown
+  ArrowUpDown,
+  Mail,
+  MailOpen,
+  MousePointer,
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  Minus
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -46,6 +53,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ExtendedUnifiedProfile, UserSearchParams } from '@/types/admin-types';
 
 const statusColorMap: Record<string, string> = {
@@ -53,6 +61,25 @@ const statusColorMap: Record<string, string> = {
   inactive: 'bg-gray-500',
   pending: 'bg-yellow-500',
   suspended: 'bg-red-500',
+};
+
+// Email engagement color mapping based on design context
+const getEmailEngagementColor = (score?: number) => {
+  if (!score && score !== 0) return 'hsl(0 0% 60%)'; // Neutral gray
+  if (score >= 75) return 'hsl(200 35% 75%)'; // Accent blue - high engagement
+  if (score >= 50) return 'hsl(315 15% 60%)'; // Primary purple - medium engagement
+  if (score >= 25) return 'hsl(355 70% 85%)'; // Secondary pink - low engagement
+  return 'hsl(0 70% 60%)'; // Red - very low engagement
+};
+
+const getTagTypeColor = (index: number) => {
+  const colors = [
+    'hsl(315 15% 60%)', // Primary purple
+    'hsl(355 70% 85%)', // Secondary pink
+    'hsl(200 35% 75%)', // Accent blue
+    'hsl(0 0% 60%)', // Neutral gray
+  ];
+  return colors[index % colors.length];
 };
 
 interface UserTableProps {
@@ -63,7 +90,7 @@ interface UserTableProps {
   totalPages: number;
 }
 
-type SortField = 'name' | 'status' | 'source' | 'activity' | 'joined' | '';
+type SortField = 'name' | 'status' | 'source' | 'activity' | 'joined' | 'email_engagement' | 'email_activity' | '';
 type SortDirection = 'asc' | 'desc' | '';
 
 export default function UserTable({ users, searchParams, page, pageSize, totalPages }: UserTableProps) {
@@ -179,8 +206,147 @@ export default function UserTable({ users, searchParams, page, pageSize, totalPa
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
+
+  // Format email engagement score with visual indicator
+  const formatEngagementScore = (user: ExtendedUnifiedProfile) => {
+    const score = user.email_engagement_score;
+    const bounced = user.email_bounced;
+    
+    if (bounced) {
+      return (
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+          <span className="text-sm text-destructive">Bounced</span>
+        </div>
+      );
+    }
+    
+    if (!score && score !== 0) {
+      return (
+        <div className="flex items-center gap-2">
+          <Minus className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">No data</span>
+        </div>
+      );
+    }
+    
+    const color = getEmailEngagementColor(score);
+    const Icon = score >= 50 ? TrendingUp : score >= 25 ? Minus : TrendingDown;
+    
+    return (
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4" style={{ color }} />
+        <span className="text-sm font-medium" style={{ color }}>
+          {Math.round(score)}%
+        </span>
+      </div>
+    );
+  };
+
+  // Render email activity indicators
+  const renderEmailActivity = (user: ExtendedUnifiedProfile) => {
+    const delivered = user.email_delivered_count || 0;
+    const opened = user.email_opened_count || 0;
+    const clicked = user.email_clicked_count || 0;
+    const lastActivity = user.last_email_activity;
+    
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-3 text-xs">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1">
+                <Mail className="h-3 w-3 text-muted-foreground" />
+                <span>{delivered}</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Emails delivered</p>
+            </TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1">
+                <MailOpen className="h-3 w-3 text-primary" />
+                <span>{opened}</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Emails opened</p>
+            </TooltipContent>
+          </Tooltip>
+          
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1">
+                <MousePointer className="h-3 w-3 text-accent" />
+                <span>{clicked}</span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Email links clicked</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+        
+        {lastActivity && (
+          <div className="text-xs text-muted-foreground">
+            Last: {formatDate(lastActivity)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Enhanced tag display with improved visual hierarchy
+  const renderTags = (tags: string[] | null) => {
+    if (!tags || tags.length === 0) {
+      return <span className="text-xs text-muted-foreground">No tags</span>;
+    }
+
+    const visibleTags = tags.slice(0, 3);
+    const remainingCount = tags.length - visibleTags.length;
+
+    return (
+      <div className="flex flex-wrap gap-1">
+        {visibleTags.map((tag, index) => (
+          <Badge 
+            key={index} 
+            variant="secondary" 
+            className="text-xs px-2 py-0.5"
+            style={{ 
+              backgroundColor: `${getTagTypeColor(index)}20`,
+              borderColor: getTagTypeColor(index),
+              color: getTagTypeColor(index)
+            }}
+          >
+            {tag}
+          </Badge>
+        ))}
+        {remainingCount > 0 && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Badge variant="outline" className="text-xs px-2 py-0.5 cursor-help">
+                +{remainingCount}
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <div className="space-y-1">
+                <p className="font-medium">Additional tags:</p>
+                {tags.slice(3).map((tag, index) => (
+                  <p key={index} className="text-xs">{tag}</p>
+                ))}
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        )}
+      </div>
+    );
+  };
   
   return (
+    <TooltipProvider>
     <div className="w-full rounded-md border">
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
         {/* Search form removed - now handled by UserFilters component */}
@@ -225,13 +391,23 @@ export default function UserTable({ users, searchParams, page, pageSize, totalPa
                 {getSortIcon('status')}
               </div>
             </TableHead>
+            <TableHead>Tags</TableHead>
             <TableHead 
               className="cursor-pointer hover:bg-muted/50"
-              onClick={() => handleSort('source')}
+              onClick={() => handleSort('email_engagement')}
             >
               <div className="flex items-center">
-                Source
-                {getSortIcon('source')}
+                Email Score
+                {getSortIcon('email_engagement')}
+              </div>
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => handleSort('email_activity')}
+            >
+              <div className="flex items-center">
+                Email Activity
+                {getSortIcon('email_activity')}
               </div>
             </TableHead>
             <TableHead 
@@ -239,7 +415,7 @@ export default function UserTable({ users, searchParams, page, pageSize, totalPa
               onClick={() => handleSort('activity')}
             >
               <div className="flex items-center">
-                Activity
+                Platform Activity
                 {getSortIcon('activity')}
               </div>
             </TableHead>
@@ -280,28 +456,13 @@ export default function UserTable({ users, searchParams, page, pageSize, totalPa
                 </Badge>
               </TableCell>
               <TableCell>
-                {user.acquisition_source ? (
-                  <div className="flex items-center gap-1">
-                    <Tag className="h-3 w-3 text-muted-foreground" />
-                    <span>{user.acquisition_source}</span>
-                  </div>
-                ) : (
-                  <span className="text-muted-foreground">Unknown</span>
-                )}
-                {user.tags && user.tags.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {user.tags.slice(0, 2).map((tag, index) => (
-                      <Badge key={index} variant="outline" className="text-xs">
-                        {tag}
-                      </Badge>
-                    ))}
-                    {user.tags.length > 2 && (
-                      <Badge variant="outline" className="text-xs">
-                        +{user.tags.length - 2}
-                      </Badge>
-                    )}
-                  </div>
-                )}
+                {renderTags(user.tags)}
+              </TableCell>
+              <TableCell>
+                {formatEngagementScore(user)}
+              </TableCell>
+              <TableCell>
+                {renderEmailActivity(user)}
               </TableCell>
               <TableCell>
                 <div className="flex flex-col gap-1">
@@ -383,5 +544,6 @@ export default function UserTable({ users, searchParams, page, pageSize, totalPa
         </div>
       )}
     </div>
+    </TooltipProvider>
   );
 } 

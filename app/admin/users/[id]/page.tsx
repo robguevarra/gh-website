@@ -5,21 +5,25 @@ import { Metadata } from 'next';
 import { ArrowLeft, UserCog, AlertCircle, Pencil, Shield, CreditCard, Activity, BookOpen, Receipt, GraduationCap, Link2, MailOpen } from 'lucide-react';
 import Link from 'next/link';
 
+// Import CourseStatus type
+// import { CourseStatus } from '@/types/course'; // Likely becomes unused
+
 // Import our data access layer functions
 import { getUserDetail, getUserActivityLog, getUserPurchaseHistory, getUserEnrollments } from '@/lib/supabase/data-access/admin-users';
 
 // Import UI components
 import { 
   UserProfileForm, 
-  UserMembershipForm, 
   UserCourses, 
-  UserActivity, 
   UserSecurityForm, 
   UserAdminTools,
   UserPurchaseHistory,
-  UserEnrollments
+  UserEnrollments,
+  UserEmailAnalytics,
+  UserTagsSegments
 } from '@/components/admin';
-import UserEmailAnalytics from '@/components/admin/user-email-analytics';
+
+// Import UI components that were accidentally removed
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -54,31 +58,19 @@ export default async function UserDetailPage(
     // No need to extract from a nested property
     
     // Fetch additional user data in parallel for better performance
-    const [activityLogResult, purchaseHistoryResult, enrollmentsResult, coursesResult] = await Promise.all([
-      getUserActivityLog(id, { limit: 10 }),
+    const [/*activityLogResult,*/ purchaseHistoryResult, enrollmentsResult, coursesResult] = await Promise.all([
+      // getUserActivityLog(id, { limit: 10 }), // Temporarily remove activity log fetching
       getUserPurchaseHistory(id, { limit: 10 }),
       getUserEnrollments(id),
-      // Fetch available courses for the enrollment tab
-      supabase.from('courses').select('id, title, description, slug, published, thumbnail_url').eq('published', true)
+      // Fetch available courses for the enrollment tab - corrected query
+      supabase.from('courses').select('id, title, description, slug, status, thumbnail_url').eq('status', 'published')
     ]);
     
     // Extract activity, purchases, and enrollments
-    const activityLog = activityLogResult.data || [];
+    // const activityLog = activityLogResult.data || []; // Temporarily remove
     const purchaseHistory = purchaseHistoryResult.data || [];
     const enrollments = enrollmentsResult.data || [];
-    
-    // Fetch membership tiers for the membership form
-    const { data: membershipTiers } = await supabase
-      .from('membership_tiers')
-      .select('*')
-      .order('price_monthly', { ascending: true });
-
-    // Fetch user's current membership
-    const { data: membership } = await supabase
-      .from('memberships')
-      .select('*')
-      .eq('user_id', id)
-      .maybeSingle();
+    const availableCoursesRaw = coursesResult?.data || [];
     
     // Create user profile data structure from the userDetail
     const userProfile = {
@@ -122,20 +114,14 @@ export default async function UserDetailPage(
 
         {/* User management tabs */}
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid grid-cols-8 w-full">
+          <TabsList className="grid grid-cols-7 w-full">
             <TabsTrigger value="profile"><Pencil className="h-4 w-4 mr-2" /> Profile</TabsTrigger>
             <TabsTrigger value="security"><Shield className="h-4 w-4 mr-2" /> Security</TabsTrigger>
-            <TabsTrigger value="membership"><CreditCard className="h-4 w-4 mr-2" /> Membership</TabsTrigger>
             <TabsTrigger value="courses"><BookOpen className="h-4 w-4 mr-2" /> Courses</TabsTrigger>
             <TabsTrigger value="activity"><Activity className="h-4 w-4 mr-2" /> Activity</TabsTrigger>
-           <TabsTrigger value="email-analytics"><MailOpen className="h-4 w-4 mr-2" /> Email Analytics</TabsTrigger>
+            <TabsTrigger value="email-analytics"><MailOpen className="h-4 w-4 mr-2" /> Email Analytics</TabsTrigger>
             <TabsTrigger value="purchases"><Receipt className="h-4 w-4 mr-2" /> Purchases</TabsTrigger>
-            <TabsTrigger value="enrollments"><GraduationCap className="h-4 w-4 mr-2" /> Enrollments</TabsTrigger>
-            <TabsTrigger asChild>
-              <Link href="/admin/users/reconciliation" className="flex items-center justify-center">
-                <Link2 className="h-4 w-4 mr-2" /> Reconcile
-              </Link>
-            </TabsTrigger>
+            <TabsTrigger value="tags-segments">Tags & Segments</TabsTrigger>
           </TabsList>
 
           <TabsContent value="profile" className="space-y-4">
@@ -145,26 +131,10 @@ export default async function UserDetailPage(
             />
           </TabsContent>
 
-          <TabsContent value="membership" className="space-y-4">
-            <UserMembershipForm 
-              userId={id}
-              membership={membership}
-              membershipTiers={membershipTiers || []}
-            />
-          </TabsContent>
-
           <TabsContent value="purchases" className="space-y-4">
             <UserPurchaseHistory 
               userId={id}
               purchaseHistory={purchaseHistory || []}
-            />
-          </TabsContent>
-
-          <TabsContent value="enrollments" className="space-y-4">
-            <UserEnrollments 
-              userId={id}
-              userCourses={enrollments || []}
-              availableCourses={coursesResult?.data || []}
             />
           </TabsContent>
           
@@ -172,18 +142,38 @@ export default async function UserDetailPage(
             <UserCourses 
               userId={id}
               userCourses={enrollments.map(enrollment => ({
-                ...enrollment,
-                course: enrollment.course
+                ...enrollment, // Spread first to include id, user_id, course_id, enrolled_at
+                // Provide values for optional fields if available, otherwise they'll be undefined
+                progress: (enrollment.metadata as any)?.progress, 
+                completed_at: (enrollment.metadata as any)?.completed_at,
+                last_activity_at: enrollment.last_accessed_at, // Directly map last_accessed_at
+                course: { 
+                  id: enrollment.course.id,
+                  title: enrollment.course.title,
+                  description: enrollment.course.description ?? '',
+                  slug: enrollment.course.slug,
+                  published: enrollment.course.status === 'published',
+                  thumbnail_url: enrollment.course.thumbnail_url 
+                }
               })) || []}
-              availableCourses={coursesResult?.data || []}
+              availableCourses={availableCoursesRaw.map(course => ({
+                // Align with local Course interface in UserCourses
+                id: course.id,
+                title: course.title,
+                description: course.description ?? '', // Ensure description is non-null string
+                slug: course.slug,
+                published: course.status === 'published', // Map status to published
+                thumbnail_url: course.thumbnail_url
+              }))}
             />
           </TabsContent>
 
           <TabsContent value="activity" className="space-y-4">
-            <UserActivity 
+            {/* <UserActivity 
               userId={id}
               activityLog={activityLog}
-            />
+            /> */}
+            <div>Activity Log Feature Coming Soon</div> { /* Placeholder for blank tab */}
           </TabsContent>
 
           <TabsContent value="email-analytics" className="space-y-4">
@@ -196,10 +186,15 @@ export default async function UserDetailPage(
               user={{
                 id: id,
                 email: userDetail.email,
+                email_confirmed_at: null,
                 last_login_at: userDetail.last_login_at,
                 created_at: userDetail.created_at,
                 updated_at: userDetail.updated_at,
-                login_count: userDetail.login_count
+                profile: {
+                  is_admin: userDetail.status === 'admin',
+                  is_blocked: userDetail.status === 'blocked' || userDetail.status === 'banned',
+                  require_password_change: false,
+                }
               }}
             />
           </TabsContent>
@@ -211,13 +206,20 @@ export default async function UserDetailPage(
               userName={`${userDetail.first_name || ''} ${userDetail.last_name || ''}`.trim() || userDetail.email}
               currentStatus={userDetail.status || 'active'}
               currentPermissions={{
-                canAccessPremiumContent: userDetail.permissions?.canAccessPremiumContent || false,
-                canAccessBetaFeatures: userDetail.permissions?.canAccessBetaFeatures || false,
-                canPostComments: userDetail.permissions?.canPostComments || true,
-                canSubmitContent: userDetail.permissions?.canSubmitContent || false,
-                maxConcurrentLogins: userDetail.permissions?.maxConcurrentLogins || 3,
-                customPermissions: userDetail.permissions?.customPermissions || ''
+                canAccessPremiumContent: false,
+                canAccessBetaFeatures: false,
+                canPostComments: true,
+                canSubmitContent: false,
+                maxConcurrentLogins: 3,
+                customPermissions: ''
               }}
+            />
+          </TabsContent>
+
+          <TabsContent value="tags-segments" className="space-y-4">
+            <UserTagsSegments 
+              userId={id}
+              userEmail={userDetail.email}
             />
           </TabsContent>
         </Tabs>

@@ -554,6 +554,7 @@ export type Database = {
           id: string
           opened_at: string | null
           sent_at: string | null
+          status: string
           unsubscribed_at: string | null
           updated_at: string | null
           user_id: string
@@ -565,6 +566,7 @@ export type Database = {
           id?: string
           opened_at?: string | null
           sent_at?: string | null
+          status?: string
           unsubscribed_at?: string | null
           updated_at?: string | null
           user_id: string
@@ -576,6 +578,7 @@ export type Database = {
           id?: string
           opened_at?: string | null
           sent_at?: string | null
+          status?: string
           unsubscribed_at?: string | null
           updated_at?: string | null
           user_id?: string
@@ -1220,6 +1223,7 @@ export type Database = {
           sender_email: string
           sender_name: string
           status: string
+          status_message: string | null
           subject: string | null
           template_id: string
           updated_at: string | null
@@ -1244,6 +1248,7 @@ export type Database = {
           sender_email: string
           sender_name: string
           status?: string
+          status_message?: string | null
           subject?: string | null
           template_id: string
           updated_at?: string | null
@@ -1268,6 +1273,7 @@ export type Database = {
           sender_email?: string
           sender_name?: string
           status?: string
+          status_message?: string | null
           subject?: string | null
           template_id?: string
           updated_at?: string | null
@@ -1344,6 +1350,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "email_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "unified_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_preference_audit_logs: {
+        Row: {
+          action: string
+          admin_user_id: string | null
+          changed_at: string
+          id: string
+          new_status: boolean
+          notes: string | null
+          previous_status: boolean | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          admin_user_id?: string | null
+          changed_at?: string
+          id?: string
+          new_status: boolean
+          notes?: string | null
+          previous_status?: boolean | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string | null
+          changed_at?: string
+          id?: string
+          new_status?: boolean
+          notes?: string | null
+          previous_status?: boolean | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_preference_audit_logs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "unified_profiles"
@@ -2910,6 +2957,7 @@ export type Database = {
           email: string
           email_bounced: boolean
           email_last_spam_at: string | null
+          email_marketing_subscribed: boolean
           email_spam_complained: boolean | null
           first_name: string | null
           id: string
@@ -2928,6 +2976,7 @@ export type Database = {
           email: string
           email_bounced?: boolean
           email_last_spam_at?: string | null
+          email_marketing_subscribed?: boolean
           email_spam_complained?: boolean | null
           first_name?: string | null
           id: string
@@ -2946,6 +2995,7 @@ export type Database = {
           email?: string
           email_bounced?: boolean
           email_last_spam_at?: string | null
+          email_marketing_subscribed?: boolean
           email_spam_complained?: boolean | null
           first_name?: string | null
           id?: string

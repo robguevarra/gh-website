@@ -126,10 +126,23 @@ export async function getTagsForUser(userId: string): Promise<Tag[]> {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from('user_tags')
-    .select('tag:tags(*)')
-    .eq('user_id', userId);
+    .select(`
+      assigned_at,
+      tag:tags(
+        *,
+        tag_type:tag_types(id, name)
+      )
+    `)
+    .eq('user_id', userId)
+    .order('assigned_at', { ascending: false }); // Most recent first
+  
   if (error) throw error;
-  return (data || []).map((row: any) => row.tag as Tag);
+  
+  // Transform the data to include assignment metadata on the tag
+  return (data || []).map((row: any) => ({
+    ...row.tag,
+    assigned_at: row.assigned_at // Add assignment timestamp to tag object
+  }) as Tag);
 }
 
 export async function getUsersForTag(tagId: string, limit = 1000, offset = 0): Promise<string[]> {

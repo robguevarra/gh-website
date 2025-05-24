@@ -82,7 +82,7 @@ interface UserSecurityFormProps {
     id: string;
     email: string;
     email_confirmed_at: string | null;
-    last_sign_in_at: string | null;
+    last_login_at: string | null;
     created_at: string;
     updated_at: string;
     profile: {
@@ -244,7 +244,7 @@ export function UserSecurityForm({
                   <span className="text-sm font-medium">Last Sign In</span>
                 </div>
                 <span className="text-sm">
-                  {formatDate(user.last_sign_in_at)}
+                  {formatDate(user.last_login_at)}
                 </span>
               </div>
             </div>

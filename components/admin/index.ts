@@ -19,3 +19,5 @@ export { UserSecurityForm } from './user-security-form';
 export { UserPageClient } from './user-page-client';
 export { UserPurchaseHistory } from './user-purchase-history';
 export { UserEnrollments } from './user-enrollments';
+export { UserEmailAnalytics } from './user-email-analytics';
+export { UserTagsSegments } from './user-tags-segments';

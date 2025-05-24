@@ -1,15 +1,18 @@
 // components/admin/user-email-analytics.tsx
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { EmailEvent, EmailEventType } from '@/lib/supabase/data-access/email-events';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { EmailAnalyticsFilters as EmailAnalyticsFiltersComponent, type EmailAnalyticsFilters as EmailAnalyticsFiltersType } from './email-analytics-filters';
-import { BarChart2, MailOpen, MousePointerClick, AlertTriangle, ShieldOff, Mail, ShieldCheck, RefreshCw } from 'lucide-react';
+import { BarChart2, MailOpen, MousePointerClick, AlertTriangle, ShieldOff, Mail, ShieldCheck, RefreshCw, CheckCircle, XCircle, Edit3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
 // Define the new interface for a processed email entry
 interface ProcessedEmail {
@@ -44,6 +47,14 @@ interface EmailAnalyticsSummary {
   is_currently_bounced: boolean;
 }
 
+interface UserEmailSubscriptionState {
+  isMarketingSubscribed: boolean | null;
+  notes: string;
+  initialStatusLoaded: boolean;
+  isUpdating: boolean;
+  error: string | null;
+}
+
 export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
   const [events, setEvents] = useState<EmailEvent[]>([]);
   const [summary, setSummary] = useState<EmailAnalyticsSummary | null>(null);
@@ -55,25 +66,35 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
     dateFrom: '', 
     dateTo: '' 
   });
+  const [subscriptionState, setSubscriptionState] = useState<UserEmailSubscriptionState>({
+    isMarketingSubscribed: null,
+    notes: '',
+    initialStatusLoaded: false,
+    isUpdating: false,
+    error: null,
+  });
 
-  const fetchAnalyticsData = () => {
+  const fetchAllUserData = useCallback(() => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (filters.eventType) params.set('eventType', filters.eventType);
-    if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
-    if (filters.dateTo) params.set('dateTo', filters.dateTo);
+    setSubscriptionState(prev => ({ ...prev, initialStatusLoaded: false, error: null }));
 
-    console.log('[UserEmailAnalytics] Fetching with filters:', filters); // Log filters before fetch
+    const analyticsParams = new URLSearchParams();
+    if (filters.eventType) analyticsParams.set('eventType', filters.eventType);
+    if (filters.dateFrom) analyticsParams.set('dateFrom', filters.dateFrom);
+    if (filters.dateTo) analyticsParams.set('dateTo', filters.dateTo);
 
-    fetch(`/api/admin/users/${userId}/email-events?${params.toString()}`)
-      .then(res => res.json())
-      .then(data => {
-        console.log('Full API Response Data:', data);
-        const rawEventsData = data.events || [];
+    const fetchAnalytics = fetch(`/api/admin/users/${userId}/email-events?${analyticsParams.toString()}`)
+      .then(res => res.json());
+    
+    const fetchSubscriptionStatus = fetch(`/api/admin/users/${userId}/subscription-status`)
+      .then(res => res.json());
+
+    Promise.all([fetchAnalytics, fetchSubscriptionStatus])
+      .then(([analyticsData, subscriptionData]) => {
+        const rawEventsData = analyticsData.events || [];
         setEvents(rawEventsData);
-        const isCurrentlyBounced = data.profile?.email_bounced ?? false; 
+        const isCurrentlyBounced = analyticsData.profile?.email_bounced ?? false;
 
-        // --- Begin Summary Calculation (existing logic) ---
         const newSummary: EmailAnalyticsSummary = {
           delivered: 0, opened: 0, clicked: 0, bounced: 0, spam: 0, unsubscribed: 0,
           open_rate: 0, click_rate: 0,
@@ -81,14 +102,14 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
           is_currently_bounced: isCurrentlyBounced 
         };
         for (const ev of rawEventsData) {
-          const eventTypeForSummary = ev.event_type.toLowerCase(); // Normalize event type for summary
-          switch (eventTypeForSummary) { // Use normalized event type
-            case 'delivery': newSummary.delivered++; break;         // Match 'delivery'
-            case 'open': newSummary.opened++; break;            // Match 'open'
-            case 'click': newSummary.clicked++; break;           // Match 'click'
-            case 'bounce': newSummary.bounced++; break;          // Match 'bounce'
-            case 'spamcomplaint': newSummary.spam++; break;       // Match 'spamcomplaint' for spam count
-            case 'subscriptionchange': newSummary.unsubscribed++; break; // Match 'subscriptionchange' for unsubscribed count
+          const eventTypeForSummary = ev.event_type.toLowerCase();
+          switch (eventTypeForSummary) {
+            case 'delivery': newSummary.delivered++; break;
+            case 'open': newSummary.opened++; break;
+            case 'click': newSummary.clicked++; break;
+            case 'bounce': newSummary.bounced++; break;
+            case 'spamcomplaint': newSummary.spam++; break;
+            case 'subscriptionchange': newSummary.unsubscribed++; break;
           }
         }
         if (newSummary.delivered > 0) {
@@ -101,94 +122,64 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
           newSummary.deliverability_status = 'Good';
         }
         setSummary(newSummary);
-        // --- End Summary Calculation ---
 
-        // --- Begin Email History Processing ---
         const emailGroups: Record<string, ProcessedEmail> = {};
-
-        // Sort events by timestamp ascending to process them in order
         const sortedEvents = [...rawEventsData].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
         for (const event of sortedEvents) {
           const groupId = event.message_id || `event-${event.id}`;
-
           if (!emailGroups[groupId]) {
             emailGroups[groupId] = {
               id: groupId,
               subject: event.campaign_subject || event.metadata?.subject as string || 'No Subject',
               campaignId: event.campaign_id,
               campaignName: event.campaign_name,
-              sentAt: event.timestamp, // Default to first event's timestamp, can be refined by 'delivered' event
-              isDelivered: false,
-              isOpened: false,
-              isClicked: false,
-              isBounced: false,
-              isSpamComplaint: false,
-              isUnsubscribed: false,
+              sentAt: event.timestamp, 
+              isDelivered: false, isOpened: false, isClicked: false, isBounced: false, isSpamComplaint: false, isUnsubscribed: false,
               rawEvents: [],
             };
           }
-
           emailGroups[groupId].rawEvents.push(event);
-
-          console.log(`[EmailHistory] Processing event ID: ${event.id}, Type: '${event.event_type}', GroupID: ${groupId}`);
-
-          const eventTypeForSwitch = event.event_type.toLowerCase(); // Normalize to lowercase
-
-          console.log(`[EmailHistory] About to switch. Type for switch: '${eventTypeForSwitch}'. Is it 'opened'? ${eventTypeForSwitch === 'opened'}. Is it 'open'? ${eventTypeForSwitch === 'open'}`); 
-
-          switch (eventTypeForSwitch) { 
-            case 'delivery': // Corrected: Postmark 'Delivery' -> toLowerCase() -> 'delivery'
-              emailGroups[groupId].isDelivered = true;
-              emailGroups[groupId].sentAt = event.timestamp;
-              console.log(`[EmailHistory] Group ${groupId}: DELIVERED flag set`);
-              break;
-            case 'open': // Corrected: Postmark 'Open' -> toLowerCase() -> 'open'
-              console.log(`[EmailHistory] Group ${groupId}: Matched 'open' case for event ID: ${event.id}. Current isOpened: ${emailGroups[groupId].isOpened}`); 
-              emailGroups[groupId].isOpened = true;
-              console.log(`[EmailHistory] Group ${groupId}: OPENED flag set to true. New isOpened: ${emailGroups[groupId].isOpened}`);
-              break;
-            case 'click': // Postmark 'Click' -> toLowerCase() -> 'click'
-              emailGroups[groupId].isClicked = true;
-              console.log(`[EmailHistory] Group ${groupId}: CLICKED flag set`);
-              break;
-            case 'bounce': // Postmark 'Bounce' -> toLowerCase() -> 'bounce'
-              emailGroups[groupId].isBounced = true;
-              console.log(`[EmailHistory] Group ${groupId}: BOUNCED flag set`);
-              break;
-            case 'spamcomplaint': // Corrected: Postmark 'SpamComplaint' -> toLowerCase() -> 'spamcomplaint'
-              emailGroups[groupId].isSpamComplaint = true;
-              console.log(`[EmailHistory] Group ${groupId}: SPAM COMPLAINT flag set`);
-              break;
-            case 'subscriptionchange': // Corrected: Assuming Postmark 'SubscriptionChange' -> 'subscriptionchange' for unsubscribes
-              emailGroups[groupId].isUnsubscribed = true;
-              console.log(`[EmailHistory] Group ${groupId}: UNSUBSCRIBED (via subscriptionchange) flag set`);
-              break;
+          const eventTypeForSwitch = event.event_type.toLowerCase();
+          switch (eventTypeForSwitch) {
+            case 'delivery': emailGroups[groupId].isDelivered = true; emailGroups[groupId].sentAt = event.timestamp; break;
+            case 'open': emailGroups[groupId].isOpened = true; break;
+            case 'click': emailGroups[groupId].isClicked = true; break;
+            case 'bounce': emailGroups[groupId].isBounced = true; break;
+            case 'spamcomplaint': emailGroups[groupId].isSpamComplaint = true; break;
+            case 'subscriptionchange': emailGroups[groupId].isUnsubscribed = true; break;
           }
         }
-        
-        const processedEmailList = Object.values(emailGroups).sort((a, b) => 
-          new Date(b.sentAt!).getTime() - new Date(a.sentAt!).getTime()
-        );
+        const processedEmailList = Object.values(emailGroups).sort((a,b) => new Date(b.sentAt!).getTime() - new Date(a.sentAt!).getTime());
         setProcessedEmails(processedEmailList);
-        console.log('Processed Emails for History:', processedEmailList);
-        // --- End Email History Processing ---
+        setLoading(false);
 
+        if (subscriptionData && typeof subscriptionData.email_marketing_subscribed === 'boolean') {
+          setSubscriptionState(prev => ({
+            ...prev,
+            isMarketingSubscribed: subscriptionData.email_marketing_subscribed,
+            initialStatusLoaded: true,
+          }));
+        } else {
+          throw new Error(subscriptionData.error || 'Failed to load subscription status format');
+        }
+      })
+      .catch(error => {
+        console.error("Failed to fetch user data (analytics or subscription):", error);
         setLoading(false);
-      }).catch(error => {
-        console.error("Failed to fetch email analytics:", error);
-        setLoading(false);
-        // Set a summary that indicates an error or partial data
-        setSummary({
-          delivered: 0, opened: 0, clicked: 0, bounced: 0, spam: 0, unsubscribed: 0,
-          open_rate: 0, click_rate: 0, deliverability_status: 'Unknown', is_currently_bounced: false
-        });
+        setSummary({ delivered: 0, opened: 0, clicked: 0, bounced: 0, spam: 0, unsubscribed: 0, open_rate: 0, click_rate: 0, deliverability_status: 'Unknown', is_currently_bounced: false });
+        setSubscriptionState(prev => ({
+            ...prev,
+            initialStatusLoaded: true,
+            error: error.message || 'An unknown error occurred fetching data.'
+        }));
       });
-  };
+  }, [userId, filters]);
 
   useEffect(() => {
-    fetchAnalyticsData();
-  }, [userId, filters]);
+    if (userId) {
+      fetchAllUserData();
+    }
+  }, [userId, fetchAllUserData]);
 
   const handleClearBounceStatus = async () => {
     setClearingBounce(true);
@@ -200,16 +191,55 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to clear bounce status');
       }
-      console.log('Bounce status cleared successfully');
-      // Refresh data to reflect the change
-      fetchAnalyticsData(); 
+      fetchAllUserData(); 
     } catch (error) {
       console.error('Error clearing bounce status:', error);
-      // Handle error display to user, e.g., toast notification
+      toast.error('Failed to clear bounce status');
     } finally {
       setClearingBounce(false);
     }
   };
+
+  const handleSubscriptionChange = (newStatus: boolean) => {
+    setSubscriptionState(prev => ({ ...prev, isMarketingSubscribed: newStatus, error: null }));
+  };
+
+  const handleSubscriptionNotesChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setSubscriptionState(prev => ({ ...prev, notes: event.target.value, error: null }));
+  };
+
+  const handleUpdateSubscription = async () => {
+    if (subscriptionState.isMarketingSubscribed === null) return;
+
+    setSubscriptionState(prev => ({ ...prev, isUpdating: true, error: null }));
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/subscription-status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          new_status: subscriptionState.isMarketingSubscribed,
+          notes: subscriptionState.notes || undefined,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update subscription status');
+      }
+      setSubscriptionState(prev => ({
+        ...prev,
+        isMarketingSubscribed: data.email_marketing_subscribed,
+        notes: '',
+        isUpdating: false,
+      }));
+      toast.success('Subscription status updated successfully!');
+    } catch (error: any) {
+      console.error('Error updating subscription status:', error);
+      setSubscriptionState(prev => ({ ...prev, isUpdating: false, error: error.message }));
+      toast.error(`Update failed: ${error.message}`);
+    } 
+  };
+  
+  const isSubscriptionSaveDisabled = !subscriptionState.initialStatusLoaded || subscriptionState.isUpdating;
 
   return (
     <TooltipProvider>
@@ -256,7 +286,7 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
                     <CardTitle className="text-sm font-medium flex items-center">
                       {summary.is_currently_bounced && <AlertTriangle className="h-4 w-4 mr-2 text-destructive" />}
                       {!summary.is_currently_bounced && summary.deliverability_status === 'Good' && <ShieldCheck className="h-4 w-4 mr-2 text-green-600" />}
-                      {!summary.is_currently_bounced && summary.deliverability_status === 'Issue' && <AlertTriangle className="h-4 w-4 mr-2 text-orange-500" />} {/* Historically bounced but not currently */} 
+                      {!summary.is_currently_bounced && summary.deliverability_status === 'Issue' && <AlertTriangle className="h-4 w-4 mr-2 text-orange-500" />}
                       Deliverability
                     </CardTitle>
                     {summary.is_currently_bounced && (
@@ -283,10 +313,69 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
             </>
           )}
         </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold flex items-center">
+              <Edit3 className="h-5 w-5 mr-2 text-primary" /> Marketing Email Subscription
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            { !subscriptionState.initialStatusLoaded ? (
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-1/2" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-10 w-1/3" />
+              </div>
+            ) : subscriptionState.error ? (
+                <p className="text-red-500">Error: {subscriptionState.error}</p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">
+                    User is currently:{" "}
+                    <span className={`font-semibold ${subscriptionState.isMarketingSubscribed ? 'text-green-600' : 'text-red-600'}`}>
+                      {subscriptionState.isMarketingSubscribed ? 'Subscribed' : 'Unsubscribed'}
+                    </span>
+                  </p>
+                  <Switch
+                    checked={subscriptionState.isMarketingSubscribed ?? false}
+                    onCheckedChange={handleSubscriptionChange}
+                    disabled={subscriptionState.isUpdating}
+                    aria-label="Toggle marketing email subscription"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="subscriptionNotes" className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes (Optional - for audit log)
+                  </label>
+                  <Textarea
+                    id="subscriptionNotes"
+                    value={subscriptionState.notes}
+                    onChange={handleSubscriptionNotesChange}
+                    placeholder="Reason for change, e.g., User request via support ticket #12345"
+                    rows={3}
+                    disabled={subscriptionState.isUpdating}
+                  />
+                </div>
+                <Button 
+                  onClick={handleUpdateSubscription}
+                  disabled={isSubscriptionSaveDisabled}
+                >
+                  {subscriptionState.isUpdating ? (
+                    <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Updating...</>
+                  ) : (
+                    'Save Subscription Changes'
+                  )}
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
         <div>
           <h3 className="font-semibold mt-6 mb-2">Email History Log</h3>
           {loading ? (
-            <Skeleton className="h-48 w-full" /> // Increased skeleton height for a potentially larger table
+            <Skeleton className="h-48 w-full" />
           ) : (
             <div className="overflow-x-auto border rounded-md">
               <table className="min-w-full text-sm divide-y divide-gray-200">

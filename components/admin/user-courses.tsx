@@ -72,7 +72,7 @@ interface Course {
   description: string;
   slug: string;
   published: boolean;
-  thumbnail_url?: string;
+  thumbnail_url?: string | null;
 }
 
 interface UserCourse {
@@ -80,9 +80,9 @@ interface UserCourse {
   user_id: string;
   course_id: string;
   enrolled_at: string;
-  completed_at: string | null;
-  progress: number;
-  last_activity_at: string | null;
+  completed_at?: string | null;
+  progress?: number;
+  last_activity_at?: string | null;
   course: Course;
 }
 
@@ -319,9 +319,9 @@ export function UserCourses({
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col space-y-1">
-                        <Progress value={userCourse.progress} className="h-2" />
+                        <Progress value={userCourse.progress ?? 0} className="h-2" />
                         <span className="text-xs text-muted-foreground">
-                          {Math.round(userCourse.progress)}% complete
+                          {Math.round(userCourse.progress ?? 0)}% complete
                         </span>
                       </div>
                     </TableCell>
@@ -329,7 +329,7 @@ export function UserCourses({
                       {formatDate(userCourse.enrolled_at)}
                     </TableCell>
                     <TableCell>
-                      {formatDate(userCourse.last_activity_at)}
+                      {formatDate(userCourse.last_activity_at ?? null)}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>

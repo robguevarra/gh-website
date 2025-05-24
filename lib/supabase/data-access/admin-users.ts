@@ -47,14 +47,14 @@ export async function searchUsers(params: UserSearchParams = {}) {
       
       // First get the data using the search_users RPC function
       const { data, error } = await supabase.rpc('search_users', {
-        p_search_term: params.searchTerm || null,
-        p_status: params.status || null,
-        p_tags: params.tags || null,
-        p_acquisition_source: params.acquisitionSource || null,
-        p_created_after: params.createdAfter ? new Date(params.createdAfter).toISOString() : null,
-        p_created_before: params.createdBefore ? new Date(params.createdBefore).toISOString() : null,
-        p_has_transactions: params.hasTransactions !== undefined ? params.hasTransactions : null,
-        p_has_enrollments: params.hasEnrollments !== undefined ? params.hasEnrollments : null,
+        p_search_term: params.searchTerm || undefined,
+        p_status: params.status || undefined,
+        p_tags: params.tags || undefined,
+        p_acquisition_source: params.acquisitionSource || undefined,
+        p_created_after: params.createdAfter ? new Date(params.createdAfter).toISOString() : undefined,
+        p_created_before: params.createdBefore ? new Date(params.createdBefore).toISOString() : undefined,
+        p_has_transactions: params.hasTransactions !== undefined ? params.hasTransactions : undefined,
+        p_has_enrollments: params.hasEnrollments !== undefined ? params.hasEnrollments : undefined,
         p_limit: params.limit || 50,
         p_offset: params.offset || 0
       });
@@ -91,6 +91,16 @@ export async function searchUsers(params: UserSearchParams = {}) {
               valueA = a.created_at || '1970-01-01T00:00:00Z';
               valueB = b.created_at || '1970-01-01T00:00:00Z';
               break;
+            case 'email_engagement':
+              // Sort by email engagement score, with bounced emails at the bottom
+              valueA = a.email_bounced ? -1 : (a.email_engagement_score || 0);
+              valueB = b.email_bounced ? -1 : (b.email_engagement_score || 0);
+              break;
+            case 'email_activity':
+              // Sort by last email activity date
+              valueA = a.last_email_activity || '1970-01-01T00:00:00Z';
+              valueB = b.last_email_activity || '1970-01-01T00:00:00Z';
+              break;
             default:
               return 0;
           }
@@ -105,7 +115,37 @@ export async function searchUsers(params: UserSearchParams = {}) {
         });
       }
       
-      return sortedData as ExtendedUnifiedProfile[];
+      // Map the database results to ExtendedUnifiedProfile format
+      const mappedData = sortedData.map((user: any): ExtendedUnifiedProfile => ({
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone: user.phone,
+        avatar_url: user.avatar_url,
+        acquisition_source: user.acquisition_source,
+        tags: user.tags,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        status: user.status,
+        admin_metadata: user.admin_metadata,
+        last_login_at: user.last_login_at,
+        login_count: user.login_count || 0,
+        transaction_count: user.transaction_count || 0,
+        enrollment_count: user.enrollment_count || 0,
+        total_spent: typeof user.total_spent === 'string' ? parseFloat(user.total_spent) : (user.total_spent || 0),
+        email_bounced: user.email_bounced || false,
+        email_engagement_score: typeof user.email_engagement_score === 'string' ? parseFloat(user.email_engagement_score) : (user.email_engagement_score || 0),
+        last_email_activity: user.last_email_activity,
+        email_delivered_count: user.email_delivered_count || 0,
+        email_opened_count: user.email_opened_count || 0,
+        email_clicked_count: user.email_clicked_count || 0,
+        email_bounced_count: user.email_bounced_count || 0,
+        email_open_rate: typeof user.email_open_rate === 'string' ? parseFloat(user.email_open_rate) : (user.email_open_rate || 0),
+        email_click_rate: typeof user.email_click_rate === 'string' ? parseFloat(user.email_click_rate) : (user.email_click_rate || 0)
+      }));
+      
+      return mappedData;
     }, 'searchUsers');
   }, 'Failed to search users');
 }
@@ -189,6 +229,8 @@ export async function getUserDetail(userId: string): Promise<{ data: UserDetail 
           id,
           title,
           slug,
+          description,
+          status,
           thumbnail_url
         )
       `)
@@ -351,14 +393,14 @@ export async function logAdminAction(
     // Use the database function for consistent logging
     const { data, error } = await supabase.rpc('log_admin_action', {
       p_admin_id: adminId,
-      p_user_id: userId,
+      p_user_id: userId || undefined,
       p_action_type: actionType,
       p_entity_type: entityType,
-      p_entity_id: entityId,
+      p_entity_id: entityId || undefined,
       p_previous_state: previousState,
       p_new_state: newState,
-      p_ip_address: ipAddress,
-      p_user_agent: userAgent
+      p_ip_address: ipAddress || undefined,
+      p_user_agent: userAgent || undefined
     });
     
     if (error) throw error;
@@ -503,12 +545,12 @@ export async function logUserActivity(
     const { data, error } = await supabase.rpc('log_user_activity', {
       p_user_id: userId,
       p_activity_type: activityType,
-      p_resource_type: resourceType,
-      p_resource_id: resourceId,
+      p_resource_type: resourceType || undefined,
+      p_resource_id: resourceId || undefined,
       p_metadata: metadata,
-      p_ip_address: ipAddress,
-      p_user_agent: userAgent,
-      p_session_id: sessionId
+      p_ip_address: ipAddress || undefined,
+      p_user_agent: userAgent || undefined,
+      p_session_id: sessionId || undefined
     });
     
     if (error) throw error;
@@ -582,8 +624,7 @@ export async function getUserEnrollments(
 ) {
   return withErrorHandling(async () => {
     const supabase = createServerSupabaseClient();
-    
-    let query = supabase
+    const { data, error } = await supabase
       .from('enrollments')
       .select(`
         *,
@@ -591,30 +632,14 @@ export async function getUserEnrollments(
           id,
           title,
           slug,
+          description,
+          status,
           thumbnail_url
         )
       `)
       .eq('user_id', userId)
-      .order('enrolled_at', { ascending: false });
-    
-    if (filters.status) {
-      query = query.eq('status', filters.status);
-    }
-    
-    if (filters.startDate) {
-      query = query.gte('enrolled_at', new Date(filters.startDate).toISOString());
-    }
-    
-    if (filters.endDate) {
-      query = query.lte('enrolled_at', new Date(filters.endDate).toISOString());
-    }
-    
-    query = query.limit(filters.limit || 50).range(
-      filters.offset || 0,
-      (filters.offset || 0) + (filters.limit || 50) - 1
-    );
-    
-    const { data, error } = await query;
+      .order('enrolled_at', { ascending: false })
+      .limit(filters.limit || 100);
     
     if (error) throw error;
     return data;

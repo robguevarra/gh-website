@@ -166,15 +166,35 @@ export interface ExtendedUnifiedProfile {
   admin_metadata: any | null;
   last_login_at: string | null;
   login_count: number;
-  transaction_count?: number;
-  enrollment_count?: number;
-  total_spent?: number;
+  transaction_count: number;
+  enrollment_count: number;
+  total_spent: number;
+  // Email engagement fields
+  email_bounced: boolean;
+  email_engagement_score: number; // Calculated based on open/click rates
+  last_email_activity: string | null;
+  email_delivered_count: number;
+  email_opened_count: number;
+  email_clicked_count: number;
+  email_bounced_count: number;
+  email_open_rate: number; // Calculated percentage
+  email_click_rate: number; // Calculated percentage
 }
 
 // User search parameters
 export interface UserSearchParams {
-  query?: string;
+  searchTerm?: string;
   status?: string;
+  tags?: string[];
+  acquisitionSource?: string;
+  hasTransactions?: boolean;
+  hasEnrollments?: boolean;
+  createdAfter?: string;
+  createdBefore?: string;
+  sortField?: string;
+  sortDirection?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
   role?: string;
   plan?: string;
   startDate?: string;

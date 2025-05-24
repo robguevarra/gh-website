@@ -11,7 +11,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ error: validation.error }, { status: validation.status });
     }
 
-    const userId = params.id;
+    // Correctly await params before accessing its properties
+    const resolvedParams = await params;
+    const userId = resolvedParams.id;
+
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
@@ -36,7 +39,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       limit,
       offset,
     };
-    console.log(`[API /email-events GET] User: ${userId}, Filters for DB Query:`, constructedFilters); // Log constructed filters
+    // console.log(`[API /email-events GET] User: ${userId}, Filters for DB Query:`, constructedFilters); // Removed log
 
     // Fetch email events
     const { events, total } = await getUserEmailEvents(userId, constructedFilters);
@@ -65,7 +68,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     });
 
   } catch (error: any) {
-    console.error('[API /email-events GET] Error:', error);
+    // console.error('[API /email-events GET] Error:', error); // Keep general error log for now, but remove specific data logs
     // If error is already a NextResponse, return it directly (e.g. from handleServerError)
     if (error instanceof NextResponse) {
         return error;

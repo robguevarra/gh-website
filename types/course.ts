@@ -5,9 +5,8 @@ export type LessonStatus = 'draft' | 'published' | 'archived'
 export interface Course {
   id: string
   title: string
-  description: string
+  description: string | null
   status: CourseStatus
-  is_published: boolean
   content_json?: Record<string, unknown>
   modules?: Module[]
   created_at?: string
