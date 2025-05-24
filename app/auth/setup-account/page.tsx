@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -44,7 +44,24 @@ interface PasswordData {
   confirmPassword: string
 }
 
-export default function SetupAccountPage() {
+// Loading component for Suspense fallback
+function SetupAccountLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-lg">
+        <CardHeader className="text-center space-y-4">
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+          </div>
+          <CardTitle>Loading Account Setup...</CardTitle>
+        </CardHeader>
+      </Card>
+    </div>
+  )
+}
+
+// Main component that uses useSearchParams
+function SetupAccountContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createBrowserClient(
@@ -481,5 +498,13 @@ export default function SetupAccountPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function SetupAccountPage() {
+  return (
+    <Suspense fallback={<SetupAccountLoading />}>
+      <SetupAccountContent />
+    </Suspense>
   )
 } 

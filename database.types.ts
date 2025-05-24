@@ -7,31 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          operationName?: string
-          query?: string
-          variables?: Json
-          extensions?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       _prisma_migrations: {
@@ -1567,6 +1542,57 @@ export type Database = {
           },
         ]
       }
+      email_send_log: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          lead_id: string | null
+          recipient_email: string
+          sent_at: string | null
+          status: string
+          template_id: string | null
+          variables: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          lead_id?: string | null
+          recipient_email: string
+          sent_at?: string | null
+          status?: string
+          template_id?: string | null
+          variables?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          lead_id?: string | null
+          recipient_email?: string
+          sent_at?: string | null
+          status?: string
+          template_id?: string | null
+          variables?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_send_log_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_log_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
           active: boolean | null
@@ -1793,6 +1819,62 @@ export type Database = {
             columns: ["module_id"]
             isOneToOne: false
             referencedRelation: "modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      magic_links: {
+        Row: {
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          purchase_lead_id: string | null
+          purpose: string
+          token: string
+          updated_at: string | null
+          used_at: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          expires_at: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          purchase_lead_id?: string | null
+          purpose: string
+          token: string
+          updated_at?: string | null
+          used_at?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          purchase_lead_id?: string | null
+          purpose?: string
+          token?: string
+          updated_at?: string | null
+          used_at?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "magic_links_purchase_lead_id_fkey"
+            columns: ["purchase_lead_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_leads"
             referencedColumns: ["id"]
           },
         ]
@@ -2237,6 +2319,69 @@ export type Database = {
           preferences?: Json | null
           role?: string
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      purchase_leads: {
+        Row: {
+          amount: number | null
+          converted_at: string | null
+          currency: string | null
+          email: string
+          first_name: string | null
+          id: string
+          last_activity_at: string | null
+          last_name: string | null
+          metadata: Json | null
+          phone: string | null
+          product_type: string
+          source_page: string | null
+          status: string
+          submitted_at: string | null
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          xendit_external_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          converted_at?: string | null
+          currency?: string | null
+          email: string
+          first_name?: string | null
+          id?: string
+          last_activity_at?: string | null
+          last_name?: string | null
+          metadata?: Json | null
+          phone?: string | null
+          product_type: string
+          source_page?: string | null
+          status?: string
+          submitted_at?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          xendit_external_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          converted_at?: string | null
+          currency?: string | null
+          email?: string
+          first_name?: string | null
+          id?: string
+          last_activity_at?: string | null
+          last_name?: string | null
+          metadata?: Json | null
+          phone?: string | null
+          product_type?: string
+          source_page?: string | null
+          status?: string
+          submitted_at?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          xendit_external_id?: string | null
         }
         Relationships: []
       }
@@ -3999,6 +4144,7 @@ export type Database = {
           first_name: string
           last_name: string
           phone: string
+          avatar_url: string
           tags: string[]
           acquisition_source: string
           status: string
@@ -4010,6 +4156,15 @@ export type Database = {
           transaction_count: number
           enrollment_count: number
           total_spent: number
+          email_bounced: boolean
+          email_engagement_score: number
+          last_email_activity: string
+          email_delivered_count: number
+          email_opened_count: number
+          email_clicked_count: number
+          email_bounced_count: number
+          email_open_rate: number
+          email_click_rate: number
         }[]
       }
       set_limit: {
@@ -4182,9 +4337,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       batch_status: ["pending", "processing", "completed", "failed"],
