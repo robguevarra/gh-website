@@ -355,7 +355,33 @@ export async function POST(request: NextRequest) {
                           }
                         }
                         
-                        // Send welcome email
+                        // Classify customer to determine if magic link is needed
+                        const classificationResponse = await fetch('/api/auth/magic-link/generate', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            email: userEmail,
+                            purpose: 'account_setup',
+                            sendEmail: false // We'll send our own custom email
+                          })
+                        })
+                        
+                        let magicLink = ''
+                        let expirationHours = '48'
+                        let setupRequired = 'true'
+                        
+                        if (classificationResponse.ok) {
+                          const result = await classificationResponse.json()
+                          if (result.success && result.magicLink) {
+                            magicLink = result.magicLink
+                            setupRequired = result.classification?.isExistingUser ? 'false' : 'true'
+                            console.log("[Webhook][P2P] Magic link generated for account setup")
+                          }
+                        } else {
+                          console.warn("[Webhook][P2P] Failed to generate magic link, sending basic welcome email")
+                        }
+
+                        // Send enhanced welcome email with magic link
                         await sendTransactionalEmail(
                           'P2P Course Welcome',
                           userEmail,
@@ -363,7 +389,10 @@ export async function POST(request: NextRequest) {
                             first_name: firstName,
                             course_name: 'Papers to Profits', 
                             enrollment_date: new Date().toLocaleDateString(),
-                            access_link: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://gracefulhomeschooling.com'}/dashboard/course`
+                            access_link: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://gracefulhomeschooling.com'}/dashboard/course`,
+                            magic_link: magicLink,
+                            expiration_hours: expirationHours,
+                            setup_required: setupRequired
                           },
                           leadId
                         )
@@ -660,7 +689,41 @@ export async function POST(request: NextRequest) {
                               }
                             }
                             
-                            // Send order confirmation email
+                            // Classify customer to determine if magic link is needed
+                            const classificationResponse = await fetch('/api/auth/magic-link/generate', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                email: userEmail,
+                                purpose: 'shopify_access',
+                                sendEmail: false // We'll send our own custom email
+                              })
+                            })
+                            
+                            let magicLink = ''
+                            let expirationHours = '48'
+                            let customerType = 'existing'
+                            let accountBenefits = 'Access your order history and digital products anytime.'
+                            
+                            if (classificationResponse.ok) {
+                              const result = await classificationResponse.json()
+                              if (result.success) {
+                                magicLink = result.magicLink || ''
+                                customerType = result.classification?.type || 'public_customer'
+                                
+                                if (result.classification?.type === 'public_customer') {
+                                  accountBenefits = 'Create your account to access order history, track purchases, and get exclusive member benefits.'
+                                  console.log("[Webhook][ECOM] Magic link generated for public customer")
+                                } else {
+                                  accountBenefits = 'Your digital products are ready in your account dashboard.'
+                                  console.log("[Webhook][ECOM] Existing customer - no magic link needed")
+                                }
+                              }
+                            } else {
+                              console.warn("[Webhook][ECOM] Failed to generate magic link, sending basic order confirmation")
+                            }
+
+                            // Send enhanced order confirmation email
                             await sendTransactionalEmail(
                               'Shopify Order Confirmation',
                               userEmail,
@@ -670,7 +733,11 @@ export async function POST(request: NextRequest) {
                                 order_items: cartItems, // Array of items with details
                                 total_amount: ((tx.amount || data.amount || 0) / 100).toFixed(2),
                                 currency: tx.currency || 'PHP',
-                                access_instructions: 'Your digital products have been delivered to your email. Check your Google Drive access for each item.'
+                                access_instructions: 'Your digital products have been delivered to your email. Check your Google Drive access for each item.',
+                                magic_link: magicLink,
+                                expiration_hours: expirationHours,
+                                customer_type: customerType,
+                                account_benefits: accountBenefits
                               },
                               leadId
                             )

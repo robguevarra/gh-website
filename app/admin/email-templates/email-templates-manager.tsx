@@ -10,7 +10,7 @@
 // Import styles for editor button states
 import './editor-styles.css';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { extractVariablesFromContent, generateDefaultVariableValues, categorizeVariables } from '@/lib/services/email/template-utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -912,24 +912,95 @@ export default function EmailTemplatesManager() {
   };
   
   // Handle save button click - simplified to use unlayer directly
-  const handleSave = () => {
-    console.log('Save button clicked');
+  // Import the EditorRef type to use ref approach
+  const unlayerEditorRef = useRef<any>(null);
+
+  const handleSave = async () => {
+    if (!unlayerEditorRef.current) {
+      toast({
+        title: 'Error',
+        description: 'Editor not ready. Please wait a moment and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
-      if (typeof window !== 'undefined' && (window as any).unlayerExportHtml) {
-        console.log('Triggering Unlayer HTML export for save');
-        // The actual saving happens in the unlayer-email-editor.tsx's exportHtml function
-        // which calls our onSave callback with the HTML and design data
-        (window as any).unlayerExportHtml();
-      } else {
-        throw new Error('Unlayer export method not found');
+      setIsSaving(true);
+      
+      // Get the editor instance using the same pattern as content-tab-content.tsx
+      const editorInstance = unlayerEditorRef.current.getEditorInstance();
+      if (!editorInstance) {
+        throw new Error('Editor instance not available');
+      }
+
+      // Get design JSON from editor
+      const design = await new Promise<any>((resolve, reject) => {
+        editorInstance.saveDesign((design: any) => {
+          if (design) {
+            resolve(design);
+          } else {
+            reject(new Error('Could not retrieve design from editor'));
+          }
+        });
+      });
+      
+      // Get HTML from editor
+      const htmlData = await new Promise<{ html: string }>((resolve, reject) => {
+        editorInstance.exportHtml((data: any) => {
+          if (data && data.html) {
+            resolve(data);
+          } else {
+            reject(new Error('Could not generate HTML from editor'));
+          }
+        });
+      });
+
+      // Call the save function with the retrieved data
+      if (selectedTemplate) {
+        const payload = {
+          templateId: selectedTemplate.id,
+          htmlTemplate: htmlData.html,
+          design: design,
+          category: selectedTemplate.category,
+          subcategory: selectedTemplate.subcategory || null,
+          version: selectedTemplate.version || 1
+        };
+        
+        const response = await fetch('/api/admin/email-templates', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to save template');
+        }
+        
+        toast({
+          title: 'Template Saved',
+          description: `${selectedTemplate.name} saved successfully`,
+        });
+        
+        // Update local state
+        setEditedHtml(htmlData.html);
+        setDesignJson(design);
+        
+        // Refresh data
+        await fetchTemplate(selectedTemplate.id);
       }
     } catch (error) {
       console.error('Error in handleSave:', error);
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to initiate save',
+        description: error instanceof Error ? error.message : 'Failed to save template',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
   
@@ -1489,7 +1560,7 @@ export default function EmailTemplatesManager() {
         {/* Super simple Unlayer editor following the article EXACTLY */}
         <div className="flex-1 overflow-hidden w-full">
           <UnlayerEmailEditor 
-            templateId={selectedTemplate?.id}
+            ref={unlayerEditorRef}
             initialHtml={editedHtml}
             initialDesign={designJson}
             onSave={async (html, design) => {
