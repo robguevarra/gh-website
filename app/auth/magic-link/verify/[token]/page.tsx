@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { validateMagicLink } from '@/lib/auth/magic-link-service'
 import { classifyCustomer, getAuthenticationFlow } from '@/lib/auth/customer-classification-service'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -22,7 +21,24 @@ type VerificationState =
   | 'invalid'
   | 'error'
 
-export default function MagicLinkVerifyPage({ params }: PageProps) {
+// Loading component for Suspense fallback
+function MagicLinkVerifyLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md mx-auto">
+        <CardHeader className="text-center">
+          <div className="flex justify-center mb-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+          </div>
+          <CardTitle className="text-xl text-purple-900">Loading Magic Link...</CardTitle>
+        </CardHeader>
+      </Card>
+    </div>
+  )
+}
+
+// Main component that uses useSearchParams
+function MagicLinkVerifyContent({ params }: PageProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [state, setState] = useState<VerificationState>('verifying')
@@ -40,64 +56,54 @@ export default function MagicLinkVerifyPage({ params }: PageProps) {
     try {
       setState('verifying')
       
-      // Get client information for security logging
-      const userAgent = navigator.userAgent
-      const ipAddress = await getClientIP()
-
       console.log('[MagicLinkVerify] Verifying token:', params.token.substring(0, 20) + '...')
 
-      // Validate magic link token
-      const validation = await validateMagicLink(params.token, ipAddress, userAgent)
+      // Use the API route instead of calling the service directly
+      const redirectTo = searchParams.get('redirect')
+      const apiUrl = `/api/auth/magic-link/verify/${encodeURIComponent(params.token)}`
+      const fullUrl = redirectTo ? `${apiUrl}?redirect=${encodeURIComponent(redirectTo)}` : apiUrl
 
-      if (!validation.success) {
-        console.error('[MagicLinkVerify] Validation failed:', validation.error)
+      const response = await fetch(fullUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+
+      const result = await response.json()
+
+      if (!result.success) {
+        console.error('[MagicLinkVerify] API validation failed:', result.error)
         
-        if (validation.expired) {
+        if (result.expired) {
           setState('expired')
-          setEmail(validation.email || '')
-        } else if (validation.used) {
+          setEmail(result.email || '')
+        } else if (result.used) {
           setState('used')
         } else {
           setState('invalid')
-          setErrorMessage(validation.error || 'Invalid magic link')
+          setErrorMessage(result.error || 'Invalid magic link')
         }
         return
       }
 
       console.log('[MagicLinkVerify] Token validated successfully:', {
-        email: validation.email,
-        purpose: validation.purpose
+        email: result.verification.email,
+        purpose: result.verification.purpose
       })
 
       // Store validated information
-      setEmail(validation.email!)
-      setPurpose(validation.purpose!)
+      setEmail(result.verification.email)
+      setPurpose(result.verification.purpose)
+      setRedirectPath(result.authFlow.redirectPath)
+      setState('success')
 
-      // Re-classify customer to get current flow recommendations
-      const classificationResult = await classifyCustomer(validation.email!)
-      
-      if (classificationResult.success && classificationResult.classification) {
-        const authFlow = getAuthenticationFlow(classificationResult.classification)
-        const finalRedirectPath = searchParams.get('redirect') || authFlow.redirectPath
-        
-        setRedirectPath(finalRedirectPath)
-        setState('success')
+      console.log('[MagicLinkVerify] Redirecting to:', result.authFlow.redirectPath)
 
-        console.log('[MagicLinkVerify] Redirecting to:', finalRedirectPath)
-
-        // Redirect after short delay for user feedback
-        setTimeout(() => {
-          router.push(finalRedirectPath)
-        }, 2000)
-      } else {
-        console.error('[MagicLinkVerify] Customer classification failed:', classificationResult.error)
-        // Fallback to default dashboard
-        setRedirectPath('/dashboard')
-        setState('success')
-        setTimeout(() => {
-          router.push('/dashboard')
-        }, 2000)
-      }
+      // Redirect after short delay for user feedback
+      setTimeout(() => {
+        router.push(result.authFlow.redirectPath)
+      }, 2000)
 
     } catch (error) {
       console.error('[MagicLinkVerify] Verification error:', error)
@@ -136,17 +142,6 @@ export default function MagicLinkVerifyPage({ params }: PageProps) {
       alert('Failed to send new magic link. Please try again.')
     } finally {
       setIsRefreshing(false)
-    }
-  }
-
-  // Get client IP for security logging (simplified version)
-  const getClientIP = async (): Promise<string> => {
-    try {
-      // In production, this would come from headers or a service
-      // For now, return a placeholder
-      return 'client-ip'
-    } catch {
-      return 'unknown'
     }
   }
 
@@ -305,5 +300,13 @@ export default function MagicLinkVerifyPage({ params }: PageProps) {
         {renderContent()}
       </div>
     </div>
+  )
+}
+
+export default function MagicLinkVerifyPage({ params }: PageProps) {
+  return (
+    <Suspense fallback={<MagicLinkVerifyLoading />}>
+      <MagicLinkVerifyContent params={params} />
+    </Suspense>
   )
 } 
