@@ -43,11 +43,18 @@ export async function classifyCustomer(email: string): Promise<ClassificationRes
     const userId = profile?.id
 
     // 2. Check for P2P enrollments (highest priority)
+    // Need to join with unified_profiles since enrollments has user_id, not email
     const { data: enrollments, error: enrollmentError } = await supabase
       .from('enrollments') 
-      .select('id, course_id, status, enrollment_date')
-      .eq('email', email)
-      .eq('status', 'enrolled')
+      .select(`
+        id, 
+        course_id, 
+        status, 
+        enrolled_at,
+        user:unified_profiles!inner(email)
+      `)
+      .eq('unified_profiles.email', email)
+      .eq('status', 'active')
 
     if (enrollmentError) {
       console.error('[CustomerClassification] Enrollment lookup failed:', enrollmentError)
@@ -95,7 +102,7 @@ export async function classifyCustomer(email: string): Promise<ClassificationRes
           isExistingUser,
           userId,
           enrollmentStatus: 'enrolled',
-          lastPurchaseDate: enrollments[0]?.enrollment_date,
+          lastPurchaseDate: enrollments[0]?.enrolled_at,
           tags: userTags,
           metadata: {
             enrollmentCount: enrollments.length,
@@ -115,7 +122,7 @@ export async function classifyCustomer(email: string): Promise<ClassificationRes
           isExistingUser,
           userId,
           enrollmentStatus: 'not_enrolled',
-          lastPurchaseDate,
+          lastPurchaseDate: lastPurchaseDate || undefined,
           tags: userTags,
           metadata: {
             shopifyOrderCount: shopifyOrders.length,
@@ -233,7 +240,7 @@ export async function classifyCustomerWithLeadHistory(email: string): Promise<Cl
       hasAbandonedCarts: leads.some(lead => 
         ['payment_initiated', 'payment_failed', 'payment_abandoned'].includes(lead.status)
       ),
-      lastFormSubmission: leads[0]?.submitted_at,
+      lastFormSubmission: leads[0]?.submitted_at || undefined,
       leadStatus: leads[0]?.status,
       interestedProducts: leads.map(lead => lead.product_type).filter(Boolean)
     } : undefined

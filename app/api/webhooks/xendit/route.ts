@@ -341,47 +341,100 @@ export async function POST(request: NextRequest) {
                         const leadId = (tx.metadata as any)?.lead_id
                         if (leadId) {
                           try {
-                            await fetch('/api/leads/capture', {
-                              method: 'PATCH',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                leadId: leadId,
-                                status: 'payment_completed'
+                            // Update lead status directly using Supabase
+                            const { error: leadUpdateError } = await supabase
+                              .from('purchase_leads')
+                              .update({ 
+                                status: 'payment_completed',
+                                last_activity_at: new Date().toISOString(),
+                                converted_at: new Date().toISOString()
                               })
-                            })
-                            console.log("[Webhook][P2P] Lead status updated to payment_completed")
+                              .eq('id', leadId)
+                            
+                            if (leadUpdateError) {
+                              console.error("[Webhook][P2P] Failed to update lead status:", leadUpdateError)
+                            } else {
+                              console.log("[Webhook][P2P] Lead status updated to payment_completed")
+                            }
                           } catch (leadUpdateError) {
                             console.error("[Webhook][P2P] Failed to update lead status:", leadUpdateError)
                           }
                         }
                         
-                        // Classify customer to determine if magic link is needed
-                        const classificationResponse = await fetch('/api/auth/magic-link/generate', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            email: userEmail,
-                            purpose: 'account_setup',
-                            sendEmail: false // We'll send our own custom email
-                          })
-                        })
-                        
+                        // Generate magic link directly using service (avoid fetch call issues)
                         let magicLink = ''
                         let expirationHours = '48'
                         let setupRequired = 'true'
                         
-                        if (classificationResponse.ok) {
-                          const result = await classificationResponse.json()
-                          if (result.success && result.magicLink) {
-                            magicLink = result.magicLink
-                            setupRequired = result.classification?.isExistingUser ? 'false' : 'true'
-                            console.log("[Webhook][P2P] Magic link generated for account setup")
+                        try {
+                          console.log("[Webhook][P2P] Starting magic link generation for:", userEmail)
+                          
+                          // Import the service functions at the top of file
+                          console.log("[Webhook][P2P] Importing magic link services...")
+                          const { generateMagicLink } = await import('@/lib/auth/magic-link-service')
+                          const { classifyCustomer, getAuthenticationFlow } = await import('@/lib/auth/customer-classification-service')
+                          console.log("[Webhook][P2P] Services imported successfully")
+                          
+                          // Classify customer
+                          console.log("[Webhook][P2P] Classifying customer...")
+                          const classificationResult = await classifyCustomer(userEmail)
+                          console.log("[Webhook][P2P] Classification result:", {
+                            success: classificationResult.success,
+                            type: classificationResult.classification?.type,
+                            isExistingUser: classificationResult.classification?.isExistingUser,
+                            error: classificationResult.error
+                          })
+                          
+                          if (classificationResult.success) {
+                            const classification = classificationResult.classification!
+                            const authFlow = getAuthenticationFlow(classification)
+                            
+                            console.log("[Webhook][P2P] Auth flow determined:", authFlow.magicLinkPurpose)
+                            
+                            // Generate magic link
+                            console.log("[Webhook][P2P] Generating magic link...")
+                            const magicLinkResult = await generateMagicLink({
+                              email: userEmail,
+                              purpose: 'account_setup',
+                              redirectTo: '/dashboard/course',
+                              expiresIn: '48h',
+                              metadata: {
+                                customerType: classification.type,
+                                isExistingUser: classification.isExistingUser,
+                                userId: classification.userId,
+                                generatedAt: new Date().toISOString(),
+                                requestSource: 'xendit_webhook'
+                              }
+                            })
+                            
+                            console.log("[Webhook][P2P] Magic link generation result:", {
+                              success: magicLinkResult.success,
+                              hasLink: !!magicLinkResult.magicLink,
+                              error: magicLinkResult.error
+                            })
+                            
+                            if (magicLinkResult.success) {
+                              magicLink = magicLinkResult.magicLink!
+                              setupRequired = classification.isExistingUser ? 'false' : 'true'
+                              console.log("[Webhook][P2P] Magic link generated successfully!")
+                            } else {
+                              console.error("[Webhook][P2P] Magic link generation failed:", magicLinkResult.error)
+                            }
+                          } else {
+                            console.error("[Webhook][P2P] Customer classification failed:", classificationResult.error)
                           }
-                        } else {
-                          console.warn("[Webhook][P2P] Failed to generate magic link, sending basic welcome email")
+                        } catch (magicLinkError) {
+                          console.error("[Webhook][P2P] Magic link generation error:", magicLinkError)
                         }
 
                         // Send enhanced welcome email with magic link
+                        console.log("[Webhook][P2P] Sending email with variables:", {
+                          first_name: firstName,
+                          magic_link_length: magicLink.length,
+                          has_magic_link: magicLink.length > 0,
+                          setup_required: setupRequired
+                        })
+                        
                         await sendTransactionalEmail(
                           'P2P Course Welcome',
                           userEmail,
@@ -390,7 +443,7 @@ export async function POST(request: NextRequest) {
                             course_name: 'Papers to Profits', 
                             enrollment_date: new Date().toLocaleDateString(),
                             access_link: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://gracefulhomeschooling.com'}/dashboard/course`,
-                            magic_link: magicLink,
+                            magic_link: magicLink || '[MAGIC_LINK_FAILED]', // Always pass a value
                             expiration_hours: expirationHours,
                             setup_required: setupRequired
                           },
@@ -675,52 +728,78 @@ export async function POST(request: NextRequest) {
                             const leadId = (tx.metadata as any)?.lead_id
                             if (leadId) {
                               try {
-                                await fetch('/api/leads/capture', {
-                                  method: 'PATCH',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    leadId: leadId,
-                                    status: 'payment_completed'
+                                // Update lead status directly using Supabase
+                                const { error: leadUpdateError } = await supabase
+                                  .from('purchase_leads')
+                                  .update({ 
+                                    status: 'payment_completed',
+                                    last_activity_at: new Date().toISOString(),
+                                    converted_at: new Date().toISOString()
                                   })
-                                })
-                                console.log("[Webhook][ECOM] Lead status updated to payment_completed")
+                                  .eq('id', leadId)
+                                
+                                if (leadUpdateError) {
+                                  console.error("[Webhook][ECOM] Failed to update lead status:", leadUpdateError)
+                                } else {
+                                  console.log("[Webhook][ECOM] Lead status updated to payment_completed")
+                                }
                               } catch (leadUpdateError) {
                                 console.error("[Webhook][ECOM] Failed to update lead status:", leadUpdateError)
                               }
                             }
                             
-                            // Classify customer to determine if magic link is needed
-                            const classificationResponse = await fetch('/api/auth/magic-link/generate', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                email: userEmail,
-                                purpose: 'shopify_access',
-                                sendEmail: false // We'll send our own custom email
-                              })
-                            })
-                            
+                            // Generate magic link directly using service (avoid fetch call issues)
                             let magicLink = ''
                             let expirationHours = '48'
                             let customerType = 'existing'
                             let accountBenefits = 'Access your order history and digital products anytime.'
                             
-                            if (classificationResponse.ok) {
-                              const result = await classificationResponse.json()
-                              if (result.success) {
-                                magicLink = result.magicLink || ''
-                                customerType = result.classification?.type || 'public_customer'
+                            try {
+                              // Import the service functions
+                              const { generateMagicLink } = await import('@/lib/auth/magic-link-service')
+                              const { classifyCustomer, getAuthenticationFlow } = await import('@/lib/auth/customer-classification-service')
+                              
+                              // Classify customer
+                              const classificationResult = await classifyCustomer(userEmail)
+                              
+                              if (classificationResult.success) {
+                                const classification = classificationResult.classification!
+                                const authFlow = getAuthenticationFlow(classification)
+                                customerType = classification.type || 'public_customer'
                                 
-                                if (result.classification?.type === 'public_customer') {
+                                if (classification.type === 'public_customer') {
                                   accountBenefits = 'Create your account to access order history, track purchases, and get exclusive member benefits.'
-                                  console.log("[Webhook][ECOM] Magic link generated for public customer")
+                                  
+                                  // Generate magic link for new customers
+                                  const magicLinkResult = await generateMagicLink({
+                                    email: userEmail,
+                                    purpose: 'shopify_access',
+                                    redirectTo: '/dashboard/store',
+                                    expiresIn: '48h',
+                                    metadata: {
+                                      customerType: classification.type,
+                                      isExistingUser: classification.isExistingUser,
+                                      userId: classification.userId,
+                                      generatedAt: new Date().toISOString(),
+                                      requestSource: 'xendit_webhook_shopify'
+                                    }
+                                  })
+                                  
+                                  if (magicLinkResult.success) {
+                                    magicLink = magicLinkResult.magicLink!
+                                    console.log("[Webhook][ECOM] Magic link generated for public customer")
+                                  } else {
+                                    console.warn("[Webhook][ECOM] Magic link generation failed:", magicLinkResult.error)
+                                  }
                                 } else {
                                   accountBenefits = 'Your digital products are ready in your account dashboard.'
                                   console.log("[Webhook][ECOM] Existing customer - no magic link needed")
                                 }
+                              } else {
+                                console.warn("[Webhook][ECOM] Customer classification failed:", classificationResult.error)
                               }
-                            } else {
-                              console.warn("[Webhook][ECOM] Failed to generate magic link, sending basic order confirmation")
+                            } catch (magicLinkError) {
+                              console.error("[Webhook][ECOM] Magic link generation error:", magicLinkError)
                             }
 
                             // Send enhanced order confirmation email
@@ -781,15 +860,21 @@ export async function POST(request: NextRequest) {
                     const leadId = (tx.metadata as any)?.lead_id
                     if (leadId) {
                       try {
-                        await fetch('/api/leads/capture', {
-                          method: 'PATCH',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            leadId: leadId,
-                            status: 'payment_completed'
+                        // Update lead status directly using Supabase
+                        const { error: leadUpdateError } = await supabase
+                          .from('purchase_leads')
+                          .update({ 
+                            status: 'payment_completed',
+                            last_activity_at: new Date().toISOString(),
+                            converted_at: new Date().toISOString()
                           })
-                        })
-                        console.log("[Webhook][Canva] Lead status updated to payment_completed")
+                          .eq('id', leadId)
+                        
+                        if (leadUpdateError) {
+                          console.error("[Webhook][Canva] Failed to update lead status:", leadUpdateError)
+                        } else {
+                          console.log("[Webhook][Canva] Lead status updated to payment_completed")
+                        }
                       } catch (leadUpdateError) {
                         console.error("[Webhook][Canva] Failed to update lead status:", leadUpdateError)
                       }
