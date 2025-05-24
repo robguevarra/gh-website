@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { classifyCustomer, getAuthenticationFlow } from '@/lib/auth/customer-classification-service'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Logo } from '@/components/ui/logo'
 import { Loader2, CheckCircle, XCircle, RefreshCw } from 'lucide-react'
 
 interface PageProps {
@@ -24,15 +25,27 @@ type VerificationState =
 // Loading component for Suspense fallback
 function MagicLinkVerifyLoading() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md mx-auto">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-          </div>
-          <CardTitle className="text-xl text-purple-900">Loading Magic Link...</CardTitle>
-        </CardHeader>
-      </Card>
+    <div className="min-h-screen bg-[#f9f6f2] flex flex-col">
+      {/* Header with Logo */}
+      <header className="w-full p-6">
+        <div className="container mx-auto">
+          <Logo size="medium" />
+        </div>
+      </header>
+      
+      {/* Main Content */}
+      <div className="flex-1 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md mx-auto bg-white/80 backdrop-blur-sm border-brand-purple/10 shadow-[0_25px_50px_-12px_rgba(176,139,165,0.15)]">
+          <CardHeader className="text-center pb-6">
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-brand-purple/10 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand-purple/30 border-t-brand-purple"></div>
+              </div>
+            </div>
+            <CardTitle className="text-xl font-serif text-[#5d4037]">Loading Magic Link...</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
     </div>
   )
 }
@@ -149,13 +162,15 @@ function MagicLinkVerifyContent({ params }: PageProps) {
     switch (state) {
       case 'verifying':
         return (
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader className="text-center">
-              <div className="flex justify-center mb-4">
-                <Loader2 className="h-12 w-12 animate-spin text-purple-600" />
+          <Card className="w-full max-w-md mx-auto bg-white/80 backdrop-blur-sm border-brand-purple/10 shadow-[0_25px_50px_-12px_rgba(176,139,165,0.15)]">
+            <CardHeader className="text-center pb-6">
+              <div className="flex justify-center mb-6">
+                <div className="w-16 h-16 rounded-full bg-brand-purple/10 flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-brand-purple" />
+                </div>
               </div>
-              <CardTitle className="text-xl text-purple-900">Verifying Magic Link</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-xl font-serif text-[#5d4037]">Verifying Magic Link</CardTitle>
+              <CardDescription className="text-[#6d4c41]">
                 Please wait while we verify your authentication link...
               </CardDescription>
             </CardHeader>
@@ -164,22 +179,25 @@ function MagicLinkVerifyContent({ params }: PageProps) {
 
       case 'success':
         return (
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader className="text-center">
-              <div className="flex justify-center mb-4">
-                <CheckCircle className="h-12 w-12 text-green-600" />
+          <Card className="w-full max-w-md mx-auto bg-white/80 backdrop-blur-sm border-brand-purple/10 shadow-[0_25px_50px_-12px_rgba(176,139,165,0.15)]">
+            <CardHeader className="text-center pb-6">
+              <div className="flex justify-center mb-6">
+                <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                  <CheckCircle className="h-8 w-8 text-green-600" />
+                </div>
               </div>
-              <CardTitle className="text-xl text-green-800">Authentication Successful!</CardTitle>
-              <CardDescription>
-                Welcome back, {email}! Redirecting you to your account...
+              <CardTitle className="text-xl font-serif text-[#5d4037]">Authentication Successful!</CardTitle>
+              <CardDescription className="text-[#6d4c41]">
+                Welcome back, <span className="font-medium text-brand-purple">{email}</span>! 
+                Redirecting you to your account...
               </CardDescription>
             </CardHeader>
             <CardContent className="text-center">
               <div className="flex justify-center mt-4">
-                <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-brand-purple" />
               </div>
-              <p className="text-sm text-gray-600 mt-2">
-                Redirecting to {redirectPath}
+              <p className="text-sm text-[#6d4c41] mt-3">
+                Redirecting to <span className="font-medium">{redirectPath}</span>
               </p>
             </CardContent>
           </Card>
@@ -187,25 +205,29 @@ function MagicLinkVerifyContent({ params }: PageProps) {
 
       case 'expired':
         return (
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader className="text-center">
-              <div className="flex justify-center mb-4">
-                <XCircle className="h-12 w-12 text-amber-600" />
+          <Card className="w-full max-w-md mx-auto bg-white/80 backdrop-blur-sm border-brand-purple/10 shadow-[0_25px_50px_-12px_rgba(176,139,165,0.15)]">
+            <CardHeader className="text-center pb-6">
+              <div className="flex justify-center mb-6">
+                <div className="w-16 h-16 rounded-full bg-brand-pink/20 flex items-center justify-center">
+                  <XCircle className="h-8 w-8 text-brand-pink" />
+                </div>
               </div>
-              <CardTitle className="text-xl text-amber-800">Magic Link Expired</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-xl font-serif text-[#5d4037]">Magic Link Expired</CardTitle>
+              <CardDescription className="text-[#6d4c41]">
                 This magic link has expired for security reasons. You can request a new one below.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-center">
-                <p className="text-sm text-gray-600 mb-4">
-                  Email: <strong>{email}</strong>
-                </p>
+                <div className="bg-brand-purple/5 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-[#6d4c41]">
+                    Email: <span className="font-medium text-brand-purple">{email}</span>
+                  </p>
+                </div>
                 <Button 
                   onClick={handleRefreshLink}
                   disabled={isRefreshing}
-                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  className="w-full bg-brand-purple hover:bg-brand-purple/90 text-white transition-all duration-200"
                 >
                   {isRefreshing ? (
                     <>
@@ -224,7 +246,7 @@ function MagicLinkVerifyContent({ params }: PageProps) {
                 <Button 
                   variant="outline"
                   onClick={() => router.push('/auth/signin')}
-                  className="w-full"
+                  className="w-full border-brand-purple/20 text-brand-purple hover:bg-brand-purple/5 transition-all duration-200"
                 >
                   Back to Sign In
                 </Button>
@@ -235,13 +257,15 @@ function MagicLinkVerifyContent({ params }: PageProps) {
 
       case 'used':
         return (
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader className="text-center">
-              <div className="flex justify-center mb-4">
-                <XCircle className="h-12 w-12 text-orange-600" />
+          <Card className="w-full max-w-md mx-auto bg-white/80 backdrop-blur-sm border-brand-purple/10 shadow-[0_25px_50px_-12px_rgba(176,139,165,0.15)]">
+            <CardHeader className="text-center pb-6">
+              <div className="flex justify-center mb-6">
+                <div className="w-16 h-16 rounded-full bg-brand-blue/20 flex items-center justify-center">
+                  <XCircle className="h-8 w-8 text-brand-blue" />
+                </div>
               </div>
-              <CardTitle className="text-xl text-orange-800">Magic Link Already Used</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-xl font-serif text-[#5d4037]">Magic Link Already Used</CardTitle>
+              <CardDescription className="text-[#6d4c41]">
                 This magic link has already been used and cannot be used again for security reasons.
               </CardDescription>
             </CardHeader>
@@ -249,7 +273,7 @@ function MagicLinkVerifyContent({ params }: PageProps) {
               <div className="text-center">
                 <Button 
                   onClick={() => router.push('/auth/signin')}
-                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  className="w-full bg-brand-purple hover:bg-brand-purple/90 text-white transition-all duration-200"
                 >
                   Request New Magic Link
                 </Button>
@@ -261,26 +285,28 @@ function MagicLinkVerifyContent({ params }: PageProps) {
       case 'invalid':
       case 'error':
         return (
-          <Card className="w-full max-w-md mx-auto">
-            <CardHeader className="text-center">
-              <div className="flex justify-center mb-4">
-                <XCircle className="h-12 w-12 text-red-600" />
+          <Card className="w-full max-w-md mx-auto bg-white/80 backdrop-blur-sm border-brand-purple/10 shadow-[0_25px_50px_-12px_rgba(176,139,165,0.15)]">
+            <CardHeader className="text-center pb-6">
+              <div className="flex justify-center mb-6">
+                <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
+                  <XCircle className="h-8 w-8 text-red-600" />
+                </div>
               </div>
-              <CardTitle className="text-xl text-red-800">Invalid Magic Link</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-xl font-serif text-[#5d4037]">Invalid Magic Link</CardTitle>
+              <CardDescription className="text-[#6d4c41]">
                 This magic link is invalid or has been tampered with.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {errorMessage && (
-                <div className="bg-red-50 p-3 rounded-md">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <p className="text-sm text-red-700">{errorMessage}</p>
                 </div>
               )}
               <div className="text-center">
                 <Button 
                   onClick={() => router.push('/auth/signin')}
-                  className="w-full bg-purple-600 hover:bg-purple-700"
+                  className="w-full bg-brand-purple hover:bg-brand-purple/90 text-white transition-all duration-200"
                 >
                   Back to Sign In
                 </Button>
@@ -295,9 +321,38 @@ function MagicLinkVerifyContent({ params }: PageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {renderContent()}
+    <div className="min-h-screen bg-[#f9f6f2] flex flex-col relative overflow-hidden">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 z-0">
+        {/* Subtle pattern overlay */}
+        <div className="absolute inset-0 opacity-5">
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fillRule='evenodd'%3E%3Cg fill='%23b08ba5' fillOpacity='0.4'%3E%3Cpath d='M36 34v-4h-10v-10h-4v10h-10v4h10v10h4v-10h10zM40 0H0v40h40V0z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+              backgroundSize: "60px 60px",
+            }}
+          />
+        </div>
+        
+        {/* Decorative circles */}
+        <div className="absolute right-0 top-1/4 w-48 h-48 rounded-full bg-brand-blue/10 blur-3xl opacity-60"></div>
+        <div className="absolute left-1/4 bottom-1/4 w-64 h-64 rounded-full bg-brand-pink/10 blur-3xl opacity-40"></div>
+        <div className="absolute right-1/3 top-1/2 w-36 h-36 rounded-full bg-brand-purple/10 blur-2xl opacity-50"></div>
+      </div>
+
+      {/* Header with Logo */}
+      <header className="w-full p-6 z-10 relative">
+        <div className="container mx-auto">
+          <Logo size="medium" />
+        </div>
+      </header>
+      
+      {/* Main Content */}
+      <div className="flex-1 flex items-center justify-center p-4 z-10 relative">
+        <div className="w-full max-w-md">
+          {renderContent()}
+        </div>
       </div>
     </div>
   )
