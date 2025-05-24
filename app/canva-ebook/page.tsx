@@ -90,6 +90,48 @@ export default function CanvaEbookPage() {
     setIsProcessing(true);
 
     try {
+      // --- STEP 1: CAPTURE LEAD BEFORE PAYMENT (Industry Best Practice) ---
+      // This ensures we don't lose potential customers who abandon payment
+      let leadId: string | undefined;
+      
+      try {
+        const leadCaptureResponse = await fetch('/api/leads/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phone,
+            productType: 'Canva',
+            amount: ebookDetails.price,
+            currency: ebookDetails.currency,
+            sourcePage: '/canva-ebook',
+            utmSource: new URLSearchParams(window.location.search).get('utm_source') || undefined,
+            utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
+            utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,
+            metadata: {
+              product_type: "ebook",
+              product_id: ebookDetails.id,
+            }
+          })
+        });
+
+        const leadResult = await leadCaptureResponse.json();
+        
+        if (leadResult.success) {
+          leadId = leadResult.leadId;
+          console.log('[Lead] Successfully captured lead before payment:', leadId);
+        } else {
+          console.error('[Lead] Failed to capture lead:', leadResult.error);
+          // Continue with payment anyway - lead capture failure shouldn't block purchase
+        }
+      } catch (leadError) {
+        console.error('[Lead] Error capturing lead:', leadError);
+        // Continue with payment anyway
+      }
+
+      // --- STEP 2: CREATE PAYMENT INTENT WITH LEAD TRACKING ---
       const response = await createPaymentIntent({
         amount: ebookDetails.price,
         currency: ebookDetails.currency,
@@ -103,6 +145,7 @@ export default function CanvaEbookPage() {
           source: "website",
           product_type: "ebook", // Explicitly mark as ebook
           product_id: ebookDetails.id,
+          ...(leadId && { lead_id: leadId }), // Include lead_id for tracking
         },
       });
 

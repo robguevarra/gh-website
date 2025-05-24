@@ -277,50 +277,28 @@ A fully operational transactional email system where:
 - [ ] **Import email service**: Add `import { sendTransactionalEmail } from '@/lib/email/transactional-email-service'`
 - [ ] **Lead Status Integration**: Add lead tracking to all payment flows
 
-- [ ] **P2P Flow Enhancement** (around line 312 after enrollment creation):
+- [x] **P2P Flow Enhancement** (around line 312 after enrollment creation):
   ```typescript
-  // Update lead status and send confirmation
-  await updateLeadStatus(tx.external_id, 'payment_completed');
-  
-  // After successful createEnrollment call
-  if (enrollmentCreated) {
-    await sendTransactionalEmail('p2p-course-welcome', userEmail, {
-      first_name: profileFirstName, // CORRECTED: snake_case
-      course_name: 'Papers to Profits', // CORRECTED: snake_case
-      enrollment_date: new Date().toLocaleDateString(), // CORRECTED: snake_case
-      access_link: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/course` // CORRECTED: snake_case
-    });
-  }
+  // ✅ COMPLETED: Email trigger integrated into Xendit webhook
+  // Sends P2P Course Welcome email after successful enrollment
+  // Updates lead status to 'payment_completed' if lead_id exists
+  // Uses snake_case variables: first_name, course_name, enrollment_date, access_link
   ```
 
-- [ ] **Canva Flow Enhancement** (around line 647 after storeEbookContactInfo):
+- [x] **Canva Flow Enhancement** (around line 647 after storeEbookContactInfo):
   ```typescript
-  // Update lead status and send delivery email
-  await updateLeadStatus(tx.external_id, 'payment_completed');
-  
-  // After successful ebook contact storage
-  await sendTransactionalEmail('canva-ebook-delivery', emailToStore, {
-    first_name: metadata?.firstName || 'Friend', // CORRECTED: snake_case
-    ebook_title: 'My Canva Business Ebook', // CORRECTED: snake_case
-    google_drive_link: process.env.CANVA_EBOOK_DRIVE_LINK, // CORRECTED: snake_case
-    support_email: process.env.SUPPORT_EMAIL || 'support@gracefulhomeschooling.com' // CORRECTED: snake_case
-  });
+  // ✅ COMPLETED: Email trigger integrated into Xendit webhook  
+  // Sends Canva Ebook Delivery email after successful contact storage
+  // Updates lead status to 'payment_completed' if lead_id exists
+  // Uses snake_case variables: first_name, ebook_title, google_drive_link, support_email
   ```
 
-- [ ] **Shopify Flow Enhancement** (around line 585 after order completion):
+- [x] **Shopify Flow Enhancement** (around line 585 after order completion):
   ```typescript
-  // Update lead status and send confirmation
-  await updateLeadStatus(tx.external_id, 'payment_completed');
-  
-  // After order status update to 'completed'
-  await sendTransactionalEmail('shopify-order-confirmation', userEmail, {
-    first_name: profileData?.first_name || 'Friend', // CORRECTED: snake_case
-    order_number: newOrderId, // CORRECTED: snake_case
-    order_items: cartItems, // Array of items with Google Drive links // CORRECTED: snake_case
-    total_amount: (tx.amount / 100).toFixed(2), // CORRECTED: snake_case
-    currency: tx.currency,
-    access_instructions: 'Check your email for individual product access links' // CORRECTED: snake_case
-  });
+  // ✅ COMPLETED: Email trigger integrated into Xendit webhook
+  // Sends Shopify Order Confirmation email after order status updated to 'completed'
+  // Updates lead status to 'payment_completed' if lead_id exists  
+  // Uses snake_case variables: first_name, order_number, order_items, total_amount, currency, access_instructions
   ```
 
 #### 4.2 Supabase Auth Integration
@@ -456,23 +434,34 @@ A fully operational transactional email system where:
   - [x] Variable format discovery (confirmed snake_case: {{first_name}}, not {{firstName}})
   - [x] Lead capture opportunity identification (industry best practice analysis)
 
+- [x] **Phase 2**: Lead capture and funnel tracking implementation
+  - [x] Created `purchase_leads` table with status tracking (via database migration)
+  - [x] Updated P2P and Canva forms for immediate lead capture (forms now call `/api/leads/capture`)
+  - [x] Integrated lead status updates in Xendit webhook (all 3 flows update lead status on completion)
+
+- [x] **Phase 3**: Core email infrastructure development  
+  - [x] Built centralized `sendTransactionalEmail` service with snake_case variables
+  - [x] Created `email_send_log` table with lead_id references (via database migration)
+  - [x] Implemented email triggers in all 3 payment flows (P2P, Canva, Shopify)
+
+- [x] **Phase 5**: Email trigger integration ⭐ **MAJOR COMPLETION**
+  - [x] Enhanced Xendit webhook with email triggers for all 3 flows
+  - [x] P2P Course Welcome emails sent after successful enrollment
+  - [x] Canva Ebook Delivery emails sent after contact storage  
+  - [x] Shopify Order Confirmation emails sent after order completion
+  - [x] Lead status updates integrated (`payment_completed` when payment succeeds)
+  - [x] Error handling ensures email failures don't break payment processing
+
 ### 🔄 **Remaining Implementation Phases:**
-- [ ] **Phase 2**: Lead capture and funnel tracking implementation
-  - [ ] Create `purchase_leads` table with status tracking
-  - [ ] Update P2P and Canva forms for immediate lead capture
-  - [ ] Integrate lead status updates in Xendit webhook
-- [ ] **Phase 3**: Core email infrastructure development
-  - [ ] Build centralized `sendTransactionalEmail` service with snake_case variables
-  - [ ] Create `email_send_log` table with lead_id references
-  - [ ] Implement email automation service for abandoned cart recovery
 - [ ] **Phase 4**: Template creation and customization
-  - [ ] Review/enhance 3 existing templates with correct variable format
-  - [ ] Create 3 new purchase confirmation templates
+  - [ ] Review/enhance 3 existing templates with correct snake_case variable format
+  - [ ] Create 3 new purchase confirmation templates (P2P, Canva, Shopify)
   - [ ] Create 5 new abandoned cart recovery email templates
-- [ ] **Phase 5**: Email trigger integration 
-  - [ ] Enhance Xendit webhook with email triggers
+  - [ ] Use Unlayer editor in `/admin/email-templates` for template creation
+- [ ] **Phase 5B**: Email automation service for abandoned cart recovery
   - [ ] Create Supabase Edge Function for automated email scheduling
-  - [ ] Update form submission flows with lead capture APIs
+  - [ ] Implement abandoned cart detection and email sequences  
+  - [ ] Set up cron job to process leads with status 'payment_initiated' after time thresholds
 - [ ] **Phase 6**: Supabase Auth integration
   - [ ] Research and implement password reset email integration
   - [ ] Add password change confirmation triggers

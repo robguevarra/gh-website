@@ -181,6 +181,49 @@ export default function PapersToProfit() {
       const fbc = getCookie('_fbc');
       // ------------------------------------------------------------------------
 
+      // --- STEP 1: CAPTURE LEAD BEFORE PAYMENT (Industry Best Practice) ---
+      // This ensures we don't lose potential customers who abandon payment
+      let leadId: string | undefined;
+      
+      try {
+        const leadCaptureResponse = await fetch('/api/leads/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phone,
+            productType: 'P2P',
+            amount: planPrice,
+            currency: process.env.PAYMENT_CURRENCY || 'PHP',
+            sourcePage: '/papers-to-profits',
+            utmSource: new URLSearchParams(window.location.search).get('utm_source') || undefined,
+            utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
+            utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,
+            metadata: {
+              plan: selectedPlan,
+              course_id: '7e386720-8839-4252-bd5f-09a33c3e1afb',
+              ...(fbp && { fbp }),
+              ...(fbc && { fbc }),
+            }
+          })
+        });
+
+        const leadResult = await leadCaptureResponse.json();
+        
+        if (leadResult.success) {
+          leadId = leadResult.leadId;
+          console.log('[Lead] Successfully captured lead before payment:', leadId);
+        } else {
+          console.error('[Lead] Failed to capture lead:', leadResult.error);
+          // Continue with payment anyway - lead capture failure shouldn't block purchase
+        }
+      } catch (leadError) {
+        console.error('[Lead] Error capturing lead:', leadError);
+        // Continue with payment anyway
+      }
+
       // --- Facebook CAPI: Send InitiateCheckout event ---
       // This is best practice: fire when user starts checkout (form submit)
       try {
@@ -216,6 +259,7 @@ export default function PapersToProfit() {
       }
       // ------------------------------------------------------------------------
 
+      // --- STEP 2: CREATE PAYMENT INTENT WITH LEAD TRACKING ---
       // Call the server action to create a payment intent with Xendit
       const response = await createPaymentIntent({
         amount: planPrice,
@@ -230,6 +274,7 @@ export default function PapersToProfit() {
           plan: selectedPlan,
           source: "website",
           course_id: "7e386720-8839-4252-bd5f-09a33c3e1afb",
+          ...(leadId && { lead_id: leadId }), // Include lead_id for tracking
           ...(fbp && { fbp }),
           ...(fbc && { fbc }),
         },

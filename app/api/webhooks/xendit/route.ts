@@ -12,6 +12,7 @@ import { buildUserData, sendFacebookEvent } from '@/lib/facebook-capi'
 import { v4 as uuidv4 } from 'uuid'
 import { Json } from '@/types/supabase'
 import { grantFilePermission } from '@/lib/google-drive/driveApiUtils';
+import { sendTransactionalEmail } from '@/lib/email/transactional-email-service';
 
 // Define a type for the expected transaction data
 interface Transaction {
@@ -321,7 +322,60 @@ export async function POST(request: NextRequest) {
                       transactionId: tx.id,
                       courseId: String(courseId), // Ensure it's a string if needed
                     })
-                    // Log is handled inside createEnrollment
+                    console.log("[Webhook][P2P] Enrollment created successfully")
+                    
+                    // --- Send P2P Course Welcome Email ---
+                    try {
+                      // Get user profile details for email personalization
+                      const { data: profileData } = await supabase
+                        .from('unified_profiles')
+                        .select('first_name, last_name, email')
+                        .eq('id', currentUserId)
+                        .maybeSingle()
+                      
+                      const userEmail = profileData?.email || tx.contact_email
+                      const firstName = profileData?.first_name || (tx.metadata as any)?.firstName || 'Friend'
+                      
+                      if (userEmail) {
+                        // Update lead status if leadId exists in metadata
+                        const leadId = (tx.metadata as any)?.lead_id
+                        if (leadId) {
+                          try {
+                            await fetch('/api/leads/capture', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                leadId: leadId,
+                                status: 'payment_completed'
+                              })
+                            })
+                            console.log("[Webhook][P2P] Lead status updated to payment_completed")
+                          } catch (leadUpdateError) {
+                            console.error("[Webhook][P2P] Failed to update lead status:", leadUpdateError)
+                          }
+                        }
+                        
+                        // Send welcome email
+                        await sendTransactionalEmail(
+                          'P2P Course Welcome',
+                          userEmail,
+                          {
+                            first_name: firstName,
+                            course_name: 'Papers to Profits', 
+                            enrollment_date: new Date().toLocaleDateString(),
+                            access_link: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://gracefulhomeschooling.com'}/dashboard/course`
+                          },
+                          leadId
+                        )
+                        console.log("[Webhook][P2P] Welcome email sent successfully")
+                      } else {
+                        console.warn("[Webhook][P2P] No email available for welcome email")
+                      }
+                    } catch (emailError) {
+                      console.error("[Webhook][P2P] Failed to send welcome email:", emailError)
+                      // Don't throw - email failure shouldn't break payment processing
+                    }
+                    // --- End Welcome Email ---
                   } catch (err) {
                     console.error("[Webhook][P2P] Failed to create enrollment:", err)
                   }
@@ -575,6 +629,60 @@ export async function POST(request: NextRequest) {
                         console.error(`[Webhook][ECOM] Failed to update order ${newOrderId} status to 'completed':`, updateStatusError);
                     } else {
                         console.log(`[Webhook][ECOM] Successfully updated order ${newOrderId} status to 'completed'.`);
+                        
+                        // --- Send Shopify Order Confirmation Email ---
+                        if (userEmail) {
+                          try {
+                            // Get user profile details for email personalization
+                            const { data: profileData } = await supabase
+                              .from('unified_profiles')
+                              .select('first_name, last_name')
+                              .eq('id', currentUserId)
+                              .maybeSingle()
+                            
+                            const firstName = profileData?.first_name || (tx.metadata as any)?.firstName || 'Friend'
+                            
+                            // Update lead status if leadId exists in metadata
+                            const leadId = (tx.metadata as any)?.lead_id
+                            if (leadId) {
+                              try {
+                                await fetch('/api/leads/capture', {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    leadId: leadId,
+                                    status: 'payment_completed'
+                                  })
+                                })
+                                console.log("[Webhook][ECOM] Lead status updated to payment_completed")
+                              } catch (leadUpdateError) {
+                                console.error("[Webhook][ECOM] Failed to update lead status:", leadUpdateError)
+                              }
+                            }
+                            
+                            // Send order confirmation email
+                            await sendTransactionalEmail(
+                              'Shopify Order Confirmation',
+                              userEmail,
+                              {
+                                first_name: firstName,
+                                order_number: newOrderId,
+                                order_items: cartItems, // Array of items with details
+                                total_amount: ((tx.amount || data.amount || 0) / 100).toFixed(2),
+                                currency: tx.currency || 'PHP',
+                                access_instructions: 'Your digital products have been delivered to your email. Check your Google Drive access for each item.'
+                              },
+                              leadId
+                            )
+                            console.log("[Webhook][ECOM] Order confirmation email sent successfully")
+                          } catch (emailError) {
+                            console.error("[Webhook][ECOM] Failed to send order confirmation email:", emailError)
+                            // Don't throw - email failure shouldn't break payment processing
+                          }
+                        } else {
+                          console.warn("[Webhook][ECOM] No email available for order confirmation")
+                        }
+                        // --- End Order Confirmation Email ---
                     }
                 } catch (statusUpdateErr) {
                      console.error(`[Webhook][ECOM] Unexpected error updating order ${newOrderId} status:`, statusUpdateErr);
@@ -596,7 +704,48 @@ export async function POST(request: NextRequest) {
                     // Ensure metadata is an object before passing
                     metadata: (typeof tx.metadata === 'object' && tx.metadata !== null) ? tx.metadata : {}, 
                   })
-                  console.log("[Webhook][Canva] Ebook contact info stored");
+                  console.log("[Webhook][Canva] Ebook contact info stored successfully");
+                  
+                  // --- Send Canva Ebook Delivery Email ---
+                  try {
+                    const firstName = (tx.metadata as any)?.firstName || 'Friend'
+                    
+                    // Update lead status if leadId exists in metadata
+                    const leadId = (tx.metadata as any)?.lead_id
+                    if (leadId) {
+                      try {
+                        await fetch('/api/leads/capture', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            leadId: leadId,
+                            status: 'payment_completed'
+                          })
+                        })
+                        console.log("[Webhook][Canva] Lead status updated to payment_completed")
+                      } catch (leadUpdateError) {
+                        console.error("[Webhook][Canva] Failed to update lead status:", leadUpdateError)
+                      }
+                    }
+                    
+                    // Send ebook delivery email
+                    await sendTransactionalEmail(
+                      'Canva Ebook Delivery',
+                      validatedEmail,
+                      {
+                        first_name: firstName,
+                        ebook_title: 'My Canva Business Ebook',
+                        google_drive_link: process.env.CANVA_EBOOK_DRIVE_LINK || 'https://drive.google.com/file/d/example',
+                        support_email: process.env.SUPPORT_EMAIL || 'support@gracefulhomeschooling.com'
+                      },
+                      leadId
+                    )
+                    console.log("[Webhook][Canva] Ebook delivery email sent successfully")
+                  } catch (emailError) {
+                    console.error("[Webhook][Canva] Failed to send ebook delivery email:", emailError)
+                    // Don't throw - email failure shouldn't break payment processing
+                  }
+                  // --- End Ebook Delivery Email ---
               } else {
                   console.warn("[Webhook][Canva] Skipping ebook contact storage because contact_email is null or not a string.");
               }
