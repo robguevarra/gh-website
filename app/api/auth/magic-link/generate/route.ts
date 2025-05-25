@@ -34,11 +34,45 @@ export async function POST(request: NextRequest) {
 
     const classification = classificationResult.classification!
     const authFlow = getAuthenticationFlow(classification)
-
-    // 3. Use specified purpose or recommended purpose from classification
-    const finalPurpose = purpose || authFlow.magicLinkPurpose
-    const finalRedirectTo = redirectTo || authFlow.redirectPath
-
+    
+    // 3. Check if user has already set their password before generating account_setup magic links
+    let finalPurpose = purpose || authFlow.magicLinkPurpose
+    let finalRedirectTo = redirectTo || authFlow.redirectPath
+    
+    // IMPORTANT: Check if we're trying to generate an account_setup magic link for a user 
+    // who has already set up their password - redirect them to login instead
+    if (finalPurpose === 'account_setup' && classification.isExistingUser && classification.userId) {
+      try {
+        // Import admin client for auth checks
+        const { getAdminClient } = await import('@/lib/supabase/admin')
+        const supabase = getAdminClient()
+        
+        // Get user data to check password status
+        const { data, error } = await supabase.auth.admin.listUsers()
+        
+        if (!error && data.users && data.users.length > 0) {
+          // Find the user matching this email
+          const matchingUsers = data.users.filter(u => u.email === email)
+          
+          if (matchingUsers.length > 0) {
+            const user = matchingUsers[0]
+            const hasSetPassword = user?.user_metadata?.password_set_at !== undefined
+            
+            if (hasSetPassword) {
+              console.log(`[MagicLinkAPI] User has already set password, redirecting to signin instead of account setup`)
+              
+              // Override purpose and redirect path for users who have set up their password
+              finalPurpose = 'login'
+              finalRedirectTo = '/auth/signin?password_set=true&email=' + encodeURIComponent(email)
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[MagicLinkAPI] Error checking password status:', err)
+        // Continue with normal flow if we can't determine password status
+      }
+    }
+    
     console.log(`[MagicLinkAPI] Customer classified as ${classification.type}:`, {
       isExistingUser: classification.isExistingUser,
       recommendedPurpose: authFlow.magicLinkPurpose,
