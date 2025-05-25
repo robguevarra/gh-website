@@ -170,38 +170,65 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // Check if user has already set their password for account setup magic links
-    if (validation.purpose === 'account_setup' && classification.isExistingUser && validation.userId) {
+    if (validation.purpose === 'account_setup' && validation.email) {
       try {
         const supabase = getAdminClient()
         
-        // Get the user to check for password_set_at in user_metadata
-        const { data: { users } } = await supabase.auth.admin.listUsers()
+        // Using the admin API to get all users, then filter by email
+        // This is not ideal for performance but is the most reliable way with the current API
+        const { data, error } = await supabase.auth.admin.listUsers()
         
-        if (users && users.length > 0) {
-          // Find the user by userId
-          const user = users.find(u => u.id === validation.userId)
+        if (error) {
+          console.error('[MagicLinkVerifyAPI] Error fetching user:', error)
+        } else if (data.users && data.users.length > 0) {
+          // Filter to find the user with matching email
+          const matchingUsers = data.users.filter(u => u.email === validation.email)
           
-          if (user && user.user_metadata) {
-            // Check if password_set_at exists in the user's metadata
-            const passwordSetAt = user.user_metadata.password_set_at
-            
-            if (passwordSetAt) {
-              console.log(`[MagicLinkVerifyAPI] User has already set password at: ${passwordSetAt}`)
-              
-              profileStatus = {
-                isComplete: true,
-                message: 'You have already set up your password. Please sign in with your email and password.'
-              }
-              
-              // Redirect to signin instead of setup-account
-              if (redirectPath.includes('setup-account')) {
-                console.log('[MagicLinkVerifyAPI] Redirecting to signin - password already set')
-                redirectPath = '/auth/signin?password_set=true&email=' + encodeURIComponent(validation.email!)
-              }
-            } else {
-              console.log('[MagicLinkVerifyAPI] User has not set password yet')
-            }
+          if (matchingUsers.length === 0) {
+            console.log('[MagicLinkVerifyAPI] No user found with email:', validation.email)
+            return
           }
+          
+          // Get the matching user
+          const user = matchingUsers[0]
+          
+          // Check user_metadata for password_set_at
+          const hasSetPassword = user?.user_metadata?.password_set_at !== undefined
+          
+          if (hasSetPassword) {
+            console.log(`[MagicLinkVerifyAPI] User has already set password at:`, user.user_metadata.password_set_at)
+            
+            // Update profile status to indicate completion
+            profileStatus = {
+              isComplete: true,
+              message: 'You have already set up your password. Please sign in with your email and password.'
+            }
+            
+            // IMPORTANT: Force redirect to signin instead of setup-account
+            // This is the critical change to ensure users can't access setup page after password is set
+            redirectPath = '/auth/signin?password_set=true&email=' + encodeURIComponent(validation.email)
+            
+            // Log the forced redirect
+            console.log('[MagicLinkVerifyAPI] FORCING redirect to:', redirectPath)
+            
+            // Return early with a specific redirection to prevent proceeding further
+            return NextResponse.json({
+              success: true,
+              verification: {
+                email: validation.email,
+                purpose: validation.purpose,
+                userId: validation.userId,
+                metadata: validation.metadata
+              },
+              authFlow: { redirectPath },
+              profileStatus,
+              session: sessionResult
+            })
+          } else {
+            console.log('[MagicLinkVerifyAPI] User has not set password yet')
+          }
+        } else {
+          console.log('[MagicLinkVerifyAPI] No user found with email:', validation.email)
         }
       } catch (error) {
         console.error('[MagicLinkVerifyAPI] Error checking password status:', error)
