@@ -1,14 +1,18 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useState, Suspense, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import Image from 'next/image'
+import Link from 'next/link'
+import { motion, AnimatePresence, useInView } from 'framer-motion'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
-import { Loader2, Eye, EyeOff, CheckCircle, User, Lock, BookOpen } from 'lucide-react'
+import { Loader2, Eye, EyeOff, CheckCircle, User, Lock, BookOpen, Heart, ArrowRight, ChevronRight } from 'lucide-react'
+import { Logo } from '@/components/ui/logo'
 import { z } from 'zod'
 
 type SetupFlow = 'p2p' | 'new' | 'general'
@@ -44,18 +48,74 @@ interface PasswordData {
   confirmPassword: string
 }
 
+// Animations
+const fadeIn = {
+  hidden: { opacity: 0, y: 20 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6 },
+  },
+};
+
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.2,
+    },
+  },
+};
+
+const fadeInFromLeft = {
+  hidden: { opacity: 0, x: -20 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.6 },
+  },
+};
+
+const fadeInFromRight = {
+  hidden: { opacity: 0, x: 20 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.6 },
+  },
+};
+
 // Loading component for Suspense fallback
 function SetupAccountLoading() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-lg">
-        <CardHeader className="text-center space-y-4">
-          <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-          </div>
-          <CardTitle>Loading Account Setup...</CardTitle>
-        </CardHeader>
-      </Card>
+    <div className="min-h-screen bg-gradient-to-br from-[hsl(315,15%,93%)] to-[hsl(355,70%,95%)] flex flex-col justify-center items-center p-4">
+      <div className="absolute top-0 right-0 w-full h-64 bg-[url('/images/pattern-dots.svg')] bg-repeat-x opacity-10" />
+      
+      <div className="w-full max-w-lg">
+        <div className="flex justify-center mb-6">
+          <Logo size="large" />
+        </div>
+        
+        <Card className="w-full max-w-lg border border-[hsl(315,15%,80%)] shadow-lg">
+          <CardHeader className="text-center space-y-4 pb-2">
+            <div className="flex justify-center py-6">
+              <div className="relative">
+                <div className="animate-ping absolute h-12 w-12 rounded-full bg-[hsl(315,15%,60%)]/30"></div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[hsl(315,15%,60%)]"></div>
+              </div>
+            </div>
+            <CardTitle className="text-2xl font-serif text-[hsl(315,15%,30%)]">
+              Preparing Your Account
+            </CardTitle>
+            <CardDescription className="text-lg text-[hsl(315,15%,50%)]">
+              Just a moment while we set everything up...
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+      
+      <div className="absolute bottom-0 left-0 w-full h-64 bg-[url('/images/pattern-waves.svg')] bg-repeat-x opacity-10" />
     </div>
   )
 }
@@ -149,15 +209,17 @@ function SetupAccountContent() {
         return {
           title: 'Welcome to Papers to Profits!',
           subtitle: 'Let\'s set up your account to access your course',
-          icon: <BookOpen className="h-8 w-8 text-purple-600" />,
+          icon: <BookOpen className="h-10 w-10 text-[hsl(315,15%,60%)]" />,
+          bgImage: '/images/papers-to-profit-bg.jpg',
           completionMessage: 'Your account is ready! You can now access your Papers to Profits course.',
-          redirectPath: '/dashboard/course'
+          redirectPath: '/dashboard'
         }
       case 'new':
         return {
           title: 'Create Your Account',
           subtitle: 'Join the Graceful Homeschooling community',
-          icon: <User className="h-8 w-8 text-purple-600" />,
+          icon: <Heart className="h-10 w-10 text-[hsl(315,15%,60%)]" />,
+          bgImage: '/images/homeschool-community-bg.jpg',
           completionMessage: 'Welcome to Graceful Homeschooling! Your account has been created.',
           redirectPath: '/dashboard'
         }
@@ -165,7 +227,8 @@ function SetupAccountContent() {
         return {
           title: 'Complete Your Account Setup',
           subtitle: 'Just a few more details to get you started',
-          icon: <User className="h-8 w-8 text-purple-600" />,
+          icon: <User className="h-10 w-10 text-[hsl(315,15%,60%)]" />,
+          bgImage: '/images/homeschool-pattern-bg.jpg',
           completionMessage: 'Your account setup is complete!',
           redirectPath: '/dashboard'
         }
@@ -346,196 +409,315 @@ function SetupAccountContent() {
   }
 
   const renderProfileStep = () => (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="firstName">First Name</Label>
-          <Input
-            id="firstName"
-            value={profileData.firstName}
-            onChange={(e) => setProfileData(prev => ({ ...prev, firstName: e.target.value }))}
-            className={errors.firstName ? 'border-red-500' : ''}
-            placeholder="Enter your first name"
-          />
+    <motion.div 
+      className="space-y-6"
+      initial="hidden"
+      animate="visible"
+      variants={staggerContainer}
+    >
+      <motion.div className="space-y-4" variants={staggerContainer}>
+        <motion.div className="space-y-2" variants={fadeIn}>
+          <Label htmlFor="firstName" className="text-[hsl(315,15%,30%)] font-medium">
+            First Name
+          </Label>
+          <div className="relative">
+            <Input
+              id="firstName"
+              value={profileData.firstName}
+              onChange={(e) => setProfileData(prev => ({ ...prev, firstName: e.target.value }))}
+              className={`pl-10 border-[hsl(315,15%,80%)] focus:border-[hsl(315,15%,60%)] focus:ring-[hsl(315,15%,60%)] ${errors.firstName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
+              placeholder="Enter your first name"
+            />
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[hsl(315,15%,60%)]" />
+          </div>
           {errors.firstName && (
-            <p className="text-sm text-red-600">{errors.firstName}</p>
+            <p className="text-sm text-red-600 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-600"></span>
+              {errors.firstName}
+            </p>
           )}
-        </div>
+        </motion.div>
 
-        <div className="space-y-2">
-          <Label htmlFor="lastName">Last Name</Label>
-          <Input
-            id="lastName"
-            value={profileData.lastName}
-            onChange={(e) => setProfileData(prev => ({ ...prev, lastName: e.target.value }))}
-            className={errors.lastName ? 'border-red-500' : ''}
-            placeholder="Enter your last name"
-          />
+        <motion.div className="space-y-2" variants={fadeIn}>
+          <Label htmlFor="lastName" className="text-[hsl(315,15%,30%)] font-medium">
+            Last Name
+          </Label>
+          <div className="relative">
+            <Input
+              id="lastName"
+              value={profileData.lastName}
+              onChange={(e) => setProfileData(prev => ({ ...prev, lastName: e.target.value }))}
+              className={`pl-10 border-[hsl(315,15%,80%)] focus:border-[hsl(315,15%,60%)] focus:ring-[hsl(315,15%,60%)] ${errors.lastName ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
+              placeholder="Enter your last name"
+            />
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[hsl(315,15%,60%)]" />
+          </div>
           {errors.lastName && (
-            <p className="text-sm text-red-600">{errors.lastName}</p>
+            <p className="text-sm text-red-600 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-600"></span>
+              {errors.lastName}
+            </p>
           )}
-        </div>
+        </motion.div>
 
-        <div className="space-y-2">
-          <Label htmlFor="email">Email Address</Label>
-          <Input
-            id="email"
-            type="email"
-            value={profileData.email}
-            onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
-            className={errors.email ? 'border-red-500' : ''}
-            placeholder="Enter your email address"
-            disabled={!!searchParams.get('email')} // Disable if pre-filled from magic link
-          />
+        <motion.div className="space-y-2" variants={fadeIn}>
+          <Label htmlFor="email" className="text-[hsl(315,15%,30%)] font-medium">
+            Email Address
+          </Label>
+          <div className="relative">
+            <Input
+              id="email"
+              type="email"
+              value={profileData.email}
+              onChange={(e) => setProfileData(prev => ({ ...prev, email: e.target.value }))}
+              className={`pl-10 border-[hsl(315,15%,80%)] focus:border-[hsl(315,15%,60%)] focus:ring-[hsl(315,15%,60%)] ${errors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}`}
+              placeholder="Enter your email address"
+              disabled={!!searchParams.get('email')} // Disable if pre-filled from magic link
+            />
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[hsl(315,15%,60%)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
           {errors.email && (
-            <p className="text-sm text-red-600">{errors.email}</p>
+            <p className="text-sm text-red-600 flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-600"></span>
+              {errors.email}
+            </p>
           )}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
-      <Button 
-        onClick={handleProfileNext}
-        className="w-full bg-purple-600 hover:bg-purple-700"
-      >
-        Continue to Password Setup
-      </Button>
-    </div>
+      <motion.div variants={fadeInFromRight}>
+        <Button 
+          onClick={handleProfileNext}
+          className="w-full bg-[hsl(315,15%,60%)] hover:bg-[hsl(315,15%,50%)] text-white font-medium py-2.5 rounded-md flex items-center justify-center gap-2 transition-all duration-300 shadow-sm hover:shadow-md"
+        >
+          Continue to Password Setup
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </motion.div>
+    </motion.div>
   )
 
+  // Password strength calculation
+  const calculatePasswordStrength = (password: string): number => {
+    if (!password) return 0;
+    
+    let strength = 0;
+    
+    // Length contribution (up to 25%)
+    strength += Math.min(password.length * 2.5, 25);
+    
+    // Character variety contribution
+    if (/[A-Z]/.test(password)) strength += 15; // uppercase
+    if (/[a-z]/.test(password)) strength += 15; // lowercase
+    if (/[0-9]/.test(password)) strength += 15; // numbers
+    if (/[^A-Za-z0-9]/.test(password)) strength += 15; // special chars
+    
+    // Word pattern penalty
+    if (/password|123456|qwerty/i.test(password)) strength -= 20;
+    
+    // Ensure strength is between 0-100
+    return Math.max(0, Math.min(100, strength));
+  };
+  
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    setPasswordData(prev => ({ ...prev, password: newPassword }));
+  };
+
   const renderPasswordStep = () => {
-    const isVerified = searchParams.get('verified') === 'true'
+    const isVerified = searchParams.get('verified') === 'true';
+    const passwordStrength = calculatePasswordStrength(passwordData.password);
+    
+    const passwordStrengthColor = () => {
+      if (!passwordData.password) return 'bg-gray-200';
+      if (passwordStrength < 33) return 'bg-red-500';
+      if (passwordStrength < 66) return 'bg-yellow-500';
+      return 'bg-green-500';
+    };
+    
+    const passwordStrengthLabel = () => {
+      if (!passwordData.password) return '';
+      if (passwordStrength < 33) return 'Weak';
+      if (passwordStrength < 66) return 'Medium';
+      return 'Strong';
+    };
     
     return (
-      <div className="space-y-6">
+      <motion.div 
+        className="space-y-6"
+        initial="hidden"
+        animate="visible"
+        variants={staggerContainer}
+      >
         {/* Show user info if coming from verified magic link */}
         {isVerified && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <motion.div variants={fadeIn} className="bg-[hsl(315,15%,97%)] border border-[hsl(315,15%,80%)] rounded-lg p-4 shadow-sm">
             <div className="flex items-center space-x-2 mb-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <h4 className="font-medium text-green-800">Email Verified</h4>
+              <CheckCircle className="h-5 w-5 text-[hsl(315,15%,60%)]" />
+              <h4 className="font-medium text-[hsl(315,15%,30%)]">Email Verified</h4>
             </div>
-            <p className="text-sm text-green-700">
+            <p className="text-sm text-[hsl(315,15%,40%)]">
               Setting up password for: <span className="font-medium">{profileData.email}</span>
             </p>
             {profileData.firstName && profileData.firstName !== 'Loading...' && (
-              <p className="text-sm text-green-700">
+              <p className="text-sm text-[hsl(315,15%,40%)]">
                 Welcome, {profileData.firstName} {profileData.lastName}!
               </p>
             )}
-          </div>
+          </motion.div>
         )}
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+        <motion.div className="space-y-4" variants={staggerContainer}>
+          <motion.div className="space-y-2" variants={fadeIn}>
+            <Label htmlFor="password" className="text-[hsl(315,15%,30%)] font-medium">
+              Password
+            </Label>
             <div className="relative">
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 value={passwordData.password}
-                onChange={(e) => setPasswordData(prev => ({ ...prev, password: e.target.value }))}
-                className={errors.password ? 'border-red-500' : ''}
-                placeholder="Create a secure password"
+                onChange={handlePasswordChange}
+                className={`pl-10 border-[hsl(315,15%,80%)] focus:border-[hsl(315,15%,60%)] focus:ring-[hsl(315,15%,60%)] ${errors.password ? 'border-red-500 focus:border-red-500 focus:ring-red-500 pr-10' : 'pr-10'}`}
+                placeholder="Create a strong password"
               />
-              <Button
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[hsl(315,15%,60%)]" />
+              <button 
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                 onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(315,15%,60%)] hover:text-[hsl(315,15%,40%)] transition-colors"
               >
                 {showPassword ? (
-                  <EyeOff className="h-4 w-4 text-gray-400" />
+                  <EyeOff className="h-5 w-5" />
                 ) : (
-                  <Eye className="h-4 w-4 text-gray-400" />
+                  <Eye className="h-5 w-5" />
                 )}
-              </Button>
+              </button>
             </div>
             {errors.password && (
-              <p className="text-sm text-red-600">{errors.password}</p>
+              <p className="text-sm text-red-600 flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-600"></span>
+                {errors.password}
+              </p>
             )}
-          </div>
+            {passwordData.password && !errors.password && (
+              <div className="space-y-1">
+                <div className="h-2 w-full bg-[hsl(315,15%,90%)] rounded-full overflow-hidden">
+                  <motion.div 
+                    className={`h-full ${passwordStrengthColor()}`}
+                    style={{ width: `${passwordStrength}%` }}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${passwordStrength}%` }}
+                    transition={{ duration: 0.5 }}
+                  ></motion.div>
+                </div>
+                <p className="text-xs text-[hsl(315,15%,50%)] flex items-center gap-1.5">
+                  <span className={`h-2 w-2 rounded-full ${passwordStrengthColor()}`}></span>
+                  Password strength: {passwordStrengthLabel()}
+                </p>
+              </div>
+            )}
+            
+            {/* Password requirements */}
+            <div className="text-xs text-[hsl(315,15%,50%)] mt-1 space-y-1 border-t border-[hsl(315,15%,90%)] pt-2">
+              <p>Password must contain:</p>
+              <ul className="space-y-1">
+                <li className="flex items-center gap-1.5">
+                  <span className={`h-1.5 w-1.5 rounded-full ${/^.{8,}$/.test(passwordData.password) ? 'bg-green-500' : 'bg-[hsl(315,15%,80%)]'}`}></span>
+                  At least 8 characters
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className={`h-1.5 w-1.5 rounded-full ${/[A-Z]/.test(passwordData.password) ? 'bg-green-500' : 'bg-[hsl(315,15%,80%)]'}`}></span>
+                  One uppercase letter
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className={`h-1.5 w-1.5 rounded-full ${/[a-z]/.test(passwordData.password) ? 'bg-green-500' : 'bg-[hsl(315,15%,80%)]'}`}></span>
+                  One lowercase letter
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <span className={`h-1.5 w-1.5 rounded-full ${/[0-9]/.test(passwordData.password) ? 'bg-green-500' : 'bg-[hsl(315,15%,80%)]'}`}></span>
+                  One number
+                </li>
+              </ul>
+            </div>
+          </motion.div>
 
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
+          <motion.div className="space-y-2" variants={fadeIn}>
+            <Label htmlFor="confirmPassword" className="text-[hsl(315,15%,30%)] font-medium">
+              Confirm Password
+            </Label>
             <div className="relative">
               <Input
                 id="confirmPassword"
                 type={showConfirmPassword ? 'text' : 'password'}
                 value={passwordData.confirmPassword}
                 onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                className={errors.confirmPassword ? 'border-red-500' : ''}
+                className={`pl-10 border-[hsl(315,15%,80%)] focus:border-[hsl(315,15%,60%)] focus:ring-[hsl(315,15%,60%)] ${errors.confirmPassword ? 'border-red-500 focus:border-red-500 focus:ring-red-500 pr-10' : 'pr-10'}`}
                 placeholder="Confirm your password"
               />
-              <Button
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-[hsl(315,15%,60%)]" />
+              <button 
                 type="button"
-                variant="ghost"
-                size="sm"
-                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(315,15%,60%)] hover:text-[hsl(315,15%,40%)] transition-colors"
               >
                 {showConfirmPassword ? (
-                  <EyeOff className="h-4 w-4 text-gray-400" />
+                  <EyeOff className="h-5 w-5" />
                 ) : (
-                  <Eye className="h-4 w-4 text-gray-400" />
+                  <Eye className="h-5 w-5" />
                 )}
-              </Button>
+              </button>
             </div>
             {errors.confirmPassword && (
-              <p className="text-sm text-red-600">{errors.confirmPassword}</p>
+              <p className="text-sm text-red-600 flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-red-600"></span>
+                {errors.confirmPassword}
+              </p>
             )}
-          </div>
+          </motion.div>
+        </motion.div>
 
-          {/* Password requirements */}
-          <div className="text-sm text-gray-600 space-y-1">
-            <p>Password must contain:</p>
-            <ul className="list-disc ml-5 space-y-1">
-              <li>At least 8 characters</li>
-              <li>One uppercase letter</li>
-              <li>One lowercase letter</li>
-              <li>One number</li>
-            </ul>
-          </div>
-        </div>
-
-        {errors.submit && (
-          <div className="bg-red-50 p-3 rounded-md">
-            <p className="text-sm text-red-700">{errors.submit}</p>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          <Button 
-            onClick={handlePasswordNext}
-            disabled={isLoading}
-            className="w-full bg-purple-600 hover:bg-purple-700"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating Account...
-              </>
-            ) : (
-              <>
-                <Lock className="h-4 w-4 mr-2" />
-                Create Account
-              </>
-            )}
-          </Button>
-
+        <motion.div 
+          className="flex flex-col space-y-3"
+          variants={staggerContainer}
+        >
+          <motion.div variants={fadeInFromRight}>
+            <Button 
+              onClick={handlePasswordNext}
+              disabled={isLoading}
+              className="w-full bg-[hsl(315,15%,60%)] hover:bg-[hsl(315,15%,50%)] text-white font-medium py-2.5 rounded-md flex items-center justify-center gap-2 transition-all duration-300 shadow-sm hover:shadow-md disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Creating Account...
+                </>
+              ) : (
+                <>
+                  Create Account
+                  <CheckCircle className="h-5 w-5" />
+                </>
+              )}
+            </Button>
+          </motion.div>
+          
           {/* Only show back button if not coming from verified magic link */}
           {!isVerified && (
-            <Button 
-              variant="outline"
-              onClick={() => setStep('profile')}
-              className="w-full"
-              disabled={isLoading}
-            >
-              Back to Profile
-            </Button>
+            <motion.div variants={fadeIn}>
+              <Button 
+                onClick={() => setStep('profile')}
+                variant="outline"
+                disabled={isLoading}
+                className="w-full border-[hsl(315,15%,80%)] text-[hsl(315,15%,40%)] hover:bg-[hsl(315,15%,97%)] hover:text-[hsl(315,15%,30%)] font-medium"
+              >
+                Back to Profile
+              </Button>
+            </motion.div>
           )}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     )
   }
 
@@ -543,76 +725,157 @@ function SetupAccountContent() {
     const config = getFlowConfig()
     
     return (
-      <div className="space-y-6 text-center">
-        <div className="flex justify-center">
-          <CheckCircle className="h-16 w-16 text-green-600" />
-        </div>
+      <motion.div 
+        className="space-y-8 text-center py-4"
+        initial="hidden"
+        animate="visible"
+        variants={staggerContainer}
+      >
+        <motion.div 
+          className="flex justify-center"
+          variants={fadeIn}
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: "spring", stiffness: 200, damping: 10 }}
+        >
+          <div className="relative">
+            <div className="absolute inset-0 animate-ping rounded-full bg-green-500/20 h-20 w-20"></div>
+            <CheckCircle className="h-20 w-20 text-[hsl(315,15%,60%)]" />
+          </div>
+        </motion.div>
         
-        <div className="space-y-2">
-          <h3 className="text-xl font-semibold text-green-800">Account Created Successfully!</h3>
-          <p className="text-gray-600">
+        <motion.div className="space-y-2" variants={fadeIn}>
+          <h3 className="text-2xl font-serif text-[hsl(315,15%,30%)]">Account Created Successfully!</h3>
+          <p className="text-[hsl(315,15%,50%)] text-lg">
             {config.completionMessage}
           </p>
-        </div>
+        </motion.div>
 
         {flow === 'p2p' && (
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <h4 className="font-medium text-purple-900 mb-2">What's Next?</h4>
-            <ul className="text-sm text-purple-700 space-y-1">
-              <li>✓ Access your course materials</li>
-              <li>✓ Join the private community</li>
-              <li>✓ Start your business journey</li>
+          <motion.div 
+            className="bg-[hsl(315,15%,97%)] border border-[hsl(315,15%,80%)] p-5 rounded-lg shadow-sm"
+            variants={fadeInFromRight}
+          >
+            <h4 className="font-medium text-[hsl(315,15%,40%)] mb-3 text-lg">What's Next?</h4>
+            <ul className="text-[hsl(315,15%,50%)] space-y-2">
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                <span>Access your course materials</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                <span>Join the private community</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-500" />
+                <span>Start your business journey</span>
+              </li>
             </ul>
-          </div>
+          </motion.div>
         )}
 
-        <Button 
-          onClick={handleComplete}
-          className="w-full bg-purple-600 hover:bg-purple-700"
-        >
-          {flow === 'p2p' ? 'Access My Course' : 'Go to Dashboard'}
-        </Button>
-      </div>
+        <motion.div variants={fadeInFromRight}>
+          <Button 
+            onClick={handleComplete}
+            className="w-full bg-[hsl(315,15%,60%)] hover:bg-[hsl(315,15%,50%)] text-white font-medium py-2.5 rounded-md flex items-center justify-center gap-2 transition-all duration-300 shadow-sm hover:shadow-md text-lg"
+          >
+            {flow === 'p2p' ? 'Access My Course' : 'Go to Dashboard'}
+            <ArrowRight className="h-5 w-5" />
+          </Button>
+        </motion.div>
+      </motion.div>
     )
   }
 
   const config = getFlowConfig()
+  const inViewRef = useRef(null)
+  const isInView = useInView(inViewRef, { once: true })
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-lg mx-auto">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            {config.icon}
-          </div>
-          <CardTitle className="text-2xl text-purple-900">{config.title}</CardTitle>
-          <CardDescription className="text-lg">
-            {config.subtitle}
-          </CardDescription>
-          
-          {/* Progress bar */}
-          <div className="mt-6">
-            <Progress value={getProgressValue()} className="w-full" />
-            <div className="flex justify-between text-sm text-gray-500 mt-2">
-              <span className={step === 'profile' ? 'text-purple-600 font-medium' : ''}>
-                Profile
-              </span>
-              <span className={step === 'password' ? 'text-purple-600 font-medium' : ''}>
-                Password
-              </span>
-              <span className={step === 'complete' ? 'text-purple-600 font-medium' : ''}>
-                Complete
-              </span>
-            </div>
-          </div>
-        </CardHeader>
+    <div className="min-h-screen bg-gradient-to-br from-[hsl(315,15%,93%)] to-[hsl(355,70%,95%)] flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Background patterns */}
+      <div className="absolute top-0 right-0 w-full h-64 bg-[url('/images/pattern-dots.svg')] bg-repeat-x opacity-10" />
+      <div className="absolute bottom-0 left-0 w-full h-64 bg-[url('/images/pattern-waves.svg')] bg-repeat-x opacity-10" />
+      
+      {/* Optional background image */}
+      {config.bgImage && (
+        <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
+          <Image 
+            src={config.bgImage} 
+            alt="Background" 
+            fill 
+            style={{ objectFit: 'cover' }} 
+            priority 
+          />
+        </div>
+      )}
+      
+      <div className="relative w-full max-w-xl mx-auto" ref={inViewRef}>
+        <div className="flex justify-center mb-6">
+          <Logo size="large" />
+        </div>
         
-        <CardContent>
-          {step === 'profile' && renderProfileStep()}
-          {step === 'password' && renderPasswordStep()}
-          {step === 'complete' && renderCompleteStep()}
-        </CardContent>
-      </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
+          transition={{ duration: 0.6 }}
+        >
+          <Card className="w-full border border-[hsl(315,15%,80%)] shadow-lg overflow-hidden">
+            <CardHeader className="text-center pb-4 relative">
+              <div className="flex justify-center mb-4">
+                <div className="p-3 rounded-full bg-[hsl(315,15%,95%)] border border-[hsl(315,15%,85%)]">
+                  {config.icon}
+                </div>
+              </div>
+              <CardTitle className="text-2xl font-serif text-[hsl(315,15%,30%)]">{config.title}</CardTitle>
+              <CardDescription className="text-lg text-[hsl(315,15%,50%)]">
+                {config.subtitle}
+              </CardDescription>
+              
+              {/* Progress bar */}
+              <div className="mt-6">
+                <Progress 
+                  value={getProgressValue()} 
+                  className="w-full h-2 bg-[hsl(315,15%,90%)]" 
+                />
+                <div className="flex justify-between text-sm mt-2">
+                  <span className={`transition-colors ${step === 'profile' ? 'text-[hsl(315,15%,60%)] font-medium' : 'text-[hsl(315,15%,60%)]'}`}>
+                    Profile
+                  </span>
+                  <span className={`transition-colors ${step === 'password' ? 'text-[hsl(315,15%,60%)] font-medium' : 'text-[hsl(315,15%,60%)]'}`}>
+                    Password
+                  </span>
+                  <span className={`transition-colors ${step === 'complete' ? 'text-[hsl(315,15%,60%)] font-medium' : 'text-[hsl(315,15%,60%)]'}`}>
+                    Complete
+                  </span>
+                </div>
+              </div>
+            </CardHeader>
+            
+            <CardContent className="pb-8">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={step}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {step === 'profile' && renderProfileStep()}
+                  {step === 'password' && renderPasswordStep()}
+                  {step === 'complete' && renderCompleteStep()}
+                </motion.div>
+              </AnimatePresence>
+            </CardContent>
+            
+            <CardFooter className="text-center text-xs text-[hsl(315,15%,60%)] border-t border-[hsl(315,15%,90%)] p-4">
+              <div className="w-full flex justify-center">
+                <span>© {new Date().getFullYear()} Graceful Homeschooling. All rights reserved.</span>
+              </div>
+            </CardFooter>
+          </Card>
+        </motion.div>
+      </div>
     </div>
   )
 }
