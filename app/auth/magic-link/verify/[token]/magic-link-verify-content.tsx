@@ -76,6 +76,8 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
             setEmail(result.email || '')
           } else if (result.used) {
             setState('used')
+            // Store email for used tokens too
+            setEmail(result.email || '')
           } else {
             setState('invalid')
             setErrorMessage(result.error || 'Invalid magic link')
@@ -144,6 +146,8 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
             setEmail(result.email || '')
           } else if (result.used) {
             setState('used')
+            // Store email for used tokens too
+            setEmail(result.email || '')
           } else {
             setState('invalid')
             setErrorMessage(result.error || 'Invalid magic link')
@@ -352,12 +356,29 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
               <div className="text-center space-y-3">
                 <Button 
                   onClick={() => {
-                    // Automatically get email from prior verification if possible
+                    // Get the email address so we can generate a new magic link
+                    console.log('[MagicLinkVerify] Refresh button clicked, email state:', email)
+                    
                     if (email) {
+                      // We have the email from verification, use it
                       handleRefreshLink()
                     } else {
-                      // If no email available, redirect to sign in page
-                      router.push('/auth/signin')
+                      // No email available - ask user for it
+                      const userEmail = prompt('Please enter your email address to receive a new magic link:')
+                      if (userEmail && userEmail.includes('@')) {
+                        console.log('[MagicLinkVerify] User entered email:', userEmail)
+                        setEmail(userEmail)
+                        // Use setTimeout to ensure state is updated before calling the function
+                        setTimeout(() => {
+                          console.log('[MagicLinkVerify] Calling handleRefreshLink with:', userEmail)
+                          handleRefreshLink()
+                        }, 100)
+                      } else if (userEmail) {
+                        alert('Please enter a valid email address')
+                      } else {
+                        // User cancelled - redirect to sign in
+                        router.push('/auth/signin')
+                      }
                     }
                   }}
                   disabled={isRefreshing}
