@@ -203,7 +203,12 @@ export async function validateMagicLink(
     // 3. Check if already used (single-use enforcement)
     if (magicLinkRecord.used_at) {
       console.warn(`[MagicLink] Token already used at ${magicLinkRecord.used_at} for ${magicLinkRecord.email}`)
-      return { success: false, error: 'Magic link has already been used', used: true }
+      return { 
+        success: false, 
+        error: 'Magic link has already been used', 
+        used: true,
+        email: magicLinkRecord.email // Always include email for refresh functionality
+      }
     }
 
     // 4. Check if expired (double-check beyond JWT)
@@ -212,7 +217,12 @@ export async function validateMagicLink(
     
     if (now > expiresAt) {
       console.warn(`[MagicLink] Token expired at ${magicLinkRecord.expires_at} for ${magicLinkRecord.email}`)
-      return { success: false, error: 'Magic link has expired', expired: true }
+      return { 
+        success: false, 
+        error: 'Magic link has expired', 
+        expired: true,
+        email: magicLinkRecord.email // Always include email for refresh functionality
+      }
     }
 
     // 5. Mark token as used
