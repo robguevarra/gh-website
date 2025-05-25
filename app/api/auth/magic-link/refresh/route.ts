@@ -10,19 +10,35 @@ import { sendTransactionalEmail } from '@/lib/email/transactional-email-service'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { expiredToken, email, purpose } = body
+    const { expiredToken, purpose } = body
 
     // Validate required fields
-    if (!expiredToken || !email) {
+    if (!expiredToken) {
       return NextResponse.json(
         { 
           success: false, 
-          error: 'Missing required fields: expiredToken and email are required' 
+          error: 'Missing required field: expiredToken is required' 
         },
         { status: 400 }
       )
     }
-
+    
+    // Get the email from the token - this follows industry best practice
+    // by looking up the token in the database regardless of token status
+    const { getEmailFromToken } = await import('@/lib/auth/token-lookup-service')
+    const emailLookup = await getEmailFromToken(expiredToken)
+    
+    if (!emailLookup.success || !emailLookup.email) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Could not retrieve email from token. Please try signing in directly.' 
+        },
+        { status: 400 }
+      )
+    }
+    
+    const email = emailLookup.email
     console.log('[MagicLinkRefresh] Processing refresh request for:', email)
 
     // Generate fresh magic link using the refresh service

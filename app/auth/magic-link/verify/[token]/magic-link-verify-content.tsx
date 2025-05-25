@@ -189,21 +189,21 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
   }
 
   const handleRefreshLink = async () => {
-    if (!email) return
-
     try {
       setIsRefreshing(true)
       
-      console.log('[MagicLinkVerify] Refreshing expired token for email:', email)
+      // Even if we don't have the email in component state, we can still use the token
+      // Modern auth systems can extract the email from the token itself
+      console.log('[MagicLinkVerify] Refreshing token:', token.substring(0, 20) + '...')
       
-      // Use the dedicated refresh endpoint with the expired token
+      // Use the dedicated refresh endpoint with just the expired token
+      // This is more secure as it doesn't rely on client-side email data
       const response = await fetch('/api/auth/magic-link/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          expiredToken: token, // Pass the expired token
-          email,
-          purpose
+          expiredToken: token, // The token is all we need to identify the user securely
+          purpose: purpose || 'account_setup'
         })
       })
 
