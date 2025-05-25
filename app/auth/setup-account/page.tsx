@@ -97,12 +97,51 @@ function SetupAccountContent() {
       setFlow(flowParam)
     }
 
-    // Pre-fill email if provided (from magic link validation)
+    // Check if coming from verified magic link
+    const isVerified = searchParams.get('verified') === 'true'
     const emailParam = searchParams.get('email')
-    if (emailParam) {
+    
+    if (isVerified && emailParam) {
+      // Skip profile step and go directly to password creation
+      setProfileData(prev => ({ 
+        ...prev, 
+        email: emailParam,
+        // For verified users, we'll get the name from the database
+        firstName: 'Loading...',
+        lastName: 'Loading...'
+      }))
+      setStep('password')
+      
+      // Fetch user profile data from the database
+      fetchUserProfile(emailParam)
+    } else if (emailParam) {
+      // Pre-fill email if provided (from magic link validation)
       setProfileData(prev => ({ ...prev, email: emailParam }))
     }
   }, [searchParams])
+
+  const fetchUserProfile = async (email: string) => {
+    try {
+      // Fetch user profile from unified_profiles table
+      const { data, error } = await supabase
+        .from('unified_profiles')
+        .select('first_name, last_name, email')
+        .eq('email', email)
+        .maybeSingle()
+
+      if (data) {
+        setProfileData({
+          firstName: data.first_name || '',
+          lastName: data.last_name || '',
+          email: data.email
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error)
+      // If we can't fetch profile, fall back to profile step
+      setStep('profile')
+    }
+  }
 
   const getFlowConfig = () => {
     switch (flow) {
@@ -191,48 +230,100 @@ function SetupAccountContent() {
 
     setIsLoading(true)
     try {
-      // Create Supabase Auth user
-      const { data, error } = await supabase.auth.signUp({
-        email: profileData.email,
-        password: passwordData.password,
-        options: {
-          data: {
-            first_name: profileData.firstName,
-            last_name: profileData.lastName,
-            setup_flow: flow,
-            setup_completed_at: new Date().toISOString()
+      const isVerified = searchParams.get('verified') === 'true'
+      
+      if (isVerified) {
+        // User came from verified magic link - they already have a Supabase Auth account
+        // We need to update their password using the Admin API
+        console.log('[AccountSetup] Setting password for verified user:', profileData.email)
+        
+        try {
+          // Use our API endpoint to update the password for existing user
+          const response = await fetch('/api/auth/update-password', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              email: profileData.email,
+              password: passwordData.password,
+              userData: {
+                first_name: profileData.firstName,
+                last_name: profileData.lastName,
+                setup_flow: flow,
+                setup_completed_at: new Date().toISOString()
+              }
+            })
+          })
+
+          const result = await response.json()
+
+          if (!result.success) {
+            console.error('[AccountSetup] Password update failed:', result.error)
+            setErrors({ submit: result.error || 'Failed to set password. Please try again.' })
+            return
           }
+
+          console.log('[AccountSetup] Password updated successfully for:', profileData.email)
+          
+          // Now sign in the user with their new password
+          const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: profileData.email,
+            password: passwordData.password
+          })
+
+          if (signInError) {
+            console.error('[AccountSetup] Sign in failed after password update:', signInError)
+            setErrors({ submit: 'Password set successfully, but sign in failed. Please try signing in manually.' })
+            return
+          }
+
+          console.log('[AccountSetup] User signed in successfully:', signInData.user?.id)
+          setStep('complete')
+
+        } catch (error) {
+          console.error('[AccountSetup] Password update error:', error)
+          setErrors({ submit: 'Failed to set password. Please try again.' })
+          return
         }
-      })
-
-      if (error) {
-        console.error('[AccountSetup] Supabase signup error:', error)
-        setErrors({ submit: error.message })
-        return
-      }
-
-      if (data.user) {
-        console.log('[AccountSetup] User created successfully:', data.user.id)
         
-        // Update unified_profiles if needed
-        await updateUnifiedProfile(data.user.id)
+      } else {
+        // New user flow - create account normally
+        console.log('[AccountSetup] Creating new account for:', profileData.email)
         
-        // Sign in the user immediately (since they just created the account)
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signUp({
           email: profileData.email,
-          password: passwordData.password
+          password: passwordData.password,
+          options: {
+            data: {
+              first_name: profileData.firstName,
+              last_name: profileData.lastName,
+              setup_flow: flow,
+              setup_completed_at: new Date().toISOString()
+            }
+          }
         })
 
-        if (signInError) {
-          console.error('[AccountSetup] Auto sign-in failed:', signInError)
-          // Don't fail the whole flow - user can sign in manually
+        if (error) {
+          console.error('[AccountSetup] Signup error:', error)
+          setErrors({ submit: error.message })
+          return
         }
 
-        setStep('complete')
+        if (data.user) {
+          console.log('[AccountSetup] User created successfully:', data.user.id)
+          
+          // Update unified_profiles if needed
+          await updateUnifiedProfile(data.user.id)
+          
+          // User should already be signed in after signup
+          setStep('complete')
+        }
       }
+      
     } catch (error) {
-      console.error('[AccountSetup] Account creation error:', error)
-      setErrors({ submit: 'Failed to create account. Please try again.' })
+      console.error('[AccountSetup] Account setup error:', error)
+      setErrors({ submit: 'Failed to complete account setup. Please try again.' })
     } finally {
       setIsLoading(false)
     }
@@ -311,117 +402,142 @@ function SetupAccountContent() {
     </div>
   )
 
-  const renderPasswordStep = () => (
-    <div className="space-y-6">
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <div className="relative">
-            <Input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              value={passwordData.password}
-              onChange={(e) => setPasswordData(prev => ({ ...prev, password: e.target.value }))}
-              className={errors.password ? 'border-red-500' : ''}
-              placeholder="Create a secure password"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-              onClick={() => setShowPassword(!showPassword)}
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4 text-gray-400" />
-              ) : (
-                <Eye className="h-4 w-4 text-gray-400" />
-              )}
-            </Button>
+  const renderPasswordStep = () => {
+    const isVerified = searchParams.get('verified') === 'true'
+    
+    return (
+      <div className="space-y-6">
+        {/* Show user info if coming from verified magic link */}
+        {isVerified && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center space-x-2 mb-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <h4 className="font-medium text-green-800">Email Verified</h4>
+            </div>
+            <p className="text-sm text-green-700">
+              Setting up password for: <span className="font-medium">{profileData.email}</span>
+            </p>
+            {profileData.firstName && profileData.firstName !== 'Loading...' && (
+              <p className="text-sm text-green-700">
+                Welcome, {profileData.firstName} {profileData.lastName}!
+              </p>
+            )}
           </div>
-          {errors.password && (
-            <p className="text-sm text-red-600">{errors.password}</p>
-          )}
+        )}
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={passwordData.password}
+                onChange={(e) => setPasswordData(prev => ({ ...prev, password: e.target.value }))}
+                className={errors.password ? 'border-red-500' : ''}
+                placeholder="Create a secure password"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4 text-gray-400" />
+                ) : (
+                  <Eye className="h-4 w-4 text-gray-400" />
+                )}
+              </Button>
+            </div>
+            {errors.password && (
+              <p className="text-sm text-red-600">{errors.password}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <div className="relative">
+              <Input
+                id="confirmPassword"
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={passwordData.confirmPassword}
+                onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                className={errors.confirmPassword ? 'border-red-500' : ''}
+                placeholder="Confirm your password"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                {showConfirmPassword ? (
+                  <EyeOff className="h-4 w-4 text-gray-400" />
+                ) : (
+                  <Eye className="h-4 w-4 text-gray-400" />
+                )}
+              </Button>
+            </div>
+            {errors.confirmPassword && (
+              <p className="text-sm text-red-600">{errors.confirmPassword}</p>
+            )}
+          </div>
+
+          {/* Password requirements */}
+          <div className="text-sm text-gray-600 space-y-1">
+            <p>Password must contain:</p>
+            <ul className="list-disc ml-5 space-y-1">
+              <li>At least 8 characters</li>
+              <li>One uppercase letter</li>
+              <li>One lowercase letter</li>
+              <li>One number</li>
+            </ul>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="confirmPassword">Confirm Password</Label>
-          <div className="relative">
-            <Input
-              id="confirmPassword"
-              type={showConfirmPassword ? 'text' : 'password'}
-              value={passwordData.confirmPassword}
-              onChange={(e) => setPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-              className={errors.confirmPassword ? 'border-red-500' : ''}
-              placeholder="Confirm your password"
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            >
-              {showConfirmPassword ? (
-                <EyeOff className="h-4 w-4 text-gray-400" />
-              ) : (
-                <Eye className="h-4 w-4 text-gray-400" />
-              )}
-            </Button>
+        {errors.submit && (
+          <div className="bg-red-50 p-3 rounded-md">
+            <p className="text-sm text-red-700">{errors.submit}</p>
           </div>
-          {errors.confirmPassword && (
-            <p className="text-sm text-red-600">{errors.confirmPassword}</p>
-          )}
-        </div>
+        )}
 
-        {/* Password requirements */}
-        <div className="text-sm text-gray-600 space-y-1">
-          <p>Password must contain:</p>
-          <ul className="list-disc ml-5 space-y-1">
-            <li>At least 8 characters</li>
-            <li>One uppercase letter</li>
-            <li>One lowercase letter</li>
-            <li>One number</li>
-          </ul>
+        <div className="space-y-3">
+          <Button 
+            onClick={handlePasswordNext}
+            disabled={isLoading}
+            className="w-full bg-purple-600 hover:bg-purple-700"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Creating Account...
+              </>
+            ) : (
+              <>
+                <Lock className="h-4 w-4 mr-2" />
+                Create Account
+              </>
+            )}
+          </Button>
+
+          {/* Only show back button if not coming from verified magic link */}
+          {!isVerified && (
+            <Button 
+              variant="outline"
+              onClick={() => setStep('profile')}
+              className="w-full"
+              disabled={isLoading}
+            >
+              Back to Profile
+            </Button>
+          )}
         </div>
       </div>
-
-      {errors.submit && (
-        <div className="bg-red-50 p-3 rounded-md">
-          <p className="text-sm text-red-700">{errors.submit}</p>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        <Button 
-          onClick={handlePasswordNext}
-          disabled={isLoading}
-          className="w-full bg-purple-600 hover:bg-purple-700"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Creating Account...
-            </>
-          ) : (
-            <>
-              <Lock className="h-4 w-4 mr-2" />
-              Create Account
-            </>
-          )}
-        </Button>
-
-        <Button 
-          variant="outline"
-          onClick={() => setStep('profile')}
-          className="w-full"
-          disabled={isLoading}
-        >
-          Back to Profile
-        </Button>
-      </div>
-    </div>
-  )
+    )
+  }
 
   const renderCompleteStep = () => {
     const config = getFlowConfig()

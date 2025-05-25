@@ -13,19 +13,16 @@ import {
   getCurrentUser,
   AuthError
 } from '@/lib/supabase/auth';
-import { useUserProfile, useAdminStatus } from '@/lib/supabase/hooks';
 
 // Get the singleton browser client instance
 const supabase = getBrowserClient();
 
-// Auth context type
+// Auth context type - SIMPLIFIED to only handle authentication
 type AuthContextType = {
   user: User | null;
   session: Session | null;
-  profile: any | null;
-  isAdmin: boolean;
   isLoading: boolean;
-  isAuthReady: boolean; // New flag to indicate when auth is initialized
+  isAuthReady: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signUp: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signInWithProvider: (provider: 'google' | 'facebook' | 'github') => Promise<{ error: AuthError | null }>;
@@ -49,51 +46,30 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  // Use the profile hook to fetch the user's profile
-  const { data: profile, isLoading: isProfileLoading } = useUserProfile(user?.id);
-
-  // Use the admin status hook
-  const { data: adminData, isLoading: isAdminLoading } = useAdminStatus(user?.id);
-
   // Initialize auth state
   useEffect(() => {
     let mounted = true;
 
     const initializeAuth = async () => {
       try {
-        // Import auth coordination utilities
-        const { coordinateTokenRefresh, notifyTokenRefreshComplete } = await import('@/lib/utils/auth-coordination');
+        // Simple auth initialization - just get the current session
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
 
-        // Check if we should refresh the token
-        const shouldRefresh = await coordinateTokenRefresh();
-
-        if (shouldRefresh) {
-          // COMMENTED OUT:
-          // console.log('🔄 [Auth] Refreshing auth token');
-          // Get current user - this is secure as it validates with the Supabase server
-          const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-
-          // Notify other tabs that refresh is complete
-          notifyTokenRefreshComplete();
-
-          if (userError) {
-            console.error('User fetch error:', userError);
-            if (mounted) {
-              setUser(null);
-              setSession(null);
-            }
-            return;
-          }
-
-          if (currentUser && mounted) {
-            setUser(currentUser);
-          } else if (mounted) {
+        if (sessionError) {
+          console.error('Session fetch error:', sessionError);
+          if (mounted) {
             setUser(null);
             setSession(null);
           }
-        } else {
-          console.log('🔄 [Auth] Skipping token refresh - using cached auth state');
-          // Use existing auth state
+          return;
+        }
+
+        if (currentSession && mounted) {
+          setUser(currentSession.user);
+          setSession(currentSession);
+        } else if (mounted) {
+          setUser(null);
+          setSession(null);
         }
       } catch (err) {
         console.error('Auth initialization error:', err);
@@ -111,24 +87,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-
+        console.log('Auth state change:', event, currentSession ? 'session exists' : 'no session');
+        
         if (currentSession && mounted) {
-          // Validate the user with the server on auth state change
-          const { data: { user: validatedUser }, error: validationError } =
-            await supabase.auth.getUser();
-
-          if (validationError) {
-            console.error('User validation error:', validationError);
-            setUser(null);
-            setSession(null);
-            return;
-          }
-
-          if (validatedUser) {
-            setUser(validatedUser);
-            setSession(currentSession);
-          }
+          // Use the user from the session directly instead of making another API call
+          setUser(currentSession.user);
+          setSession(currentSession);
         } else if (mounted) {
+          // Clear both auth state and store when no session
           setUser(null);
           setSession(null);
         }
@@ -152,18 +118,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setIsLoading(true);
     const { user: signedInUser, session: newSession, error } = await signInWithEmail(email, password);
 
-    if (!error) {
+    if (!error && signedInUser && newSession) {
       setUser(signedInUser);
       setSession(newSession);
 
-      // Wait for admin status to be loaded
-      const { data: adminData } = await supabase
-        .from('profiles')
-        .select('is_admin')
-        .eq('id', signedInUser.id)
-        .single();
-
-      // Redirect based on admin status
+      // Simple redirect without additional database queries
+      // The profile and admin status will be loaded by the hooks after redirect
       window.location.href = '/dashboard';
     }
 
@@ -196,11 +156,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // Sign out
   const logout = async () => {
     setIsLoading(true);
+    
     const { error } = await signOut();
 
     if (!error) {
       setUser(null);
       setSession(null);
+      // Redirect to signin page after successful logout
+      window.location.href = '/auth/signin';
     }
 
     setIsLoading(false);
@@ -227,9 +190,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const value = {
     user,
     session,
-    profile,
-    isAdmin: adminData?.isAdmin || false,
-    isLoading: !isAuthReady || isLoading || isProfileLoading || isAdminLoading,
+    isLoading: !isAuthReady || isLoading,
     isAuthReady,
     signIn,
     signUp,

@@ -71,6 +71,7 @@ export interface StudentDashboardStore {
     joinedDate: string;
   } | null;
   isLoadingProfile: boolean;
+  hasProfileError: boolean;
 
   // Enrollment data
   enrollments: UserEnrollment[];
@@ -206,6 +207,7 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       userId: null,
       userProfile: null,
       isLoadingProfile: false,
+      hasProfileError: false,
 
       // Enrollment data
       enrollments: [],

@@ -22,7 +22,7 @@ const verifyRequestSchema = z.object({
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const { token } = params
+    const { token } = await params
     
     if (!token) {
       return NextResponse.json(
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const { token } = params
+    const { token } = await params
     
     if (!token) {
       return NextResponse.json(
