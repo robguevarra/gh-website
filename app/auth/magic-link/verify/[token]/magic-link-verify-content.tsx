@@ -356,22 +356,13 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
               <div className="text-center space-y-3">
                 <Button 
                   onClick={() => {
-                    // Security: Only use email extracted from the token
-                    // Never allow arbitrary email input for security reasons
-                    console.log('[MagicLinkVerify] Refresh button clicked, email state:', email)
+                    // Security: Always use the token-based approach
+                    // Our updated server-side logic can extract the email directly from the token
+                    console.log('[MagicLinkVerify] Refresh button clicked, using token-based flow')
                     
-                    if (email) {
-                      // We have the email from verification, use it
-                      handleRefreshLink()
-                    } else {
-                      // No email available - this shouldn't happen if we properly extract it
-                      // from both expired and used tokens in verifyMagicLink function
-                      console.error('[MagicLinkVerify] No email available for refresh!')
-                      
-                      // Redirect to sign-in as fallback with error message
-                      alert('Unable to request a new magic link. Please try signing in with your email.')
-                      router.push('/auth/signin')
-                    }
+                    // Always call the refresh function - our server now handles both
+                    // expired and used tokens, with or without client-side email state
+                    handleRefreshLink()
                   }}
                   disabled={isRefreshing}
                   className="w-full bg-brand-purple hover:bg-brand-purple/90 text-white transition-all duration-200"
