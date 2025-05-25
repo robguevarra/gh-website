@@ -206,9 +206,19 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
       const result = await response.json()
 
       if (result.success) {
-        console.log('[MagicLinkVerify] Successfully refreshed magic link')
-        // Use toast notification if available or alert
-        alert('A new magic link has been sent to your email address.')
+        console.log('[MagicLinkVerify] Successfully refreshed magic link:', {
+          emailSent: result.emailSent,
+          expiresAt: result.expiresAt
+        })
+        
+        if (result.emailSent) {
+          alert(`A new magic link has been sent to ${email}. Please check your inbox (and spam folder).`)
+        } else {
+          // Email generation succeeded but email sending failed
+          console.error('[MagicLinkVerify] Magic link generated but email failed to send:', result.emailError)
+          alert(`The magic link was generated but we couldn't send the email. Please try again or contact support.`)
+        }
+        
         router.push('/auth/signin')
       } else {
         console.error('[MagicLinkVerify] Failed to refresh link:', result.error)
@@ -334,12 +344,43 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="text-center">
+              <div className="bg-brand-purple/5 rounded-lg p-3 mb-4">
+                <p className="text-sm text-[#6d4c41]">
+                  To access your account, you can request a new magic link or sign in with your password (if you've set one up).
+                </p>
+              </div>
+              <div className="text-center space-y-3">
                 <Button 
-                  onClick={() => router.push('/auth/signin')}
+                  onClick={() => {
+                    // Automatically get email from prior verification if possible
+                    if (email) {
+                      handleRefreshLink()
+                    } else {
+                      // If no email available, redirect to sign in page
+                      router.push('/auth/signin')
+                    }
+                  }}
+                  disabled={isRefreshing}
                   className="w-full bg-brand-purple hover:bg-brand-purple/90 text-white transition-all duration-200"
                 >
-                  Request New Magic Link
+                  {isRefreshing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Sending New Link...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Request New Magic Link
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => router.push('/auth/signin')}
+                  className="w-full border-brand-purple/20 text-brand-purple hover:bg-brand-purple/5 transition-all duration-200"
+                >
+                  Back to Sign In
                 </Button>
               </div>
             </CardContent>
