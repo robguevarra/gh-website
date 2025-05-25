@@ -83,41 +83,55 @@ export function useUserProfile(userId: string | undefined) {
       if (!userId) return null;
       
       try {
-        // First try to get from unified_profiles table created during data unification
+        // Try unified_profiles first (this is our main user table)
         const { data: unifiedProfile, error: unifiedError } = await supabase
           .from('unified_profiles')
-          .select('id, first_name, last_name, phone')
+          .select('id, first_name, last_name, phone, email')
           .eq('id', userId)
-          .maybeSingle(); // Use maybeSingle instead of single to avoid errors when row doesn't exist
+          .maybeSingle();
         
         if (!unifiedError && unifiedProfile) {
-          // Adapt unified_profiles schema to match expected profile schema
+          // Return profile in expected format
           return {
             id: unifiedProfile.id,
             first_name: unifiedProfile.first_name,
             last_name: unifiedProfile.last_name,
+            full_name: unifiedProfile.first_name && unifiedProfile.last_name 
+              ? `${unifiedProfile.first_name} ${unifiedProfile.last_name}`.trim()
+              : unifiedProfile.first_name || unifiedProfile.last_name || null,
             phone: unifiedProfile.phone,
-            avatar_url: null,
+            email: unifiedProfile.email,
+            avatar_url: null, // We don't store avatars in unified_profiles yet
             role: 'user', // Default role 
             preferences: null
           };
         }
           
-        // Fall back to original profiles table
+        // Only fall back to profiles table if unified_profiles doesn't have the user
         const { data, error } = await supabase
           .from('profiles')
           .select('id, first_name, last_name, phone, avatar_url, role, preferences')
           .eq('id', userId)
-          .maybeSingle(); // Use maybeSingle instead of single to prevent errors
+          .maybeSingle();
         
         if (error) {
           console.error('Profile fetch error:', error.message);
           return null;
         }
+        
+        // Add full_name if we have first/last name
+        if (data) {
+          return {
+            ...data,
+            full_name: data.first_name && data.last_name 
+              ? `${data.first_name} ${data.last_name}`.trim()
+              : data.first_name || data.last_name || null
+          };
+        }
+        
         return data;
       } catch (err) {
         console.error('Profile fetch exception:', err instanceof Error ? err.message : String(err));
-        // Return null instead of throwing to prevent component errors
         return null;
       }
     },
@@ -309,42 +323,30 @@ export function useAdminStatus(userId: string | undefined) {
       if (!userId) return { isAdmin: false };
       
       try {
-        // First try to get user roles from a direct query with service key
-        const { data, error } = await supabase
-          .rpc('check_if_user_is_admin', { user_id: userId });
-        
-        if (!error && data) {
-          return { isAdmin: !!data };
-        }
-        
-        // Check if user is in profiles table with admin role
+        // Check profiles table first for admin role
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('role, is_admin')
           .eq('id', userId)
-          .maybeSingle(); // Use maybeSingle instead of single to prevent errors
+          .maybeSingle();
         
-        if (!profileError && profile?.role === 'admin') {
-          return { isAdmin: true };
+        if (!profileError && profile) {
+          if (profile.role === 'admin' || profile.is_admin === true) {
+            return { isAdmin: true };
+          }
         }
         
-        // Additional check for the is_admin field if it exists
-        if (!profileError && profile?.is_admin === true) {
-          return { isAdmin: true };
-        }
-        
-        // For consistency in error handling, check for unified_profiles too
-        // This is just for completeness - we don't expect admin flags here but could add this in the future
-        const { data: unifiedProfile } = await supabase
+        // If not found in profiles, check unified_profiles for admin tag
+        const { data: unifiedProfile, error: unifiedError } = await supabase
           .from('unified_profiles')
           .select('tags')
           .eq('id', userId)
           .maybeSingle();
         
-        // Check if user has admin tag in their unified profile tags array
-        if (unifiedProfile?.tags && Array.isArray(unifiedProfile.tags) && 
-            unifiedProfile.tags.some(tag => tag === 'admin')) {
-          return { isAdmin: true };
+        if (!unifiedError && unifiedProfile?.tags && Array.isArray(unifiedProfile.tags)) {
+          if (unifiedProfile.tags.includes('admin')) {
+            return { isAdmin: true };
+          }
         }
         
         return { isAdmin: false };

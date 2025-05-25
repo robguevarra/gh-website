@@ -49,7 +49,13 @@ export const createActions = (
    * Initialize the dashboard with the authenticated user
    */
   initializeAuthenticatedUser: async () => {
+    // Set initial loading state immediately
     set({ isLoadingProfile: true });
+
+    // Create a timeout promise to prevent hanging operations
+    const timeout = (ms: number) => new Promise<{ timedOut: true }>(
+      resolve => setTimeout(() => resolve({ timedOut: true }), ms)
+    );
 
     try {
       // Get the current authenticated user from Supabase
@@ -57,57 +63,181 @@ export const createActions = (
 
       if (error || !user) {
         console.error('Error getting authenticated user:', error);
-        set({ isLoadingProfile: false });
-        return;
-      }
-
-      // Set the user ID in the store
-      set({ userId: user.id });
-
-      // Get user profile data from the profiles table using browser client
-      const supabase = getBrowserClient();
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError || !profile) {
-        console.error('Error getting user profile:', profileError);
-        set({
-          userProfile: {
-            name: user.email?.split('@')[0] || 'User',
-            email: user.email || '',
-            avatar: '/images/placeholder-avatar.png',
-            joinedDate: new Date(user.created_at).toLocaleDateString()
-          },
-          isLoadingProfile: false
+        set({ 
+          isLoadingProfile: false,
+          hasProfileError: true 
         });
         return;
       }
 
-      // TECH DEBT: This action currently queries the legacy `profiles` table.
-      // See ProjectDocs/Build_Notes/active/tech-debt_refactor-useuserprofile-hook.md
-      // The long-term solution is to migrate to `unified_profiles`, but for now,
-      // we adapt to the `profiles` table structure. Assuming first_name/last_name exist.
-      const profileName = profile.first_name && profile.last_name
-        ? `${profile.first_name} ${profile.last_name}`
-        : profile.first_name || profile.last_name || user.email?.split('@')[0] || 'User';
-
-      // Set the user profile in the store
-      set({
+      // Set the user ID in the store immediately to allow early rendering with minimal data
+      set({ 
+        userId: user.id,
+        // Initialize a minimal profile with email-based fallbacks immediately
+        // This ensures we always have something to display even if queries time out
         userProfile: {
-          name: profileName, // Use combined or fallback name
+          name: user.email?.split('@')[0] || 'User',
           email: user.email || '',
-          avatar: profile.avatar_url || '/images/placeholder-avatar.png',
+          avatar: '/images/placeholder-avatar.png',
           joinedDate: new Date(user.created_at).toLocaleDateString()
-        },
-        isLoadingProfile: false
+        }
       });
+      
+      // Get user profile data with timeout protection
+      const supabase = getBrowserClient();
+      
+      // Log the user ID to help with debugging
+      console.log('Attempting to find profile for user ID:', user.id);
+      
+      // First try direct email match which is more reliable than UUID matching
+      // This handles cases where the ID format might differ between auth and profile tables
+      let userEmailPromise;
+      
+      if (user.email) {
+        userEmailPromise = supabase
+          .from('unified_profiles')
+          .select('id, first_name, last_name, phone, email')
+          .eq('email', user.email)
+          .maybeSingle();
+      } else {
+        // No email available, create a rejected promise to skip this step
+        userEmailPromise = Promise.resolve({ data: null, error: new Error('No email available') });
+        console.warn('No email available for user, skipping email match');
+      }
+      
+      // Race the query against a timeout
+      const userEmailResult = await Promise.race([
+        userEmailPromise,
+        timeout(3000) // 3 second timeout
+      ]);
+      
+      // Handle possible timeout or success with email query
+      if ('timedOut' in userEmailResult) {
+        console.warn('unified_profiles email query timed out, trying ID match');
+      } else {
+        const { data: emailProfile, error: emailError } = userEmailResult;
+        
+        if (!emailError && emailProfile) {
+          // Found profile by email, use this data
+          const firstName = emailProfile.first_name || '';
+          const lastName = emailProfile.last_name || '';
+          const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+          
+          // Update profile with unified_profiles data
+          set({
+            userProfile: {
+              name: fullName || user.email?.split('@')[0] || 'User',
+              email: emailProfile.email || user.email || '',
+              avatar: '/images/placeholder-avatar.png',
+              joinedDate: new Date(user.created_at).toLocaleDateString()
+            }
+          });
+          
+          console.log('Loaded profile from unified_profiles (email match):', fullName || 'Name not found');
+          
+          // Successfully found by email, skip the ID match attempt
+          return;
+        }
+        
+        // If we reach here, email match failed, try ID match as backup
+        console.log('Email match failed, trying ID match:', user.id);
+      }
+      
+      // Try unified_profiles with case-insensitive UUID match as backup
+      // Convert ID to lowercase to handle case sensitivity issues
+      const unifiedProfilePromise = supabase
+        .from('unified_profiles')
+        .select('id, first_name, last_name, phone, email')
+        .filter('id', 'ilike', user.id.toLowerCase()) // Use ilike for case-insensitive matching
+        .maybeSingle();
+        
+      // Race the query against a timeout
+      const unifiedProfileResult = await Promise.race([
+        unifiedProfilePromise,
+        timeout(3000) // 3 second timeout
+      ]);
+      
+      // Handle possible timeout
+      if ('timedOut' in unifiedProfileResult) {
+        console.warn('unified_profiles ID query timed out, using fallback data');
+        // We don't need to set anything here since we already set the fallback profile
+      } else {
+        const { data: unifiedProfile, error: unifiedError } = unifiedProfileResult;
+        
+        if (unifiedError) {
+          console.error('Error fetching unified profile:', unifiedError);
+        }
+        
+        if (!unifiedError && unifiedProfile) {
+          // Format name with proper validation
+          const firstName = unifiedProfile.first_name || '';
+          const lastName = unifiedProfile.last_name || '';
+          const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+          
+          // Update profile with unified_profiles data
+          set({
+            userProfile: {
+              name: fullName || user.email?.split('@')[0] || 'User',
+              email: unifiedProfile.email || user.email || '',
+              avatar: '/images/placeholder-avatar.png',
+              joinedDate: new Date(user.created_at).toLocaleDateString()
+            }
+          });
+          
+          console.log('Loaded profile from unified_profiles (ID match):', fullName || 'Name not found');
+        } else {
+          // Fall back to profiles table with timeout protection
+          const profilePromise = supabase
+            .from('profiles')
+            .select('first_name, last_name, avatar_url')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          // Race the profiles query against a timeout
+          const profileResult = await Promise.race([
+            profilePromise,
+            timeout(3000) // 3 second timeout
+          ]);
+          
+          if ('timedOut' in profileResult) {
+            console.warn('profiles query timed out, using fallback data');
+            // We already have fallback data set, so no action needed
+          } else {
+            const { data: profile, error: profileError } = profileResult;
+            
+            if (!profileError && profile) {
+              // Format name with proper validation
+              const firstName = profile.first_name || '';
+              const lastName = profile.last_name || '';
+              const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+              
+              // Update profile with profiles table data
+              set({
+                userProfile: {
+                  name: fullName || user.email?.split('@')[0] || 'User',
+                  email: user.email || '',
+                  avatar: profile.avatar_url || '/images/placeholder-avatar.png',
+                  joinedDate: new Date(user.created_at).toLocaleDateString()
+                }
+              });
+              
+              console.log('Loaded profile from profiles table:', fullName || 'Name not found');
+            } else {
+              console.log('No profile found in either table, using email fallback');
+            }
+          }
+        }
+      }
+      
+      // Always mark loading as complete, regardless of what data we found
+      set({ isLoadingProfile: false });
 
-      // Load the rest of the user data
+      // Load the rest of the user data in the background
+      // This won't block the UI from rendering with the profile data we already have
       const store = get() as StudentDashboardStore;
-      await store.loadUserDashboardData(user.id);
+      store.loadUserDashboardData(user.id).catch(err => {
+        console.error('Error loading user dashboard data:', err);
+      });
 
     } catch (error) {
       console.error('Error initializing authenticated user:', error);

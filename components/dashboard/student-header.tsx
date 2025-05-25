@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, memo } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
+import { User } from "@supabase/supabase-js"
 import {
   Bell,
   ChevronDown,
@@ -49,6 +50,73 @@ import { useStudentDashboardStore } from '@/lib/stores/student-dashboard';
 
 // We're now using the useStudentHeader hook which provides optimized access to the store
 
+// Internal component for profile display with loading states and timeout handling
+interface ProfileDisplayProps {
+  isLoading: boolean;
+  userProfile: { name: string; email: string; avatar: string; joinedDate: string } | null;
+  user: User | null;
+  displayName: string;
+  displayInitial: string;
+}
+
+const ProfileDisplay = memo(function ProfileDisplay({ 
+  isLoading, 
+  userProfile, 
+  user, 
+  displayName, 
+  displayInitial 
+}: ProfileDisplayProps) {
+  // State to force-resolve loading after a timeout
+  const [forceResolveLoading, setForceResolveLoading] = useState(false);
+  
+  // Use effect to force-resolve loading state if it persists too long
+  useEffect(() => {
+    // If loading, set a timeout to force resolution after 5 seconds
+    if (isLoading) {
+      const timeoutId = setTimeout(() => {
+        setForceResolveLoading(true);
+        console.warn('Force-resolved loading state after timeout');
+      }, 5000); // 5 second timeout
+      
+      return () => clearTimeout(timeoutId);
+    } else {
+      // Reset when not loading
+      setForceResolveLoading(false);
+    }
+  }, [isLoading]);
+  
+  // Show loading state unless forced to resolve
+  const shouldShowLoading = isLoading && !forceResolveLoading;
+  
+  if (shouldShowLoading) {
+    return (
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-8 w-8 rounded-full" />
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-[100px]" />
+          <Skeleton className="h-3 w-[70px]" />
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="flex items-center gap-2">
+      <Avatar>
+        <AvatarImage 
+          src={userProfile?.avatar || ''} 
+          alt={userProfile?.name || user?.email || 'User'} 
+        />
+        <AvatarFallback>{displayInitial}</AvatarFallback>
+      </Avatar>
+      <div className="space-y-1">
+        <p className="text-sm font-medium">{displayName}</p>
+        <p className="text-xs text-muted-foreground">{user?.email || 'user@example.com'}</p>
+      </div>
+    </div>
+  );
+});
+
 // We'll get data from the store directly instead of props
 interface StudentHeaderProps {}
 
@@ -56,8 +124,18 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
   const router = useRouter()
   const pathname = usePathname()
 
-  // Use the auth context to get the authenticated user and logout function
-  const { user, profile, logout, isLoading: isLoadingAuth } = useAuth()
+  // Use auth context ONLY for authentication state
+  const { user, logout, isLoading: isLoadingAuth, isAuthReady } = useAuth()
+
+  // Use Zustand store directly for all application data with individual selectors for better performance
+  const userProfile = useStudentDashboardStore(state => state.userProfile)
+  const isLoadingProfile = useStudentDashboardStore(state => state.isLoadingProfile)
+  const hasProfileError = useStudentDashboardStore(state => state.hasProfileError)
+  const initializeAuthenticatedUser = useStudentDashboardStore(state => state.initializeAuthenticatedUser)
+  const clearUserState = useStudentDashboardStore(state => state.clearUserState)
+  
+  // Combined loading state for UI purposes
+  const isLoading = isLoadingAuth || isLoadingProfile
 
   // Use our optimized hook for the student header
   const {
@@ -74,9 +152,18 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
 
   // Initialize dashboard data when user is authenticated
   useEffect(() => {
+    if (isAuthReady && user?.id && !userProfile) {
+      console.log('Initializing student dashboard store for user:', user.id);
+      initializeAuthenticatedUser();
+    } else if (isAuthReady && !user) {
+      console.log('Clearing student dashboard store - no user');
+      clearUserState();
+    }
+  }, [isAuthReady, user?.id, userProfile, initializeAuthenticatedUser, clearUserState])
+
+  // Load additional dashboard data
+  useEffect(() => {
     if (user?.id) {
-      // COMMENTED OUT:
-      // console.log('Loading dashboard data for user:', user.id)
       loadUserData(user.id)
     }
   }, [user?.id, loadUserData])
@@ -84,10 +171,14 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
   // Redirect to login if no user
   useEffect(() => {
     // Only redirect if auth is done loading and no user is found
-    if (!user && !isLoadingAuth) {
+    if (!user && !isLoadingAuth && isAuthReady) {
       router.push('/auth/signin')
     }
-  }, [user, isLoadingAuth, router])
+  }, [user, isLoadingAuth, isAuthReady, router])
+
+  // Compute display name with proper fallbacks
+  const displayName = userProfile?.name || user?.email?.split('@')[0] || 'User'
+  const displayInitial = userProfile?.name?.charAt(0) || user?.email?.charAt(0) || 'U'
 
   const [scrolled, setScrolled] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
@@ -130,47 +221,10 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
   // State for logout loading
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  // Get the clearUserState action from the store
-  const clearUserState = useStudentDashboardStore((state) => state.clearUserState);
-
+  // Handle logout with proper store cleanup
   const handleLogout = async () => {
-    // Set loading state
-    setIsLoggingOut(true)
-    console.log('Logout initiated, clearing user state...');
-
-    try {
-      // Clear user-specific Zustand state *before* calling Supabase logout
-      // This prevents race conditions where components might react to old state
-      // after Supabase tokens are cleared but before navigation completes.
-      clearUserState();
-      console.log('User state cleared.');
-
-      // Use the auth context logout method (signs out from Supabase)
-      const { error } = await logout();
-      console.log('Supabase logout completed.', error ? `Error: ${error.message}` : 'Success');
-
-      if (error) {
-        console.error('Error signing out:', error);
-        // Optionally show an error message to the user here
-        setIsLoggingOut(false); // Reset loading state on error
-        return;
-      }
-
-      // If logout is successful, redirect immediately to the sign-in page
-      // No need for setTimeout, navigation should happen after state is cleared and logout confirmed
-      console.log('Logout successful, redirecting to /auth/signin...');
-      router.push('/auth/signin');
-      // We might not need to set isLoggingOut back to false here,
-      // as the component might unmount upon navigation.
-      // However, setting it defensively isn't harmful.
-      // setIsLoggingOut(false); // Removed as navigation likely unmounts
-
-    } catch (err) {
-      console.error('Unexpected error during logout:', err);
-      // Handle unexpected errors (e.g., network issues during clearUserState or logout)
-      // Optionally show an error message to the user here
-      setIsLoggingOut(false); // Reset loading state on error
-    }
+    clearUserState(); // Clear store first
+    await logout(); // Then logout
   }
 
   return (
@@ -268,26 +322,13 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
 
                 <div className="mt-6 pt-6 border-t">
                   <div className="flex items-center gap-4 px-4 mb-4">
-                    {isLoadingAuth ? (
-                      <div className="flex items-center gap-2">
-                        <Skeleton className="h-8 w-8 rounded-full" />
-                        <div className="space-y-2">
-                          <Skeleton className="h-4 w-[100px]" />
-                          <Skeleton className="h-3 w-[70px]" />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <Avatar>
-                          <AvatarImage src={profile?.avatar_url || ''} alt={profile?.full_name || user?.email || ''} />
-                          <AvatarFallback>{profile?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}</AvatarFallback>
-                        </Avatar>
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium">{profile?.full_name || user?.email?.split('@')[0] || 'User'}</p>
-                          <p className="text-xs text-muted-foreground">{user?.email || 'user@example.com'}</p>
-                        </div>
-                      </div>
-                    )}
+                    <ProfileDisplay 
+                      isLoading={isLoading} 
+                      userProfile={userProfile} 
+                      user={user} 
+                      displayName={displayName} 
+                      displayInitial={displayInitial} 
+                    />
                   </div>
 
                   <Button
@@ -450,12 +491,12 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                 ) : (
                   <>
                     <Avatar>
-                      <AvatarImage src={profile?.avatar_url || ''} alt={profile?.full_name || user?.email || ''} />
-                      <AvatarFallback>{profile?.full_name?.charAt(0) || user?.email?.charAt(0) || 'U'}</AvatarFallback>
+                      <AvatarImage src={userProfile?.avatar || ''} alt={userProfile?.name || user?.email || ''} />
+                      <AvatarFallback>{displayInitial}</AvatarFallback>
                     </Avatar>
                     <div className="hidden md:block">
                       <div className="text-sm font-medium">
-                        {profile?.full_name || user?.email?.split('@')[0] || 'User'}
+                        {displayName}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {user?.email || 'user@example.com'}

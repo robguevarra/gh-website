@@ -389,14 +389,18 @@ export async function POST(request: NextRequest) {
                             const classification = classificationResult.classification!
                             const authFlow = getAuthenticationFlow(classification)
                             
-                            console.log("[Webhook][P2P] Auth flow determined:", authFlow.magicLinkPurpose)
+                            console.log("[Webhook][P2P] Auth flow determined:", {
+                              purpose: authFlow.magicLinkPurpose,
+                              redirectPath: authFlow.redirectPath,
+                              requiresPasswordCreation: authFlow.requiresPasswordCreation
+                            })
                             
-                            // Generate magic link
+                            // Generate magic link using the correct redirect path from classification
                             console.log("[Webhook][P2P] Generating magic link...")
                             const magicLinkResult = await generateMagicLink({
                               email: userEmail,
-                              purpose: 'account_setup',
-                              redirectTo: '/dashboard/course',
+                              purpose: authFlow.magicLinkPurpose,
+                              redirectTo: authFlow.redirectPath, // ✅ Use the correct redirect path from classification
                               expiresIn: '48h',
                               metadata: {
                                 customerType: classification.type,
@@ -770,11 +774,11 @@ export async function POST(request: NextRequest) {
                                 if (classification.type === 'public_customer') {
                                   accountBenefits = 'Create your account to access order history, track purchases, and get exclusive member benefits.'
                                   
-                                  // Generate magic link for new customers
+                                  // Generate magic link for new customers using the correct redirect path
                                   const magicLinkResult = await generateMagicLink({
                                     email: userEmail,
-                                    purpose: 'shopify_access',
-                                    redirectTo: '/dashboard/store',
+                                    purpose: authFlow.magicLinkPurpose,
+                                    redirectTo: authFlow.redirectPath, // ✅ Use the correct redirect path from classification
                                     expiresIn: '48h',
                                     metadata: {
                                       customerType: classification.type,
