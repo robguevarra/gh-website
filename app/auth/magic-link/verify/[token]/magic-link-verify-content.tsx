@@ -356,29 +356,21 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
               <div className="text-center space-y-3">
                 <Button 
                   onClick={() => {
-                    // Get the email address so we can generate a new magic link
+                    // Security: Only use email extracted from the token
+                    // Never allow arbitrary email input for security reasons
                     console.log('[MagicLinkVerify] Refresh button clicked, email state:', email)
                     
                     if (email) {
                       // We have the email from verification, use it
                       handleRefreshLink()
                     } else {
-                      // No email available - ask user for it
-                      const userEmail = prompt('Please enter your email address to receive a new magic link:')
-                      if (userEmail && userEmail.includes('@')) {
-                        console.log('[MagicLinkVerify] User entered email:', userEmail)
-                        setEmail(userEmail)
-                        // Use setTimeout to ensure state is updated before calling the function
-                        setTimeout(() => {
-                          console.log('[MagicLinkVerify] Calling handleRefreshLink with:', userEmail)
-                          handleRefreshLink()
-                        }, 100)
-                      } else if (userEmail) {
-                        alert('Please enter a valid email address')
-                      } else {
-                        // User cancelled - redirect to sign in
-                        router.push('/auth/signin')
-                      }
+                      // No email available - this shouldn't happen if we properly extract it
+                      // from both expired and used tokens in verifyMagicLink function
+                      console.error('[MagicLinkVerify] No email available for refresh!')
+                      
+                      // Redirect to sign-in as fallback with error message
+                      alert('Unable to request a new magic link. Please try signing in with your email.')
+                      router.push('/auth/signin')
                     }
                   }}
                   disabled={isRefreshing}
