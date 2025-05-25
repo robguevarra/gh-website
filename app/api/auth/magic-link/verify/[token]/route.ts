@@ -169,36 +169,43 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       message: ''
     }
 
-    // Check if user profile is already complete for account setup magic links
-    if (validation.purpose === 'account_setup' && classification.isExistingUser) {
-      const supabase = getAdminClient()
-      
-      // Check if user has a complete profile in the unified_profiles table
-      const { data: profileData, error: profileError } = await supabase
-        .from('unified_profiles')
-        .select('id, first_name, last_name')
-        .eq('email', validation.email!)
-        .maybeSingle()
-      
-      if (!profileError && profileData) {
-        // Consider profile complete if it has both first and last name
-        const hasCompleteName = profileData.first_name && profileData.last_name
+    // Check if user has already set their password for account setup magic links
+    if (validation.purpose === 'account_setup' && classification.isExistingUser && validation.userId) {
+      try {
+        const supabase = getAdminClient()
         
-        if (hasCompleteName) {
-          console.log('[MagicLinkVerifyAPI] User has complete profile:', profileData)
+        // Get the user to check for password_set_at in user_metadata
+        const { data: { users } } = await supabase.auth.admin.listUsers()
+        
+        if (users && users.length > 0) {
+          // Find the user by userId
+          const user = users.find(u => u.id === validation.userId)
           
-          profileStatus = {
-            isComplete: true,
-            message: 'Your account has already been set up. Please sign in with your email and password.'
-          }
-          
-          // For users with complete profiles, redirect to signin instead
-          if (redirectPath.includes('setup-account')) {
-            // Override the redirect to go to signin instead
-            console.log('[MagicLinkVerifyAPI] Redirecting to signin instead of setup')
-            redirectPath = '/auth/signin?complete=true&email=' + encodeURIComponent(validation.email!)
+          if (user && user.user_metadata) {
+            // Check if password_set_at exists in the user's metadata
+            const passwordSetAt = user.user_metadata.password_set_at
+            
+            if (passwordSetAt) {
+              console.log(`[MagicLinkVerifyAPI] User has already set password at: ${passwordSetAt}`)
+              
+              profileStatus = {
+                isComplete: true,
+                message: 'You have already set up your password. Please sign in with your email and password.'
+              }
+              
+              // Redirect to signin instead of setup-account
+              if (redirectPath.includes('setup-account')) {
+                console.log('[MagicLinkVerifyAPI] Redirecting to signin - password already set')
+                redirectPath = '/auth/signin?password_set=true&email=' + encodeURIComponent(validation.email!)
+              }
+            } else {
+              console.log('[MagicLinkVerifyAPI] User has not set password yet')
+            }
           }
         }
+      } catch (error) {
+        console.error('[MagicLinkVerifyAPI] Error checking password status:', error)
+        // Continue with normal flow if we can't determine password status
       }
     }
 
