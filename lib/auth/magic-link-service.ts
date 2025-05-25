@@ -264,22 +264,50 @@ export async function validateMagicLink(
 }
 
 /**
- * Generate a fresh magic link when an expired one is accessed
+ * Generate a fresh magic link when an expired or used token is accessed
  * Industry best practice for user-friendly experience
  */
 export async function refreshExpiredMagicLink(
-  expiredToken: string,
+  token: string,
   options?: Partial<MagicLinkOptions>
 ): Promise<MagicLinkResult> {
   try {
-    // First, try to decode the expired token to get user info
+    // STEP 1: First try to get the token info directly from the database
+    // This is the most reliable approach - works for valid, expired, AND used tokens
+    const supabase = getAdminClient()
+    const { data: tokenData, error: dbError } = await supabase
+      .from('magic_links')
+      .select('email, purpose, metadata, used_at')
+      .eq('token', token)
+      .maybeSingle()
+      
+    if (tokenData?.email) {
+      console.log(`[MagicLink] Found token in database for: ${tokenData.email}`)
+      
+      // STEP 2A: Database lookup successful - generate new token using info from DB
+      return await generateMagicLink({
+        email: tokenData.email,
+        purpose: tokenData.purpose as 'account_setup' | 'login' | 'shopify_access',
+        metadata: { 
+          ...(typeof tokenData.metadata === 'object' ? tokenData.metadata : {}),
+          ...(options?.metadata || {}),
+          refreshedFrom: 'database_lookup',
+          originalTokenStatus: tokenData.used_at ? 'used' : 'unknown'
+        },
+        redirectTo: options?.redirectTo,
+        expiresIn: options?.expiresIn || MAGIC_LINK_EXPIRATION
+      })
+    }
+    
+    // STEP 2B: If not in DB, fall back to decoding the JWT (less reliable)
+    console.log('[MagicLink] Token not found in database, attempting JWT decode')
     let decoded: any
     try {
-      decoded = jwt.verify(expiredToken, MAGIC_LINK_SECRET, { 
+      decoded = jwt.verify(token, MAGIC_LINK_SECRET, { 
         ignoreExpiration: true // Allow expired tokens for refresh
       })
     } catch (error) {
-      console.error('[MagicLink] Cannot decode expired token for refresh:', error)
+      console.error('[MagicLink] Cannot decode token for refresh:', error)
       return { success: false, error: 'Cannot refresh invalid magic link' }
     }
 
