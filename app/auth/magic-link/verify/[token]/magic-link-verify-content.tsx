@@ -13,6 +13,7 @@ type VerificationState =
   | 'used'
   | 'invalid'
   | 'error'
+  | 'profile_exists' // New state for already set up profiles
 
 interface MagicLinkVerifyContentProps {
   token: string
@@ -85,14 +86,27 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
         console.log('[MagicLinkVerify] Token validated successfully with session:', {
           email: result.verification.email,
           purpose: result.verification.purpose,
-          sessionCreated: result.session?.success
+          sessionCreated: result.session?.success,
+          profileStatus: result.profileStatus?.isComplete ? 'complete' : 'incomplete'
         })
 
         // Store validated information
         setEmail(result.verification.email)
         setPurpose(result.verification.purpose)
         setRedirectPath(result.authFlow.redirectPath)
-        setState('success')
+        
+        // Check if user already has a complete profile
+        if (result.profileStatus?.isComplete) {
+          console.log('[MagicLinkVerify] User already has a complete profile')
+          setState('profile_exists')
+          // Set a short timeout to show the profile exists message before redirecting
+          setTimeout(() => {
+            router.push(result.authFlow.redirectPath)
+          }, 3000)
+          return
+        } else {
+          setState('success')
+        }
 
         console.log('[MagicLinkVerify] Redirecting to:', result.authFlow.redirectPath)
 
@@ -176,24 +190,29 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
     try {
       setIsRefreshing(true)
       
-      // Request new magic link via API
-      const response = await fetch('/api/auth/magic-link/generate', {
+      console.log('[MagicLinkVerify] Refreshing expired token for email:', email)
+      
+      // Use the dedicated refresh endpoint with the expired token
+      const response = await fetch('/api/auth/magic-link/refresh', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          expiredToken: token, // Pass the expired token
           email,
-          purpose,
-          sendEmail: true
+          purpose
         })
       })
 
       const result = await response.json()
 
       if (result.success) {
+        console.log('[MagicLinkVerify] Successfully refreshed magic link')
+        // Use toast notification if available or alert
         alert('A new magic link has been sent to your email address.')
         router.push('/auth/signin')
       } else {
-        alert('Failed to send new magic link. Please try again.')
+        console.error('[MagicLinkVerify] Failed to refresh link:', result.error)
+        alert('Failed to send new magic link: ' + (result.error || 'Unknown error'))
       }
     } catch (error) {
       console.error('[MagicLinkVerify] Refresh error:', error)
@@ -323,6 +342,37 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
                   Request New Magic Link
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        )
+
+      case 'profile_exists':
+        return (
+          <Card className="w-full max-w-md mx-auto bg-white/80 backdrop-blur-sm border-brand-purple/10 shadow-[0_25px_50px_-12px_rgba(176,139,165,0.15)]">
+            <CardHeader className="text-center pb-6">
+              <div className="flex justify-center mb-6">
+                <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
+                  <CheckCircle className="h-8 w-8 text-blue-600" />
+                </div>
+              </div>
+              <CardTitle className="text-xl font-serif text-[#5d4037]">Account Already Set Up</CardTitle>
+              <CardDescription className="text-[#6d4c41]">
+                Your account has already been set up. Redirecting you to sign in...
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-700">
+                  <span className="font-medium">Good news!</span> Your account is already set up. 
+                  You can sign in using your email and password.
+                </p>
+              </div>
+              <div className="flex justify-center mt-4">
+                <Loader2 className="h-6 w-6 animate-spin text-brand-purple" />
+              </div>
+              <p className="text-sm text-[#6d4c41] text-center mt-2">
+                Redirecting to <span className="font-medium">sign in page</span>
+              </p>
             </CardContent>
           </Card>
         )

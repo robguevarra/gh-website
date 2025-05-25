@@ -161,9 +161,46 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const classification = classificationResult.classification!
     const authFlow = getAuthenticationFlow(classification)
-    const finalRedirectTo = redirectTo || authFlow.redirectPath
+    let redirectPath = redirectTo || authFlow.redirectPath
 
     let sessionResult = null
+    let profileStatus = {
+      isComplete: false,
+      message: ''
+    }
+
+    // Check if user profile is already complete for account setup magic links
+    if (validation.purpose === 'account_setup' && classification.isExistingUser) {
+      const supabase = getAdminClient()
+      
+      // Check if user has a complete profile in the unified_profiles table
+      const { data: profileData, error: profileError } = await supabase
+        .from('unified_profiles')
+        .select('id, first_name, last_name')
+        .eq('email', validation.email!)
+        .maybeSingle()
+      
+      if (!profileError && profileData) {
+        // Consider profile complete if it has both first and last name
+        const hasCompleteName = profileData.first_name && profileData.last_name
+        
+        if (hasCompleteName) {
+          console.log('[MagicLinkVerifyAPI] User has complete profile:', profileData)
+          
+          profileStatus = {
+            isComplete: true,
+            message: 'Your account has already been set up. Please sign in with your email and password.'
+          }
+          
+          // For users with complete profiles, redirect to signin instead
+          if (redirectPath.includes('setup-account')) {
+            // Override the redirect to go to signin instead
+            console.log('[MagicLinkVerifyAPI] Redirecting to signin instead of setup')
+            redirectPath = '/auth/signin?complete=true&email=' + encodeURIComponent(validation.email!)
+          }
+        }
+      }
+    }
 
     // Create Supabase Auth session if requested and user exists
     if (createSession && validation.userId) {
@@ -184,18 +221,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       },
       authFlow: {
         purpose: authFlow.magicLinkPurpose,
-        redirectPath: finalRedirectTo,
+        redirectPath: redirectPath,
         requiresPasswordCreation: authFlow.requiresPasswordCreation,
         description: authFlow.flowDescription
       },
+      profileStatus: profileStatus,
       session: sessionResult,
       metadata: validation.metadata || {}
     }
 
     console.log(`[MagicLinkVerifyAPI] Verification complete for ${validation.email}:`, {
       type: classification.type,
+      profileStatus: profileStatus.isComplete ? 'complete' : 'incomplete',
       sessionCreated: !!sessionResult?.success,
-      redirectTo: finalRedirectTo
+      redirectTo: redirectPath
     })
 
     return NextResponse.json(response)
