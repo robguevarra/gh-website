@@ -125,12 +125,40 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
 
         const emailGroups: Record<string, ProcessedEmail> = {};
         const sortedEvents = [...rawEventsData].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        
+        // Helper function to extract subject from event data
+        const extractSubject = (event: EmailEvent): string => {
+          // Try various possible locations for the subject
+          if (event.campaign_subject) return event.campaign_subject;
+          if (event.metadata?.subject) return event.metadata.subject as string;
+          
+          // Check in Postmark metadata format
+          if (typeof event.metadata === 'object' && event.metadata) {
+            // Some email providers store subject in different metadata fields
+            const metadata = event.metadata as Record<string, any>;
+            if (metadata.Subject) return metadata.Subject;
+            if (metadata.MessageSubject) return metadata.MessageSubject;
+            if (metadata.EmailSubject) return metadata.EmailSubject;
+            
+            // Check deeper in metadata properties
+            if (metadata.Metadata && typeof metadata.Metadata === 'object') {
+              const metadataObj = metadata.Metadata;
+              if (metadataObj.subject) return metadataObj.subject;
+            }
+          }
+          
+          // If all else fails, use recipient email as a fallback identifier
+          return event.recipient ? `Email to ${event.recipient}` : 'No Subject';
+        };
+        
         for (const event of sortedEvents) {
-          const groupId = event.message_id || `event-${event.id}`;
+          // Use provider_message_id as the primary grouping key, fall back to message_id or event id
+          const groupId = event.provider_message_id || event.message_id || `event-${event.id}`;
+          
           if (!emailGroups[groupId]) {
             emailGroups[groupId] = {
               id: groupId,
-              subject: event.campaign_subject || event.metadata?.subject as string || 'No Subject',
+              subject: extractSubject(event),
               campaignId: event.campaign_id,
               campaignName: event.campaign_name,
               sentAt: event.timestamp, 
@@ -384,72 +412,100 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Campaign</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activity</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {processedEmails.length === 0 ? (
-                    <tr><td colSpan={4} className="px-4 py-4 text-center text-muted-foreground">No email history found.</td></tr>
+                    <tr><td colSpan={5} className="px-4 py-4 text-center text-muted-foreground">No email history found.</td></tr>
                   ) : (
-                    processedEmails.map(email => (
-                      <tr key={email.id}>
-                        <td className="px-4 py-3 whitespace-nowrap">{email.sentAt ? format(new Date(email.sentAt), 'yyyy-MM-dd HH:mm') : 'N/A'}</td>
-                        <td className="px-4 py-3 whitespace-nowrap font-medium">{email.subject || 'N/A'}</td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-500">{email.campaignName || email.campaignId || 'N/A'}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex items-center space-x-1.5">
-                            {email.isDelivered && (
+                    processedEmails.map(email => {
+                      // Determine email status for display
+                      let status = 'Delivered';
+                      let statusColor = 'text-green-600';
+                      let StatusIcon = Mail;
+                      
+                      if (email.isBounced) {
+                        status = 'Bounced';
+                        statusColor = 'text-red-500';
+                        StatusIcon = AlertTriangle;
+                      } else if (email.isSpamComplaint) {
+                        status = 'Marked as spam';
+                        statusColor = 'text-orange-500';
+                        StatusIcon = ShieldOff;
+                      } else if (email.isUnsubscribed) {
+                        status = 'Unsubscribed';
+                        statusColor = 'text-gray-700';
+                        StatusIcon = ShieldOff;
+                      } else if (email.isClicked) {
+                        status = 'Clicked';
+                        statusColor = 'text-purple-500';
+                        StatusIcon = MousePointerClick;
+                      } else if (email.isOpened) {
+                        status = 'Opened';
+                        statusColor = 'text-blue-500';
+                        StatusIcon = MailOpen;
+                      }
+                      
+                      return (
+                        <tr key={email.id}>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {email.sentAt ? format(new Date(email.sentAt), 'yyyy-MM-dd HH:mm') : 'N/A'}
+                          </td>
+                          <td className="px-4 py-3 font-medium">
+                            {email.subject || 'No Subject'}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-500">
+                            {email.campaignName || email.campaignId || 'Transactional'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              {/* Email journey progress tracker */}
+                              <div className="flex items-center">
+                                <div className={`flex items-center justify-center h-5 w-5 rounded-full ${email.isDelivered ? 'bg-green-100' : 'bg-gray-100'}`}>
+                                  <Mail className={`h-3 w-3 ${email.isDelivered ? 'text-green-600' : 'text-gray-400'}`} />
+                                </div>
+                                <div className={`w-3 h-0.5 ${email.isDelivered && email.isOpened ? 'bg-blue-300' : 'bg-gray-200'}`}></div>
+                                <div className={`flex items-center justify-center h-5 w-5 rounded-full ${email.isOpened ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                                  <MailOpen className={`h-3 w-3 ${email.isOpened ? 'text-blue-600' : 'text-gray-400'}`} />
+                                </div>
+                                <div className={`w-3 h-0.5 ${email.isOpened && email.isClicked ? 'bg-purple-300' : 'bg-gray-200'}`}></div>
+                                <div className={`flex items-center justify-center h-5 w-5 rounded-full ${email.isClicked ? 'bg-purple-100' : 'bg-gray-100'}`}>
+                                  <MousePointerClick className={`h-3 w-3 ${email.isClicked ? 'text-purple-600' : 'text-gray-400'}`} />
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor} bg-opacity-10`}>
+                              <StatusIcon className="mr-1 h-3 w-3" />
+                              {status}
+                            </div>
+                            {(email.isBounced || email.isSpamComplaint) && (
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Mail className="h-4 w-4 text-green-500" />
+                                  <button className="ml-2 text-xs text-gray-500 underline">
+                                    Details
+                                  </button>
                                 </TooltipTrigger>
-                                <TooltipContent><p>Delivered</p></TooltipContent>
+                                <TooltipContent className="w-72">
+                                  <div className="space-y-1">
+                                    <p className="font-medium">Event Details</p>
+                                    <p className="text-xs">
+                                      {email.rawEvents
+                                        .filter(e => e.event_type.toLowerCase() === 'bounce' || e.event_type.toLowerCase() === 'spamcomplaint')
+                                        .map(e => e.metadata?.Details || 'No details available')
+                                        .join('\n')}
+                                    </p>
+                                  </div>
+                                </TooltipContent>
                               </Tooltip>
                             )}
-                            {email.isOpened && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <MailOpen className="h-4 w-4 text-blue-500" />
-                                </TooltipTrigger>
-                                <TooltipContent><p>Opened</p></TooltipContent>
-                              </Tooltip>
-                            )}
-                            {email.isClicked && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <MousePointerClick className="h-4 w-4 text-purple-500" />
-                                </TooltipTrigger>
-                                <TooltipContent><p>Clicked</p></TooltipContent>
-                              </Tooltip>
-                            )}
-                            {email.isBounced && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                                </TooltipTrigger>
-                                <TooltipContent><p>Bounced</p></TooltipContent>
-                              </Tooltip>
-                            )}
-                            {email.isSpamComplaint && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <ShieldOff className="h-4 w-4 text-orange-500" />
-                                </TooltipTrigger>
-                                <TooltipContent><p>Spam Complaint</p></TooltipContent>
-                              </Tooltip>
-                            )}
-                            {email.isUnsubscribed && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <ShieldOff className="h-4 w-4 text-gray-700" />
-                                </TooltipTrigger>
-                                <TooltipContent><p>Unsubscribed</p></TooltipContent>
-                              </Tooltip>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
