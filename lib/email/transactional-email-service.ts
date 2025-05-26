@@ -89,14 +89,27 @@ export async function sendTransactionalEmail(
       trackLinks: 'HtmlAndText'
     })
 
-    // 5. Update log entry with success status
+    // 5. Prepare email content and headers for storage
+    const emailContent = {
+      html: processedHtmlContent,
+      text: processedTextContent || '',
+      subject: processedSubject
+    };
+    
+    // Extract headers from the response if available
+    const headers = (emailResponse as any).Headers || {};
+    
+    // 6. Update log entry with success status and content details
     if (logId) {
       try {
         await (supabase as any)
           .from('email_send_log')
           .update({
             status: 'sent',
-            sent_at: new Date().toISOString()
+            sent_at: new Date().toISOString(),
+            email_content: JSON.stringify(emailContent),
+            email_headers: headers,
+            raw_response: emailResponse
           })
           .eq('id', logId)
       } catch (updateErr) {

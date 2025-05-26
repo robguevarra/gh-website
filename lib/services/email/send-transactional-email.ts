@@ -104,19 +104,35 @@ export async function sendTransactionalEmail(options: TransactionalEmailOptions)
         attachments,
         metadata: {
           ...(metadata || {}),
-          emailLogId: logEntry?.id ? String(logEntry.id) : undefined // Ensure metadata values are strings
+          // Ensure metadata values are strings and handle undefined
+          emailLogId: logEntry?.id ? String(logEntry.id) : ''
         }
       }
     );
     
-    // Update log with successful send
+    // Prepare to store email content and headers
+    // For template emails, we store template variables as they represent email content
+    const emailContent = {
+      templateId,
+      variables,
+      renderedBy: 'postmark-server'
+    };
+    
+    // Extract headers from the response
+    // Postmark doesn't expose Headers directly in the type, but we can access it safely
+    const headers = (result as any).Headers || {};
+    
+    // Update log with successful send and store content/headers
     if (logEntry) {
       await supabase
         .from('email_send_log')
         .update({
           status: 'sent',
           external_id: result.MessageID,
-          sent_at: new Date().toISOString()
+          sent_at: new Date().toISOString(),
+          email_content: JSON.stringify(emailContent),
+          email_headers: headers,
+          raw_response: result
         })
         .eq('id', logEntry.id);
     }
