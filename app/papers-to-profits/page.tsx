@@ -1292,7 +1292,7 @@ export default function PapersToProfit() {
                     <h3 className="text-lg font-medium text-[#5d4037] mb-4">Still have questions?</h3>
                     <p className="text-[#6d4c41] mb-4">
                       We're here to help! Contact us at{" "}
-                      <span className="text-brand-purple">support@gracefulhomeschooling.com</span> and we'll get back to
+                      <span className="text-brand-purple">help@gracefulhomeschooling.com</span> and we'll get back to
                       you as soon as possible.
                     </p>
                     <Button

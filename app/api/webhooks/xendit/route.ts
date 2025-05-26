@@ -699,7 +699,26 @@ export async function POST(request: NextRequest) {
             }
             // --- End Step 8 (Access Granting) ---
 
-            // --- Step 9: Update Order Status to Completed ---
+            // --- Step 9: Clean up user_carts table ---
+            // After successful order creation and permissions granting, clean up the user's cart in the database
+            try {
+                console.log(`[Webhook][ECOM] Cleaning up user_carts table for user ${currentUserId}`);
+                const { error: cleanupError } = await supabase
+                    .from('user_carts')
+                    .delete()
+                    .eq('user_id', currentUserId);
+                    
+                if (cleanupError) {
+                    console.error(`[Webhook][ECOM] Failed to clean up user_carts:`, cleanupError);
+                } else {
+                    console.log(`[Webhook][ECOM] Successfully cleaned up user_carts for user ${currentUserId}`);
+                }
+            } catch (cleanupError) {
+                console.error(`[Webhook][ECOM] Error during user_carts cleanup:`, cleanupError);
+                // Non-critical error, continue processing
+            }
+            
+            // --- Step 10: Update Order Status to Completed ---
             // After attempting permissions, mark the order as completed in our system
             // Only do this if we successfully created the order in the first place (newOrderId is not null)
             if (newOrderId) {
@@ -1025,7 +1044,7 @@ export async function POST(request: NextRequest) {
                         first_name: firstName,
                         ebook_title: 'My Canva Business Ebook',
                         google_drive_link: process.env.CANVA_EBOOK_DRIVE_LINK || 'https://drive.google.com/file/d/example',
-                        support_email: process.env.SUPPORT_EMAIL || 'support@gracefulhomeschooling.com'
+                        support_email: process.env.SUPPORT_EMAIL || 'help@gracefulhomeschooling.com'
                       },
                       leadId
                     )

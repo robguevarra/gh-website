@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
           first_name: firstName,
           magic_link: refreshResult.magicLink!, // Use magic_link as the variable name for template compatibility
           original_purpose: purpose || 'account setup',
-          support_email: process.env.SUPPORT_EMAIL || 'support@gracefulhomeschooling.com',
+          support_email: process.env.SUPPORT_EMAIL || 'help@gracefulhomeschooling.com',
           expiration_hours: '48'
         }
       )
