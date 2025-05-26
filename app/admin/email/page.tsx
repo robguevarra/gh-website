@@ -190,7 +190,7 @@ export default function EmailAdminPage() {
                     From: Graceful Homeschooling &lt;support@gracefulhomeschooling.com&gt;
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Reply-To: support@gracefulhomeschooling.com
+                    Reply-To: help@gracefulhomeschooling.com
                   </p>
                 </div>
               </TabsContent>

@@ -297,7 +297,7 @@ export default function PurchaseHistoryPage() {
       <div className="mt-8 text-center text-sm text-muted-foreground">
         <p>
           Missing an order or need help with a download?
-          <a href="mailto:support@gracefulhustle.com" className="text-brand-purple hover:underline ml-1">
+          <a href="mailto:help@gracefulhomeschooling.com" className="text-brand-purple hover:underline ml-1">
             Contact Support
           </a>
         </p>
