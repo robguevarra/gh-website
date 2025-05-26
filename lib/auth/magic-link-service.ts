@@ -11,7 +11,7 @@ const BASE_URL = process.env.MAGIC_LINK_BASE_URL || process.env.NEXT_PUBLIC_SITE
 // Magic link interfaces
 export interface MagicLinkOptions {
   email: string
-  purpose: 'account_setup' | 'login' | 'shopify_access'
+  purpose: 'account_setup' | 'login' | 'shopify_access' | 'password_reset'
   redirectTo?: string
   expiresIn?: string // Default: 48 hours
   metadata?: Record<string, any>
@@ -156,11 +156,19 @@ export async function generateMagicLink(options: MagicLinkOptions): Promise<Magi
 /**
  * Validate and use a magic link token
  * Marks token as used and returns user information
+ * 
+ * @param token - The magic link token to validate
+ * @param ipAddress - IP address of the client for logging
+ * @param userAgent - User agent of the client for logging
+ * @param markAsUsed - Whether to mark the token as used (default: true)
+ *                    For password reset flow, set to false during verification
+ *                    and true during actual password reset
  */
 export async function validateMagicLink(
   token: string, 
   ipAddress?: string, 
-  userAgent?: string
+  userAgent?: string,
+  markAsUsed: boolean = true
 ): Promise<MagicLinkValidation> {
   try {
     const supabase = getAdminClient()
@@ -225,19 +233,32 @@ export async function validateMagicLink(
       }
     }
 
-    // 5. Mark token as used
-    const { error: updateError } = await supabase
-      .from('magic_links')
-      .update({
-        used_at: now.toISOString(),
-        ip_address: ipAddress || null,
-        user_agent: userAgent || null
-      })
-      .eq('id', magicLinkRecord.id)
-
-    if (updateError) {
-      console.error('[MagicLink] Failed to mark token as used:', updateError)
-      // Continue anyway - validation was successful
+    // 5. Mark token as used if requested
+    // For password reset flow, we only mark it as used during the actual password reset, not during verification
+    if (markAsUsed) {
+      // Special handling for password reset tokens
+      // If it's a password reset token and we're in the verification stage, log but don't mark as used
+      if (magicLinkRecord.purpose === 'password_reset') {
+        console.log('[MagicLink] Password reset token. If this is just verification, use markAsUsed=false')
+      }
+      
+      const { error: updateError } = await supabase
+        .from('magic_links')
+        .update({
+          used_at: now.toISOString(),
+          ip_address: ipAddress || null,
+          user_agent: userAgent || null
+        })
+        .eq('id', magicLinkRecord.id)
+  
+      if (updateError) {
+        console.error('[MagicLink] Failed to mark token as used:', updateError)
+        // Continue anyway - validation was successful
+      }
+      
+      console.log(`[MagicLink] Token marked as used for ${magicLinkRecord.email}`)
+    } else {
+      console.log(`[MagicLink] Token validated but NOT marked as used (purpose: ${magicLinkRecord.purpose})`)
     }
 
     console.log(`[MagicLink] Successfully validated magic link for ${magicLinkRecord.email}:`, {
@@ -315,7 +336,11 @@ export async function refreshExpiredMagicLink(
     const refreshOptions: MagicLinkOptions = {
       email: decoded.email,
       purpose: decoded.purpose,
-      metadata: { ...decoded.metadata, ...options?.metadata },
+      metadata: { 
+        ...(typeof decoded.metadata === 'object' ? decoded.metadata : {}),
+        ...(options?.metadata || {}),
+        refreshedFrom: 'jwt_decode'
+      },
       redirectTo: options?.redirectTo,
       expiresIn: options?.expiresIn || MAGIC_LINK_EXPIRATION
     }

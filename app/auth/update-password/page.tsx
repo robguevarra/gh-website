@@ -34,19 +34,105 @@ const staggerContainer = {
 // Component that uses searchParams
 function UpdatePasswordContent() {
   const [error, setError] = useState<string | null>(null);
-  const [tokenStatus, setTokenStatus] = useState<'valid' | 'invalid' | 'expired' | 'used' | 'loading' | null>(null);
+  const [tokenStatus, setTokenStatus] = useState<'valid' | 'invalid' | 'expired' | 'used' | 'loading' | null>('loading');
+  const [userEmail, setUserEmail] = useState<string>('');
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Get token and type from URL
+  // Get token, type, and verification status from URL
   const token = searchParams.get('token');
   const type = searchParams.get('type');
+  const isVerified = searchParams.get('verified') === 'true';
+  const email = searchParams.get('email');
+  
+  console.log('[UpdatePassword] URL params:', { 
+    token: token?.substring(0, 10) + '...',
+    type,
+    isVerified,
+    email
+  });
 
   useEffect(() => {
-    if (token && type === 'recovery') {
-      setTokenStatus('valid'); // Initially assume token is valid
-    }
-  }, [token, type]);
+    const validateToken = async () => {
+      console.log('[UpdatePassword] Starting token validation');
+      
+      // Case 1: Coming from magic link verification (our custom flow) - with verified flag
+      if (token && isVerified && email) {
+        console.log('[UpdatePassword] Detected verified magic link flow');
+        setTokenStatus('valid');
+        setUserEmail(email);
+        return;
+      }
+      
+      // Case 1b: Coming directly from password reset email (magic link without verification)
+      if (token && email && !type) {
+        console.log('[UpdatePassword] Detected direct magic link without verification');
+        setTokenStatus('valid');
+        setUserEmail(email);
+        return;
+      }
+      
+      // Case 2: Standard Supabase recovery flow
+      if (token && type === 'recovery') {
+        console.log('[UpdatePassword] Detected standard Supabase recovery flow');
+        setTokenStatus('valid');
+        // Try to extract email from JWT if possible
+        try {
+          // JWT has 3 parts separated by dots
+          const parts = token.split('.');
+          if (parts.length === 3) {
+            const payload = JSON.parse(atob(parts[1]));
+            if (payload.email) {
+              setUserEmail(payload.email);
+            }
+          }
+        } catch (e) {
+          console.error('Error parsing JWT token:', e);
+        }
+        return;
+      }
+
+      // Case 3: No valid token parameters
+      if (!token) {
+        console.log('[UpdatePassword] No token found in URL');
+        setTokenStatus(null);
+        setError('No password reset token provided. Please request a new password reset link.');
+        return;
+      }
+
+      // Case 4: Token validation required (token without verification)
+      setTokenStatus('loading');
+      try {
+        const response = await fetch(`/api/auth/magic-link/verify/${encodeURIComponent(token)}`, {
+          method: 'GET',
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+          setTokenStatus('valid');
+          setUserEmail(result.verification.email || '');
+        } else if (result.expired) {
+          setTokenStatus('expired');
+          setError('This password reset link has expired. Please request a new one.');
+          setUserEmail(result.email || '');
+        } else if (result.used) {
+          setTokenStatus('used');
+          setError('This password reset link has already been used. Please request a new one if needed.');
+          setUserEmail(result.email || '');
+        } else {
+          setTokenStatus('invalid');
+          setError(result.error || 'Invalid password reset link. Please request a new one.');
+        }
+      } catch (err) {
+        console.error('Error validating token:', err);
+        setTokenStatus('invalid');
+        setError('Failed to validate password reset link. Please try again or request a new one.');
+      }
+    };
+    
+    validateToken();
+  }, [token, type, isVerified, email]);
 
   return (
     <>
@@ -76,7 +162,13 @@ function UpdatePasswordContent() {
       {/* Show the form only if token is valid or there's no token */}
       {(tokenStatus === 'valid' || (!token && !tokenStatus)) && (
         <motion.div variants={fadeIn}>
-          <UpdatePasswordForm errorMessage={error} />
+          <UpdatePasswordForm 
+            errorMessage={error}
+            email={userEmail} 
+            token={token || undefined}
+            isMagicLink={!!token && !!userEmail} 
+            redirectUrl={`/auth/signin?updated=true&email=${encodeURIComponent(userEmail)}`}
+          />
         </motion.div>
       )}
     </>

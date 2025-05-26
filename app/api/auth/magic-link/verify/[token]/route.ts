@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import jwt from 'jsonwebtoken'
 import { validateMagicLink } from '@/lib/auth/magic-link-service'
 import { classifyCustomer, getAuthenticationFlow } from '@/lib/auth/customer-classification-service'
 import { getAdminClient } from '@/lib/supabase/admin'
@@ -39,8 +40,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                      'unknown'
     const userAgent = request.headers.get('user-agent') || 'unknown'
 
-    // Validate magic link token
-    const validation = await validateMagicLink(token, ipAddress, userAgent)
+    // Check if this is a password reset token before validation
+    let isPwdReset = false
+    try {
+      // Just decode without verification to check purpose
+      const decoded = jwt.decode(token)
+      if (decoded && typeof decoded === 'object' && decoded.purpose === 'password_reset') {
+        isPwdReset = true
+        console.log('[MagicLinkVerifyAPI] GET: Detected password reset token - not marking as used yet')
+      }
+    } catch (e) {
+      // Ignore decode errors, full validation will happen next
+    }
+    
+    // Don't mark as used for password reset tokens during verification
+    const validation = await validateMagicLink(token, ipAddress, userAgent, !isPwdReset)
 
     if (!validation.success) {
       console.error('[MagicLinkVerifyAPI] Token validation failed:', validation.error)
@@ -73,6 +87,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const redirectTo = url.searchParams.get('redirect') || authFlow.redirectPath
 
     console.log(`[MagicLinkVerifyAPI] Customer classified as ${classification.type}, redirecting to: ${redirectTo}`)
+    
+    // Handle password reset specially
+    let finalRedirectPath = redirectTo
+    if (validation.purpose === 'password_reset') {
+      console.log('[MagicLinkVerifyAPI] Password reset purpose detected, redirecting to update-password')
+      finalRedirectPath = '/auth/update-password'
+    }
 
     // Return verification success with flow information
     // Note: Session creation handled client-side for security and flexibility
@@ -81,7 +102,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       verification: {
         email: validation.email,
         purpose: validation.purpose,
-        userId: validation.userId
+        userId: validation.userId,
+        token: token // Include token for password reset flow
       },
       classification: {
         type: classification.type,
@@ -90,7 +112,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       },
       authFlow: {
         purpose: authFlow.magicLinkPurpose,
-        redirectPath: redirectTo,
+        redirectPath: finalRedirectPath,
         requiresPasswordCreation: authFlow.requiresPasswordCreation,
         description: authFlow.flowDescription
       },
@@ -135,8 +157,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                      request.headers.get('user-agent') || 
                      'unknown'
 
-    // Validate magic link token
-    const validation = await validateMagicLink(token, ipAddress, userAgent)
+    // Check if this is a password reset token before validation
+    let isPwdReset = false
+    try {
+      // Just decode without verification to check purpose
+      const decoded = jwt.decode(token)
+      if (decoded && typeof decoded === 'object' && decoded.purpose === 'password_reset') {
+        isPwdReset = true
+        console.log('[MagicLinkVerifyAPI] POST: Detected password reset token - not marking as used yet')
+      }
+    } catch (e) {
+      // Ignore decode errors, full validation will happen next
+    }
+    
+    // Don't mark as used for password reset tokens during verification
+    const validation = await validateMagicLink(token, ipAddress, userAgent, !isPwdReset)
 
     if (!validation.success) {
       console.error('[MagicLinkVerifyAPI] Token validation failed:', validation.error)
@@ -173,112 +208,88 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     console.log(`[MagicLinkVerifyAPI] POST purpose:`, validation.purpose)
     console.log(`[MagicLinkVerifyAPI] POST email:`, validation.email)
 
-    // SHARED PASSWORD CHECK FUNCTION to avoid duplicating code between GET and POST handlers
-    const checkForExistingPassword = async (email: string, purpose: string, userId?: string) => {
-      if (purpose !== 'account_setup' || !email) {
-        return null; // Only check for account_setup links
-      }
-      
+    // Extract critical verification information
+    
+    // SIMPLE PASSWORD CHECK: Users who have set passwords should always go to sign-in
+    if (validation.email) {
       try {
-        console.log(`[MagicLinkVerifyAPI] Checking password status for ${email}`)
         const supabase = getAdminClient()
+        const email = validation.email
         
-        // Using the admin API to get all users, then filter by email
-        const { data, error } = await supabase.auth.admin.listUsers()
+        // IMPORTANT: Extract userId from either direct property or metadata
+        // The logs show userId is null but it exists in metadata
+        const userId = validation.userId || validation.metadata?.userId
+        console.log('[MagicLinkVerifyAPI] Extracted userId:', userId)
         
-        if (error) {
-          console.error('[MagicLinkVerifyAPI] Error fetching users:', error)
-          return null
-        }
+        let hasPassword = false
         
-        if (!data.users || data.users.length === 0) {
-          console.log('[MagicLinkVerifyAPI] No users found in system')
-          return null
-        }
-        
-        // Filter to find user by email (case-insensitive for safety)
-        const matchingUsers = data.users.filter(u => 
-          u.email?.toLowerCase() === email.toLowerCase()
-        )
-        
-        if (matchingUsers.length === 0) {
-          console.log('[MagicLinkVerifyAPI] No matching user found for email:', email)
-          return null
-        }
-        
-        // Get the matching user
-        const user = matchingUsers[0]
-        
-        // Check user_metadata for password_set_at
-        const passwordSetAt = user?.user_metadata?.password_set_at
-        const hasSetPassword = passwordSetAt !== undefined
-        
-        console.log(`[MagicLinkVerifyAPI] User found:`, {
-          id: user.id,
-          email: user.email,
-          hasSetPassword,
-          passwordSetAt,
-          metadata: JSON.stringify(user.user_metadata || {})
-        })
-        
-        if (hasSetPassword) {
-          console.log(`[MagicLinkVerifyAPI] 🔒 CONFIRMED: User has already set password`)
+        // APPROACH 1: Direct lookup by ID if available
+        if (userId) {
+          const { data, error } = await supabase.auth.admin.getUserById(userId)
           
-          // Create redirect to signin
-          const signinPath = '/auth/signin?password_set=true&email=' + encodeURIComponent(email)
-          
-          return {
-            isPasswordSet: true,
-            redirectPath: signinPath,
-            profileStatus: {
-              isComplete: true,
-              message: 'You have already set up your password. Please sign in with your email and password.'
+          if (!error && data?.user?.user_metadata?.password_set_at) {
+            hasPassword = true
+            console.log(`[MagicLinkVerifyAPI] User has set password at: ${data.user.user_metadata.password_set_at}`)
+          }
+        }
+        
+        // APPROACH 2: Fallback to email lookup via unified profiles
+        if (!hasPassword) {
+          const { data: profile } = await supabase
+            .from('unified_profiles')
+            .select('id')
+            .eq('email', email)
+            .maybeSingle()
+            
+          if (profile?.id) {
+            const { data } = await supabase.auth.admin.getUserById(profile.id)
+            if (data?.user?.user_metadata?.password_set_at) {
+              hasPassword = true
+              console.log(`[MagicLinkVerifyAPI] User found via profile lookup, has password`)
             }
           }
-        } else {
-          console.log('[MagicLinkVerifyAPI] User has not set password yet')
-          return { isPasswordSet: false }
+        }
+        
+        // If user has set password and this is NOT a password reset, redirect to signin
+        // For password reset, we want to continue even if they have a password
+        if (hasPassword && validation.purpose !== 'password_reset') {
+          console.log('[MagicLinkVerifyAPI] User has password, redirecting to signin')
+          
+          // Update status and redirect path
+          profileStatus = {
+            isComplete: true,
+            message: 'You have already set up your password. Please sign in with your email and password.'
+          }
+          
+          redirectPath = '/auth/signin?password_set=true&email=' + encodeURIComponent(email)
+          
+          // Return early with the signin redirect
+          return NextResponse.json({
+            success: true,
+            verification: {
+              email: email,
+              purpose: validation.purpose,
+              userId: validation.userId
+            },
+            authFlow: { redirectPath },
+            profileStatus,
+            session: null
+          })
+        }
+        
+        // Special handling for password reset
+        if (validation.purpose === 'password_reset') {
+          console.log('[MagicLinkVerifyAPI] Password reset purpose detected in POST method')
+          redirectPath = '/auth/update-password'
         }
       } catch (err) {
         console.error('[MagicLinkVerifyAPI] Error checking password status:', err)
-        return null // Continue with normal flow on errors
+        // Continue with normal flow on error
       }
     }
     
-    // Check if user has already set their password for account setup magic links
-    const passwordStatus = await checkForExistingPassword(
-      validation.email || '',
-      validation.purpose || '',
-      validation.userId
-    )
-    
-    // If user has set password, update redirect and profileStatus
-    if (passwordStatus?.isPasswordSet) {
-      console.log('[MagicLinkVerifyAPI] 🚨 Password is set, forcing signin redirect')
-      
-      // Make sure these values exist before assigning
-      if (passwordStatus.redirectPath) {
-        redirectPath = passwordStatus.redirectPath
-      }
-      
-      if (passwordStatus.profileStatus) {
-        profileStatus = passwordStatus.profileStatus
-      }
-      
-      // Return early to prevent proceeding further
-      return NextResponse.json({
-        success: true,
-        verification: {
-          email: validation.email,
-          purpose: validation.purpose,
-          userId: validation.userId,
-          metadata: validation.metadata
-        },
-        authFlow: { redirectPath },
-        profileStatus,
-        session: null // No session for redirected flows
-      })
-    }
+    // We've already checked for password status above
+    // Continue with normal flow if the user hasn't set a password
 
     // Create Supabase Auth session if requested and user exists
     if (createSession && validation.userId) {
@@ -290,7 +301,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       verification: {
         email: validation.email,
         purpose: validation.purpose,
-        userId: validation.userId
+        userId: validation.userId,
+        token: token // Include token for password reset flow
       },
       classification: {
         type: classification.type,
@@ -303,9 +315,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         requiresPasswordCreation: authFlow.requiresPasswordCreation,
         description: authFlow.flowDescription
       },
+      // Always include metadata - this is critical for client-side password checks
+      metadata: validation.metadata || {},
       profileStatus: profileStatus,
-      session: sessionResult,
-      metadata: validation.metadata || {}
+      session: sessionResult
     }
 
     console.log(`[MagicLinkVerifyAPI] Verification complete for ${validation.email}:`, {
