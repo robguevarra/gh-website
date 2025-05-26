@@ -806,83 +806,36 @@ export async function POST(request: NextRequest) {
                               console.error("[Webhook][ECOM] Magic link generation error:", magicLinkError)
                             }
 
-                            // Format cart items for email display (similar to dashboard)
-                            const formatOrderItemsForEmail = (items: any[]) => {
+                            // Convert cart items to a simple readable text format for email
+                            const formatOrderItemsText = (items: any[]) => {
                               if (!items || !Array.isArray(items) || items.length === 0) {
-                                return '<p style="font-style: italic; color: #6b7280;">No items found in this order.</p>';
+                                return 'No items found in this order.';
                               }
                               
-                              // Start with table-based layout for email compatibility
-                              let itemsHtml = `
-                              <div style="margin-bottom: 24px;">
-                                <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
-                                  <tr>
-                                    <td style="padding-bottom: 12px;">
-                                      <p style="font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
-                                        Items (${items.length})
-                                      </p>
-                                    </td>
-                                  </tr>
-                              `;
-                              
-                              // Add each item
-                              itemsHtml += items.map((item, index) => {
+                              // Create a simple text list of items
+                              return items.map((item, index) => {
                                 const title = item.title || 'Product title unavailable';
-                                const variantTitle = item.variant_title ? `<span style="display: block; font-size: 12px; color: #6b7280;">(${item.variant_title})</span>` : '';
                                 const quantity = item.quantity || 1;
                                 const price = item.price || 0;
-                                const imageUrl = item.featured_image_url || item.image_url || null;
                                 const googleDriveFileId = item.google_drive_file_id || null;
                                 
-                                // Define fallback image display
-                                const imageDisplay = imageUrl 
-                                  ? `<img src="${imageUrl}" alt="${title}" width="64" height="64" style="object-fit: cover; border-radius: 6px; border: 1px solid #f1b5bc33;" />`
-                                  : `<div style="width: 64px; height: 64px; background-color: #f1b5bc1a; border-radius: 6px; border: 1px solid #f1b5bc33; display: flex; align-items: center; justify-content: center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f1b5bc88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>`;
+                                let itemText = `${index + 1}. ${title}`;  
+                                if (item.variant_title) {
+                                  itemText += ` (${item.variant_title})`;
+                                }
                                 
-                                // Format drive link button
-                                const driveButton = googleDriveFileId 
-                                  ? `<a href="https://drive.google.com/drive/folders/${googleDriveFileId}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 6px 12px; font-size: 13px; font-weight: 500; text-decoration: none; color: #374151; background-color: white; border: 1px solid #d1d5db; border-radius: 4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>Open Folder</a>`
-                                  : `<span style="display: inline-block; padding: 6px 12px; font-size: 13px; font-weight: 500; color: #6b7280; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; opacity: 0.6; cursor: not-allowed;">Not Available</span>`;
+                                itemText += `\nQuantity: ${quantity} | Price: PHP ${price.toFixed(2)}`;
                                 
-                                // Create item row
-                                return `
-                                <tr>
-                                  <td style="padding: 16px 0; ${index < items.length - 1 ? 'border-bottom: 1px solid #f3f4f6;' : ''}">
-                                    <table width="100%" cellpadding="0" cellspacing="0">
-                                      <tr>
-                                        <td width="72" valign="top">
-                                          ${imageDisplay}
-                                        </td>
-                                        <td style="padding: 0 16px;" valign="top">
-                                          <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 500; color: #111827;">
-                                            ${title}
-                                            ${variantTitle}
-                                          </p>
-                                          <p style="margin: 0; font-size: 12px; color: #6b7280;">
-                                            Qty: ${quantity} | PHP ${price.toFixed(2)}
-                                          </p>
-                                        </td>
-                                        <td align="right" valign="middle">
-                                          ${driveButton}
-                                        </td>
-                                      </tr>
-                                    </table>
-                                  </td>
-                                </tr>
-                                `;
-                              }).join('');
-                              
-                              // Close the table
-                              itemsHtml += `
-                                </table>
-                              </div>
-                              `;
-                              
-                              return itemsHtml;
+                                if (googleDriveFileId) {
+                                  itemText += `\nAccess your files here: https://drive.google.com/drive/folders/${googleDriveFileId}`;
+                                }
+                                
+                                return itemText;
+                              }).join('\n\n');
                             };
                             
-                            // Generate formatted HTML for order items
-                            const formattedOrderItems = formatOrderItemsForEmail(cartItems);
+                            // Generate formatted text for order items
+                            const formattedOrderItems = formatOrderItemsText(cartItems);
                             
                             // Send enhanced order confirmation email
                             await sendTransactionalEmail(
@@ -891,8 +844,7 @@ export async function POST(request: NextRequest) {
                               {
                                 first_name: firstName,
                                 order_number: newOrderId,
-                                order_items: cartItems, // Keep original for backward compatibility
-                                order_link: formattedOrderItems, // New HTML formatted display
+                                order_items: formattedOrderItems, // Plain text formatted items
                                 total_amount: ((tx.amount || data.amount || 0) / 100).toFixed(2),
                                 currency: tx.currency || 'PHP',
                                 access_instructions: 'Your digital products have been delivered to your email. Check your Google Drive access for each item.',
