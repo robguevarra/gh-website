@@ -115,6 +115,7 @@ export async function sendTransactionalEmail(options: TransactionalEmailOptions)
     const emailContent = {
       templateId,
       variables,
+      subject: templateData?.subject || `${templateId} Email`, // Store the subject
       renderedBy: 'postmark-server'
     };
     
@@ -128,11 +129,12 @@ export async function sendTransactionalEmail(options: TransactionalEmailOptions)
         .from('email_send_log')
         .update({
           status: 'sent',
-          external_id: result.MessageID,
+          external_id: result.MessageID, // Store the Postmark message ID for tracking
           sent_at: new Date().toISOString(),
+          subject: templateData?.subject || `${templateId} Email`, // Store in dedicated column
           email_content: JSON.stringify(emailContent),
           email_headers: headers,
-          raw_response: result
+          raw_response: result // Store the complete API response
         })
         .eq('id', logEntry.id);
     }
