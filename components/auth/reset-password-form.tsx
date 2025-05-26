@@ -33,17 +33,49 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
 
     try {
       setIsLoading(true);
-      const { error: resetError } = await resetPassword(email);
       
-      if (resetError) {
-        setError(resetError.message);
+      // Call our custom API endpoint instead of Supabase's resetPassword
+      const response = await fetch('/api/auth/password-reset/request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          // Include device information for security tracking
+          requestOrigin: {
+            userAgent: navigator.userAgent,
+            language: navigator.language,
+            platform: navigator.platform,
+            screenSize: `${window.screen.width}x${window.screen.height}`,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+          }
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        setError(result.error || 'Failed to send reset link. Please try again.');
         return;
       }
       
       setIsSuccess(true);
+      
+      // Log analytics event (if you have analytics)
+      try {
+        if (typeof window !== 'undefined' && 'gtag' in window) {
+          // @ts-ignore
+          window.gtag('event', 'password_reset_requested', {
+            email_domain: email.split('@')[1]
+          });
+        }
+      } catch (analyticsError) {
+        console.error('Analytics error:', analyticsError);
+      }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
-      console.error(err);
+      console.error('Password reset request error:', err);
     } finally {
       setIsLoading(false);
     }

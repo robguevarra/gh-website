@@ -14,6 +14,7 @@ type VerificationState =
   | 'invalid'
   | 'error'
   | 'profile_exists' // New state for already set up profiles
+  | 'password_reset' // New state for password reset flow
 
 interface MagicLinkVerifyContentProps {
   token: string
@@ -97,6 +98,21 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
         setPurpose(result.verification.purpose)
         setRedirectPath(result.authFlow.redirectPath)
         
+        // Check if this is a password reset flow
+        if (result.verification.purpose === 'password_reset') {
+          console.log('[MagicLinkVerify] Password reset flow detected')
+          setState('password_reset')
+          // Redirect to password reset page after verification
+          setTimeout(() => {
+            const redirectUrl = new URL('/auth/update-password', window.location.origin)
+            redirectUrl.searchParams.set('email', result.verification.email)
+            redirectUrl.searchParams.set('verified', 'true')
+            redirectUrl.searchParams.set('token', token)
+            router.push(redirectUrl.pathname + redirectUrl.search)
+          }, 2000)
+          return
+        }
+        
         // Check if user already has a complete profile
         if (result.profileStatus?.isComplete) {
           console.log('[MagicLinkVerify] User already has a complete profile')
@@ -164,32 +180,47 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
         setEmail(result.verification.email)
         setPurpose(result.verification.purpose)
         setRedirectPath(result.authFlow.redirectPath)
+        
+        // Check if this is a password reset flow - needs special handling
+        if (result.verification.purpose === 'password_reset') {
+          console.log('[MagicLinkVerify] Password reset flow detected (GET method)')
+          setState('password_reset')
+          // Redirect to password reset page after verification
+          setTimeout(() => {
+            const redirectUrl = new URL('/auth/update-password', window.location.origin)
+            redirectUrl.searchParams.set('email', result.verification.email)
+            redirectUrl.searchParams.set('verified', 'true')
+            redirectUrl.searchParams.set('token', token)
+            console.log('[MagicLinkVerify] Redirecting to password reset:', redirectUrl.toString())
+            router.push(redirectUrl.pathname + redirectUrl.search)
+          }, 2000)
+          return
+        }
+        
         setState('success')
         
-        // DIAGNOSTIC LOGGING: Log the entire API response for debugging
-        console.log('[MagicLinkVerify] COMPLETE API RESPONSE:', JSON.stringify(result, null, 2))
+        // Check if user already completed setup in two ways:
+        // 1. Direct check via profileStatus (set by server)
+        // 2. Client-side check using userId from metadata
+        let hasCompletedSetup = result.profileStatus?.isComplete === true
         
-        // Check if user has already completed profile setup (has password)
-        const hasCompletedSetup = result.profileStatus?.isComplete === true
-        
-        // DIAGNOSTIC LOGGING: Log all redirect-related values
-        console.log('[MagicLinkVerify] Profile Status:', JSON.stringify(result.profileStatus || 'NOT PROVIDED'))
-        console.log('[MagicLinkVerify] Has completed setup?', hasCompletedSetup)
-        console.log('[MagicLinkVerify] Original redirect path:', result.authFlow.redirectPath)
+        // If server didn't set profileStatus, check metadata for userId
+        // This is a crucial fallback for backward compatibility
+        if (!hasCompletedSetup && result.metadata?.userId) {
+          // Force redirect to signin for all login links when a userId exists
+          // This is the industry standard pattern - users with accounts should never see setup screens
+          if (result.verification.purpose === 'login') {
+            hasCompletedSetup = true
+          }
+        }
         
         if (hasCompletedSetup) {
-          console.log('[MagicLinkVerify] 🚨 USER ALREADY COMPLETED SETUP, SHOULD REDIRECT TO SIGNIN')
           // Override redirectPath for users who have already set up their account
           const signinUrl = `/auth/signin?password_set=true&email=${encodeURIComponent(result.verification.email)}`
           setRedirectPath(signinUrl)
           
           // Also display a message to the user
           setErrorMessage(result.profileStatus?.message || 'You have already set up your password. Redirecting to sign in.')
-          
-          // ALERT for testing
-          alert('DEBUG: User has already set password. Should redirect to signin. Check console for details.')
-        } else {
-          console.log('[MagicLinkVerify] User has NOT completed setup, continuing to setup page')
         }
         
         // Will be overridden below if hasCompletedSetup is true
@@ -222,6 +253,13 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
               redirectUrl.searchParams.set('email', result.verification.email)
               
               console.log('[MagicLinkVerify] Forcing redirect to signin:', redirectUrl.toString())
+            } else if (result.verification.purpose === 'password_reset') {
+              // For password reset, go to the update password page
+              redirectUrl = new URL('/auth/update-password', window.location.origin)
+              redirectUrl.searchParams.set('email', result.verification.email)
+              redirectUrl.searchParams.set('verified', 'true')
+              redirectUrl.searchParams.set('token', token)
+              console.log('[MagicLinkVerify] Password reset redirect:', redirectUrl.toString())
             } else {
               // For normal users, follow the standard flow
               redirectUrl = new URL(result.authFlow.redirectPath, window.location.origin)
