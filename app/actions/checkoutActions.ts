@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
-import { createServerSupabaseClient } from '@/lib/supabase/server'; // Correct helper function
+import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'; // Import both client types
 import { CartItem } from '@/stores/cartStore'; // Type for cart items
 import { type Database } from '@/types/supabase';
 import { type SupabaseClient } from '@supabase/supabase-js'; // Import SupabaseClient type
@@ -236,10 +236,13 @@ export async function createXenditEcommercePayment(
       // Add any other relevant info needed by the webhook
     };
 
-    // 5. Log pending transaction using the dedicated helper
+    // 5. Log pending transaction using the dedicated helper with service role client to bypass RLS
     try {
+      // Get admin client that bypasses RLS policies
+      const adminClient = await createServiceRoleClient();
+      
       await logEcommercePendingTransaction({
-        supabase: supabase, // Pass the created client
+        supabase: adminClient, // Use admin client to bypass RLS
         userId: user.id,
         email: user.email,
         amount: calculatedTotal,
