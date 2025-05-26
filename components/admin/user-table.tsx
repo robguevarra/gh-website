@@ -92,7 +92,7 @@ interface UserTableProps {
   totalPages: number;
 }
 
-type SortField = 'name' | 'status' | 'source' | 'activity' | 'joined' | 'email_engagement' | 'email_activity' | '';
+type SortField = 'name' | 'status' | 'source' | 'activity' | 'joined' | '';
 type SortDirection = 'asc' | 'desc' | '';
 
 export default function UserTable({ users, searchParams, page, pageSize, totalPages }: UserTableProps) {
@@ -251,76 +251,100 @@ export default function UserTable({ users, searchParams, page, pageSize, totalPa
     const opened = user.email_opened_count || 0;
     const clicked = user.email_clicked_count || 0;
     const lastActivity = user.last_email_activity;
+    const emailBounced = user.email_bounced || false;
     
-    // Special handling for cases where last_email_activity exists but counts are zero
-    // This indicates there likely is activity but the count fields aren't updated
-    const hasInconsistentData = lastActivity && delivered === 0;
+    // If there's a last_email_activity timestamp, we KNOW the user has email activity
+    // regardless of what the count fields say - these are clearly out of sync in some cases
+    const hasActivity = !!lastActivity;
     
-    // Calculate rates (only if we have consistent data)
-    const openRate = !hasInconsistentData && delivered > 0 ? (opened / delivered) * 100 : 0;
-    const clickRate = !hasInconsistentData && opened > 0 ? (clicked / opened) * 100 : 0;
-    
-    // Determine engagement level
-    let engagementLevel: 'high' | 'medium' | 'low' | 'none' | 'unknown' = 'none';
-    
-    if (hasInconsistentData) {
-      // If we have last_email_activity but no counts, mark as unknown rather than none
-      engagementLevel = 'unknown';
-    } else if (delivered === 0) {
-      engagementLevel = 'none';
-    } else if (openRate >= 50 && clickRate >= 25) {
-      engagementLevel = 'high';
-    } else if (openRate >= 25 || clickRate >= 10) {
-      engagementLevel = 'medium';
-    } else {
-      engagementLevel = 'low';
-    }
-    
-    // Set colors based on engagement level
-    const engagementColors = {
-      high: 'text-green-600',
-      medium: 'text-blue-500',
-      low: 'text-amber-500',
-      none: 'text-gray-400',
-      unknown: 'text-purple-500'
-    };
-    
-    // Set icons based on engagement level
-    const engagementIcons = {
-      high: TrendingUp,
-      medium: BarChart2,
-      low: TrendingDown,
-      none: Minus,
-      unknown: Mail
-    };
-    
-    const EngagementIcon = engagementIcons[engagementLevel];
-    
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <EngagementIcon className={`h-4 w-4 ${engagementColors[engagementLevel]}`} />
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1">
-              <span className={`text-xs font-medium ${engagementColors[engagementLevel]}`}>
-                {engagementLevel === 'none' ? 'No activity' : 
-                 engagementLevel === 'unknown' ? 'Has activity' : 
-                 `${engagementLevel.charAt(0).toUpperCase() + engagementLevel.slice(1)} engagement`}
-              </span>
-              
-              {engagementLevel === 'unknown' && (
+    if (hasActivity) {
+      // Since we have confirmed activity, let's create a view-details link
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-blue-500" />
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1">
+                <span className="text-xs font-medium text-blue-500">
+                  Active
+                </span>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <AlertTriangle className="h-3 w-3 text-amber-500" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">Email activity detected but metrics unavailable. View details for accurate information.</p>
+                    <p className="text-xs">View user details to see complete email analytics</p>
                   </TooltipContent>
                 </Tooltip>
-              )}
+              </div>
             </div>
-            
-            {!hasInconsistentData && delivered > 0 && (
+          </div>
+          {lastActivity && (
+            <div className="text-xs text-muted-foreground">
+              Last activity: {formatDate(lastActivity)}
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    // If user is bounced, show that status
+    if (emailBounced) {
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-500" />
+            <div className="flex flex-col">
+              <span className="text-xs font-medium text-red-500">
+                Bounced
+              </span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Only use delivered/opened/clicked stats if they're logically consistent
+    if (delivered > 0) {
+      // Calculate rates
+      const openRate = delivered > 0 ? (opened / delivered) * 100 : 0;
+      const clickRate = opened > 0 ? (clicked / opened) * 100 : 0;
+      
+      // Determine engagement level
+      let engagementLevel: 'high' | 'medium' | 'low' = 'low';
+      
+      if (openRate >= 50 && clickRate >= 25) {
+        engagementLevel = 'high';
+      } else if (openRate >= 25 || clickRate >= 10) {
+        engagementLevel = 'medium';
+      }
+      
+      // Set colors based on engagement level
+      const engagementColors = {
+        high: 'text-green-600',
+        medium: 'text-blue-500',
+        low: 'text-amber-500'
+      };
+      
+      // Set icons based on engagement level
+      const engagementIcons = {
+        high: TrendingUp,
+        medium: BarChart2,
+        low: TrendingDown
+      };
+      
+      const EngagementIcon = engagementIcons[engagementLevel];
+      
+      return (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <EngagementIcon className={`h-4 w-4 ${engagementColors[engagementLevel]}`} />
+            <div className="flex flex-col">
+              <div className="flex items-center gap-1">
+                <span className={`text-xs font-medium ${engagementColors[engagementLevel]}`}>
+                  {`${engagementLevel.charAt(0).toUpperCase() + engagementLevel.slice(1)} engagement`}
+                </span>
+              </div>
               <div className="flex items-center gap-3 text-xs">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -352,15 +376,23 @@ export default function UserTable({ users, searchParams, page, pageSize, totalPa
                   </TooltipContent>
                 </Tooltip>
               </div>
-            )}
+            </div>
           </div>
         </div>
-        
-        {lastActivity && (
-          <div className="text-xs text-muted-foreground">
-            Last activity: {formatDate(lastActivity)}
+      );
+    }
+    
+    // Default case - no activity
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <Minus className="h-4 w-4 text-gray-400" />
+          <div className="flex flex-col">
+            <span className="text-xs font-medium text-gray-400">
+              No activity
+            </span>
           </div>
-        )}
+        </div>
       </div>
     );
   };
@@ -458,24 +490,7 @@ export default function UserTable({ users, searchParams, page, pageSize, totalPa
               </div>
             </TableHead>
             <TableHead>Tags</TableHead>
-            <TableHead 
-              className="cursor-pointer hover:bg-muted/50"
-              onClick={() => handleSort('email_engagement')}
-            >
-              <div className="flex items-center">
-                Email Score
-                {getSortIcon('email_engagement')}
-              </div>
-            </TableHead>
-            <TableHead 
-              className="cursor-pointer hover:bg-muted/50"
-              onClick={() => handleSort('email_activity')}
-            >
-              <div className="flex items-center">
-                Email Activity
-                {getSortIcon('email_activity')}
-              </div>
-            </TableHead>
+
             <TableHead 
               className="cursor-pointer hover:bg-muted/50"
               onClick={() => handleSort('activity')}
@@ -524,12 +539,7 @@ export default function UserTable({ users, searchParams, page, pageSize, totalPa
               <TableCell>
                 {renderTags(user.tags)}
               </TableCell>
-              <TableCell>
-                {formatEngagementScore(user)}
-              </TableCell>
-              <TableCell>
-                {renderEmailActivity(user)}
-              </TableCell>
+
               <TableCell>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-1 text-sm">
