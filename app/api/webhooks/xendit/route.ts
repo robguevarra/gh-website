@@ -812,14 +812,17 @@ export async function POST(request: NextRequest) {
                                 return '<p style="font-style: italic; color: #6b7280;">No items found in this order.</p>';
                               }
                               
+                              // Log the items to debug what we're receiving
+                              console.log('[Webhook][ECOM] Formatting cart items for email:', JSON.stringify(items, null, 2));
+                              
                               // Start with table-based layout for email compatibility
                               let htmlOutput = `
                               <div style="margin-bottom: 24px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
                                   <tr>
                                     <td style="padding-bottom: 12px;">
-                                      <p style="font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
-                                        Items (${items.length})
+                                      <p style="font-size: 14px; font-weight: 600; color: #b08ba5; text-transform: uppercase; letter-spacing: 0.05em; margin: 0;">
+                                        ITEMS (${items.length})
                                       </p>
                                     </td>
                                   </tr>
@@ -827,22 +830,32 @@ export async function POST(request: NextRequest) {
                               
                               // Add each item
                               items.forEach((item, index) => {
-                                const title = item.title || 'Product title unavailable';
+                                // Extract product information, handling nested objects
+                                const title = item.title || (item.shopify_products && item.shopify_products.title) || 'Product title unavailable';
                                 const variantTitleHtml = item.variant_title ? `<span style="display: block; font-size: 12px; color: #6b7280;">(${item.variant_title})</span>` : '';
-                                const quantity = item.quantity || 1;
-                                const price = item.price || 0;
-                                const imageUrl = item.featured_image_url || item.image_url || null;
-                                const googleDriveFileId = item.google_drive_file_id || null;
+                                
+                                // Find image URL in various possible locations
+                                const imageUrl = 
+                                  item.featured_image_url || 
+                                  (item.shopify_products && item.shopify_products.featured_image_url) || 
+                                  item.image_url || 
+                                  null;
+                                
+                                // Find Google Drive link in various possible locations
+                                const googleDriveFileId = 
+                                  item.google_drive_file_id || 
+                                  (item.shopify_products && item.shopify_products.google_drive_file_id) || 
+                                  null;
                                 
                                 // Define fallback image display
                                 const imageDisplayHtml = imageUrl 
                                   ? `<img src="${imageUrl}" alt="${title}" width="64" height="64" style="object-fit: cover; border-radius: 6px; border: 1px solid #f1b5bc33;" />` 
-                                  : `<div style="width: 64px; height: 64px; background-color: #f1b5bc1a; border-radius: 6px; border: 1px solid #f1b5bc33; display: flex; align-items: center; justify-content: center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f1b5bc88" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg></div>`;
+                                  : `<div style="width: 64px; height: 64px; background-color: #f1b5bc1a; border-radius: 6px; border: 1px solid #f1b5bc33; text-align: center; line-height: 64px;">📷</div>`;
                                 
-                                // Format drive link button
+                                // Format drive link button with GH branding colors
                                 const driveButtonHtml = googleDriveFileId 
-                                  ? `<a href="https://drive.google.com/drive/folders/${googleDriveFileId}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 6px 12px; font-size: 13px; font-weight: 500; text-decoration: none; color: #374151; background-color: white; border: 1px solid #d1d5db; border-radius: 4px;"><span style="vertical-align: middle; margin-right: 4px;">📁</span>Open Folder</a>` 
-                                  : `<span style="display: inline-block; padding: 6px 12px; font-size: 13px; font-weight: 500; color: #6b7280; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 4px; opacity: 0.6;">Not Available</span>`;
+                                  ? `<a href="https://drive.google.com/drive/folders/${googleDriveFileId}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; font-size: 14px; font-weight: 500; text-decoration: none; color: white; background-color: #b08ba5; border-radius: 4px;">📁 Open Folder</a>` 
+                                  : `<span style="display: inline-block; padding: 8px 16px; font-size: 14px; font-weight: 500; color: #6b7280; background-color: #f3f4f6; border-radius: 4px;">Not Available</span>`;
                                 
                                 // Create item row
                                 htmlOutput += `
@@ -854,12 +867,9 @@ export async function POST(request: NextRequest) {
                                           ${imageDisplayHtml}
                                         </td>
                                         <td style="padding: 0 16px;" valign="top">
-                                          <p style="margin: 0 0 4px 0; font-size: 14px; font-weight: 500; color: #111827;">
+                                          <p style="margin: 0 0 4px 0; font-size: 16px; font-weight: 500; color: #111827;">
                                             ${title}
                                             ${variantTitleHtml}
-                                          </p>
-                                          <p style="margin: 0; font-size: 12px; color: #6b7280;">
-                                            Qty: ${quantity} | PHP ${parseFloat(price).toFixed(2)}
                                           </p>
                                         </td>
                                         <td align="right" valign="middle">
