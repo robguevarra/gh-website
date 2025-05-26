@@ -891,8 +891,53 @@ export async function POST(request: NextRequest) {
                               return htmlOutput;
                             };
                             
-                            // Generate formatted HTML for order items
-                            const formattedOrderItemsHtml = formatOrderItemsForEmail(cartItems);
+                            // Fetch complete product details from database before generating email content
+                            let enrichedCartItems = [...cartItems]; // Start with existing cart items
+                            
+                            try {
+                              // Extract product IDs from cart items
+                              const productIds = cartItems
+                                .map(item => item.productId || item.product_id)
+                                .filter(Boolean);
+                              
+                              if (productIds.length > 0) {
+                                // Fetch complete product details including images and drive links
+                                const { data: products, error } = await supabase
+                                  .from('shopify_products')
+                                  .select('id, title, featured_image_url, google_drive_file_id')
+                                  .in('id', productIds);
+                                
+                                if (error) {
+                                  console.error('[Webhook][ECOM] Error fetching product details for email:', error);
+                                } else if (products && products.length > 0) {
+                                  console.log('[Webhook][ECOM] Successfully fetched product details for email:', JSON.stringify(products, null, 2));
+                                  
+                                  // Create a map for easy lookup
+                                  const productMap = new Map(products.map(p => [p.id, p]));
+                                  
+                                  // Enrich cart items with database product details
+                                  enrichedCartItems = cartItems.map(item => {
+                                    const productId = item.productId || item.product_id;
+                                    const productDetails = productId ? productMap.get(productId) : null;
+                                    
+                                    if (productDetails) {
+                                      return {
+                                        ...item,
+                                        title: item.title || productDetails.title,
+                                        featured_image_url: productDetails.featured_image_url,
+                                        google_drive_file_id: productDetails.google_drive_file_id
+                                      };
+                                    }
+                                    return item;
+                                  });
+                                }
+                              }
+                            } catch (fetchError) {
+                              console.error('[Webhook][ECOM] Error enriching cart items for email:', fetchError);
+                            }
+                            
+                            // Generate formatted HTML with enriched product details
+                            const formattedOrderItemsHtml = formatOrderItemsForEmail(enrichedCartItems);
                             
                             // Send enhanced order confirmation email
                             await sendTransactionalEmail(
