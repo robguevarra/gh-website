@@ -817,7 +817,7 @@ export async function POST(request: NextRequest) {
                               
                               // Start with table-based layout for email compatibility
                               let htmlOutput = `
-                              <div style="margin-bottom: 24px;">
+                              <div style="margin-bottom: 24px; background-color: #f5f9fa; border-radius: 8px; padding: 20px;">
                                 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
                                   <tr>
                                     <td style="padding-bottom: 12px;">
@@ -852,10 +852,10 @@ export async function POST(request: NextRequest) {
                                   ? `<img src="${imageUrl}" alt="${title}" width="64" height="64" style="object-fit: cover; border-radius: 6px; border: 1px solid #f1b5bc33;" />` 
                                   : `<div style="width: 64px; height: 64px; background-color: #f1b5bc1a; border-radius: 6px; border: 1px solid #f1b5bc33; text-align: center; line-height: 64px;">📷</div>`;
                                 
-                                // Format drive link button with GH branding colors
+                                // Format drive link button with GH branding colors - matching the image style
                                 const driveButtonHtml = googleDriveFileId 
-                                  ? `<a href="https://drive.google.com/drive/folders/${googleDriveFileId}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 8px 16px; font-size: 14px; font-weight: 500; text-decoration: none; color: white; background-color: #b08ba5; border-radius: 4px;">📁 Open Folder</a>` 
-                                  : `<span style="display: inline-block; padding: 8px 16px; font-size: 14px; font-weight: 500; color: #6b7280; background-color: #f3f4f6; border-radius: 4px;">Not Available</span>`;
+                                  ? `<a href="https://drive.google.com/drive/folders/${googleDriveFileId}" target="_blank" rel="noopener noreferrer" style="display: inline-block; padding: 10px 20px; font-size: 14px; font-weight: 500; text-decoration: none; color: white; background-color: #b98ba5; border-radius: 6px; text-align: center; box-shadow: 0 1px 2px rgba(0,0,0,0.05);"><span style="margin-right: 6px;">📁</span>Open Folder</a>` 
+                                  : `<span style="display: inline-block; padding: 10px 20px; font-size: 14px; font-weight: 500; color: #6b7280; background-color: #f3f4f6; border-radius: 6px; text-align: center;">Not Available</span>`;
                                 
                                 // Create item row
                                 htmlOutput += `
