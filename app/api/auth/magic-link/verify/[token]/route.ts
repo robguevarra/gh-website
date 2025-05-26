@@ -168,72 +168,116 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       isComplete: false,
       message: ''
     }
+    
+    console.log(`[MagicLinkVerifyAPI] POST handler - checking for existing password`)
+    console.log(`[MagicLinkVerifyAPI] POST purpose:`, validation.purpose)
+    console.log(`[MagicLinkVerifyAPI] POST email:`, validation.email)
 
-    // Check if user has already set their password for account setup magic links
-    if (validation.purpose === 'account_setup' && validation.email) {
+    // SHARED PASSWORD CHECK FUNCTION to avoid duplicating code between GET and POST handlers
+    const checkForExistingPassword = async (email: string, purpose: string, userId?: string) => {
+      if (purpose !== 'account_setup' || !email) {
+        return null; // Only check for account_setup links
+      }
+      
       try {
+        console.log(`[MagicLinkVerifyAPI] Checking password status for ${email}`)
         const supabase = getAdminClient()
         
         // Using the admin API to get all users, then filter by email
-        // This is not ideal for performance but is the most reliable way with the current API
         const { data, error } = await supabase.auth.admin.listUsers()
         
         if (error) {
-          console.error('[MagicLinkVerifyAPI] Error fetching user:', error)
-        } else if (data.users && data.users.length > 0) {
-          // Filter to find the user with matching email
-          const matchingUsers = data.users.filter(u => u.email === validation.email)
+          console.error('[MagicLinkVerifyAPI] Error fetching users:', error)
+          return null
+        }
+        
+        if (!data.users || data.users.length === 0) {
+          console.log('[MagicLinkVerifyAPI] No users found in system')
+          return null
+        }
+        
+        // Filter to find user by email (case-insensitive for safety)
+        const matchingUsers = data.users.filter(u => 
+          u.email?.toLowerCase() === email.toLowerCase()
+        )
+        
+        if (matchingUsers.length === 0) {
+          console.log('[MagicLinkVerifyAPI] No matching user found for email:', email)
+          return null
+        }
+        
+        // Get the matching user
+        const user = matchingUsers[0]
+        
+        // Check user_metadata for password_set_at
+        const passwordSetAt = user?.user_metadata?.password_set_at
+        const hasSetPassword = passwordSetAt !== undefined
+        
+        console.log(`[MagicLinkVerifyAPI] User found:`, {
+          id: user.id,
+          email: user.email,
+          hasSetPassword,
+          passwordSetAt,
+          metadata: JSON.stringify(user.user_metadata || {})
+        })
+        
+        if (hasSetPassword) {
+          console.log(`[MagicLinkVerifyAPI] 🔒 CONFIRMED: User has already set password`)
           
-          if (matchingUsers.length === 0) {
-            console.log('[MagicLinkVerifyAPI] No user found with email:', validation.email)
-            return
-          }
+          // Create redirect to signin
+          const signinPath = '/auth/signin?password_set=true&email=' + encodeURIComponent(email)
           
-          // Get the matching user
-          const user = matchingUsers[0]
-          
-          // Check user_metadata for password_set_at
-          const hasSetPassword = user?.user_metadata?.password_set_at !== undefined
-          
-          if (hasSetPassword) {
-            console.log(`[MagicLinkVerifyAPI] User has already set password at:`, user.user_metadata.password_set_at)
-            
-            // Update profile status to indicate completion
-            profileStatus = {
+          return {
+            isPasswordSet: true,
+            redirectPath: signinPath,
+            profileStatus: {
               isComplete: true,
               message: 'You have already set up your password. Please sign in with your email and password.'
             }
-            
-            // IMPORTANT: Force redirect to signin instead of setup-account
-            // This is the critical change to ensure users can't access setup page after password is set
-            redirectPath = '/auth/signin?password_set=true&email=' + encodeURIComponent(validation.email)
-            
-            // Log the forced redirect
-            console.log('[MagicLinkVerifyAPI] FORCING redirect to:', redirectPath)
-            
-            // Return early with a specific redirection to prevent proceeding further
-            return NextResponse.json({
-              success: true,
-              verification: {
-                email: validation.email,
-                purpose: validation.purpose,
-                userId: validation.userId,
-                metadata: validation.metadata
-              },
-              authFlow: { redirectPath },
-              profileStatus,
-              session: sessionResult
-            })
-          } else {
-            console.log('[MagicLinkVerifyAPI] User has not set password yet')
           }
         } else {
-          console.log('[MagicLinkVerifyAPI] No user found with email:', validation.email)
+          console.log('[MagicLinkVerifyAPI] User has not set password yet')
+          return { isPasswordSet: false }
         }
-      } catch (error) {
-        console.error('[MagicLinkVerifyAPI] Error checking password status:', error)
-        // Continue with normal flow if we can't determine password status
+      } catch (err) {
+        console.error('[MagicLinkVerifyAPI] Error checking password status:', err)
+        return null // Continue with normal flow on errors
       }
+    }
+    
+    // Check if user has already set their password for account setup magic links
+    const passwordStatus = await checkForExistingPassword(
+      validation.email || '',
+      validation.purpose || '',
+      validation.userId
+    )
+    
+    // If user has set password, update redirect and profileStatus
+    if (passwordStatus?.isPasswordSet) {
+      console.log('[MagicLinkVerifyAPI] 🚨 Password is set, forcing signin redirect')
+      
+      // Make sure these values exist before assigning
+      if (passwordStatus.redirectPath) {
+        redirectPath = passwordStatus.redirectPath
+      }
+      
+      if (passwordStatus.profileStatus) {
+        profileStatus = passwordStatus.profileStatus
+      }
+      
+      // Return early to prevent proceeding further
+      return NextResponse.json({
+        success: true,
+        verification: {
+          email: validation.email,
+          purpose: validation.purpose,
+          userId: validation.userId,
+          metadata: validation.metadata
+        },
+        authFlow: { redirectPath },
+        profileStatus,
+        session: null // No session for redirected flows
+      })
     }
 
     // Create Supabase Auth session if requested and user exists

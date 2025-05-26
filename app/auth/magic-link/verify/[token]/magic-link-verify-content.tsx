@@ -166,46 +166,83 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
         setRedirectPath(result.authFlow.redirectPath)
         setState('success')
         
+        // DIAGNOSTIC LOGGING: Log the entire API response for debugging
+        console.log('[MagicLinkVerify] COMPLETE API RESPONSE:', JSON.stringify(result, null, 2))
+        
         // Check if user has already completed profile setup (has password)
-        // This is critical for preventing setup-account access for users with passwords
         const hasCompletedSetup = result.profileStatus?.isComplete === true
         
+        // DIAGNOSTIC LOGGING: Log all redirect-related values
+        console.log('[MagicLinkVerify] Profile Status:', JSON.stringify(result.profileStatus || 'NOT PROVIDED'))
+        console.log('[MagicLinkVerify] Has completed setup?', hasCompletedSetup)
+        console.log('[MagicLinkVerify] Original redirect path:', result.authFlow.redirectPath)
+        
         if (hasCompletedSetup) {
-          console.log('[MagicLinkVerify] User already completed setup, redirecting to signin')
+          console.log('[MagicLinkVerify] 🚨 USER ALREADY COMPLETED SETUP, SHOULD REDIRECT TO SIGNIN')
           // Override redirectPath for users who have already set up their account
-          // This ensures they can't access the setup flow again
           const signinUrl = `/auth/signin?password_set=true&email=${encodeURIComponent(result.verification.email)}`
           setRedirectPath(signinUrl)
           
           // Also display a message to the user
           setErrorMessage(result.profileStatus?.message || 'You have already set up your password. Redirecting to sign in.')
+          
+          // ALERT for testing
+          alert('DEBUG: User has already set password. Should redirect to signin. Check console for details.')
+        } else {
+          console.log('[MagicLinkVerify] User has NOT completed setup, continuing to setup page')
         }
         
-        console.log('[MagicLinkVerify] Redirecting to:', hasCompletedSetup ? 
-          `/auth/signin?password_set=true&email=${encodeURIComponent(result.verification.email)}` : 
-          result.authFlow.redirectPath
-        )
+        // Will be overridden below if hasCompletedSetup is true
+        let finalRedirectPath = result.authFlow.redirectPath
+        
+        if (hasCompletedSetup) {
+          finalRedirectPath = `/auth/signin?password_set=true&email=${encodeURIComponent(result.verification.email)}`
+          console.log('[MagicLinkVerify] OVERRIDING redirect to:', finalRedirectPath)
+        }
+        
+        console.log('[MagicLinkVerify] Final redirect decision:', {
+          hasCompletedSetup,
+          redirectingTo: finalRedirectPath,
+          originalPath: result.authFlow.redirectPath
+        })
 
         // Redirect after short delay for user feedback
-        // Pass user information as URL parameters to skip profile step
         setTimeout(() => {
-          // If user has completed setup, force redirect to signin regardless of what's in the token
-          const finalRedirectPath = hasCompletedSetup ? 
-            `/auth/signin?password_set=true&email=${encodeURIComponent(result.verification.email)}` : 
-            result.authFlow.redirectPath
-            
-          const redirectUrl = new URL(finalRedirectPath, window.location.origin)
+          console.log('[MagicLinkVerify] EXECUTING REDIRECT NOW...')
           
-          // Only add these params if we're not redirecting to signin
-          if (!hasCompletedSetup) {
-            redirectUrl.searchParams.set('email', result.verification.email)
-            redirectUrl.searchParams.set('verified', 'true')
-            if (result.verification.purpose) {
-              redirectUrl.searchParams.set('purpose', result.verification.purpose)
+          // This is critical - we must use the finalRedirectPath from above
+          // NOT recompute it, to ensure our logic is consistent
+          let redirectUrl
+          
+          try {
+            if (hasCompletedSetup) {
+              // For users with passwords, create a clean signin URL with minimal parameters
+              redirectUrl = new URL(`/auth/signin`, window.location.origin)
+              redirectUrl.searchParams.set('password_set', 'true')
+              redirectUrl.searchParams.set('email', result.verification.email)
+              
+              console.log('[MagicLinkVerify] Forcing redirect to signin:', redirectUrl.toString())
+            } else {
+              // For normal users, follow the standard flow
+              redirectUrl = new URL(result.authFlow.redirectPath, window.location.origin)
+              redirectUrl.searchParams.set('email', result.verification.email)
+              redirectUrl.searchParams.set('verified', 'true')
+              if (result.verification.purpose) {
+                redirectUrl.searchParams.set('purpose', result.verification.purpose)
+              }
+              
+              console.log('[MagicLinkVerify] Standard redirect to setup:', redirectUrl.toString())
             }
+            
+            // Log the final URL right before navigation
+            console.log('[MagicLinkVerify] ⚠️ FINAL REDIRECT URL:', redirectUrl.toString())
+            
+            // Execute the navigation
+            router.push(redirectUrl.pathname + redirectUrl.search)
+          } catch (err) {
+            console.error('[MagicLinkVerify] Redirect error:', err)
+            alert('Error during redirect. See console for details.')
           }
-          
-          router.push(redirectUrl.pathname + redirectUrl.search)
         }, 2000)
       }
 
