@@ -41,7 +41,9 @@ import {
   AlertTriangle,
   TrendingUp,
   TrendingDown,
-  Minus
+  Minus,
+  BarChart2,
+  Percent
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -243,56 +245,120 @@ export default function UserTable({ users, searchParams, page, pageSize, totalPa
     );
   };
 
-  // Render email activity indicators
+  // Render email activity indicators with meaningful metrics
   const renderEmailActivity = (user: ExtendedUnifiedProfile) => {
     const delivered = user.email_delivered_count || 0;
     const opened = user.email_opened_count || 0;
     const clicked = user.email_clicked_count || 0;
     const lastActivity = user.last_email_activity;
     
+    // Special handling for cases where last_email_activity exists but counts are zero
+    // This indicates there likely is activity but the count fields aren't updated
+    const hasInconsistentData = lastActivity && delivered === 0;
+    
+    // Calculate rates (only if we have consistent data)
+    const openRate = !hasInconsistentData && delivered > 0 ? (opened / delivered) * 100 : 0;
+    const clickRate = !hasInconsistentData && opened > 0 ? (clicked / opened) * 100 : 0;
+    
+    // Determine engagement level
+    let engagementLevel: 'high' | 'medium' | 'low' | 'none' | 'unknown' = 'none';
+    
+    if (hasInconsistentData) {
+      // If we have last_email_activity but no counts, mark as unknown rather than none
+      engagementLevel = 'unknown';
+    } else if (delivered === 0) {
+      engagementLevel = 'none';
+    } else if (openRate >= 50 && clickRate >= 25) {
+      engagementLevel = 'high';
+    } else if (openRate >= 25 || clickRate >= 10) {
+      engagementLevel = 'medium';
+    } else {
+      engagementLevel = 'low';
+    }
+    
+    // Set colors based on engagement level
+    const engagementColors = {
+      high: 'text-green-600',
+      medium: 'text-blue-500',
+      low: 'text-amber-500',
+      none: 'text-gray-400',
+      unknown: 'text-purple-500'
+    };
+    
+    // Set icons based on engagement level
+    const engagementIcons = {
+      high: TrendingUp,
+      medium: BarChart2,
+      low: TrendingDown,
+      none: Minus,
+      unknown: Mail
+    };
+    
+    const EngagementIcon = engagementIcons[engagementLevel];
+    
     return (
-      <div className="space-y-1">
-        <div className="flex items-center gap-3 text-xs">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-1">
-                <Mail className="h-3 w-3 text-muted-foreground" />
-                <span>{delivered}</span>
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <EngagementIcon className={`h-4 w-4 ${engagementColors[engagementLevel]}`} />
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1">
+              <span className={`text-xs font-medium ${engagementColors[engagementLevel]}`}>
+                {engagementLevel === 'none' ? 'No activity' : 
+                 engagementLevel === 'unknown' ? 'Has activity' : 
+                 `${engagementLevel.charAt(0).toUpperCase() + engagementLevel.slice(1)} engagement`}
+              </span>
+              
+              {engagementLevel === 'unknown' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <AlertTriangle className="h-3 w-3 text-amber-500" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Email activity detected but metrics unavailable. View details for accurate information.</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            
+            {!hasInconsistentData && delivered > 0 && (
+              <div className="flex items-center gap-3 text-xs">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1">
+                      <MailOpen className="h-3 w-3 text-primary" />
+                      <span>{Math.round(openRate)}%</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="space-y-1">
+                      <p>Open rate: {Math.round(openRate)}%</p>
+                      <p className="text-xs text-muted-foreground">{opened} of {delivered} emails opened</p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+                
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1">
+                      <MousePointer className="h-3 w-3 text-accent" />
+                      <span>{Math.round(clickRate)}%</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <div className="space-y-1">
+                      <p>Click rate: {Math.round(clickRate)}%</p>
+                      <p className="text-xs text-muted-foreground">{clicked} of {opened} opened emails clicked</p>
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
               </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Emails delivered</p>
-            </TooltipContent>
-          </Tooltip>
-          
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-1">
-                <MailOpen className="h-3 w-3 text-primary" />
-                <span>{opened}</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Emails opened</p>
-            </TooltipContent>
-          </Tooltip>
-          
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex items-center gap-1">
-                <MousePointer className="h-3 w-3 text-accent" />
-                <span>{clicked}</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Email links clicked</p>
-            </TooltipContent>
-          </Tooltip>
+            )}
+          </div>
         </div>
         
         {lastActivity && (
           <div className="text-xs text-muted-foreground">
-            Last: {formatDate(lastActivity)}
+            Last activity: {formatDate(lastActivity)}
           </div>
         )}
       </div>
