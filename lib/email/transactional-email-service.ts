@@ -107,6 +107,7 @@ export async function sendTransactionalEmail(
           .update({
             status: 'sent',
             sent_at: new Date().toISOString(),
+            subject: processedSubject, // Store in dedicated subject column
             email_content: JSON.stringify(emailContent),
             email_headers: headers,
             raw_response: emailResponse
