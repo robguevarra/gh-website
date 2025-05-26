@@ -165,18 +165,46 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
         setPurpose(result.verification.purpose)
         setRedirectPath(result.authFlow.redirectPath)
         setState('success')
-
-        console.log('[MagicLinkVerify] Redirecting to:', result.authFlow.redirectPath)
+        
+        // Check if user has already completed profile setup (has password)
+        // This is critical for preventing setup-account access for users with passwords
+        const hasCompletedSetup = result.profileStatus?.isComplete === true
+        
+        if (hasCompletedSetup) {
+          console.log('[MagicLinkVerify] User already completed setup, redirecting to signin')
+          // Override redirectPath for users who have already set up their account
+          // This ensures they can't access the setup flow again
+          const signinUrl = `/auth/signin?password_set=true&email=${encodeURIComponent(result.verification.email)}`
+          setRedirectPath(signinUrl)
+          
+          // Also display a message to the user
+          setErrorMessage(result.profileStatus?.message || 'You have already set up your password. Redirecting to sign in.')
+        }
+        
+        console.log('[MagicLinkVerify] Redirecting to:', hasCompletedSetup ? 
+          `/auth/signin?password_set=true&email=${encodeURIComponent(result.verification.email)}` : 
+          result.authFlow.redirectPath
+        )
 
         // Redirect after short delay for user feedback
         // Pass user information as URL parameters to skip profile step
         setTimeout(() => {
-          const redirectUrl = new URL(result.authFlow.redirectPath, window.location.origin)
-          redirectUrl.searchParams.set('email', result.verification.email)
-          redirectUrl.searchParams.set('verified', 'true')
-          if (result.verification.purpose) {
-            redirectUrl.searchParams.set('purpose', result.verification.purpose)
+          // If user has completed setup, force redirect to signin regardless of what's in the token
+          const finalRedirectPath = hasCompletedSetup ? 
+            `/auth/signin?password_set=true&email=${encodeURIComponent(result.verification.email)}` : 
+            result.authFlow.redirectPath
+            
+          const redirectUrl = new URL(finalRedirectPath, window.location.origin)
+          
+          // Only add these params if we're not redirecting to signin
+          if (!hasCompletedSetup) {
+            redirectUrl.searchParams.set('email', result.verification.email)
+            redirectUrl.searchParams.set('verified', 'true')
+            if (result.verification.purpose) {
+              redirectUrl.searchParams.set('purpose', result.verification.purpose)
+            }
           }
+          
           router.push(redirectUrl.pathname + redirectUrl.search)
         }, 2000)
       }
