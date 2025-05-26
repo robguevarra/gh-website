@@ -454,14 +454,43 @@ export async function POST(request: NextRequest) {
                           leadId
                         )
                         console.log("[Webhook][P2P] Welcome email sent successfully")
+                    
+                    // --- Begin User Tagging ---
+                    try {
+                      // Get the P2P Enrolled tag ID
+                      const { data: p2pTag, error: tagError } = await supabase
+                        .from('tags')
+                        .select('id')
+                        .eq('name', 'P2P Enrolled')
+                        .single();
+                        
+                      if (tagError || !p2pTag) {
+                        console.error("[Webhook][P2P] Failed to find 'P2P Enrolled' tag:", tagError || 'Tag not found');
                       } else {
-                        console.warn("[Webhook][P2P] No email available for welcome email")
+                        // Import the tags module
+                        const { assignTagsToUsers } = await import('@/lib/supabase/data-access/tags');
+                        
+                        // Assign the tag to the user
+                        await assignTagsToUsers({
+                          tagIds: [p2pTag.id],
+                          userIds: [currentUserId]
+                        });
+                        
+                        console.log(`[Webhook][P2P] Successfully tagged user ${currentUserId} with 'P2P Enrolled'`);
                       }
-                    } catch (emailError) {
-                      console.error("[Webhook][P2P] Failed to send welcome email:", emailError)
-                      // Don't throw - email failure shouldn't break payment processing
+                    } catch (tagError) {
+                      console.error("[Webhook][P2P] Failed to tag user:", tagError);
+                      // Don't throw - tagging failure shouldn't break payment processing
                     }
-                    // --- End Welcome Email ---
+                    // --- End User Tagging ---
+                  } else {
+                    console.warn("[Webhook][P2P] No email available for welcome email")
+                  }
+                } catch (emailError) {
+                  console.error("[Webhook][P2P] Failed to send welcome email:", emailError)
+                  // Don't throw - email failure shouldn't break payment processing
+                }
+                // --- End Welcome Email ---
                   } catch (err) {
                     console.error("[Webhook][P2P] Failed to create enrollment:", err)
                   }
@@ -1007,6 +1036,39 @@ export async function POST(request: NextRequest) {
                     metadata: (typeof tx.metadata === 'object' && tx.metadata !== null) ? tx.metadata : {}, 
                   })
                   console.log("[Webhook][Canva] Ebook contact info stored successfully");
+                  
+                  // --- Apply Canva Purchase tag ---
+                  try {
+                    if (tx.user_id) {
+                      // Get the Canva Purchase tag ID
+                      const { data: canvaTag, error: tagError } = await supabase
+                        .from('tags')
+                        .select('id')
+                        .eq('name', 'Canva Purchase')
+                        .single();
+                        
+                      if (tagError || !canvaTag) {
+                        console.error("[Webhook][Canva] Failed to find 'Canva Purchase' tag:", tagError || 'Tag not found');
+                      } else {
+                        // Import the tags module
+                        const { assignTagsToUsers } = await import('@/lib/supabase/data-access/tags');
+                        
+                        // Assign the tag to the user
+                        await assignTagsToUsers({
+                          tagIds: [canvaTag.id],
+                          userIds: [tx.user_id]
+                        });
+                        
+                        console.log(`[Webhook][Canva] Successfully tagged user ${tx.user_id} with 'Canva Purchase'`);
+                      }
+                    } else {
+                      console.warn("[Webhook][Canva] Cannot apply tag - no user_id available");
+                    }
+                  } catch (tagError) {
+                    console.error("[Webhook][Canva] Failed to tag user:", tagError);
+                    // Don't throw - tagging failure shouldn't break payment processing
+                  }
+                  // --- End Canva Purchase tag ---
                   
                   // --- Send Canva Ebook Delivery Email ---
                   try {
