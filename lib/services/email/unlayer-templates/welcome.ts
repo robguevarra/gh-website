@@ -159,7 +159,7 @@ const welcomeTemplate = {
                 type: "text",
                 values: {
                   containerPadding: "20px",
-                  text: "<p style='text-align: center;'><span style='color: #888888; font-size: 12px;'>© 2025 Graceful Homeschooling. All rights reserved.</span></p><p style='text-align: center;'><span style='color: #888888; font-size: 12px;'>If you have any questions, please contact us at <a href='mailto:support@gracefulhomeschooling.com'>support@gracefulhomeschooling.com</a></span></p>",
+                  text: "<p style='text-align: center;'><span style='color: #888888; font-size: 12px;'>© 2025 Graceful Homeschooling. All rights reserved.</span></p><p style='text-align: center;'><span style='color: #888888; font-size: 12px;'>If you have any questions, please contact us at <a href='mailto:help@gracefulhomeschooling.com'>help@gracefulhomeschooling.com</a></span></p>",
                 },
               },
             ],

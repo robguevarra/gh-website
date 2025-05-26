@@ -473,7 +473,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                   {totalCartItems}
                 </Badge>
               )}
-              <span className="sr-only">Shopping Cart</span>
+              <span className="sr-only">Shopping Cartzzz</span>
             </Button>
           </Link>
 

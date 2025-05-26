@@ -7,16 +7,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Separator } from "@/components/ui/separator";
 import { formatPrice } from '@/lib/utils';
 import { createXenditEcommercePayment } from '@/app/actions/checkoutActions';
-import { AlertCircle, Loader2, ChevronLeft } from 'lucide-react';
+import { AlertCircle, Loader2, ChevronLeft, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useToast } from '@/components/ui/use-toast';
 import Link from 'next/link';
 
 export default function CheckoutForm() {
   const items = useCartStore((state) => state.items);
   const getTotalPrice = useCartStore((state) => state.getTotalPrice);
+  const removeItem = useCartStore((state) => state.removeItem);
 
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const { toast } = useToast();
 
   const totalPrice = getTotalPrice();
 
@@ -64,13 +67,31 @@ export default function CheckoutForm() {
 
         {items.map((item) => (
           <div key={item.productId} className="flex justify-between items-center">
-            <div>
+            <div className="flex-grow">
               <p className="font-medium">{item.title}</p>
               <p className="text-sm text-muted-foreground">
                 Quantity: {item.quantity}
               </p>
             </div>
-            <p>{formatPrice(item.price * item.quantity)}</p>
+            <div className="flex items-center gap-3">
+              <p>{formatPrice(item.price * item.quantity)}</p>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-neutral-400 hover:text-destructive hover:bg-destructive/10"
+                onClick={() => {
+                  removeItem(item.productId);
+                  toast({
+                    title: "Item Removed",
+                    description: `${item.title} has been removed from your cart.`,
+                  });
+                }}
+                aria-label={`Remove ${item.title} from cart`}
+                disabled={isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         ))}
         <Separator />

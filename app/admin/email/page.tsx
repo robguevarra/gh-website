@@ -187,7 +187,7 @@ export default function EmailAdminPage() {
                 <div className="space-y-1">
                   <h3 className="text-sm font-medium">Sender Details</h3>
                   <p className="text-sm text-muted-foreground">
-                    From: Graceful Homeschooling &lt;support@gracefulhomeschooling.com&gt;
+                    From: Graceful Homeschooling &lt;help@gracefulhomeschooling.com&gt;
                   </p>
                   <p className="text-sm text-muted-foreground">
                     Reply-To: help@gracefulhomeschooling.com

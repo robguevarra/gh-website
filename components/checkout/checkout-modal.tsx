@@ -750,7 +750,7 @@ export function CheckoutModal({ isOpen, onClose }: CheckoutModalProps) {
       <div className="pt-4">
         <p className="text-sm text-[#6d4c41] mb-4">
           If you have any questions, please contact our support team at{" "}
-          <span className="text-[#ad8174]">support@gracefulhomeschooling.com</span>
+          <span className="text-[#ad8174]">help@gracefulhomeschooling.com</span>
         </p>
         <Button onClick={onClose} className="bg-[#ad8174] hover:bg-[#8d6e63] text-white">
           Close

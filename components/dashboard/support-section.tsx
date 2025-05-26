@@ -40,7 +40,7 @@ export function SupportSection({
       onEmailSupport()
     } else {
       // Default behavior
-      window.open('mailto:support@gracefulhomeschooling.com', '_blank')
+      window.open('mailto:help@gracefulhomeschooling.com', '_blank')
     }
   }
 

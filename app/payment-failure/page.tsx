@@ -73,8 +73,8 @@ export default async function PaymentFailurePage({ searchParams }: PaymentFailur
           
           <p className="text-xs text-[#6d4c41] mt-6">
             Need help? Contact our support team at{" "}
-            <a href="mailto:support@gracefulhomeschooling.com" className="text-brand-purple underline">
-              support@gracefulhomeschooling.com
+            <a href="mailto:help@gracefulhomeschooling.com" className="text-brand-purple underline">
+              help@gracefulhomeschooling.com
             </a>
           </p>
         </div>
