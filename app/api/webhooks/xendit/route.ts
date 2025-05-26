@@ -891,7 +891,7 @@ export async function POST(request: NextRequest) {
                               {
                                 first_name: firstName,
                                 order_number: newOrderId,
-                                order_link: formattedOrderItemsHtml, // HTML-formatted order display
+                                order_items: formattedOrderItemsHtml, // HTML-formatted order display
                                 total_amount: ((tx.amount || data.amount || 0)).toFixed(2),
                                 currency: tx.currency || 'PHP',
                                 access_instructions: 'Your digital products have been delivered to your email. Check your Google Drive access for each item.',
