@@ -205,27 +205,27 @@ export interface ContinueLearningLesson {
 // ==============================
 // Dashboard Purchase Types
 // ==============================
-export interface PurchaseItem {
-  id: string;
-  product_id: string | null;
-  title: string;
-  variant_title?: string | null;
-  quantity: number;
-  price_at_purchase: number;
-  image_url: string | null;
-  google_drive_file_id?: string | null;
-  source: 'ecommerce' | 'shopify';
+// Use the same base type as in purchaseHistory.ts to ensure compatibility
+import { PurchaseItem as BasePurchaseItem } from '@/lib/services/purchaseHistory';
+
+// Extended PurchaseItem with UI-specific properties
+export interface PurchaseItem extends BasePurchaseItem {
+  // UI-specific properties
+  name?: string; // Mapped from title
+  price?: number; // Mapped from price_at_purchase
+  image?: string; // Mapped from image_url
+  googleDriveId?: string | null; // Mapped from google_drive_file_id
 }
 
-export interface Purchase {
-  id: string;
-  order_number: string | null;
-  created_at: string;
-  order_status: string | null;
-  total_amount: number | null;
-  currency: string | null;
-  items: PurchaseItem[];
-  source: 'ecommerce' | 'shopify';
+// Use the same base type as in purchaseHistory.ts to ensure compatibility
+import { Purchase as BasePurchase } from '@/lib/services/purchaseHistory';
+
+// Extended Purchase with UI-specific properties
+export interface Purchase extends BasePurchase {
+  // UI-specific properties
+  date?: string; // Formatted from created_at
+  status?: string; // Mapped from order_status
+  total?: number; // Computed from total_amount
 }
 
 // Template Types
@@ -266,9 +266,22 @@ export interface LiveClass {
 export interface Announcement {
   id: string;
   title: string;
-  content: string;
-  date: string;
-  isNew: boolean;
+  content: string | null;
+  type: 'general_update' | 'live_class' | 'sale_promo' | 'new_content';
+  publish_date: string | null;
+  expiry_date: string | null;
+  link_url: string | null;
+  link_text: string | null;
+  image_url: string | null;
+  created_at: string;
+  updated_at: string;
+  status: string;
+  sort_order: number | null;
+  host_name: string | null;
+  host_avatar_url: string | null;
+  location: string | null;
+  discount_percentage: number | null;
+  target_audience: string | null;
 }
 
 // Student Types

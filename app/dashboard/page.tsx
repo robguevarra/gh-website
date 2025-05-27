@@ -500,22 +500,56 @@ export default function StudentDashboard() {
   
   // Transform the store purchase type to the format expected by PurchasesSection
   const mapStorePurchasesToUIFormat = useCallback((storePurchases: StorePurchase[]): Purchase[] => {
-    return storePurchases.map(purchase => ({
-      id: purchase.order_number || purchase.id,
-      date: new Date(purchase.created_at).toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      }),
-      status: purchase.order_status || 'completed',
-      total: purchase.total_amount ? purchase.total_amount * 100 : 0,
-      items: purchase.items.map(item => ({
-        name: item.title || 'Product',
-        price: item.price_at_purchase,
-        image: item.image_url || `/placeholder.svg?height=60&width=60&text=${item.title?.charAt(0) || 'P'}`,
-        googleDriveId: item.google_drive_file_id || null
-      }))
-    }))
+    return storePurchases.map(purchase => {
+      // Create properly mapped purchase item objects that include both required properties
+      // Use type assertion to ensure compatibility with both database and UI types
+      const mappedItems = purchase.items.map(item => {
+        const mappedItem = {
+          // Include required PurchaseItem properties
+          id: item.id,
+          product_id: item.product_id,
+          title: item.title,
+          variant_title: item.variant_title,
+          quantity: item.quantity,
+          price_at_purchase: item.price_at_purchase,
+          image_url: item.image_url,
+          google_drive_file_id: item.google_drive_file_id,
+          source: item.source,
+          
+          // Include UI-specific properties
+          name: item.title || 'Product',
+          price: item.price_at_purchase,
+          image: item.image_url || `/placeholder.svg?height=60&width=60&text=${item.title?.charAt(0) || 'P'}`,
+          googleDriveId: item.google_drive_file_id || null
+        };
+        
+        return mappedItem as PurchaseItem; // Type assertion to ensure compatibility
+      });
+      
+      // Return properly typed Purchase object with type assertion to ensure compatibility
+      const result = {
+        // Include required Purchase properties
+        id: purchase.id,
+        order_number: purchase.order_number,
+        created_at: purchase.created_at,
+        order_status: purchase.order_status,
+        total_amount: purchase.total_amount,
+        currency: purchase.currency,
+        source: purchase.source,
+        items: mappedItems,
+        
+        // Include UI-specific properties
+        date: new Date(purchase.created_at).toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        status: purchase.order_status || 'completed',
+        total: purchase.total_amount ? purchase.total_amount * 100 : 0
+      };
+      
+      return result as Purchase; // Final type assertion
+    });
   }, [])
 
   // Get the most recent purchases (limited to 3)
@@ -804,10 +838,7 @@ export default function StudentDashboard() {
         <ErrorBoundary componentName="Purchases Section">
           <div>
             <PurchasesSection
-              recentPurchases={recentPurchases}
-              isSectionExpanded={isSectionExpanded}
-              toggleSection={toggleSection}
-              isLoading={isLoadingPurchases}
+              userId={user?.id}
               viewAllUrl="/dashboard/purchase-history"
             />
           </div>

@@ -99,6 +99,19 @@ Key technical points to consider:
   - Identify issues with data-tour attributes in dashboard sections
 - [ ] Add missing data-tour attributes
   - Update all relevant dashboard sections with proper data-tour attributes
+
+### 4. Critical Bug Fixes
+- [x] Fix React Hooks violations in PurchasesSection component
+  - Replaced `useMemo` hooks inside map function with immediately invoked function expressions (IIFEs)
+  - Fixed nested hooks violation in the purchase items rendering loop
+  - Ensured same functionality for date formatting, status capitalization, and price formatting
+  - Eliminated console errors about "change in the order of Hooks" and "Rendered more hooks than during the previous render"
+- [ ] Review all dashboard components for similar hooks violations
+  - Check map functions and conditional rendering for hook usage
+  - Ensure all hooks follow the Rules of Hooks (only called at top-level of component)
+- [ ] Implement error boundaries to prevent UI crashes
+  - Add error boundary components around critical sections
+  - Create fallback UI for failed component renders
   - Ensure attributes match the expected targets in the OnboardingTour component
 - [ ] Implement localStorage persistence
   - Add functions to save and retrieve modal and tour state from localStorage
