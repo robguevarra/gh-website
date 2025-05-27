@@ -3,30 +3,13 @@ import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 import { z } from 'zod';
+import { checkAdminAccess } from '@/lib/auth/check-admin-access';
 
 // Zod schema for validating the request body for PUT (rename)
 const updateTemplateSchema = z.object({
   name: z.string().min(1, { message: 'Template name cannot be empty' }),
   // Add other fields like subject, description if needed
 });
-
-async function checkAdminAccess() {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return { isAdmin: false, error: 'User not authenticated', status: 401 };
-  }
-
-  // Check for admin role - assumes 'is_admin' boolean in user_metadata
-  // Adjust this check based on your actual role management setup (e.g., RLS, custom claims, 'roles' table)
-  const isAdmin = user.user_metadata?.is_admin === true;
-
-  if (!isAdmin) {
-    return { isAdmin: false, error: 'Admin access required', status: 403 };
-  }
-
-  return { isAdmin: true, error: null, status: 200 };
-}
 
 // Handler for PUT requests (Rename Template)
 export async function PUT(

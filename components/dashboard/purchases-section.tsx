@@ -93,8 +93,7 @@ export function PurchasesSection({
                   </Link>
                 )}
                 <Link
-                  href="https://gracefulhomeschooling.myshopify.com"
-                  target="_blank"
+                  href="/dashboard/store"
                   className="text-green-600 hover:underline text-sm flex items-center"
                 >
                   Visit Shop
@@ -179,7 +178,7 @@ export function PurchasesSection({
                 <ShoppingBag className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
                 <p className="text-muted-foreground">No purchases yet</p>
                 <Button variant="outline" className="mt-4" asChild>
-                  <Link href="https://gracefulhomeschooling.myshopify.com" target="_blank">
+                  <Link href="/dashboard/store" target="_blank">
                     Browse Shop
                     <ExternalLink className="h-3 w-3 ml-1" />
                   </Link>
@@ -199,8 +198,7 @@ export function PurchasesSection({
                   </Link>
                 )}
                 <Link
-                  href="https://gracefulhomeschooling.myshopify.com"
-                  target="_blank"
+                  href="/dashboard/store"
                   className="text-green-600 hover:underline text-sm flex items-center justify-center"
                 >
                   Visit Shop

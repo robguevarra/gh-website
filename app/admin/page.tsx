@@ -13,7 +13,8 @@ import {
   TrendingUp, 
   Target, 
   Package,
-  Tags as TagsIcon 
+  Tags as TagsIcon,
+  Megaphone // Added for Announcements
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -45,7 +46,7 @@ export default async function AdminDashboardPage() {
       </div>
       {/* Tab navigation for dashboard sections. Add new sections as needed. */}
       <Tabs defaultValue="overview" className="space-y-8">
-        <TabsList className="grid w-full grid-cols-6 md:w-auto">
+        <TabsList className="grid w-full grid-cols-6 md:w-auto"> 
           {/* Tab triggers for each dashboard section */}
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <BarChart2 className="h-4 w-4" />

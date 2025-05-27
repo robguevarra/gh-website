@@ -61,25 +61,29 @@ To replace the mock data for "Live Classes" and "Announcements" on the user dash
   - Anonymous users: Same as authenticated, or restrict as needed.
 
 ### 2. API Endpoints (Next.js API Routes)
--   **Admin Endpoints (e.g., `/api/admin/announcements`)**:
-    -   `POST /`: Create a new announcement. (Requires admin access via `checkAdminAccess`)
+-   **Admin Endpoints (e.g., `/api/admin/announcements`)**: Implemented
+    -   `POST /`: Create a new announcement. (Requires admin access via `checkAdminAccess`) - Implemented
         -   Request body: Announcement data.
         -   Response: Created announcement object.
-    -   `GET /`: List all announcements (for admin panel, with pagination and filtering). (Requires admin access)
+    -   `GET /`: List all announcements (for admin panel, with pagination and filtering). (Requires admin access) - Implemented
         -   Response: Array of announcement objects.
-    -   `GET /[id]`: Get a single announcement by ID. (Requires admin access)
+    -   `GET /[id]`: Get a single announcement by ID. (Requires admin access) - Implemented
         -   Response: Announcement object.
-    -   `PUT /[id]`: Update an existing announcement. (Requires admin access)
+    -   `PUT /[id]`: Update an existing announcement. (Requires admin access) - Implemented
         -   Request body: Updated announcement data.
         -   Response: Updated announcement object.
-    -   `DELETE /[id]`: Delete an announcement (consider soft delete by changing status to 'archived'). (Requires admin access)
+    -   `DELETE /[id]`: Delete an announcement (consider soft delete by changing status to 'archived'). (Requires admin access) - Implemented
         -   Response: Success message.
--   **Public Endpoint (e.g., `/api/announcements`)**:
-    -   `GET /`: Fetch active, published announcements for the user dashboard.
-        -   Filters: `status = 'published'`, `publish_date <= now()`, (`expiry_date >= now()` or `expiry_date IS NULL`).
+    -   Zod validation schemas centralized in `lib/validations/announcement.ts`.
+-   **Public Endpoint (e.g., `/api/announcements`)**: Implemented
+    -   `GET /`: Fetch active, published announcements for the user dashboard. - Implemented
+        -   Filters: 
+            - For regular announcements: `status = 'published'`, `publish_date <= now()`
+            - For live classes: `status = 'published'`, `publish_date >= now()` (to show upcoming classes)
+            - For all: (`expiry_date >= now()` or `expiry_date IS NULL`)
         -   Ordering: `sort_order` (if available), then `publish_date` descending.
         -   Response: Array of announcement objects (subset of fields needed for display).
-        -   Consider adding pagination support (e.g., `?page=1&limit=10`).
+        -   Pagination support implemented with `?page=1&limit=10` parameters.
 
 ### 3. Admin Dashboard UI (`app/admin/`)
 -   **Create a new page/section for Announcement Management:**
@@ -120,55 +124,34 @@ To replace the mock data for "Live Classes" and "Announcements" on the user dash
         -   Display title, content, date, link, host information as applicable.
         -   Handle empty state (no announcements to display).
         -   Style according to existing dashboard design. Ensure responsiveness.
-
-### 5. Authentication & Authorization
--   Secure all admin API endpoints using the `checkAdminAccess` utility.
--   Ensure RLS policies on Supabase tables are correctly implemented.
-
-## Technical Considerations
-
-### Database & API
--   **Data Validation**: Use Zod for validating API request bodies and potentially for database interactions.
--   **Error Handling**: Implement robust error handling in API routes and provide clear feedback to the client.
--   **Date/Time Management**: Be consistent with timezone handling (UTC preferred for storage).
--   **Performance**: Optimize database queries. Use pagination for admin lists. Cache public API responses if traffic is high.
-
-### Frontend (Admin & User Dashboard)
--   **State Management (Admin)**: Use Zustand or React Context for managing form state and UI state in the admin panel if complex.
--   **Component Reusability**: Create reusable components for forms, tables, and display cards.
--   **UX**: Provide clear visual feedback for actions. Implement loading states. Ensure forms are user-friendly.
--   **Accessibility**: Follow accessibility best practices for forms and interactive elements.
--   **Styling**: Utilize existing Shadcn UI components and Tailwind CSS classes for consistency.
-
-### General
--   **Code Quality**: Follow DRY principles, write clean, maintainable, and well-commented code. Adhere to project's linting and formatting rules.
--   **Testing**: Plan for unit/integration tests for API endpoints and critical UI components.
-
-## Completion Status
-This phase is **pending**.
-
-Tasks:
-- [ ] Design and agree on final database schema for `announcements`.
-- [ ] Implement Supabase schema migrations and RLS policies.
-- [ ] Develop Admin API endpoints (CRUD operations).
-- [ ] Develop Public API endpoint for fetching announcements.
-- [ ] Implement Admin Dashboard UI for managing announcements.
-- [ ] Create Public Announcements Page.
-- [ ] Update Student Header to link to the new Announcements page.
-- [ ] Integrate announcement fetching and display into User Dashboard.
+        - [X] Ensure `publish_date` and `expiry_date` are correctly handled for visibility.
+        - [X] Display the first relevant announcement prominently.
+        - [X] Provide a link/button to view all announcements (linking to `/announcements`).
+      - [X] **Unify 'Live Classes' with Announcements**
+        - [X] Adapt `LiveClassesSection` to consume announcements with `type: 'live_class'`.
+        - [X] Map `live_class` announcement data to the `LiveClass` interface used by the section.
+        - [X] Updated the `LiveClassesSection` component to direct users to the Facebook community page:
+          - Changed button text from "Add to Calendar" to "Join Community"
+          - Set default community URL to Facebook group if no specific link is provided
+          - Simplified button behavior for better user experience
+        - [X] Modified the announcements API to include upcoming live classes (future dates)
+        - [X] Ensure `CourseProgressSection` also correctly handles the updated `LiveClass` interface if it consumes similar data.
+    - [X] **Public Announcements Page (`/announcements`)**
+      - [X] Create a new page at `app/announcements/page.tsx`.
+      - [X] Fetch and display all **published** and **current** (not expired, publish date is past or null) announcements.
+      - [X] Completely redesigned the UI to match the dashboard's clean, modern style:
+        - Changed from a grid of cards to a vertical list of announcements
+        - Added custom icons for each announcement type
+        - Improved visual hierarchy with better spacing and typography
+        - Enhanced display of host information for live classes
+        - Made the design consistent with the dashboard's aesthetic
+        - Improved empty state with helpful message and icon
+      - [X] Implemented pagination controls with proper styling
+    - [ ] **API Endpoints**
+{{ ... }}
+- [x] Implement delete functionality with confirmation.
+- [X] Create Public Announcements Page.
+- [X] Update Student Header to link to the new Announcements page.
+- [X] Integrate announcement fetching and display into User Dashboard.
 - [ ] Write tests for API endpoints.
-- [ ] Conduct thorough testing of the entire feature.
-- [ ] Document new API endpoints and admin panel usage.
-
-## Next Steps After Completion
-- Phase 2: Enhancements such as rich text editor for content, image uploads, advanced scheduling options, or audience targeting.
-- Phase 2: User-specific announcements based on `target_audience`.
-
----
-
-> **Note to AI Developers**: When working with this project, always ensure that you:
-> 1. Review previously completed build notes for context and established patterns.
-> 2. Consult the implementation strategy and architecture planning documents.
-> 3. Align your work with the project context (`ProjectContext.md`) and design context (`designContext.md`).
-> 4. Follow the established folder structure, naming conventions, and coding standards.
-> 5. Include this reminder in all future build notes to maintain consistency.
+{{ ... }}

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export interface LiveClass {
-  id: number
+  id: string
   title: string
   date: string
   time: string
@@ -99,8 +99,18 @@ export function LiveClassesSection({
                         <span className="text-xs text-[#6d4c41]">{liveClass.host.name}</span>
                       </div>
                     </div>
-                    <Button size="sm" className="w-full bg-brand-pink hover:bg-brand-pink/90">
-                      Add to Calendar
+                    <Button 
+                      size="sm" 
+                      className="w-full bg-brand-pink hover:bg-brand-pink/90"
+                      onClick={() => {
+                        // Default to the Facebook community page if no specific link is provided
+                        const communityUrl = liveClass.zoomLink && liveClass.zoomLink !== '#' 
+                          ? liveClass.zoomLink 
+                          : 'https://www.facebook.com/groups/gracefulhomeschooling';
+                        window.open(communityUrl, '_blank');
+                      }}
+                    >
+                      Join Community
                     </Button>
                   </div>
                 ))
