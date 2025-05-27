@@ -90,14 +90,27 @@ The dashboard is a central feature of the Graceful Homeschooling platform, provi
 ### 2. Component Optimizations
 
 #### Purchases Section
+- [ ] Refactor data loading to use optimized store hooks
+  - Update usePurchasesData hook to follow established patterns
+  - Implement proper dependency arrays to prevent unnecessary data loading
+  - Add data refresh mechanisms for explicit refresh only
 - [ ] Convert to use the enhanced usePurchasesData hook
   - Remove direct props passing for purchases data
   - Implement proper loading states
   - Add error handling for failed requests
 - [ ] Implement proper memoization
-  - Memoize event handlers with useCallback
-  - Use useMemo for computed values
-  - Memoize rendered elements to prevent recreation
+  - Memoize list rendering functions
+  - Add React.memo wrapping to child components
+  - Ensure stable prop references
+- [x] Fix critical React Hooks violations
+  - Replaced `useMemo` hooks inside map functions with immediately invoked function expressions (IIFEs)
+  - Fixed nested hooks violation in the purchase items rendering loop
+  - Maintained same functionality for date formatting, status capitalization, and price formatting
+  - Eliminated console errors about "change in the order of Hooks" and "Rendered more hooks than during the previous render"
+- [ ] Add performance monitoring
+  - Integrate logRender function
+  - Add performance tracking attributes
+  - Document baseline vs. optimized metrics
 
 #### Announcements Page
 - [ ] Convert to use the new useAnnouncementsData hook
