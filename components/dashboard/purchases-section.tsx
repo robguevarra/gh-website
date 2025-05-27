@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { Download, ExternalLink, ShoppingBag, ChevronDown, ChevronUp, ChevronRight } from "lucide-react"
+import { Download, ExternalLink, ShoppingBag, ChevronDown, ChevronUp, ChevronRight, Folder } from "lucide-react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +11,7 @@ export interface PurchaseItem {
   name: string
   price: number
   image: string
+  googleDriveId?: string | null
 }
 
 export interface Purchase {
@@ -45,10 +46,13 @@ export function PurchasesSection({
     },
   }
 
-  const handleDownload = (purchaseId: string) => {
-    // Placeholder for receipt download functionality
-    // Will be implemented in the Shopify integration phase
-    console.log(`Downloading receipt for purchase ${purchaseId}`)
+  const handleOpenFolder = (googleDriveId: string | null | undefined) => {
+    if (googleDriveId) {
+      const driveUrl = `https://drive.google.com/drive/folders/${googleDriveId}`;
+      window.open(driveUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      console.log('No Google Drive link available for this item');
+    }
   }
 
   return (
@@ -137,38 +141,42 @@ export function PurchasesSection({
                     </div>
                     <div className="text-xs text-muted-foreground">{purchase.date}</div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {purchase.items.map((item, index) => (
-                        <div key={index} className="flex items-center gap-3">
-                          <div className="h-12 w-12 rounded-md overflow-hidden relative flex-shrink-0">
-                            <Image
-                              src={item.image || "/placeholder.svg"}
-                              alt={item.name}
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-medium text-sm line-clamp-1">{item.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              ₱{(item.price / 100).toFixed(2)}
+                        <div key={index} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
+                          <div className="flex items-center gap-3">
+                            <div className="h-12 w-12 rounded-md overflow-hidden relative flex-shrink-0">
+                              <Image
+                                src={item.image || "/placeholder.svg"}
+                                alt={item.name}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-medium text-sm line-clamp-1">{item.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                ₱{(item.price / 100).toFixed(2)}
+                              </div>
                             </div>
                           </div>
+                          {item.googleDriveId && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="text-xs flex-shrink-0"
+                              onClick={() => handleOpenFolder(item.googleDriveId)}
+                            >
+                              <Folder className="h-3 w-3 mr-1" />
+                              Open Folder
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t">
                       <div className="font-medium">Total: ₱{(purchase.total / 100).toFixed(2)}</div>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="text-xs"
-                        onClick={() => handleDownload(purchase.id)}
-                      >
-                        <Download className="h-3 w-3 mr-1" />
-                        Download
-                      </Button>
                     </div>
                   </div>
                 ))}

@@ -399,7 +399,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                       className="bg-brand-pink hover:bg-brand-pink/90"
                       onClick={() => window.open(upcomingClasses[0].zoomLink, '_blank')}
                     >
-                      Join Zoom
+                      Join Community
                       <ExternalLink className="ml-2 h-3 w-3" />
                     </Button>
                   </div>

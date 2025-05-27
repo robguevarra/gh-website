@@ -182,32 +182,8 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
   const displayInitial = userProfile?.name?.charAt(0) || user?.email?.charAt(0) || 'U'
 
   const [scrolled, setScrolled] = useState(false)
-  const [showNotifications, setShowNotifications] = useState(false)
-
-  // Mock notifications (these would come from the API in a real implementation)
-  const notifications = [
-    {
-      id: 1,
-      title: "New Templates Added",
-      message: "We've just added 5 new planner templates to your free templates library.",
-      time: "2 hours ago",
-      read: false,
-    },
-    {
-      id: 2,
-      title: "Live Class Reminder",
-      message: "Your next live class starts tomorrow at 2:00 PM.",
-      time: "5 hours ago",
-      read: false,
-    },
-    {
-      id: 3,
-      title: "Your download is ready",
-      message: "Digital Planner Template has been processed and is ready for download",
-      time: "Yesterday",
-      read: true,
-    },
-  ]
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
 
   // Handle scroll effect
   useEffect(() => {
@@ -396,68 +372,6 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="relative"
-              onClick={() => setShowNotifications(!showNotifications)}
-            >
-              <Bell className="h-5 w-5" />
-              {notifications.some(n => !n.read) && (
-                <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-red-500 border-2 border-white" />
-              )}
-              <span className="sr-only">Notifications</span>
-            </Button>
-
-            <AnimatePresence>
-              {showNotifications && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 10 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute right-0 mt-1 w-80 rounded-md border bg-white shadow-md z-50"
-                >
-                  <div className="flex items-center justify-between p-4 border-b">
-                    <h3 className="font-medium">Notifications</h3>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => setShowNotifications(false)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="max-h-[300px] overflow-y-auto">
-                    {notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        className={`p-4 border-b ${notification.read ? '' : 'bg-muted/30'}`}
-                      >
-                        <div className="flex justify-between">
-                          <h4 className="text-sm font-medium">{notification.title}</h4>
-                          {!notification.read && (
-                            <Badge variant="outline" className="ml-2 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100">
-                              New
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">{notification.message}</p>
-                        <div className="text-[10px] text-muted-foreground mt-2">{notification.time}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="p-2 border-t">
-                    <Button variant="ghost" size="sm" className="w-full text-xs justify-center">
-                      View all notifications
-                    </Button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
 
           <Link href="/dashboard/checkout" aria-label={`Shopping Cart with ${totalCartItems} items`}>
             <Button
