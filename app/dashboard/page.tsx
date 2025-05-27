@@ -6,6 +6,14 @@ import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
+import { 
+  hasSeenWelcomeModal, 
+  markWelcomeModalShown, 
+  hasSeenOnboardingTour, 
+  markOnboardingTourShown,
+  getDashboardUIPreferences
+} from '@/lib/utils/user-preferences'
+
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -50,6 +58,8 @@ import { useStudentDashboardStore } from "@/lib/stores/student-dashboard"
 // Import types
 import type { CourseProgress } from "@/lib/stores/student-dashboard/types"
 import type { DriveItem } from '@/lib/google-drive/driveApiUtils';
+import type { Purchase as StorePurchase, PurchaseItem as StorePurchaseItem } from "@/lib/services/purchaseHistory";
+import type { Purchase, PurchaseItem } from "@/components/dashboard/purchases-section";
 
 // Define extended CourseProgress interface to include the properties we need
 interface ExtendedCourseProgress extends CourseProgress {
@@ -108,11 +118,7 @@ export default function StudentDashboard() {
 
   // Use optimized UI state hook for better performance
   const {
-    showWelcomeModal,
-    showOnboarding,
     showAnnouncement,
-    setShowWelcomeModal,
-    setShowOnboarding,
     setShowAnnouncement
   } = useOptimizedUIState()
 
@@ -448,48 +454,48 @@ export default function StudentDashboard() {
     }
   }, [continueLearningLesson, isLoadingContinueLearningLesson, firstLesson, firstModule])
 
-  // Mock data for recent purchases
-  const recentPurchases = [
-    {
-      id: "order1",
-      date: "July 10, 2023",
-      status: "completed",
-      total: 1999, // in cents
-      items: [
-        {
-          name: "Digital Planner Pro Pack",
-          price: 1999, // in cents
-          image: "/placeholder.svg?height=60&width=60&text=PP"
-        }
-      ]
-    },
-    {
-      id: "order2",
-      date: "June 22, 2023",
-      status: "completed",
-      total: 1299, // in cents
-      items: [
-        {
-          name: "Instagram Marketing Guide",
-          price: 1299, // in cents
-          image: "/placeholder.svg?height=60&width=60&text=IMG"
-        }
-      ]
-    },
-    {
-      id: "order3",
-      date: "June 5, 2023",
-      status: "completed",
-      total: 899, // in cents
-      items: [
-        {
-          name: "Custom Etsy Store Banner",
-          price: 899, // in cents
-          image: "/placeholder.svg?height=60&width=60&text=EB"
-        }
-      ]
+  // Get purchase data from the store using the hook
+  const { 
+    purchases, 
+    isLoadingPurchases, 
+    hasPurchasesError
+  } = usePurchasesData()
+  
+  // Transform the store purchase type to the format expected by PurchasesSection
+  const mapStorePurchasesToUIFormat = useCallback((storePurchases: StorePurchase[]): Purchase[] => {
+    return storePurchases.map(purchase => ({
+      id: purchase.order_number || purchase.id,
+      date: new Date(purchase.created_at).toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      }),
+      status: purchase.order_status || 'completed',
+      total: purchase.total_amount || 0,
+      items: purchase.items.map(item => ({
+        name: item.title || 'Product',
+        price: item.price_at_purchase,
+        image: item.image_url || `/placeholder.svg?height=60&width=60&text=${item.title?.charAt(0) || 'P'}`
+      }))
+    }))
+  }, [])
+
+  // Get the most recent purchases (limited to 3)
+  const recentPurchases = useMemo(() => {
+    // Generate fallback data if there's an error
+    if (hasPurchasesError) {
+      return [{
+        id: 'error',
+        date: 'Error loading purchases',
+        status: 'error',
+        total: 0,
+        items: []
+      }]
     }
-  ]
+
+    // Map the purchases to the expected format and take the 3 most recent
+    return mapStorePurchasesToUIFormat(purchases || []).slice(0, 3)
+  }, [purchases, hasPurchasesError, mapStorePurchasesToUIFormat])
 
   // This section is now using the upcomingClasses defined above
   /* Removed duplicate upcomingClasses declaration */
@@ -520,6 +526,32 @@ export default function StudentDashboard() {
     }
   ]
 
+  // State for welcome modal and onboarding tour
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false)
+  const [showOnboardingTour, setShowOnboardingTour] = useState(false)
+  const preferencesLoadedRef = useRef(false)
+
+  // Load user interface preferences from localStorage
+  useEffect(() => {
+    if (typeof window === 'undefined' || preferencesLoadedRef.current) return
+    
+    // Only load preferences once
+    preferencesLoadedRef.current = true
+    
+    const preferences = getDashboardUIPreferences()
+    setShowWelcomeModal(preferences.showWelcomeModal)
+    setShowOnboardingTour(preferences.showOnboarding)
+  }, [])
+
+  const handleOnboardingComplete = () => {
+    setShowOnboardingTour(false)
+    markOnboardingTourShown()
+  }
+  
+  const handleOnboardingSkip = () => {
+    markOnboardingTourShown()
+  }
+
   return (
     <div className="min-h-screen bg-[#f9f6f2]">
 
@@ -528,12 +560,20 @@ export default function StudentDashboard() {
         isOpen={showWelcomeModal}
         onClose={() => {
           setShowWelcomeModal(false)
-          setShowOnboarding(true)
+          markWelcomeModalShown()
+          
+          // Only show onboarding tour if user hasn't seen it before
+          if (!hasSeenOnboardingTour()) {
+            setShowOnboardingTour(true)
+          }
+        }}
+        onComplete={() => {
+          markWelcomeModalShown()
         }}
       />
 
       {/* Onboarding Tour */}
-      {showOnboarding && <OnboardingTour onComplete={() => setShowOnboarding(false)} />}
+      {showOnboardingTour && <OnboardingTour onComplete={handleOnboardingComplete} onSkip={handleOnboardingSkip} />}
 
       {/* Template Preview Modal */}
       <TemplatePreviewModal
@@ -692,6 +732,8 @@ export default function StudentDashboard() {
               recentPurchases={recentPurchases}
               isSectionExpanded={isSectionExpanded}
               toggleSection={toggleSection}
+              isLoading={isLoadingPurchases}
+              viewAllUrl="/dashboard/purchase-history"
             />
           </div>
         </ErrorBoundary>
@@ -716,9 +758,24 @@ export default function StudentDashboard() {
             <SupportSection
               faqs={[
                 {
-                  id: "faq-1",
-                  question: "How do I access the course materials?",
-                  content: "You can access all course materials by clicking on the course modules in the 'Course Progress' section."
+                  id: "templates-access",
+                  question: "How do I access all the templates?",
+                  answer: "You can access all templates in the Templates Library section of your dashboard. Click on any template to preview it, then download or use it directly."
+                },
+                {
+                  id: "course-modules",
+                  question: "When will the next course module be available?",
+                  answer: "New course modules are typically released every two weeks. You'll receive an email notification when new content becomes available."
+                },
+                {
+                  id: "technical-issues",
+                  question: "I'm having technical issues with the course videos",
+                  answer: "If you're experiencing video playback issues, try clearing your browser cache, using a different browser, or checking your internet connection. For persistent problems, please contact our support team."
+                },
+                {
+                  id: "payment-questions",
+                  question: "How do I update my payment method?",
+                  answer: "To update your payment method, go to your Account Settings page, select the 'Billing' tab, and click 'Update Payment Method'."
                 }
               ]}
               isSectionExpanded={isSectionExpanded}

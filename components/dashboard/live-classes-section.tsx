@@ -40,7 +40,7 @@ export function LiveClassesSection({
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeInUp} transition={{ delay: 0.3 }}>
-      <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 h-full">
+      <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100 h-full" data-tour="live-classes">
         {/* Section Header - Mobile Toggle */}
         <div
           className="md:hidden flex items-center justify-between p-4 cursor-pointer"
