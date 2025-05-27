@@ -268,6 +268,12 @@ export default function StudentDashboard() {
   const upcomingLiveClasses: LiveClass[] = useMemo(() => {
     return liveAnnouncements
       .filter(ann => ann.type === 'live_class')
+      .sort((a, b) => {
+        // Sort by publish_date (ascending) to get the earliest upcoming class first
+        if (!a.publish_date) return 1;
+        if (!b.publish_date) return -1;
+        return new Date(a.publish_date).getTime() - new Date(b.publish_date).getTime();
+      })
       .map(ann => ({
         id: ann.id, // id is already a string (uuid)
         title: ann.title || 'Live Class Event',
@@ -280,6 +286,11 @@ export default function StudentDashboard() {
         zoomLink: ann.link_url || '#',
       }));
   }, [liveAnnouncements]);
+  
+  // Get the earliest upcoming live class
+  const nextLiveClass = useMemo(() => {
+    return upcomingLiveClasses.length > 0 ? upcomingLiveClasses[0] : null;
+  }, [upcomingLiveClasses]);
 
   // Helper Functions
   function getRandomInt(min: number, max: number) {
@@ -501,7 +512,8 @@ export default function StudentDashboard() {
       items: purchase.items.map(item => ({
         name: item.title || 'Product',
         price: item.price_at_purchase,
-        image: item.image_url || `/placeholder.svg?height=60&width=60&text=${item.title?.charAt(0) || 'P'}`
+        image: item.image_url || `/placeholder.svg?height=60&width=60&text=${item.title?.charAt(0) || 'P'}`,
+        googleDriveId: item.google_drive_file_id || null
       }))
     }))
   }, [])
@@ -714,10 +726,27 @@ export default function StudentDashboard() {
                 <div className="bg-brand-blue/10 rounded-full p-2">
                   <Calendar className="h-5 w-5 text-brand-blue" />
                 </div>
-                <div>
+                <div className="flex-1">
                   <div className="text-xs text-[#6d4c41]">Next Live Class</div>
-                  <div className="text-sm font-bold text-[#5d4037]">Jul 20, 2:00 PM</div>
+                  {nextLiveClass ? (
+                    <div>
+                      <div className="text-sm font-bold text-[#5d4037] line-clamp-1">{nextLiveClass.title}</div>
+                      <div className="text-xs text-[#6d4c41]">{nextLiveClass.date}, {nextLiveClass.time}</div>
+                    </div>
+                  ) : (
+                    <div className="text-sm font-bold text-[#5d4037]">No upcoming classes</div>
+                  )}
                 </div>
+                {nextLiveClass?.zoomLink && nextLiveClass.zoomLink !== '#' && (
+                  <Button 
+                    size="sm" 
+                    variant="ghost" 
+                    className="px-2 h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
+                    onClick={() => window.open(nextLiveClass.zoomLink, '_blank')}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             </motion.div>
 

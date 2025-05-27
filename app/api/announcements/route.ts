@@ -21,8 +21,9 @@ export async function GET(request: Request) {
       .from('announcements')
       .select('id, title, content, type, publish_date, link_url, link_text, image_url, host_name, host_avatar_url, sort_order', { count: 'exact' })
       .eq('status', 'published')
-      // Special handling for live classes - we want to show upcoming events
-      .or(`type.neq.live_class,and(type.eq.live_class,publish_date.gte.${now}),and(type.neq.live_class,publish_date.lte.${now})`)
+      // Handle different announcement types with appropriate date filtering
+      .or(`and(type.neq.live_class,or(publish_date.lte.${now},publish_date.is.null)),and(type.eq.live_class,publish_date.gte.${now})`)
+      // Only show announcements that haven't expired
       .or(`expiry_date.gte.${now},expiry_date.is.null`)
       .order(sortBy, { ascending: sortOrder === 'asc' })
       .range(offset, offset + limit - 1);

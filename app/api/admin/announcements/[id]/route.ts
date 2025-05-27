@@ -16,7 +16,9 @@ export async function GET(
     return NextResponse.json({ error: adminAccess.error }, { status: adminAccess.status });
   }
 
-  const { id } = params;
+  // Await params to fix the dynamic API error
+  const resolvedParams = await Promise.resolve(params);
+  const { id } = resolvedParams;
 
   if (!id || !UUID_REGEX.test(id)) {
     return NextResponse.json({ error: 'Invalid announcement ID format' }, { status: 400 });
@@ -59,7 +61,9 @@ export async function PUT(
     return NextResponse.json({ error: adminAccess.error }, { status: adminAccess.status });
   }
 
-  const { id } = params;
+  // Await params to fix the dynamic API error
+  const resolvedParams = await Promise.resolve(params);
+  const { id } = resolvedParams;
 
   if (!id || !UUID_REGEX.test(id)) {
     return NextResponse.json({ error: 'Invalid announcement ID format' }, { status: 400 });
@@ -113,7 +117,9 @@ export async function DELETE(
     return NextResponse.json({ error: adminAccess.error }, { status: adminAccess.status });
   }
 
-  const { id } = params;
+  // Await params to fix the dynamic API error
+  const resolvedParams = await Promise.resolve(params);
+  const { id } = resolvedParams;
 
    if (!id || !UUID_REGEX.test(id)) {
     return NextResponse.json({ error: 'Invalid announcement ID format' }, { status: 400 });
