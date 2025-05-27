@@ -20,6 +20,7 @@ import {
   Users,
   Receipt,
   ShoppingCart,
+  Megaphone, // Added Megaphone icon
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -298,11 +299,11 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                     Purchases
                   </Link>
                   <Link
-                    href="/dashboard/live-classes"
-                    className={`flex items-center gap-2 rounded-lg px-4 py-2 ${pathname === "/dashboard/live-classes" ? "text-brand-purple bg-brand-purple/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
+                    href="/dashboard/announcements" // Updated Announcements link
+                    className={`flex items-center gap-2 rounded-lg px-4 py-2 ${pathname === "/dashboard/announcements" ? "text-brand-purple bg-brand-purple/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"}`}
                   >
-                    <Calendar className="h-5 w-5" />
-                    Live Classes
+                    <Megaphone className="h-5 w-5" />
+                    Announcements
                   </Link>
                   <Link
                     href="/dashboard/community"
@@ -386,10 +387,10 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
               Purchases
             </Link>
             <Link
-              href="/dashboard/live-classes"
-              className={`text-sm font-medium ${pathname === "/dashboard/live-classes" ? "text-brand-purple" : "text-muted-foreground hover:text-foreground"}`}
+              href="/dashboard/announcements" // Updated Announcements link for desktop
+              className={`text-sm font-medium ${pathname === "/dashboard/announcements" ? "text-brand-purple" : "text-muted-foreground hover:text-foreground"}`}
             >
-              Live Classes
+              Announcements
             </Link>
           </nav>
         </div>

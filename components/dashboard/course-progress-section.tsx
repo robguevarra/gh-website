@@ -37,7 +37,7 @@ export interface CourseLesson {
 }
 
 export interface LiveClass {
-  id: number
+  id: string
   title: string
   date: string
   time: string

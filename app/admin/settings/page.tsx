@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { AdminHeading } from '@/components/admin/admin-heading';
-import { Settings, Users, MessageSquare, Bell, Shield, Database } from 'lucide-react';
+import { Settings, Users, MessageSquare, Bell, Shield, Database, Megaphone } from 'lucide-react';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Settings | Admin Dashboard',
@@ -31,6 +32,7 @@ export default function SettingsPage() {
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="advanced">Advanced</TabsTrigger>
+          <TabsTrigger value="announcements">Announcements</TabsTrigger>
         </TabsList>
         
         <TabsContent value="general" className="space-y-4">
@@ -457,6 +459,29 @@ export default function SettingsPage() {
                 Run Manual Sync
               </Button>
               <Button>Save Changes</Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="announcements" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Announcement Management</CardTitle>
+              <CardDescription>
+                Create, edit, publish, and manage all platform announcements.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                Access the dedicated interface to manage live classes, sales promotions, general updates, and new content announcements.
+              </p>
+            </CardContent>
+            <CardFooter>
+              <Link href="/admin/settings/announcements" passHref legacyBehavior>
+                <Button asChild>
+                  <a>Go to Announcements</a>
+                </Button>
+              </Link>
             </CardFooter>
           </Card>
         </TabsContent>

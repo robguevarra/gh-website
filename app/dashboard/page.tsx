@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { format } from 'date-fns'; // Added for date formatting
 
 import { 
   hasSeenWelcomeModal, 
@@ -60,6 +61,7 @@ import type { CourseProgress } from "@/lib/stores/student-dashboard/types"
 import type { DriveItem } from '@/lib/google-drive/driveApiUtils';
 import type { Purchase as StorePurchase, PurchaseItem as StorePurchaseItem } from "@/lib/services/purchaseHistory";
 import type { Purchase, PurchaseItem } from "@/components/dashboard/purchases-section";
+import type { Database } from '@/types/supabase'; // Added for Announcement type
 
 // Define extended CourseProgress interface to include the properties we need
 interface ExtendedCourseProgress extends CourseProgress {
@@ -68,9 +70,12 @@ interface ExtendedCourseProgress extends CourseProgress {
   totalLessonsCount: number;
 }
 
+// Define Announcement type based on Supabase schema
+type Announcement = Database['public']['Tables']['announcements']['Row'];
+
 // Dashboard Section components
 import { CourseProgressSection } from "@/components/dashboard/course-progress-section"
-import { LiveClassesSection } from "@/components/dashboard/live-classes-section"
+import { LiveClassesSection, type LiveClass } from "@/components/dashboard/live-classes-section" // Added LiveClass import
 import { PurchasesSection } from "@/components/dashboard/purchases-section"
 import { SupportSection } from "@/components/dashboard/support-section"
 import { CommunitySection } from "@/components/dashboard/community-section-v2"
@@ -134,6 +139,8 @@ export default function StudentDashboard() {
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [previewFile, setPreviewFile] = useState<DriveItem | null>(null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+  const [liveAnnouncements, setLiveAnnouncements] = useState<Announcement[]>([]); // Added state for live announcements
+  const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0); // Track current announcement in carousel
 
   // References for animations
   const containerRef = useRef(null)
@@ -199,7 +206,7 @@ export default function StudentDashboard() {
       if (user?.id) {
         console.log('Window focused, triggering dashboard data refresh check...');
         // Call the function retrieved outside the effect
-        loadUserDashboardData(user.id);
+        loadUserDashboardData(user.id, true); // Pass true to indicate a refresh check
       }
     };
 
@@ -210,6 +217,69 @@ export default function StudentDashboard() {
       window.removeEventListener('focus', handleFocus);
     };
   }, [user?.id, loadUserDashboardData]); // Depend on user ID and the load function
+
+  // Fetch live announcements
+  useEffect(() => {
+    const fetchAnnouncements = async () => {
+      try {
+        const response = await fetch('/api/announcements?limit=5'); // Fetch a few, sorted by publish_date desc by default
+        if (!response.ok) {
+          throw new Error('Failed to fetch announcements');
+        }
+        const responseData = await response.json(); // Get the full response object
+        const announcementsArray: Announcement[] = responseData.data || []; // Extract the array from the 'data' property
+        
+        setLiveAnnouncements(announcementsArray);
+        setCurrentAnnouncementIndex(0); // Reset to first announcement
+        if (announcementsArray.length > 0) {
+          setShowAnnouncement(true); // Show section if there are announcements
+        } else {
+          setShowAnnouncement(false);
+        }
+      } catch (error) {
+        console.error("Error fetching announcements:", error);
+        setShowAnnouncement(false); // Hide section on error
+      }
+    };
+
+    if (user?.id) { // Only fetch if user is available
+      fetchAnnouncements();
+    }
+  }, [user?.id, setShowAnnouncement]);
+  
+  // Carousel effect for announcements
+  useEffect(() => {
+    // Only set up carousel if there are multiple announcements
+    if (liveAnnouncements.length <= 1) return;
+    
+    // Set up interval to rotate announcements every 8 seconds
+    const carouselInterval = setInterval(() => {
+      setCurrentAnnouncementIndex(prevIndex => {
+        // Cycle to the next announcement, loop back to beginning if at the end
+        return (prevIndex + 1) % liveAnnouncements.length;
+      });
+    }, 8000); // 8 seconds
+    
+    // Clean up interval on component unmount
+    return () => clearInterval(carouselInterval);
+  }, [liveAnnouncements.length]);
+
+  // Prepare live class data from announcements
+  const upcomingLiveClasses: LiveClass[] = useMemo(() => {
+    return liveAnnouncements
+      .filter(ann => ann.type === 'live_class')
+      .map(ann => ({
+        id: ann.id, // id is already a string (uuid)
+        title: ann.title || 'Live Class Event',
+        date: ann.publish_date ? format(new Date(ann.publish_date), 'MMMM d, yyyy') : 'Date TBD',
+        time: ann.publish_date ? format(new Date(ann.publish_date), 'p') : 'Time TBD',
+        host: {
+          name: ann.host_name || 'TBD',
+          avatar: ann.host_avatar_url || '/placeholder.svg?height=40&width=40&text=H',
+        },
+        zoomLink: ann.link_url || '#',
+      }));
+  }, [liveAnnouncements]);
 
   // Helper Functions
   function getRandomInt(min: number, max: number) {
@@ -256,32 +326,6 @@ export default function StudentDashboard() {
     setPreviewFile(file)
     setIsPreviewOpen(true)
   }
-
-  // Mock data for upcoming classes
-  const upcomingClasses = [
-    {
-      id: 1,
-      title: "Designing Digital Planners that Sell",
-      date: "July 20, 2023",
-      time: "2:00 PM - 3:30 PM EDT",
-      host: {
-        name: "Grace Guevarra",
-        avatar: "/placeholder.svg?height=40&width=40&text=GG",
-      },
-      zoomLink: "https://example.com/zoom1",
-    },
-    {
-      id: 2,
-      title: "Marketing Your Digital Products in 2023",
-      date: "July 27, 2023",
-      time: "2:00 PM - 3:30 PM EDT",
-      host: {
-        name: "Rob Guevarra",
-        avatar: "/placeholder.svg?height=40&width=40&text=RG",
-      },
-      zoomLink: "https://example.com/zoom2",
-    },
-  ]
 
   // Get enrollments data using selectors to subscribe to updates
   const enrollments = useStudentDashboardStore(state => state.enrollments || []);
@@ -342,31 +386,13 @@ export default function StudentDashboard() {
       totalLessons: currentCourseProgress?.totalLessonsCount || 0,
       nextLesson: "Continue Learning",
       timeSpent: calculateTimeSpent(currentCourseProgress),
-      nextLiveClass: upcomingClasses?.[0] ? `${upcomingClasses[0].date} - ${upcomingClasses[0].time}` : "No upcoming classes",
+      nextLiveClass: upcomingLiveClasses?.[0] ? `${upcomingLiveClasses[0].date} - ${upcomingLiveClasses[0].time}` : "No upcoming classes",
       instructor: {
         name: "Grace Guevarra",
         avatar: "/placeholder.svg?height=40&width=40&text=GG",
       },
     };
-  }, [enrollments, courseId, currentCourseProgress, upcomingClasses])
-
-  // Mock data for announcements
-  const announcements = [
-    {
-      id: 1,
-      title: "New Templates Added!",
-      content: "We've just added 5 new planner templates to your free templates library. Check them out now!",
-      date: "July 15, 2023",
-      isNew: true,
-    },
-    {
-      id: 2,
-      title: "Upcoming Live Q&A Session",
-      content: "Join us for a live Q&A session on July 20 at 2:00 PM to get all your questions answered.",
-      date: "July 14, 2023",
-      isNew: false,
-    },
-  ]
+  }, [enrollments, courseId, currentCourseProgress, upcomingLiveClasses])
 
   // Get the continue learning lesson from the store using a selector to subscribe to updates
   const continueLearningLesson = useStudentDashboardStore(state => state.continueLearningLesson);
@@ -434,7 +460,7 @@ export default function StudentDashboard() {
         title: continueLearningLesson.lessonTitle,
         module: continueLearningLesson.moduleTitle,
         moduleId: continueLearningLesson.moduleId,
-        duration: "15 min",
+        duration: "15 min", // Assuming a default or fetched duration
         thumbnail: "/placeholder.svg?height=120&width=200&text=Lesson",
         progress: continueLearningLesson.progress,
         current: true,
@@ -471,7 +497,7 @@ export default function StudentDashboard() {
         day: 'numeric' 
       }),
       status: purchase.order_status || 'completed',
-      total: purchase.total_amount || 0,
+      total: purchase.total_amount ? purchase.total_amount * 100 : 0,
       items: purchase.items.map(item => ({
         name: item.title || 'Product',
         price: item.price_at_purchase,
@@ -496,9 +522,6 @@ export default function StudentDashboard() {
     // Map the purchases to the expected format and take the 3 most recent
     return mapStorePurchasesToUIFormat(purchases || []).slice(0, 3)
   }, [purchases, hasPurchasesError, mapStorePurchasesToUIFormat])
-
-  // This section is now using the upcomingClasses defined above
-  /* Removed duplicate upcomingClasses declaration */
 
   // Mock data for community posts
   const communityPosts = [
@@ -598,38 +621,61 @@ export default function StudentDashboard() {
         <div className="container px-4 py-8">
           {/* Announcement Banner */}
           <AnimatePresence>
-            {showAnnouncement && (
-              <motion.div
-                className="mb-6 bg-gradient-to-r from-brand-purple/10 to-brand-pink/10 rounded-xl p-4 border border-brand-purple/20 relative"
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="bg-brand-purple/20 rounded-full p-2 mt-0.5">
-                    <Bell className="h-5 w-5 text-brand-purple" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-medium text-brand-purple">{announcements[0].title}</h3>
-                    <p className="text-sm text-[#6d4c41]">{announcements[0].content}</p>
-                    <div className="flex items-center gap-4 mt-2">
-                      <span className="text-xs text-[#6d4c41]">{announcements[0].date}</span>
-                      <Link href="/dashboard/announcements" className="text-xs text-brand-purple hover:underline">
-                        View all announcements
-                      </Link>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 absolute top-2 right-2"
-                    onClick={() => setShowAnnouncement(false)}
+            {showAnnouncement && liveAnnouncements.length > 0 && (
+              <div className="mb-6 bg-gradient-to-r from-brand-purple/10 to-brand-pink/10 rounded-xl p-4 border border-brand-purple/20 relative overflow-hidden">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentAnnouncementIndex}
+                    initial={{ opacity: 0, x: 50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -50 }}
+                    transition={{ duration: 0.4, ease: "easeInOut" }}
+                    className="relative"
                   >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              </motion.div>
+                    <div className="flex items-start gap-3">
+                      <div className="bg-brand-purple/20 rounded-full p-2 mt-0.5">
+                        <Bell className="h-5 w-5 text-brand-purple" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-brand-purple">{liveAnnouncements[currentAnnouncementIndex].title}</h3>
+                        <p className="text-sm text-[#6d4c41]">{liveAnnouncements[currentAnnouncementIndex].content}</p>
+                        <div className="flex items-center justify-between gap-4 mt-2">
+                          <div className="flex items-center gap-2">
+                            {liveAnnouncements[currentAnnouncementIndex].publish_date && (
+                              <span className="text-xs text-[#6d4c41]">
+                                {format(new Date(liveAnnouncements[currentAnnouncementIndex].publish_date), 'MMMM d, yyyy')}
+                              </span>
+                            )}
+                            <Link href="/dashboard/announcements" className="text-xs text-brand-purple hover:underline">
+                              View all
+                            </Link>
+                          </div>
+                          {liveAnnouncements.length > 1 && (
+                            <div className="flex items-center gap-1">
+                              {liveAnnouncements.map((_, index) => (
+                                <button 
+                                  key={index}
+                                  onClick={() => setCurrentAnnouncementIndex(index)}
+                                  className={`w-1.5 h-1.5 rounded-full transition-all ${index === currentAnnouncementIndex ? 'bg-brand-purple scale-125' : 'bg-brand-purple/30'}`}
+                                  aria-label={`View announcement ${index + 1}`}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 absolute top-2 right-2"
+                        onClick={() => setShowAnnouncement(false)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             )}
           </AnimatePresence>
           {/* Quick Stats */}
@@ -700,7 +746,7 @@ export default function StudentDashboard() {
             courseId: enrollments?.[0]?.course?.id || formattedCourseProgress.courseId || ''
           }}
           recentLessons={recentLessons}
-          upcomingClasses={upcomingClasses}
+          upcomingClasses={upcomingLiveClasses} // Use the new live data
           isSectionExpanded={isSectionExpanded}
           toggleSection={toggleSection}
         />
@@ -742,7 +788,7 @@ export default function StudentDashboard() {
         <ErrorBoundary componentName="Live Classes Section">
           <div>
             <LiveClassesSection
-              upcomingClasses={upcomingClasses}
+              upcomingClasses={upcomingLiveClasses} // Use the new live data
               isSectionExpanded={isSectionExpanded}
               toggleSection={toggleSection}
             />

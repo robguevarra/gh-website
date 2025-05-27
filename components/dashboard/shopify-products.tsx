@@ -230,7 +230,7 @@ export function ShopifyProducts() {
           </Button>
         </div>
 
-        <Link href="https://gracefulhomeschooling.myshopify.com" target="_blank">
+        <Link href="/dashboard/shop" target="_blank">
           <Button className="bg-brand-purple hover:bg-brand-purple/90">
             <ShoppingBag className="h-4 w-4 mr-2" />
             Visit Shop

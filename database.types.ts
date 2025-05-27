@@ -475,6 +475,63 @@ export type Database = {
           },
         ]
       }
+      announcements: {
+        Row: {
+          content: string
+          created_at: string
+          expiry_date: string | null
+          host_avatar_url: string | null
+          host_name: string | null
+          id: string
+          image_url: string | null
+          link_text: string | null
+          link_url: string | null
+          publish_date: string | null
+          sort_order: number | null
+          status: string
+          target_audience: string | null
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          expiry_date?: string | null
+          host_avatar_url?: string | null
+          host_name?: string | null
+          id?: string
+          image_url?: string | null
+          link_text?: string | null
+          link_url?: string | null
+          publish_date?: string | null
+          sort_order?: number | null
+          status?: string
+          target_audience?: string | null
+          title: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          expiry_date?: string | null
+          host_avatar_url?: string | null
+          host_name?: string | null
+          id?: string
+          image_url?: string | null
+          link_text?: string | null
+          link_url?: string | null
+          publish_date?: string | null
+          sort_order?: number | null
+          status?: string
+          target_audience?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       campaign_analytics: {
         Row: {
           bounce_rate: number | null
@@ -1545,34 +1602,46 @@ export type Database = {
       email_send_log: {
         Row: {
           created_at: string | null
+          email_content: string | null
+          email_headers: Json | null
           error_message: string | null
           id: string
           lead_id: string | null
+          raw_response: Json | null
           recipient_email: string
           sent_at: string | null
           status: string
+          subject: string | null
           template_id: string | null
           variables: Json | null
         }
         Insert: {
           created_at?: string | null
+          email_content?: string | null
+          email_headers?: Json | null
           error_message?: string | null
           id?: string
           lead_id?: string | null
+          raw_response?: Json | null
           recipient_email: string
           sent_at?: string | null
           status?: string
+          subject?: string | null
           template_id?: string | null
           variables?: Json | null
         }
         Update: {
           created_at?: string | null
+          email_content?: string | null
+          email_headers?: Json | null
           error_message?: string | null
           id?: string
           lead_id?: string | null
+          raw_response?: Json | null
           recipient_email?: string
           sent_at?: string | null
           status?: string
+          subject?: string | null
           template_id?: string | null
           variables?: Json | null
         }
@@ -1822,6 +1891,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      live_classes: {
+        Row: {
+          created_at: string | null
+          event_datetime: string
+          host_avatar_url: string | null
+          host_name: string | null
+          id: string
+          is_active: boolean | null
+          title: string
+          updated_at: string | null
+          zoom_link: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_datetime: string
+          host_avatar_url?: string | null
+          host_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          title: string
+          updated_at?: string | null
+          zoom_link: string
+        }
+        Update: {
+          created_at?: string | null
+          event_datetime?: string
+          host_avatar_url?: string | null
+          host_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          title?: string
+          updated_at?: string | null
+          zoom_link?: string
+        }
+        Relationships: []
       }
       magic_links: {
         Row: {
@@ -2116,6 +2221,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      password_reset_attempts: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          error: string | null
+          id: string
+          ip_address: string
+          status: string
+          token_snippet: string
+          updated_at: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          error?: string | null
+          id?: string
+          ip_address: string
+          status: string
+          token_snippet: string
+          updated_at?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          error?: string | null
+          id?: string
+          ip_address?: string
+          status?: string
+          token_snippet?: string
+          updated_at?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
       }
       payment_methods: {
         Row: {
@@ -2491,6 +2632,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      security_events: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       segments: {
         Row: {
@@ -3880,6 +4054,16 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      password_reset_metrics: {
+        Row: {
+          count: number | null
+          day: string | null
+          status: string | null
+          unique_emails: number | null
+          unique_ips: number | null
+        }
+        Relationships: []
       }
       revenue_analysis_view: {
         Row: {
