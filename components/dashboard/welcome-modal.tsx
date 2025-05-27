@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button"
 interface WelcomeModalProps {
   isOpen: boolean
   onClose: () => void
+  onComplete?: () => void
 }
 
-export function WelcomeModal({ isOpen, onClose }: WelcomeModalProps) {
+export function WelcomeModal({ isOpen, onClose, onComplete }: WelcomeModalProps) {
   const [step, setStep] = useState(0)
 
   const steps = [
@@ -53,6 +54,10 @@ export function WelcomeModal({ isOpen, onClose }: WelcomeModalProps) {
     if (step < steps.length - 1) {
       setStep(step + 1)
     } else {
+      // When completing the final step
+      if (onComplete) {
+        onComplete()
+      }
       onClose()
     }
   }

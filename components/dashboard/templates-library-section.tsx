@@ -43,7 +43,7 @@ export function TemplatesLibrarySection({
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeInUp} transition={{ delay: 0.1 }}>
-      <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
+      <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100" data-tour="templates">
         {/* Section Header - Mobile Toggle */}
         <div
           className="md:hidden flex items-center justify-between p-4 cursor-pointer"

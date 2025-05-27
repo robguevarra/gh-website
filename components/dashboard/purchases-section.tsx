@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { Download, ExternalLink, ShoppingBag, ChevronDown, ChevronUp } from "lucide-react"
+import { Download, ExternalLink, ShoppingBag, ChevronDown, ChevronUp, ChevronRight } from "lucide-react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -25,12 +25,16 @@ export interface PurchasesSectionProps {
   recentPurchases: Purchase[]
   isSectionExpanded: (section: string) => boolean
   toggleSection: (section: string) => void
+  isLoading?: boolean
+  viewAllUrl?: string
 }
 
 export function PurchasesSection({
   recentPurchases,
   isSectionExpanded,
-  toggleSection
+  toggleSection,
+  isLoading = false,
+  viewAllUrl = "/dashboard/purchase-history"
 }: PurchasesSectionProps) {
   const fadeInUp = {
     hidden: { opacity: 0, y: 20 },
@@ -78,17 +82,51 @@ export function PurchasesSection({
                 </div>
                 <h2 className="text-xl font-medium text-[#5d4037]">Recent Purchases</h2>
               </div>
-              <Link
-                href="https://gracefulhomeschooling.myshopify.com"
-                target="_blank"
-                className="text-green-600 hover:underline text-sm flex items-center"
-              >
-                Visit Shop
-                <ExternalLink className="h-3 w-3 ml-1" />
-              </Link>
+              <div className="flex items-center gap-3">
+                {viewAllUrl && (
+                  <Link
+                    href={viewAllUrl}
+                    className="text-green-600 hover:underline text-sm flex items-center"
+                  >
+                    View All
+                    <ChevronRight className="h-3 w-3 ml-1" />
+                  </Link>
+                )}
+                <Link
+                  href="https://gracefulhomeschooling.myshopify.com"
+                  target="_blank"
+                  className="text-green-600 hover:underline text-sm flex items-center"
+                >
+                  Visit Shop
+                  <ExternalLink className="h-3 w-3 ml-1" />
+                </Link>
+              </div>
             </div>
 
-            {recentPurchases.length > 0 ? (
+            {isLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={`skeleton-${i}`} className="border rounded-lg p-4 space-y-3 animate-pulse">
+                    <div className="flex items-center justify-between">
+                      <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+                      <div className="h-5 bg-green-100 rounded w-1/5"></div>
+                    </div>
+                    <div className="h-3 bg-gray-100 rounded w-1/3"></div>
+                    <div className="flex items-center gap-3">
+                      <div className="h-12 w-12 rounded-md bg-gray-200"></div>
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                        <div className="h-3 bg-gray-100 rounded w-1/4"></div>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <div className="h-4 bg-gray-200 rounded w-1/5"></div>
+                      <div className="h-8 bg-gray-100 rounded w-1/4"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : recentPurchases.length > 0 ? (
               <div className="space-y-4">
                 {recentPurchases.map((purchase) => (
                   <div key={purchase.id} className="border rounded-lg p-4 space-y-3">
@@ -150,14 +188,25 @@ export function PurchasesSection({
             )}
 
             <div className="mt-4 pt-4 border-t text-center md:hidden">
-              <Link
-                href="https://gracefulhomeschooling.myshopify.com"
-                target="_blank"
-                className="text-green-600 hover:underline text-sm flex items-center justify-center"
-              >
-                Visit Shop
-                <ExternalLink className="h-3 w-3 ml-1" />
-              </Link>
+              <div className="flex flex-col gap-3">
+                {viewAllUrl && (
+                  <Link
+                    href={viewAllUrl}
+                    className="text-green-600 hover:underline text-sm flex items-center justify-center"
+                  >
+                    View All Purchases
+                    <ChevronRight className="h-3 w-3 ml-1" />
+                  </Link>
+                )}
+                <Link
+                  href="https://gracefulhomeschooling.myshopify.com"
+                  target="_blank"
+                  className="text-green-600 hover:underline text-sm flex items-center justify-center"
+                >
+                  Visit Shop
+                  <ExternalLink className="h-3 w-3 ml-1" />
+                </Link>
+              </div>
             </div>
           </div>
         </div>

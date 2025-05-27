@@ -210,7 +210,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeInUp}>
-      <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100">
+      <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-100" data-tour="course-progress">
         {/* Section Header - Mobile Toggle */}
         <div
           className="md:hidden flex items-center justify-between p-4 cursor-pointer"

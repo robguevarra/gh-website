@@ -1,12 +1,14 @@
 "use client"
 
-import { HelpCircle, Lightbulb, Mail, MessageSquare, Info, ChevronDown, ChevronUp } from "lucide-react"
+import { HelpCircle, Lightbulb, Mail, MessageSquare, Info, ChevronDown, ChevronUp, PlusCircle, MinusCircle } from "lucide-react"
+import { useState } from "react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 
 export interface FAQ {
   id: string
   question: string
+  answer: string
 }
 
 export interface SupportSectionProps {
@@ -26,6 +28,8 @@ export function SupportSection({
   onLiveChat,
   onFaqClick
 }: SupportSectionProps) {
+  // Track which FAQs are expanded
+  const [expandedFaqs, setExpandedFaqs] = useState<Record<string, boolean>>({})
   const fadeInUp = {
     hidden: { opacity: 0, y: 20 },
     visible: {
@@ -54,11 +58,15 @@ export function SupportSection({
   }
 
   const handleFaqClick = (faqId: string) => {
+    // Toggle the expanded state of the FAQ
+    setExpandedFaqs(prev => ({
+      ...prev,
+      [faqId]: !prev[faqId]
+    }))
+    
+    // Call the external handler if provided
     if (onFaqClick) {
       onFaqClick(faqId)
-    } else {
-      // Default behavior - placeholder
-      console.log(`FAQ clicked: ${faqId}`)
     }
   }
 
@@ -132,44 +140,144 @@ export function SupportSection({
                     faqs.map((faq) => (
                       <div 
                         key={faq.id}
-                        className="p-3 rounded-lg border border-gray-100 bg-white hover:shadow-sm transition-shadow cursor-pointer"
-                        onClick={() => handleFaqClick(faq.id)}
+                        className="rounded-lg border border-gray-100 bg-white hover:shadow-sm transition-all cursor-pointer"
                       >
-                        <div className="flex items-center gap-2">
-                          <Info className="h-4 w-4 text-amber-600" />
-                          <h4 className="font-medium text-sm">{faq.question}</h4>
+                        <div 
+                          className="p-3 flex items-center justify-between"
+                          onClick={() => handleFaqClick(faq.id)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Info className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                            <h4 className="font-medium text-sm">{faq.question}</h4>
+                          </div>
+                          <div className="flex-shrink-0">
+                            {expandedFaqs[faq.id] ? (
+                              <MinusCircle className="h-4 w-4 text-amber-600" />
+                            ) : (
+                              <PlusCircle className="h-4 w-4 text-amber-600" />
+                            )}
+                          </div>
                         </div>
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ 
+                            height: expandedFaqs[faq.id] ? 'auto' : 0,
+                            opacity: expandedFaqs[faq.id] ? 1 : 0
+                          }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-3 pb-3 pt-0">
+                            <div className="pl-6 text-sm text-gray-600 border-l border-amber-100 ml-2">
+                              {faq.answer}
+                            </div>
+                          </div>
+                        </motion.div>
                       </div>
                     ))
                   ) : (
                     // Default FAQs when none are provided
                     <>
-                      <div 
-                        className="p-3 rounded-lg border border-gray-100 bg-white hover:shadow-sm transition-shadow cursor-pointer"
-                        onClick={() => handleFaqClick("templates-access")}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Info className="h-4 w-4 text-amber-600" />
-                          <h4 className="font-medium text-sm">How do I access my templates?</h4>
+                      <div className="rounded-lg border border-gray-100 bg-white hover:shadow-sm transition-all cursor-pointer">
+                        <div 
+                          className="p-3 flex items-center justify-between"
+                          onClick={() => handleFaqClick("templates-access")}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Info className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                            <h4 className="font-medium text-sm">How do I access my templates?</h4>
+                          </div>
+                          <div className="flex-shrink-0">
+                            {expandedFaqs["templates-access"] ? (
+                              <MinusCircle className="h-4 w-4 text-amber-600" />
+                            ) : (
+                              <PlusCircle className="h-4 w-4 text-amber-600" />
+                            )}
+                          </div>
                         </div>
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ 
+                            height: expandedFaqs["templates-access"] ? 'auto' : 0,
+                            opacity: expandedFaqs["templates-access"] ? 1 : 0
+                          }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-3 pb-3 pt-0">
+                            <div className="pl-6 text-sm text-gray-600 border-l border-amber-100 ml-2">
+                              You can access all templates in the Templates Library section of your dashboard. Click on any template to preview it, then download or use it directly.
+                            </div>
+                          </div>
+                        </motion.div>
                       </div>
-                      <div 
-                        className="p-3 rounded-lg border border-gray-100 bg-white hover:shadow-sm transition-shadow cursor-pointer"
-                        onClick={() => handleFaqClick("commercial-license")}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Info className="h-4 w-4 text-amber-600" />
-                          <h4 className="font-medium text-sm">Can I sell products made with the templates?</h4>
+                      
+                      <div className="rounded-lg border border-gray-100 bg-white hover:shadow-sm transition-all cursor-pointer">
+                        <div 
+                          className="p-3 flex items-center justify-between"
+                          onClick={() => handleFaqClick("commercial-license")}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Info className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                            <h4 className="font-medium text-sm">Can I sell products made with the templates?</h4>
+                          </div>
+                          <div className="flex-shrink-0">
+                            {expandedFaqs["commercial-license"] ? (
+                              <MinusCircle className="h-4 w-4 text-amber-600" />
+                            ) : (
+                              <PlusCircle className="h-4 w-4 text-amber-600" />
+                            )}
+                          </div>
                         </div>
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ 
+                            height: expandedFaqs["commercial-license"] ? 'auto' : 0,
+                            opacity: expandedFaqs["commercial-license"] ? 1 : 0
+                          }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-3 pb-3 pt-0">
+                            <div className="pl-6 text-sm text-gray-600 border-l border-amber-100 ml-2">
+                              Yes! All templates come with a commercial license that allows you to sell physical and digital products created with them. The only restriction is that you cannot resell the template files themselves.
+                            </div>
+                          </div>
+                        </motion.div>
                       </div>
-                      <div 
-                        className="p-3 rounded-lg border border-gray-100 bg-white hover:shadow-sm transition-shadow cursor-pointer"
-                        onClick={() => handleFaqClick("live-classes")}
-                      >
-                        <div className="flex items-center gap-2">
-                          <Info className="h-4 w-4 text-amber-600" />
-                          <h4 className="font-medium text-sm">How do I join the live classes?</h4>
+                      
+                      <div className="rounded-lg border border-gray-100 bg-white hover:shadow-sm transition-all cursor-pointer">
+                        <div 
+                          className="p-3 flex items-center justify-between"
+                          onClick={() => handleFaqClick("live-classes")}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Info className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                            <h4 className="font-medium text-sm">How do I join the live classes?</h4>
+                          </div>
+                          <div className="flex-shrink-0">
+                            {expandedFaqs["live-classes"] ? (
+                              <MinusCircle className="h-4 w-4 text-amber-600" />
+                            ) : (
+                              <PlusCircle className="h-4 w-4 text-amber-600" />
+                            )}
+                          </div>
                         </div>
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ 
+                            height: expandedFaqs["live-classes"] ? 'auto' : 0,
+                            opacity: expandedFaqs["live-classes"] ? 1 : 0
+                          }}
+                          transition={{ duration: 0.3 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-3 pb-3 pt-0">
+                            <div className="pl-6 text-sm text-gray-600 border-l border-amber-100 ml-2">
+                              You can join live classes directly from the Live Classes section of your dashboard. Click on any upcoming class to see details and access the link to join when it's time.
+                            </div>
+                          </div>
+                        </motion.div>
                       </div>
                     </>
                   )}

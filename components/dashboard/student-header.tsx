@@ -344,7 +344,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
             </SheetContent>
           </Sheet>
 
-          <Link href="/" className="hidden md:block">
+          <Link href="/dashboard" className="hidden md:block">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-md bg-brand-purple text-white flex items-center justify-center font-serif">
                 G
@@ -473,7 +473,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                   {totalCartItems}
                 </Badge>
               )}
-              <span className="sr-only">Shopping Cartzzz</span>
+              <span className="sr-only">Shopping Cart</span>
             </Button>
           </Link>
 
