@@ -2,58 +2,88 @@
 
 import Link from "next/link"
 import Image from "next/image"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Download, ExternalLink, ShoppingBag, ChevronDown, ChevronUp, ChevronRight, Folder } from "lucide-react"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { usePurchasesData } from "@/lib/hooks/use-dashboard-store"
+import { useSectionExpansion } from "@/lib/hooks/use-dashboard-store"
 
+// Update interfaces to match the actual API data structure
 export interface PurchaseItem {
-  name: string
-  price: number
-  image: string
-  googleDriveId?: string | null
+  id?: string
+  title: string
+  price_at_purchase?: number
+  price?: number
+  image_url?: string
+  google_drive_file_id?: string | null
+  product_id?: string | null
+  variant_title?: string | null
+  quantity?: number
+  source?: 'ecommerce' | 'shopify'
 }
 
 export interface Purchase {
   id: string
-  date: string
+  order_number?: string | null
+  created_at?: string
+  date?: string // Legacy field for backward compatibility
   items: PurchaseItem[]
-  total: number
-  status: string
+  total_amount?: number
+  total?: number // Legacy field for backward compatibility
+  order_status?: string
+  status?: string // Legacy field for backward compatibility
+  currency?: string | null
+  source?: 'ecommerce' | 'shopify'
 }
 
 export interface PurchasesSectionProps {
-  recentPurchases: Purchase[]
-  isSectionExpanded: (section: string) => boolean
-  toggleSection: (section: string) => void
-  isLoading?: boolean
   viewAllUrl?: string
+  userId?: string | null
 }
 
 export function PurchasesSection({
-  recentPurchases,
-  isSectionExpanded,
-  toggleSection,
-  isLoading = false,
-  viewAllUrl = "/dashboard/purchase-history"
+  viewAllUrl = "/dashboard/purchase-history",
+  userId
 }: PurchasesSectionProps) {
-  const fadeInUp = {
+  // Use the enhanced hook for purchases data
+  const { 
+    purchases: recentPurchases, 
+    isLoadingPurchases: isLoading, 
+    hasPurchasesError,
+    loadPurchases,
+    isStale
+  } = usePurchasesData()
+  
+  // Get section expansion state from centralized store
+  const { isSectionExpanded, toggleSection } = useSectionExpansion()
+  
+  // Load purchases data when component mounts or when userId changes
+  useEffect(() => {
+    if (userId && (recentPurchases.length === 0 || isStale())) {
+      loadPurchases(userId)
+    }
+  }, [userId, recentPurchases.length, isStale, loadPurchases])
+  // Memoize animation variants to prevent recreation on each render
+  const fadeInUp = useMemo(() => ({
     hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,
       y: 0,
       transition: { duration: 0.6 },
     },
-  }
+  }), [])
 
-  const handleOpenFolder = (googleDriveId: string | null | undefined) => {
+  // Memoize event handler to prevent recreation on each render
+  const handleOpenFolder = useCallback((googleDriveId: string | null | undefined) => {
     if (googleDriveId) {
       const driveUrl = `https://drive.google.com/drive/folders/${googleDriveId}`;
       window.open(driveUrl, '_blank', 'noopener,noreferrer');
     } else {
       console.log('No Google Drive link available for this item');
     }
-  }
+  }, [])
 
   return (
     <motion.div initial="hidden" animate="visible" variants={fadeInUp} transition={{ delay: 0.2 }}>
@@ -131,55 +161,94 @@ export function PurchasesSection({
               </div>
             ) : recentPurchases.length > 0 ? (
               <div className="space-y-4">
-                {recentPurchases.map((purchase) => (
+                {/* Render purchases list - Using fragment to avoid key warning */}
+              {recentPurchases.map((purchase) => {
+                // Format date string if it's ISO format - using pure function instead of hook
+                const formattedDate = (() => {
+                  try {
+                    return new Date(purchase.created_at || purchase.date || '')
+                      .toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      });
+                  } catch (e) {
+                    return purchase.date || 'N/A';
+                  }
+                })();
+                
+                // Format status with proper capitalization - using pure function instead of hook
+                const formattedStatus = (() => {
+                  const status = purchase.order_status || purchase.status || 'Processing';
+                  return status.charAt(0).toUpperCase() + status.slice(1);
+                })();
+                
+                // Calculate total with proper formatting - using pure function instead of hook
+                const formattedTotal = (() => {
+                  const amount = purchase.total_amount || purchase.total || 0;
+                  return `₱${(amount / 100).toFixed(2)}`;
+                })();
+                
+                return (
                   <div key={purchase.id} className="border rounded-lg p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium">Order #{purchase.id}</div>
+                      <div className="text-sm font-medium">Order #{purchase.order_number || purchase.id.substring(0, 6)}</div>
                       <Badge variant="outline" className="bg-green-50 text-green-600 border-green-200">
-                        {purchase.status.charAt(0).toUpperCase() + purchase.status.slice(1)}
+                        {formattedStatus}
                       </Badge>
                     </div>
-                    <div className="text-xs text-muted-foreground">{purchase.date}</div>
+                    <div className="text-xs text-muted-foreground">{formattedDate}</div>
 
                     <div className="space-y-3">
-                      {purchase.items.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
-                          <div className="flex items-center gap-3">
-                            <div className="h-12 w-12 rounded-md overflow-hidden relative flex-shrink-0">
-                              <Image
-                                src={item.image || "/placeholder.svg"}
-                                alt={item.name}
-                                fill
-                                className="object-cover"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <div className="font-medium text-sm line-clamp-1">{item.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                ₱{(item.price / 100).toFixed(2)}
+                      {purchase.items?.map((item, index) => {
+                        // Format price with proper currency - using pure function instead of hook
+                        const itemPrice = (() => {
+                          // Use price_at_purchase as the primary source of price
+                          // Fall back to the UI-specific price property if it exists
+                          const price = item.price_at_purchase || (item as any).price || 0;
+                          return `₱${(price / 100).toFixed(2)}`;
+                        })();
+                        
+                        return (
+                          <div key={item.id || index} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 last:border-b-0 last:pb-0">
+                            <div className="flex items-center gap-3">
+                              <div className="h-12 w-12 rounded-md overflow-hidden relative flex-shrink-0">
+                                <Image
+                                  src={item.image_url || "/placeholder.svg"}
+                                  alt={item.title || 'Product image'}
+                                  fill
+                                  className="object-cover"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <div className="font-medium text-sm line-clamp-1">{item.title || 'Product'}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {itemPrice}
+                                </div>
                               </div>
                             </div>
+                            {item.google_drive_file_id && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="text-xs flex-shrink-0"
+                                onClick={() => handleOpenFolder(item.google_drive_file_id)}
+                              >
+                                <Folder className="h-3 w-3 mr-1" />
+                                Open Folder
+                              </Button>
+                            )}
                           </div>
-                          {item.googleDriveId && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="text-xs flex-shrink-0"
-                              onClick={() => handleOpenFolder(item.googleDriveId)}
-                            >
-                              <Folder className="h-3 w-3 mr-1" />
-                              Open Folder
-                            </Button>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t">
-                      <div className="font-medium">Total: ₱{(purchase.total / 100).toFixed(2)}</div>
+                      <div className="font-medium">Total: {formattedTotal}</div>
                     </div>
                   </div>
-                ))}
+                );
+              })}
               </div>
             ) : (
               <div className="text-center py-12">

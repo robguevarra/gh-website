@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/auth-context';
+import { useAnnouncementsData } from '@/lib/hooks/use-dashboard-store';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,11 @@ import {
 } from 'lucide-react';
 
 // Define Announcement type based on Supabase schema
+// Define Announcement type based on Supabase database schema
 type Announcement = Database['public']['Tables']['announcements']['Row'];
+
+// Helper type to properly type-cast announcement type values
+type AnnouncementType = 'general_update' | 'live_class' | 'sale_promo' | 'new_content';
 
 // Format date in a human-readable way
 const formatDate = (dateString: string) => {
@@ -38,8 +43,61 @@ const formatDate = (dateString: string) => {
   return format(date, 'MMMM d, yyyy');
 };
 
+// Type that matches exactly what AnnouncementCard expects
+interface SafeAnnouncement {
+  id: string;
+  title: string;
+  content: string; // Never null
+  type: AnnouncementType; // Using our helper type
+  publish_date: string | null;
+  expiry_date: string | null;
+  link_url: string | null;
+  link_text: string | null;
+  image_url: string | null;
+  created_at: string;
+  updated_at: string;
+  status: string;
+  sort_order: number | null;
+  host_name: string | null;
+  host_avatar_url: string | null;
+  location: string | null; // Exists in UI but might not in DB
+  discount_percentage: number | null; // Exists in UI but might not in DB
+  target_audience: string | null;
+}
+
+/**
+ * Create a safe wrapper for announcements to handle null content and incompatible types
+ * This function converts a database Announcement to a UI-safe SafeAnnouncement,
+ * handling any missing or null fields and ensuring type compatibility
+ */
+const createSafeAnnouncement = (announcement: Announcement): SafeAnnouncement => {
+  // Use type assertion to bypass TypeScript's type checking for incompatible types
+  // We know that we're manually handling the incompatibilities here
+  return {
+    id: announcement.id,
+    title: announcement.title,
+    content: announcement.content || '', // Ensure content is never null
+    type: announcement.type as AnnouncementType, // Cast string to our enum type
+    publish_date: announcement.publish_date,
+    expiry_date: announcement.expiry_date,
+    link_url: announcement.link_url,
+    link_text: announcement.link_text,
+    image_url: announcement.image_url,
+    created_at: announcement.created_at,
+    updated_at: announcement.updated_at,
+    status: announcement.status,
+    sort_order: announcement.sort_order,
+    host_name: announcement.host_name,
+    host_avatar_url: announcement.host_avatar_url,
+    // Add missing fields with defaults if they're not in the database schema
+    location: (announcement as any).location || null,
+    discount_percentage: (announcement as any).discount_percentage || null,
+    target_audience: announcement.target_audience
+  } as SafeAnnouncement; // Final type assertion to ensure compatibility
+};
+
 // Announcement card component for consistent display
-const AnnouncementCard = ({ announcement }: { announcement: Announcement }) => {
+const AnnouncementCard = ({ announcement }: { announcement: SafeAnnouncement }) => {
   // Determine icon and color based on announcement type
   let iconColor = 'text-brand-purple';
   let bgColor = 'bg-brand-purple/10';
@@ -126,7 +184,8 @@ const AnnouncementCard = ({ announcement }: { announcement: Announcement }) => {
           <div className="flex-1">
             {/* Main content */}
             <p className="text-sm text-[#6d4c41] whitespace-pre-line leading-relaxed line-clamp-3">
-              {announcement.content?.substring(0, 200)}{announcement.content && announcement.content.length > 200 ? '...' : ''}
+              {announcement.content?.substring(0, 200) || ''}
+              {announcement.content && announcement.content.length > 200 ? '...' : ''}
             </p>
             
             {/* Additional metadata */}
@@ -253,12 +312,38 @@ const EmptyState = ({ type }: { type: string }) => {
 
 export default function AnnouncementsPage() {
   const { user, isLoading: isAuthLoading } = useAuth();
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   
+  // Use the enhanced announcements hook with caching
+  const {
+    announcements,
+    isLoadingAnnouncements: isLoading,
+    hasAnnouncementsError,
+    loadAnnouncements,
+    isStale
+  } = useAnnouncementsData();
+  
+  // Load announcements data with proper caching
+  const fetchAnnouncements = useCallback(async () => {
+    if (!user?.id) return;
+    
+    try {
+      await loadAnnouncements(currentPage, 10, { type: activeTab === 'all' ? undefined : activeTab });
+      // Update total pages from pagination info
+      // In a future enhancement, we could include pagination data in the store
+      const response = await fetch(`/api/announcements?page=${currentPage}&limit=10${activeTab !== 'all' ? `&type=${activeTab}` : ''}`);
+      if (response.ok) {
+        const data = await response.json();
+        setTotalPages(data.pagination?.totalPages || 1);
+      }
+    } catch (error) {
+      console.error('Error updating pagination:', error);
+    }
+  }, [user?.id, currentPage, activeTab, loadAnnouncements]);
+  
+  // Handle authentication and data loading
   useEffect(() => {
     // Redirect if not authenticated
     if (!isAuthLoading && !user) {
@@ -266,45 +351,35 @@ export default function AnnouncementsPage() {
       return;
     }
     
-    const fetchAnnouncements = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch(`/api/announcements?page=${currentPage}&limit=10`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch announcements');
-        }
-        const data = await response.json();
-        setAnnouncements(data.data || []);
-        setTotalPages(data.pagination?.totalPages || 1);
-      } catch (error) {
-        console.error('Error fetching announcements:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
+    if (user && (announcements.length === 0 || isStale())) {
+      fetchAnnouncements();
+    }
+  }, [user, isAuthLoading, announcements.length, isStale, fetchAnnouncements]);
+  
+  // Refresh data when tab or page changes
+  useEffect(() => {
     if (user) {
       fetchAnnouncements();
     }
-  }, [user, isAuthLoading, currentPage]);
+  }, [activeTab, currentPage, user, fetchAnnouncements]);
   
-  // Filter announcements based on active tab
-  const filteredAnnouncements = announcements.filter(announcement => {
-    if (activeTab === 'all') return true;
-    return announcement.type === activeTab;
-  });
+  // Filter announcements based on active tab - memoized to prevent unnecessary recalculations
+  const filteredAnnouncements = useMemo(() => {
+    if (activeTab === 'all') return announcements;
+    return announcements.filter(announcement => announcement.type === activeTab);
+  }, [announcements, activeTab]);
   
-  // Count announcements by type
-  const counts = {
+  // Count announcements by type - memoized to prevent unnecessary recalculations
+  const counts = useMemo(() => ({
     all: announcements.length,
     live_class: announcements.filter(a => a.type === 'live_class').length,
     sale_promo: announcements.filter(a => a.type === 'sale_promo').length,
     new_content: announcements.filter(a => a.type === 'new_content').length,
     general_update: announcements.filter(a => a.type === 'general_update').length,
-  };
+  }), [announcements]);
   
-  // Loading skeleton component
-  const LoadingSkeleton = () => (
+  // Loading skeleton component - memoized to prevent recreation on each render
+  const LoadingSkeleton = useCallback(() => (
     <div className="space-y-6">
       {[...Array(3)].map((_, i) => (
         <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 animate-pulse">
@@ -325,7 +400,7 @@ export default function AnnouncementsPage() {
         </div>
       ))}
     </div>
-  );
+  ), []);
   
   return (
     <motion.div 
@@ -434,9 +509,16 @@ export default function AnnouncementsPage() {
                   transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  {filteredAnnouncements.map((announcement) => (
-                    <AnnouncementCard key={announcement.id} announcement={announcement} />
-                  ))}
+                  {filteredAnnouncements.map((announcement) => {
+                    // Use type assertion to ensure compatibility
+                    const safeAnnouncement = createSafeAnnouncement(announcement as any);
+                    return (
+                      <AnnouncementCard 
+                        key={announcement.id} 
+                        announcement={safeAnnouncement} 
+                      />
+                    );
+                  })}
                 </motion.div>
               ) : (
                 <EmptyState type="all" />
@@ -454,9 +536,16 @@ export default function AnnouncementsPage() {
                   transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  {filteredAnnouncements.map((announcement) => (
-                    <AnnouncementCard key={announcement.id} announcement={announcement} />
-                  ))}
+                  {filteredAnnouncements.map((announcement) => {
+                    // Use type assertion to ensure compatibility
+                    const safeAnnouncement = createSafeAnnouncement(announcement as any);
+                    return (
+                      <AnnouncementCard 
+                        key={announcement.id} 
+                        announcement={safeAnnouncement} 
+                      />
+                    );
+                  })}
                 </motion.div>
               ) : (
                 <EmptyState type="live_class" />
@@ -474,9 +563,16 @@ export default function AnnouncementsPage() {
                   transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  {filteredAnnouncements.map((announcement) => (
-                    <AnnouncementCard key={announcement.id} announcement={announcement} />
-                  ))}
+                  {filteredAnnouncements.map((announcement) => {
+                    // Use type assertion to ensure compatibility
+                    const safeAnnouncement = createSafeAnnouncement(announcement as any);
+                    return (
+                      <AnnouncementCard 
+                        key={announcement.id} 
+                        announcement={safeAnnouncement} 
+                      />
+                    );
+                  })}
                 </motion.div>
               ) : (
                 <EmptyState type="sale_promo" />
@@ -494,9 +590,16 @@ export default function AnnouncementsPage() {
                   transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  {filteredAnnouncements.map((announcement) => (
-                    <AnnouncementCard key={announcement.id} announcement={announcement} />
-                  ))}
+                  {filteredAnnouncements.map((announcement) => {
+                    // Use type assertion to ensure compatibility
+                    const safeAnnouncement = createSafeAnnouncement(announcement as any);
+                    return (
+                      <AnnouncementCard 
+                        key={announcement.id} 
+                        announcement={safeAnnouncement} 
+                      />
+                    );
+                  })}
                 </motion.div>
               ) : (
                 <EmptyState type="new_content" />

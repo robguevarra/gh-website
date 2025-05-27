@@ -250,6 +250,9 @@ export function useCourseProgressData() {
 
 /**
  * Hook for purchases data
+ * 
+ * Enhanced with timestamp tracking and SWR pattern for proper caching
+ * Prevents unnecessary re-fetching and provides stale state detection
  */
 export function usePurchasesData() {
   // Monitor hook performance in development
@@ -259,17 +262,43 @@ export function usePurchasesData() {
   const purchases = useStudentDashboardStore(state => state.purchases)
   const isLoadingPurchases = useStudentDashboardStore(state => state.isLoadingPurchases)
   const hasPurchasesError = useStudentDashboardStore(state => state.hasPurchasesError)
+  const lastPurchasesLoadTime = useStudentDashboardStore(state => state.lastPurchasesLoadTime)
 
   // Get actions separately as they don't need to trigger re-renders
   const setPurchases = useStudentDashboardStore(state => state.setPurchases)
+  const setIsLoadingPurchases = useStudentDashboardStore(state => state.setIsLoadingPurchases)
+  const setHasPurchasesError = useStudentDashboardStore(state => state.setHasPurchasesError)
+  const loadPurchases = useStudentDashboardStore(state => state.loadPurchases)
+
+  // Helper function to check if data is stale
+  const isStale = useCallback(() => {
+    if (!lastPurchasesLoadTime) return true
+    // 5 minutes threshold for staleness
+    return Date.now() - lastPurchasesLoadTime > 5 * 60 * 1000
+  }, [lastPurchasesLoadTime])
 
   // Use useMemo to return a stable object reference
   return useMemo(() => ({
     purchases,
     isLoadingPurchases,
     hasPurchasesError,
-    setPurchases
-  }), [purchases, isLoadingPurchases, hasPurchasesError, setPurchases])
+    lastPurchasesLoadTime,
+    isStale,
+    setPurchases,
+    setIsLoadingPurchases,
+    setHasPurchasesError,
+    loadPurchases
+  }), [
+    purchases,
+    isLoadingPurchases,
+    hasPurchasesError,
+    lastPurchasesLoadTime,
+    isStale,
+    setPurchases,
+    setIsLoadingPurchases,
+    setHasPurchasesError,
+    loadPurchases
+  ])
 }
 
 // We don't need to define these types as they're inferred from the selectors
@@ -280,7 +309,7 @@ export function usePurchasesData() {
  * Uses the same pattern as other hooks in this file for consistency
  * and to prevent unnecessary re-renders
  */
-export const useLiveClassesData = () => {
+export function useLiveClassesData() {
   // Monitor hook performance in development
   logRender('useLiveClassesData')
 
@@ -291,17 +320,72 @@ export const useLiveClassesData = () => {
 
   // Get actions separately as they don't need to trigger re-renders
   const setLiveClasses = useStudentDashboardStore(state => state.setLiveClasses)
+  const setIsLoadingLiveClasses = useStudentDashboardStore(state => state.setIsLoadingLiveClasses)
+  const setHasLiveClassesError = useStudentDashboardStore(state => state.setHasLiveClassesError)
 
   // Use useMemo to return a stable object reference
   return useMemo(() => ({
     liveClasses,
     isLoadingLiveClasses,
     hasLiveClassesError,
-    setLiveClasses
-  }), [liveClasses, isLoadingLiveClasses, hasLiveClassesError, setLiveClasses])
+    setLiveClasses,
+    setIsLoadingLiveClasses,
+    setHasLiveClassesError
+  }), [liveClasses, isLoadingLiveClasses, hasLiveClassesError, setLiveClasses, setIsLoadingLiveClasses, setHasLiveClassesError])
 }
 
-// We don't need to define these types as they're inferred from the selectors
+/**
+ * Hook for announcements data
+ * 
+ * Optimized for performance with individual selectors and memoized return values
+ * Uses SWR pattern with timestamp-based cache invalidation
+ */
+export function useAnnouncementsData() {
+  // Monitor hook performance in development
+  logRender('useAnnouncementsData')
+
+  // Get state values using individual selectors
+  const announcements = useStudentDashboardStore(state => state.announcements)
+  const isLoadingAnnouncements = useStudentDashboardStore(state => state.isLoadingAnnouncements)
+  const hasAnnouncementsError = useStudentDashboardStore(state => state.hasAnnouncementsError)
+  const lastAnnouncementsLoadTime = useStudentDashboardStore(state => state.lastAnnouncementsLoadTime)
+
+  // Get actions separately as they don't need to trigger re-renders
+  const setAnnouncements = useStudentDashboardStore(state => state.setAnnouncements)
+  const setIsLoadingAnnouncements = useStudentDashboardStore(state => state.setIsLoadingAnnouncements)
+  const setHasAnnouncementsError = useStudentDashboardStore(state => state.setHasAnnouncementsError)
+  const loadAnnouncements = useStudentDashboardStore(state => state.loadAnnouncements)
+
+  // Helper function to check if data is stale
+  const isStale = useCallback(() => {
+    if (!lastAnnouncementsLoadTime) return true
+    // 5 minutes threshold for staleness
+    return Date.now() - lastAnnouncementsLoadTime > 5 * 60 * 1000
+  }, [lastAnnouncementsLoadTime])
+
+  // Use useMemo to return a stable object reference
+  return useMemo(() => ({
+    announcements,
+    isLoadingAnnouncements,
+    hasAnnouncementsError,
+    lastAnnouncementsLoadTime,
+    isStale,
+    setAnnouncements,
+    setIsLoadingAnnouncements,
+    setHasAnnouncementsError,
+    loadAnnouncements
+  }), [
+    announcements,
+    isLoadingAnnouncements,
+    hasAnnouncementsError,
+    lastAnnouncementsLoadTime,
+    isStale,
+    setAnnouncements,
+    setIsLoadingAnnouncements,
+    setHasAnnouncementsError,
+    loadAnnouncements
+  ])
+}
 
 /**
  * Hook for UI state

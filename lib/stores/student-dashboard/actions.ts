@@ -20,7 +20,8 @@ import type {
   UICourseProgress,
   UIModuleProgress,
   UILessonProgress,
-  ContinueLearningLesson
+  ContinueLearningLesson,
+  Announcement
 } from './types/index';
 import { useStudentDashboardStore } from './index';
 import { create } from 'zustand';
@@ -1488,6 +1489,55 @@ export const createActions = (
   setSaleProducts: (products: ProductData[]) => set({ saleProducts: products, lastSaleProductsLoadTime: Date.now() }),
   setIsLoadingSaleProducts: (isLoading: boolean) => set({ isLoadingSaleProducts: isLoading }),
   setHasSaleProductsError: (hasError: boolean) => set({ hasSaleProductsError: hasError }),
+
+  /**
+   * Load announcements with pagination and filtering
+   * Uses SWR pattern with timestamp-based caching
+   */
+  loadAnnouncements: async (page = 1, limit = 10, filter: { type?: string } = {}, force = false) => {
+    const { announcements, lastAnnouncementsLoadTime } = get();
+    
+    // Check if we have data and it's not stale, unless force refresh is requested
+    if (!force && announcements.length > 0 && lastAnnouncementsLoadTime && 
+        Date.now() - lastAnnouncementsLoadTime < STALE_THRESHOLD) {
+      return;
+    }
+    
+    set({ isLoadingAnnouncements: true, hasAnnouncementsError: false });
+    
+    try {
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+      
+      // Add type filter if provided
+      if (filter.type) {
+        params.append('type', filter.type);
+      }
+      
+      // Fetch announcements from API
+      const response = await fetch(`/api/announcements?${params.toString()}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch announcements: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Update state with fetched announcements
+      set({
+        announcements: data.data || [],
+        lastAnnouncementsLoadTime: Date.now()
+      });
+    } catch (error) {
+      console.error('[Store Action] loadAnnouncements error:', error);
+      set({ hasAnnouncementsError: true });
+    } finally {
+      set({ isLoadingAnnouncements: false });
+    }
+  },
 
   // UI actions
   setShowWelcomeModal: (show: boolean) => set({ showWelcomeModal: show }),

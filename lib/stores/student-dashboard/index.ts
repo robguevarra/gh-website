@@ -25,7 +25,8 @@ import {
   type Template,
   type Purchase,
   type LiveClass,
-  type ContinueLearningLesson
+  type ContinueLearningLesson,
+  type Announcement
 } from './types/index';
 
 // ADDED: Import or define ProductData type (assuming it's moved or defined globally)
@@ -110,6 +111,12 @@ export interface StudentDashboardStore {
   isLoadingLiveClasses: boolean;
   hasLiveClassesError: boolean;
 
+  // Announcements data
+  announcements: Announcement[];
+  isLoadingAnnouncements: boolean;
+  hasAnnouncementsError: boolean;
+  lastAnnouncementsLoadTime: number | null;
+
   // UI state
   showWelcomeModal: boolean;
   showOnboarding: boolean;
@@ -154,6 +161,12 @@ export interface StudentDashboardStore {
   setLiveClasses: (classes: LiveClass[]) => void;
   setIsLoadingLiveClasses: (isLoading: boolean) => void;
   setHasLiveClassesError: (hasError: boolean) => void;
+
+  // Announcements actions
+  setAnnouncements: (announcements: Announcement[]) => void;
+  setIsLoadingAnnouncements: (isLoading: boolean) => void;
+  setHasAnnouncementsError: (hasError: boolean) => void;
+  loadAnnouncements: (page?: number, limit?: number, filter?: { type?: string }, force?: boolean) => Promise<void>;
 
   // UI actions
   setShowWelcomeModal: (show: boolean) => void;
@@ -246,6 +259,12 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       isLoadingLiveClasses: false,
       hasLiveClassesError: false,
 
+      // Announcements data
+      announcements: [],
+      isLoadingAnnouncements: false,
+      hasAnnouncementsError: false,
+      lastAnnouncementsLoadTime: null,
+
       // UI state
       showWelcomeModal: true,
       showOnboarding: false,
@@ -310,9 +329,14 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       setHasPurchasesError: (hasError) => set({ hasPurchasesError: hasError }),
 
       // Live classes actions
-      setLiveClasses: (classes) => set({ liveClasses: classes }),
-      setIsLoadingLiveClasses: (isLoading) => set({ isLoadingLiveClasses: isLoading }),
-      setHasLiveClassesError: (hasError) => set({ hasLiveClassesError: hasError }),
+      setLiveClasses: (classes: LiveClass[]) => set({ liveClasses: classes }),
+      setIsLoadingLiveClasses: (isLoading: boolean) => set({ isLoadingLiveClasses: isLoading }),
+      setHasLiveClassesError: (hasError: boolean) => set({ hasLiveClassesError: hasError }),
+
+      // Announcements actions
+      setAnnouncements: (announcements: Announcement[]) => set({ announcements, lastAnnouncementsLoadTime: Date.now() }),
+      setIsLoadingAnnouncements: (isLoading: boolean) => set({ isLoadingAnnouncements: isLoading }),
+      setHasAnnouncementsError: (hasError: boolean) => set({ hasAnnouncementsError: hasError }),
 
       // UI actions
       setShowWelcomeModal: (show) => set({ showWelcomeModal: show }),
