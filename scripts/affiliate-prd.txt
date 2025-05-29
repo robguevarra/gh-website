@@ -1,0 +1,239 @@
+Below is PRD v1.1 – Affiliate Module for GH Website.
+It is structured so an AI-assisted dev team can explode every bullet into Jira/Linear tasks without missing context.
+
+⸻
+
+1 · Executive Summary
+
+Item	Detail
+Objective	Launch a native affiliate program to drive incremental revenue and new-user registrations.
+Primary KPIs	• Monthly registrations attributed to affiliates • Monthly paid conversions attributed to affiliates
+Secondary KPIs	Affiliate activation rate (≥30 % of sign-ups generating ≥1 click in first 7 days) · ROI (payout ÷ GMV) · Fraud rate (<2 % flagged conversions)
+In Scope (MVP)	One product (Papers to Profits) · PHP currency · 2-level commission · 30-day cookie · Dashboard (Aff / Admin) · Xendit disbursements · Postmark notifications · Integration with existing auth system
+Out of Scope (MVP)	Coupon codes · Multi-currency · Tier > 2 · External BI feed · CS read-only role
+Existing Systems Integration	Supabase Auth · unified_profiles table · Student dashboard (/dashboard) · Admin dashboard (/admin) · Xendit payment integration · auth.user_metadata for admin roles
+
+
+⸻
+
+2 · Personas & Core User Stories
+
+2.1 Affiliate
+
+ID	Story	Acceptance Criteria
+A-1	Sign up with email + mobile OTP	Account status = pending → confirmation email → active after click
+A-2	Generate referral links	UI returns vanity slug and full URL; QR optional
+A-3	View dashboard metrics	Widgets: Payout history › Clicks › CVR › Pending / Cleared ₱ › Top Links › Unique Visitors › Geo; p95 load ≤1 s
+A-4	Receive payout email	Postmark template payout_sent fires when payout row status=sent
+
+2.2 Admin
+
+| B-1 | Review fraud flags | /admin/flags table shows reason, metrics, resolve button; actions audited |
+| B-2 | Trigger EOM payouts | Button generates Xendit batch; success → payout rows sent |
+| B-3 | View program analytics | /admin/analytics shows 7-day & 30-day KPI charts |
+
+2.3 Super Admin
+
+| C-1 | Edit program settings | UI to change commission %, cookie TTL, flag thresholds without redeploy |
+| C-2 | Impersonate any user | Button sets x-impersonate header; audit logged |
+
+2.4 Authentication & Login Flow
+
+| D-1 | Context-sensitive login | After authentication, system detects user type and redirects appropriately: student-only → /dashboard, affiliate-only → /affiliate, both → selection screen asking which dashboard to enter |
+| D-2 | Dashboard switcher | For users with multiple roles (student + affiliate), provide persistent UI element to switch between dashboards without re-login |
+| D-3 | Leverage existing auth | Use Supabase Auth, unified_profiles table, and existing auth flow; add affiliate status to user's profile |
+| D-4 | Role-based access | Use existing admin role check (user_metadata.is_admin) for admin functions; add affiliate permissions for accessing affiliate dashboard |
+
+⸻
+
+3 · Program Rules
+
+Topic	Rule
+Commission	Level 1 = 25 % (members) / 20 % (non-members) of GMV Level 2 = 10 %
+Attribution	30-day last-click wins cookie + UTM param ?a=<slug>
+Self-Referral	Allowed; commissions apply
+Hold Period	Conversions pending → cleared after 3 × 24 h
+Payout Cadence	Auto batch on last calendar day (Asia/Manila, 23:00) via Xendit Disbursement
+Fees	Xendit disbursement fee deducted from affiliate amount
+Fraud Auto-Flag	Any 24-h window with (a) CVR > 50 % on ≥50 clicks or (b) ≥3 self-purchases → flag
+Data Retention	Soft-delete PII 6 months after affiliate status=inactive; keep aggregates
+
+
+⸻
+
+4 · Functional Requirements
+
+Ref	Requirement	Owner
+F-01	Signup flow (email → OTP → status pending) with integration to existing Supabase Auth	FE
+F-02	Supabase schema (see §6) with RLS policies integrated with unified_profiles	BE
+F-03	JS click pixel (/api/affiliate/click) sets 30-day cookie and handles UTM parameters	FE
+F-04	Extend existing Xendit webhook (/api/webhooks/xendit) to upsert conversion rows	BE
+F-05	Cron or on-demand /api/affiliate/payout/batch creates payouts	BE
+F-06	Fraud engine CRON every 30 min; insert into fraud_flags	BE
+F-07	Affiliate dashboard (/affiliate) with context-aware navigation	FE
+F-08	Extend existing Admin console (/admin) with affiliate management tab	FE
+F-09	Creative library embed (Google-Drive viewer)	FE
+F-10	Postmark templates (signup_confirmation, signup_approved, payout_sent, flag_notice)	DevOps
+F-11	Context-sensitive login router for student/affiliate/admin roles	FE
+F-12	Dashboard switcher component for users with multiple roles	FE
+F-13	Integrate affiliate checking with existing checkAdminAccess pattern	BE
+
+
+⸻
+
+5 · Non-Functional Requirements
+
+Category	Spec
+Performance	API p95 ≤ 200 ms; dashboard FCP ≤ 1 s on 3G
+Scalability	Design for 10 k clicks / day and 100 k rows / table (12 mo)
+Security	Supabase RLS everywhere; payouts require server role; audit trail
+Accessibility	WCAG 2.1 AA
+Localization	English
+
+
+⸻
+
+6 · Data Model (Supabase)
+
+erDiagram
+  auth.users ||--o{ unified_profiles : "1"
+  unified_profiles ||--o{ affiliates : "1"
+  affiliates ||--o{ affiliate_clicks : "1"
+  affiliates ||--o{ affiliate_conversions : "1"
+  affiliates ||--o{ payouts : "1"
+
+  %% Existing tables (simplified)
+  auth.users {
+    id uuid PK
+    email text
+    user_metadata jsonb %% Contains is_admin boolean
+  }
+  
+  unified_profiles {
+    id uuid PK FK auth.users.id
+    first_name text
+    last_name text
+    phone text
+    email text
+    %% Other existing fields
+  }
+
+  affiliates {
+    id uuid PK
+    user_id uuid FK unified_profiles.id
+    slug text UNIQUE %% Vanity URL slug for affiliate links
+    parent_affiliate uuid FK affiliates.id
+    status text("pending","active","flagged","inactive")
+    commission_rate numeric(5,2) %% Customizable per affiliate
+    is_member boolean %% Used for commission rate calculation
+    created_at timestamptz
+    updated_at timestamptz
+  }
+
+  affiliate_clicks {
+    id uuid PK
+    affiliate_id uuid FK affiliates.id
+    visitor_id uuid
+    ip inet
+    created_at timestamptz
+  }
+
+  affiliate_conversions {
+    id uuid PK
+    affiliate_id uuid FK affiliates.id
+    order_id uuid
+    gmv numeric(12,2)
+    level int
+    status text("pending","cleared","paid","flagged")
+    cleared_at timestamptz
+    paid_at timestamptz
+  }
+
+  payouts {
+    id uuid PK
+    affiliate_id uuid FK affiliates.id
+    amount numeric(12,2)
+    xendit_batch_id text
+    status text("processing","sent","failed")
+    sent_at timestamptz
+  }
+
+  fraud_flags {
+    id uuid PK
+    affiliate_id uuid
+    reason text
+    created_at timestamptz
+    resolved boolean default false
+  }
+
+Key RLS snippets (pseudo)
+
+-- affiliates
+CREATE POLICY "owner_or_admin"
+  USING (auth.uid() = user_id OR auth.role() IN ('admin','superadmin'));
+
+-- clicks/conversions
+GRANT SELECT ON affiliate_conversions
+  TO authenticated USING ( affiliate_id IN
+      (SELECT id FROM affiliates WHERE user_id = auth.uid()) );
+
+
+⸻
+
+7 · API Contract (Next.js 15 /app/api route handlers)
+
+Route	Method	Auth	Request Body	Response
+Notes
+/affiliate/signup	POST	public	{email, phone}	200 {status:'pending'}	Integrates with existing Supabase Auth
+/affiliate/click	POST	public	{affiliateSlug} (pixel)	204	Sets cookie and logs click
+/api/auth/redirect	GET	authenticated	–	302 (redirects based on role)	Implements context-sensitive login flow
+/api/webhooks/xendit	POST	secret	Xendit payload	200	Extend existing webhook implementation
+/affiliate/stats	GET	affiliate	–	200 {metrics:{...}}	Returns affiliate-specific metrics
+/affiliate/dashboard-type	GET	authenticated	–	200 {types:[student,affiliate,admin]}	Returns available dashboard types for UI
+/affiliate/payout/batch	POST	admin	{date}	200 {batchId}	Requires admin role (checkAdminAccess)
+/admin/affiliate/flags	GET/PATCH	admin	GET→query / PATCH→{status}	200	Extension of existing admin API
+
+Swagger / TypeScript typings live in /schemas.
+
+⸻
+
+8 · Email Templates (Postmark)
+
+Template	Trigger	Key Vars
+signup_confirmation	POST /affiliate/signup success	{firstName}
+signup_approved	Admin sets status=active	{firstName}
+payout_sent	Payout row status→sent	{firstName, amount, date}
+flag_notice	Row inserted into fraud_flags	{reason}
+
+
+⸻
+
+9 · Roll-Out Schedule & Task Buckets
+
+(No hard dates – unlimited budget lets PM adapt sprint length.)
+
+Phase	Task Buckets	Owners
+0 · Foundations	• Create Supabase tables & RLS • Seed super-admin	BE
+1 · Tracking Core	• Pixel implementation • Cookie logic • Webhook ingestion	FE / BE
+2 · Dashboards	• Affiliate UI widgets • Admin analytics & flag queue	FE
+3 · Payout Engine	• Batch API • Xendit integration • Cron scheduler	BE
+4 · Notifications	• Postmark MJML • Template tests	DevOps
+5 · Hardening	• Pen-test • Load-test 10 k clicks/day	SecOps
+6 · Launch	• Marketing assets upload • Public sign-up open	PM
+
+
+⸻
+
+10 · Acceptance-Test Checklist (MVP)
+	1.	30-day cookie persists and overrides previous affiliate on last click.
+	2.	Self-purchase flows create pending commission and clear after 3 days.
+	3.	Fraud rule fires with synthetic data (55 clicks, 30 conversions).
+	4.	EOM payout cron creates Xendit batch; sandbox response updates payout rows.
+	5.	Affiliate dashboard numbers match SQL truth within ±1 click / conversion.
+	6.	Super Admin changes Level 2 rate → new conversions compute 10 % (legacy remain).
+	7.	RLS prevents one affiliate querying another’s stats.
+	8.	Postmark emails render on mobile and dark-mode.
+
+⸻
+
+Ready for Dev 🔧

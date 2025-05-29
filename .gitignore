@@ -55,3 +55,7 @@ node_modules/
 *.sw?
 # OS specific
 # Task files
+
+# Added by Claude Task Master
+tasks.json
+tasks/ 
