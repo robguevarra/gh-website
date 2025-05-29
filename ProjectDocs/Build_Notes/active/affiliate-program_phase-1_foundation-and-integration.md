@@ -26,11 +26,11 @@ A comprehensive affiliate system that includes:
 ## Implementation Plan
 
 ### 1. Database Foundation
-- [ ] Design and implement affiliate tables extending unified_profiles
-- [ ] Create proper indexes for performance optimization
-- [ ] Implement RLS policies for security
-- [ ] Add affiliate status to unified_profiles
-- [ ] Set up test data for development
+- [x] Design and implement affiliate tables extending unified_profiles (Schema documented in `/ProjectDocs/Database/affiliate_program_schema.md`)
+- [x] Create proper indexes for performance optimization
+- [x] Implement RLS policies for security
+- [x] Add affiliate status to unified_profiles (Handled by `affiliate_general_status` and sync trigger, documented in schema)
+- [x] Set up test data for development
 
 ### 2. Authentication and Access Control
 - [ ] Implement affiliate signup flow with OTP verification
@@ -68,7 +68,14 @@ A comprehensive affiliate system that includes:
 - [ ] Implement data retention policies
 
 ### 7. Testing and Deployment
-- [ ] Create comprehensive test suite
+- [~] Create comprehensive test suite
+  - [x] Batch 1 (affiliates table, unified_profiles sync) tests passed after resolving `updated_at` timestamp issue with `clock_timestamp()`.
+  - [x] Batch 2 (affiliate_clicks table) tests passed, including schema corrections (added `updated_at`, corrected `referral_url`) and trigger functionality.
+  - [x] Batch 3 (affiliate_conversions table) tests passed. This included creating the `membership_levels` table, adding `membership_level_id` to `unified_profiles`, adding `updated_at` to `affiliate_conversions`, creating its trigger, and aligning tests with the actual `calculate_and_set_conversion_commission` trigger logic and `conversion_status_type` enum.
+  - [x] Batch 4 (fraud_flags table and affiliate status update) tests passed. This involved:
+    - Correcting the `fraud_flags` schema assumptions (it uses `affiliate_id` directly, not `conversion_id`, and has `details` instead of `evidence`).
+    - Updating the `handle_fraud_flag_affiliate_suspension` trigger to use `NEW.affiliate_id` and set affiliate status to `flagged` (as `suspended` was not a valid `affiliate_status_type` enum value).
+    - Ensuring `fraud_flags` has an `updated_at` column and an associated trigger.
 - [ ] Perform security and penetration testing
 - [ ] Conduct load testing for scalability
 - [ ] Prepare deployment pipeline
