@@ -1,0 +1,133 @@
+{
+  "meta": {
+    "generatedAt": "2025-05-29T11:07:24.750Z",
+    "tasksAnalyzed": 15,
+    "totalTasks": 15,
+    "analysisCount": 15,
+    "thresholdScore": 5,
+    "projectName": "Taskmaster",
+    "usedResearch": false
+  },
+  "complexityAnalysis": [
+    {
+      "taskId": 1,
+      "taskTitle": "Extend Supabase Schema for Affiliate Program",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the Supabase schema extension task into subtasks covering: 1) table creation with proper relationships, 2) RLS policy implementation, 3) indexing strategy, 4) unified_profiles extension, and 5) comprehensive testing of the schema.",
+      "reasoning": "This task involves complex database design with multiple tables, relationships, security policies, and performance considerations. The schema forms the foundation of the entire affiliate system, requiring careful planning and testing."
+    },
+    {
+      "taskId": 2,
+      "taskTitle": "Integrate Affiliate Authentication with Existing Supabase Auth",
+      "complexityScore": 8,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Divide the authentication integration task into subtasks covering: 1) affiliate signup endpoint implementation, 2) OTP verification flow, 3) user metadata extension, 4) role-based access control, 5) user type detection logic, and 6) security hardening.",
+      "reasoning": "Authentication integration is highly complex due to security requirements, multiple user roles, and integration with existing systems. It requires careful handling of user metadata, role checks, and security considerations."
+    },
+    {
+      "taskId": 3,
+      "taskTitle": "Implement Context-Sensitive Login Router",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the login router implementation into subtasks covering: 1) redirect endpoint creation, 2) user type detection logic, 3) dashboard selection screen for multi-role users, and 4) session management and error handling.",
+      "reasoning": "This task involves conditional logic for user redirection based on roles and requires integration with authentication systems. The complexity comes from handling multiple user types and maintaining session state."
+    },
+    {
+      "taskId": 4,
+      "taskTitle": "Develop Dashboard Switcher Component",
+      "complexityScore": 5,
+      "recommendedSubtasks": 3,
+      "expansionPrompt": "Divide the dashboard switcher component development into subtasks covering: 1) UI design and implementation following the design system, 2) client-side navigation with authentication state preservation, and 3) accessibility and responsive design implementation.",
+      "reasoning": "This is primarily a frontend task with moderate complexity. It requires maintaining authentication state during navigation and ensuring the component works across devices, but has fewer security concerns than other tasks."
+    },
+    {
+      "taskId": 5,
+      "taskTitle": "Implement Affiliate Click Tracking",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the click tracking implementation into subtasks covering: 1) tracking endpoint creation, 2) JavaScript pixel development, 3) cookie management and UTM parameter handling, 4) visitor ID generation and tracking, and 5) performance optimization and testing.",
+      "reasoning": "Click tracking is complex due to browser compatibility issues, cookie management, privacy considerations, and performance requirements. It's a critical component that must work reliably across various environments."
+    },
+    {
+      "taskId": 6,
+      "taskTitle": "Extend Xendit Webhook for Conversion Tracking",
+      "complexityScore": 9,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Divide the Xendit webhook extension into subtasks covering: 1) webhook endpoint modification, 2) affiliate attribution logic, 3) commission calculation for different levels, 4) conversion status management, 5) security verification, and 6) error handling and logging.",
+      "reasoning": "This task involves complex business logic for multi-level commissions, integration with an external payment system, security considerations for webhooks, and critical financial calculations that must be accurate."
+    },
+    {
+      "taskId": 7,
+      "taskTitle": "Implement Fraud Detection Engine",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the fraud detection engine implementation into subtasks covering: 1) CRON job setup, 2) fraud pattern detection algorithms, 3) flagging system implementation, 4) notification system integration, and 5) audit logging and performance optimization.",
+      "reasoning": "Fraud detection involves complex algorithms, time-window analysis, and critical business logic that affects affiliate status. It requires careful implementation to avoid false positives while catching actual fraud."
+    },
+    {
+      "taskId": 8,
+      "taskTitle": "Develop Affiliate Dashboard UI",
+      "complexityScore": 7,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Divide the affiliate dashboard UI development into subtasks covering: 1) protected route implementation, 2) referral link generation with vanity slugs and QR codes, 3) metrics widgets implementation, 4) stats endpoint development, and 5) responsive design and performance optimization.",
+      "reasoning": "The dashboard involves multiple complex UI components, data visualization, API integration, and must meet strict performance requirements while remaining accessible and responsive."
+    },
+    {
+      "taskId": 9,
+      "taskTitle": "Extend Admin Console for Affiliate Management",
+      "complexityScore": 7,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the admin console extension into subtasks covering: 1) affiliate management interface implementation, 2) fraud review system, 3) analytics dashboard with KPI charts, and 4) program settings editor with user impersonation.",
+      "reasoning": "This task requires extending an existing admin system with new capabilities, implementing complex UI components for analytics, and ensuring proper authorization for sensitive admin actions."
+    },
+    {
+      "taskId": 10,
+      "taskTitle": "Implement Payout Processing System",
+      "complexityScore": 9,
+      "recommendedSubtasks": 6,
+      "expansionPrompt": "Divide the payout processing system implementation into subtasks covering: 1) payout endpoint creation, 2) CRON job for automated payouts, 3) conversion status management, 4) Xendit Disbursement API integration, 5) fee calculation and status updates, and 6) error handling and logging.",
+      "reasoning": "Payout processing involves financial transactions, integration with external payment APIs, complex business logic for status transitions, and must be extremely reliable with proper error handling and logging."
+    },
+    {
+      "taskId": 11,
+      "taskTitle": "Implement Email Notification System",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the email notification system implementation into subtasks covering: 1) Postmark template creation with MJML, 2) email sending logic for different trigger points, 3) variable substitution and personalization, and 4) delivery queue with retry logic and logging.",
+      "reasoning": "Email notification requires integration with an external service, template design for multiple scenarios, and reliable delivery mechanisms, but is more straightforward than some other tasks."
+    },
+    {
+      "taskId": 12,
+      "taskTitle": "Implement Creative Library for Affiliates",
+      "complexityScore": 5,
+      "recommendedSubtasks": 3,
+      "expansionPrompt": "Divide the creative library implementation into subtasks covering: 1) Google Drive viewer integration, 2) UI component for browsing and previewing assets, and 3) search, filtering, and download functionality.",
+      "reasoning": "This task primarily involves third-party integration with Google Drive and UI development. It's relatively self-contained with fewer dependencies on other system components."
+    },
+    {
+      "taskId": 13,
+      "taskTitle": "Implement Data Retention and Privacy Controls",
+      "complexityScore": 7,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Break down the data retention implementation into subtasks covering: 1) inactive affiliate identification, 2) PII soft-deletion functionality, 3) database triggers for anonymization, and 4) audit logging and admin controls.",
+      "reasoning": "This task involves complex database operations, privacy considerations, and compliance requirements. It requires careful implementation to maintain data integrity while properly handling sensitive information."
+    },
+    {
+      "taskId": 14,
+      "taskTitle": "Implement System Monitoring and Analytics",
+      "complexityScore": 6,
+      "recommendedSubtasks": 4,
+      "expansionPrompt": "Divide the monitoring and analytics implementation into subtasks covering: 1) KPI tracking implementation, 2) performance monitoring setup, 3) alerting system configuration, and 4) logging and dashboard creation.",
+      "reasoning": "This task requires integration with monitoring tools, defining metrics, and setting up dashboards. It's important for system health but doesn't involve as much custom business logic as other tasks."
+    },
+    {
+      "taskId": 15,
+      "taskTitle": "System Integration Testing and Deployment",
+      "complexityScore": 8,
+      "recommendedSubtasks": 5,
+      "expansionPrompt": "Break down the system integration testing and deployment into subtasks covering: 1) end-to-end testing of all flows, 2) security and performance testing, 3) acceptance criteria verification, 4) deployment script creation and documentation, and 5) production monitoring setup.",
+      "reasoning": "This task involves comprehensive testing of the entire system, security validation, and preparation for production deployment. It requires coordination across all components and thorough verification of all requirements."
+    }
+  ]
+}
