@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { User, Session } from '@supabase/supabase-js';
 import { getBrowserClient } from '@/lib/supabase/client';
 import {
@@ -29,6 +30,7 @@ type AuthContextType = {
   logout: () => Promise<{ error: AuthError | null }>;
   resetPassword: (email: string) => Promise<{ error: AuthError | null }>;
   updatePassword: (password: string) => Promise<{ error: AuthError | null }>;
+  supabase: SupabaseClient; // Expose Supabase client
 };
 
 // Create the auth context
@@ -198,6 +200,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     logout,
     resetPassword: handleResetPassword,
     updatePassword: handleUpdatePassword,
+    supabase, // Add supabase client to context value
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

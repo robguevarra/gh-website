@@ -11,6 +11,9 @@ import { StudentHeader } from "@/components/dashboard/student-header"
 import { WelcomeModal } from "@/components/dashboard/welcome-modal"
 import { OnboardingTour } from "@/components/dashboard/onboarding-tour"
 
+// Import UserContextFetcher
+import { UserContextFetcher } from "@/lib/components/providers/user-context-fetcher"
+
 export default function DashboardLayout({
   children,
 }: {
@@ -55,6 +58,7 @@ export default function DashboardLayout({
   return (
     // Use flex column to structure header and main content
     <div className="min-h-screen flex flex-col bg-background">
+      <UserContextFetcher />
       {/* Render the main student header */} 
       <StudentHeader />
       

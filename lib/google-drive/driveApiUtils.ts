@@ -36,19 +36,12 @@ async function getGoogleAuthClient() {
   const credentialsJson = process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON;
   const keyFilePath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH;
 
-  console.log('Google Auth Client initialization:', {
-    hasCredentialsJson: !!credentialsJson,
-    hasKeyFilePath: !!keyFilePath,
-    keyFilePath: keyFilePath || 'not set'
-  });
-
   let authOptions: any = { // Using 'any' temporarily as options differ slightly
     scopes: SCOPES,
   };
 
   if (credentialsJson) {
     try {
-      console.log('Using credentials from GOOGLE_SERVICE_ACCOUNT_CREDENTIALS_JSON');
       const credentials = JSON.parse(credentialsJson);
       // Verify the credentials have the required fields
       if (!credentials.client_email || !credentials.private_key) {
@@ -61,7 +54,6 @@ async function getGoogleAuthClient() {
     }
   } else if (keyFilePath) {
     try {
-      console.log('Using key file from GOOGLE_SERVICE_ACCOUNT_KEY_PATH');
       const absoluteKeyFilePath = path.resolve(process.cwd(), keyFilePath);
       // Add a check to see if the file actually exists
       const fs = require('fs');
@@ -80,19 +72,11 @@ async function getGoogleAuthClient() {
   }
 
   try {
-    console.log('Creating GoogleAuth client with options:', {
-      hasCredentials: !!authOptions.credentials,
-      hasKeyFile: !!authOptions.keyFile,
-      scopes: authOptions.scopes
-    });
-
     const auth = new google.auth.GoogleAuth(authOptions);
 
     // Test the authentication by getting a client
     try {
-      console.log('Testing authentication by getting a client...');
       const client = await auth.getClient();
-      console.log('Authentication successful');
     } catch (clientError: any) {
       console.error('Error getting auth client:', clientError.message);
       throw clientError;
@@ -125,7 +109,7 @@ export async function getFolderContents(folderId: string | null): Promise<DriveI
 
     let targetFolderId = folderId;
     if (!targetFolderId) {
-      targetFolderId = process.env[ROOT_FOLDER_ID_ENV_VAR];
+      targetFolderId = process.env[ROOT_FOLDER_ID_ENV_VAR] || null;
       if (!targetFolderId) {
         targetFolderId = 'root'; // Use the 'root' alias as a fallback
       } else {
@@ -410,7 +394,6 @@ export async function grantFilePermission(
       throw new Error(`[grantFilePermission] Invalid user email format: ${userEmail}`);
   }
 
-  console.log(`[Drive] Attempting to grant '${role}' permission for ${userEmail} on file/folder ${fileId}`);
 
   try {
     const auth = await getGoogleAuthClient();
@@ -430,7 +413,6 @@ export async function grantFilePermission(
     });
 
     // Log success with the permission ID
-    console.log(`[Drive] Successfully granted permission. Permission ID: ${response.data.id}`);
 
   } catch (error: any) {
     // Log specific details if available (e.g., error code, message)

@@ -194,9 +194,51 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }, { status: 500 })
     }
 
-    const classification = classificationResult.classification!
-    const authFlow = getAuthenticationFlow(classification)
-    let redirectPath = redirectTo || authFlow.redirectPath
+    const classification = classificationResult.classification!;
+    const authFlow = getAuthenticationFlow(classification);
+    let redirectPath = redirectTo || authFlow.redirectPath;
+
+    // Handle password reset specially - this should take precedence
+    if (validation.purpose === 'password_reset') {
+      console.log('[MagicLinkVerifyAPI-POST] Password reset purpose detected, redirecting to update-password');
+      redirectPath = '/auth/update-password';
+    } else if (createSession && validation.userId) {
+      // If not a password reset, and we are creating a session, determine role-based redirect
+      try {
+        const adminSupabase = getAdminClient();
+        const { data: profile, error: profileError } = await adminSupabase
+          .from('unified_profiles')
+          .select('is_student, is_affiliate, is_admin')
+          .eq('id', validation.userId)
+          .single();
+
+        if (profileError || !profile) {
+          console.error(`[MagicLinkVerifyAPI-POST] Error fetching profile for user ${validation.userId} or profile not found. Falling back to default redirect.`, profileError);
+          // redirectPath remains as determined by authFlow or defaults to /dashboard later if needed
+        } else {
+          console.log(`[MagicLinkVerifyAPI-POST] Profile fetched for ${validation.userId}:`, profile);
+          // Role-based redirection priority: Admin > Affiliate > Student
+          if (profile.is_admin) {
+            redirectPath = '/admin';
+            console.log(`[MagicLinkVerifyAPI-POST] Redirecting admin user ${validation.userId} to /admin`);
+          } else if (profile.is_affiliate) {
+            redirectPath = '/affiliate-portal';
+            console.log(`[MagicLinkVerifyAPI-POST] Redirecting affiliate user ${validation.userId} to /affiliate-portal`);
+          } else if (profile.is_student) {
+            redirectPath = '/dashboard'; // Explicitly set for student, or if it's the only role
+            console.log(`[MagicLinkVerifyAPI-POST] Redirecting student user ${validation.userId} to /dashboard`);
+          } else {
+            // Fallback if no specific role flag is true but user is authenticated and profile exists
+            // This might happen if roles are not yet set, or if it's a new user type without a specific dashboard
+            redirectPath = '/dashboard'; 
+            console.log(`[MagicLinkVerifyAPI-POST] No specific role for ${validation.userId}, defaulting to /dashboard`);
+          }
+        }
+      } catch (e) {
+        console.error('[MagicLinkVerifyAPI-POST] Unexpected error during profile fetch for redirect. Falling back.', e);
+        // redirectPath remains as determined by authFlow or defaults to /dashboard later
+      }
+    }
 
     let sessionResult = null
     let profileStatus = {

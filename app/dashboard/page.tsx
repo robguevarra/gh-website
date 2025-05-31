@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import Image from "next/image"
-import Link from "next/link"
+import Link from "next/link";
+import { useSearchParams } from 'next/navigation';
 import { useRouter } from "next/navigation"
 import { format } from 'date-fns'; // Added for date formatting
 
@@ -108,7 +109,8 @@ import {
 
 export default function StudentDashboard() {
   const router = useRouter()
-  const { user, isLoading: isAuthLoading } = useAuth()
+  const { user, isLoading: isAuthLoading } = useAuth();
+  const searchParams = useSearchParams();
 
   // Use optimized hooks for better performance
   const { userId, isLoadingProfile, setUserId } = useUserProfile()
@@ -141,6 +143,7 @@ export default function StudentDashboard() {
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [liveAnnouncements, setLiveAnnouncements] = useState<Announcement[]>([]); // Added state for live announcements
   const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0); // Track current announcement in carousel
+  const [showPortalSwitcher, setShowPortalSwitcher] = useState(false);
 
   // References for animations
   const containerRef = useRef(null)
@@ -246,6 +249,13 @@ export default function StudentDashboard() {
       fetchAnnouncements();
     }
   }, [user?.id, setShowAnnouncement]);
+
+  // Effect to check for portal switcher query param
+  useEffect(() => {
+    if (searchParams.get('choosePortal') === 'true') {
+      setShowPortalSwitcher(true);
+    }
+  }, [searchParams]);
   
   // Carousel effect for announcements
   useEffect(() => {
@@ -291,6 +301,47 @@ export default function StudentDashboard() {
   const nextLiveClass = useMemo(() => {
     return upcomingLiveClasses.length > 0 ? upcomingLiveClasses[0] : null;
   }, [upcomingLiveClasses]);
+
+  const handlePortalChoice = (path: string) => {
+    setShowPortalSwitcher(false);
+    // Use replace to remove query param from history and avoid back button issues
+    router.replace(path, { scroll: false }); 
+  };
+
+  // If portal switcher is active, render it and nothing else for the dashboard
+  if (showPortalSwitcher) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.2 }}
+          className="bg-background p-6 sm:p-8 rounded-xl shadow-2xl max-w-lg w-full text-center border border-border"
+        >
+          <h2 className="text-2xl sm:text-3xl font-bold mb-3 text-foreground">Choose Your Portal</h2>
+          <p className="mb-6 sm:mb-8 text-muted-foreground text-sm sm:text-base">
+            Welcome! You have access to multiple areas. Please select where you'd like to go:
+          </p>
+          <div className="space-y-3 sm:space-y-4">
+            <Button 
+              onClick={() => handlePortalChoice('/dashboard')}
+              className="w-full bg-brand-primary hover:bg-brand-primary-dark text-primary-foreground text-base sm:text-lg py-3 h-auto"
+            >
+              <Users className="mr-2 h-5 w-5" /> Student Dashboard
+            </Button>
+            <Button 
+              onClick={() => router.push('/affiliate-portal')} 
+              variant="outline"
+              className="w-full text-base sm:text-lg py-3 h-auto border-brand-secondary text-brand-secondary hover:bg-brand-secondary/10"
+            >
+              <Sparkles className="mr-2 h-5 w-5" /> Affiliate Portal
+            </Button>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   // Helper Functions
   function getRandomInt(min: number, max: number) {

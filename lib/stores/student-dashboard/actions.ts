@@ -12,7 +12,7 @@
  */
 
 // Import required dependencies
-import { type StudentDashboardStore, type ProductData, type StoreCollection } from './index';
+import { type StudentDashboardStore, type ProductData, type StoreCollection, type UserContextData } from './index';
 import { getBrowserClient } from '@/lib/supabase/client';
 import * as auth from '@/lib/supabase/auth';
 import type { Database } from '@/types/supabase';
@@ -1570,6 +1570,55 @@ export const createActions = (
   getContinueLearningLesson: () => {
     // This seems redundant - state.continueLearningLesson is directly accessible
     return get().continueLearningLesson;
+  },
+
+  /**
+   * Fetches the user context (roles, basic profile info) from the API.
+   * It checks if the data is stale before making a new request.
+   */
+  fetchUserContext: async (forceRefresh = false) => {
+    const { userContext, lastUserContextLoadTime, userContextLoading } = get();
+
+    // Prevent re-fetch if already loading
+    if (userContextLoading) {
+      console.log('[Store Action] fetchUserContext: Already loading, skipping.');
+      return;
+    }
+
+    // Check if data is fresh and not forcing a refresh
+    if (
+      !forceRefresh &&
+      userContext &&
+      lastUserContextLoadTime &&
+      Date.now() - lastUserContextLoadTime < STALE_THRESHOLD
+    ) {
+      console.log('[Store Action] fetchUserContext: Data is fresh, skipping.');
+      return;
+    }
+
+    set({ userContextLoading: true, userContextError: null });
+
+    try {
+      const response = await fetch('/api/user/context');
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error response' }));
+        throw new Error(errorData.error || `Failed to fetch user context: ${response.status}`);
+      }
+
+      const data: UserContextData = await response.json();
+
+      set({
+        userContext: data,
+        lastUserContextLoadTime: Date.now(),
+      });
+    } catch (error) {
+      console.error('[Store Action] fetchUserContext error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      set({ userContextError: errorMessage });
+    } finally {
+      set({ userContextLoading: false });
+    }
   },
 
 });
