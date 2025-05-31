@@ -13,6 +13,7 @@ import {
   Settings,
   HelpCircle,
 } from 'lucide-react';
+import { DashboardSwitcher } from '@/components/navigation/dashboard-switcher';
 import { signOut } from '@/lib/supabase/auth';
 import { useUserProfile } from '@/lib/supabase/hooks';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
@@ -134,6 +135,10 @@ export default function AdminHeader() {
                   <span>Help</span>
                 </Link>
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <div className="px-2 py-1">
+                <DashboardSwitcher />
+              </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <LogOut className="mr-2 h-4 w-4" />

@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { validateAdminStatus } from '@/lib/supabase/admin';
 import AdminHeader from '@/components/admin/admin-header';
 import AdminSidebar from '@/components/admin/admin-sidebar';
+import { UserContextFetcher } from '@/lib/components/providers/user-context-fetcher';
 
 
 export const metadata = {
@@ -47,22 +48,26 @@ export default async function AdminLayout({
     if (!isAdmin) {
       console.log('User does not have admin privileges');
       // Store the attempted admin access in analytics
+      // Using type assertion to bypass strict typing as admin_access_attempts isn't in the generated types
       await supabase
-        .from('admin_access_attempts')
+        .from('admin_access_attempts' as any)
         .insert({
           user_id: user.id,
           email: user.email,
           attempted_path: pathname,
           timestamp: new Date().toISOString()
-        })
-        .select()
-        .single();
+        });
+      
+      // No need to select the inserted record as we're redirecting away
+
       
       redirect('/dashboard?error=insufficient_permissions');
     }
     
     return (
       <div className="flex min-h-screen flex-col bg-gray-50">
+        {/* Client component that fetches user context data including role information */}
+        <UserContextFetcher />
         <AdminHeader />
         <div className="flex flex-1 flex-col md:flex-row">
           <AdminSidebar />
