@@ -1,12 +1,18 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { defaultSecurityMiddleware, applyRateLimiting } from '@/lib/security'
+import { AUTH_ERROR_CODES } from '@/lib/session/auth-error-handler'
 
 export async function middleware(request: NextRequest) {
+  // Create the initial response
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   })
+  
+  // Apply security middleware early to set security headers
+  response = await defaultSecurityMiddleware(request, response)
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -84,6 +90,23 @@ export async function middleware(request: NextRequest) {
 
   // Check for special auth routes that shouldn't be redirected
   const isPasswordResetFlow = request.nextUrl.pathname.startsWith('/auth/update-password')
+  
+  // Apply rate limiting to authentication endpoints
+  const isLoginRoute = request.nextUrl.pathname.startsWith('/auth/signin') || 
+                      request.nextUrl.pathname.startsWith('/api/auth/login')
+  const isSignupRoute = request.nextUrl.pathname.startsWith('/auth/signup') || 
+                       request.nextUrl.pathname.startsWith('/api/auth/signup')
+  const isPasswordResetRoute = request.nextUrl.pathname.startsWith('/auth/reset-password') || 
+                              request.nextUrl.pathname.startsWith('/api/auth/reset-password')
+  
+  // Apply appropriate rate limiting based on the route
+  if (isLoginRoute && request.method !== 'GET') {
+    response = await applyRateLimiting(request, response, 'login')
+  } else if (isSignupRoute && request.method !== 'GET') {
+    response = await applyRateLimiting(request, response, 'signup')
+  } else if (isPasswordResetRoute && request.method !== 'GET') {
+    response = await applyRateLimiting(request, response, 'passwordReset')
+  }
 
   // Handle protected routes
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
@@ -175,6 +198,81 @@ export async function middleware(request: NextRequest) {
       return response;
     }
   }
+
+  // Apply session security headers to response
+  const sessionExpiryTime = user ? Math.floor(Date.now() / 1000) + 3600 : 0; // 1 hour from now or 0 if no user
+  response.headers.set('x-session-expiry', sessionExpiryTime.toString());
+  
+  // Add session activity timestamp to track user activity
+  response.headers.set('x-session-activity', Date.now().toString());
+  
+  // Add auth status header for client components to detect auth state changes
+  response.headers.set('x-auth-status', user ? 'authenticated' : 'unauthenticated');
+  
+  // Apply any final security measures before returning the response
+  return response
+}
+
+/**
+ * Helper function to update the session
+ * This is extracted from the middleware for reuse
+ */
+export async function updateSession(request: NextRequest) {
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+        },
+        remove(name: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value: '',
+            ...options,
+          })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({
+            name,
+            value: '',
+            ...options,
+          })
+        },
+      },
+    }
+  )
+
+  // This will refresh session if expired - required for Server Components
+  // It makes an API request to Supabase to validate the session
+  await supabase.auth.getUser()
 
   return response
 }

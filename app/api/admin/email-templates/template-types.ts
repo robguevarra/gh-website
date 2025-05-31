@@ -21,11 +21,11 @@ export type DetailedTemplate = EmailTemplate & {
   htmlTemplate: string;
   renderedHtml?: string;
   subject?: string;
-  design?: string; // JSON stringified design data from Unlayer
+  design?: any; // JSON object containing Unlayer design data
   previousVersions?: {
     version: number;
     htmlTemplate: string;
-    design?: string; // JSON stringified design data from Unlayer
+    design?: any; // JSON object containing Unlayer design data
     updatedAt: string;
     editedBy?: string;
   }[];
@@ -47,14 +47,14 @@ export type TemplateCategory = {
 // Metadata stored alongside templates
 export type TemplateMetadata = {
   htmlTemplate: string;
-  design?: string; // JSON stringified design data from Unlayer
+  design?: any; // JSON object containing Unlayer design data
   category: string;
   subcategory?: string | null;
   version: number;
   previousVersions: {
     version: number;
     htmlTemplate: string;
-    design?: string; // JSON stringified design data from Unlayer
+    design?: any; // JSON object containing Unlayer design data
     updatedAt: string;
     editedBy?: string;
   }[];

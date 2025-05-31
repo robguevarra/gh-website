@@ -582,8 +582,21 @@ export default function EmailTemplatesManager() {
       // Ensure design is properly serializable
       let preparedDesign;
       try {
-        preparedDesign = designJson ? JSON.parse(JSON.stringify(designJson)) : null;
-      } catch (_) {
+        // Handle different possible formats of designJson
+        if (designJson) {
+          if (typeof designJson === 'string') {
+            // If it's already a string (which shouldn't happen with our fixed API)
+            preparedDesign = JSON.parse(designJson);
+          } else if (typeof designJson === 'object') {
+            // If it's an object (normal case), create a deep clone
+            preparedDesign = JSON.parse(JSON.stringify(designJson));
+          }
+        } else {
+          preparedDesign = null;
+        }
+      } catch (error) {
+        // Log the error for debugging
+        console.error('Error processing design JSON:', error);
         // Silently handle serialization errors with a fallback
         preparedDesign = null;
       }
