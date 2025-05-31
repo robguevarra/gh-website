@@ -32,7 +32,6 @@ const logRender = (hookName: string): void => {
       .join('')
 
     // Log render count on each render with component info
-    console.log(`[Performance] ${hookName} rendered (count: ${renderCount.current}) in ${callerComponent}`)
 
     // Track previous state to detect changes
     const prevStateRef = useRef<any>(null)
@@ -48,9 +47,6 @@ const logRender = (hookName: string): void => {
         return JSON.stringify((currentState as Record<string, any>)[key]) !== JSON.stringify((prevStateRef.current as Record<string, any>)[key])
       })
 
-      if (changedKeys.length > 0) {
-        console.log(`[Performance] State changes detected in: ${changedKeys.join(', ')}`)
-      }
     }
 
     // Update previous state reference

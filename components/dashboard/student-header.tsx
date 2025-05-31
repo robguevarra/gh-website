@@ -50,6 +50,7 @@ import { useCartStore } from '@/stores/cartStore';
 import { useStudentDashboardStore } from '@/lib/stores/student-dashboard';
 
 // We're now using the useStudentHeader hook which provides optimized access to the store
+import { DashboardSwitcher } from '@/components/navigation/dashboard-switcher';
 
 // Internal component for profile display with loading states and timeout handling
 interface ProfileDisplayProps {
@@ -431,6 +432,10 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                   <Receipt className="mr-2 h-4 w-4" /> Purchases
                 </Link>
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <div className="px-2 py-1">
+                <DashboardSwitcher />
+              </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 {isLoggingOut ? (

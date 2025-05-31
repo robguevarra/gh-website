@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Mail, Lock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Database } from '@/types/supabase'; // Assuming your DB types are here
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -17,7 +18,7 @@ export interface SignInFormProps {
 
 export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const signIn = useAuth(); // signIn is the whole context object now
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,7 +38,7 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
 
     try {
       setIsLoading(true);
-      const { error: signInError } = await signIn(email, password);
+      const { error: signInError } = await signIn.signIn(email, password);
       
       if (signInError) {
         setError(signInError.message);
@@ -48,10 +49,63 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
       // Show success state before redirect
       setIsSuccess(true);
       
-      // Redirect after a short delay to show success animation
-      setTimeout(() => {
-        router.push(redirectUrl);
-      }, 1200);
+      // Fetch user profile for role-based redirect
+      if (signIn.user?.id && signIn.supabase) {
+        try {
+          const { data: profile, error: profileError } = await signIn.supabase
+            .from('unified_profiles')
+            .select('is_student, is_affiliate, is_admin, affiliate_general_status')
+            .eq('id', signIn.user.id)
+            .single();
+
+          if (profileError) {
+            console.error('Error fetching user profile:', profileError);
+            // Fallback to default redirectUrl if profile fetch fails
+            setTimeout(() => router.push(redirectUrl), 1200);
+            return;
+          }
+
+          let targetPath = redirectUrl; // Default
+          const isStudent = profile.is_student;
+          const isAffiliate = profile.is_affiliate;
+          const isAdmin = profile.is_admin;
+          const affiliateStatus = profile.affiliate_general_status;
+
+          // Role-based redirection priority: Admin > Affiliate > Student
+          if (isAdmin) {
+            targetPath = '/admin';
+          } else if (isAffiliate && isStudent) {
+            if (affiliateStatus === 'active') {
+              // For users with both roles, prioritize affiliate portal when active
+              targetPath = '/affiliate-portal';
+              // Alternative approach: show portal selection UI
+              // targetPath = '/dashboard?choosePortal=true';
+            } else {
+              targetPath = '/dashboard'; // Default to student dashboard if affiliate not active
+            }
+          } else if (isAffiliate) {
+            // Affiliate-only users always go to affiliate portal, regardless of status
+            targetPath = '/affiliate-portal';
+            // Optionally include status for inactive affiliates
+            if (affiliateStatus !== 'active') {
+              targetPath += `?status=${affiliateStatus}`;
+            }
+          } else if (isStudent) {
+            targetPath = '/dashboard';
+          }
+          // Else, targetPath remains the default redirectUrl
+
+          setTimeout(() => router.push(targetPath), 1200);
+
+        } catch (profileCatchError) {
+          console.error('Unexpected error fetching profile:', profileCatchError);
+          setTimeout(() => router.push(redirectUrl), 1200); // Fallback
+        }
+      } else {
+        // Fallback if user or supabase client is not available from context
+        console.warn('User ID or Supabase client not available for role-based redirect.');
+        setTimeout(() => router.push(redirectUrl), 1200);
+      }
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
       console.error(err);

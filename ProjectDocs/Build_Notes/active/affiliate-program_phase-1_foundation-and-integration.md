@@ -33,9 +33,19 @@ A comprehensive affiliate system that includes:
 - [x] Set up test data for development
 
 ### 2. Authentication and Access Control
-- [ ] Implement affiliate signup flow with OTP verification
+- [x] Implement affiliate signup flow:
+  - [x] **Frontend:** Create new affiliate signup page (e.g., `/auth/affiliate-signup`) reusing UI from `/auth/signin`. Form to include email, password, [optional: slug], terms agreement. (Implemented `/auth/affiliate-signup` with `AffiliateSignupForm`)
+  - [x] **Backend API (`/api/affiliate/signup`):**
+    - Validate inputs.
+    - Call `supabase.auth.signUp()`.
+    - [x] Ensure `affiliate.slug` is unique and auto-generated (Verified existing implementation in `/api/affiliate/signup/route.ts` is sufficient for new signups).
+    - [x] Set `affiliate.is_member` correctly (For new signups via `/api/affiliate/signup`, `is_member` correctly defaults to `false` as they are new users. Logic for existing users becoming affiliates would be a separate flow).
+    - [x] Resolved RLS issues for database inserts by using a service role client after user signup.
+    - If new user: Supabase handles email confirmation (serves as OTP for email ownership). API then creates `unified_profiles` and `public.affiliates` records (with `status: 'pending'` for admin review).
+    - If existing user (email already in `auth.users`): API returns error, guiding user to log in and apply via a separate "become an affiliate" flow (details for this flow TBD, but prevents duplicate `auth.users` entries).
+  - [x] **Affiliate Status:** The `affiliates.status = 'pending'` is for admin review of the application, distinct from Supabase email confirmation. (Handled in API)
 - [ ] Create context-sensitive login router
-- [ ] Develop dashboard switcher for multi-role users
+- [ ] Develop portal switcher for multi-role users (e.g., to navigate between `/dashboard` and `/affiliate-portal`)
 - [ ] Extend checkAdminAccess for affiliate management
 - [ ] Implement role-based authorization for affiliate routes
 
@@ -47,7 +57,7 @@ A comprehensive affiliate system that includes:
 - [ ] Set up visitor tracking with fraud prevention
 
 ### 4. Dashboard Development
-- [ ] Build affiliate dashboard UI
+- [ ] Build dedicated Affiliate Portal UI (e.g., at `/affiliate-portal`)
 - [ ] Implement metrics and reporting components
 - [ ] Create referral link generator with QR code option
 - [ ] Develop payout history display

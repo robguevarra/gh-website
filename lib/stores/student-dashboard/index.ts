@@ -5,6 +5,17 @@ import { batchMiddleware } from './batch-middleware';
 import { equalityMiddleware } from './equality-middleware';
 import { createActions } from './actions';
 
+// Define UserContext type
+export interface UserContextData {
+  id: string | null;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  isStudent: boolean;
+  isAffiliate: boolean;
+  isAdmin: boolean;
+}
+
 /**
  * Student Dashboard Store
  *
@@ -47,6 +58,15 @@ export type StoreCollection = {
 };
 
 export interface StudentDashboardStore {
+  // User Context State
+  userContext: UserContextData | null;
+  userContextLoading: boolean;
+  userContextError: string | null;
+  lastUserContextLoadTime: number | null; // Timestamp
+
+  // User Context Actions
+  fetchUserContext: (force?: boolean) => Promise<void>;
+
   // Dashboard Data Loading Actions
   loadUserDashboardData: (userId: string, force?: boolean) => Promise<void>;
   loadUserEnrollments: (userId: string, force?: boolean) => Promise<void>;
@@ -411,6 +431,12 @@ export const useStudentDashboardStore = create<StudentDashboardStore>()(
       isLoadingSaleProducts: false, // Initialize as false
       hasSaleProductsError: false,
       lastSaleProductsLoadTime: null,
+
+      // User Context
+      userContext: null,
+      userContextLoading: false,
+      userContextError: null,
+      lastUserContextLoadTime: null,
     }),
     {
       name: 'student-dashboard-storage',

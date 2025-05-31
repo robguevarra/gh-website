@@ -87,20 +87,93 @@ export async function middleware(request: NextRequest) {
 
   // Handle protected routes
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
-  const isProtectedRoute = request.nextUrl.pathname.startsWith('/dashboard') ||
-                          request.nextUrl.pathname.startsWith('/admin')
+  const isDashboardRoute = request.nextUrl.pathname.startsWith('/dashboard')
+  const isAdminRoute = request.nextUrl.pathname.startsWith('/admin')
+  const isAffiliatePortalRoute = request.nextUrl.pathname.startsWith('/affiliate-portal')
+  const isProtectedRoute = isDashboardRoute || isAdminRoute || isAffiliatePortalRoute
 
   // Allow password reset flow even without authentication
   if (isPasswordResetFlow) {
     return response
   }
 
+  // Redirect unauthenticated users from protected routes to sign-in
   if (!user && isProtectedRoute) {
     return NextResponse.redirect(new URL('/auth/signin', request.url))
   }
 
-  if (user && isAuthPage && !isPasswordResetFlow) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+  // For authenticated users, check role access and redirect appropriately
+  if (user) {
+    // Fetch user profile once for all checks
+    try {
+      const { data: profile, error: profileError } = await supabase
+        .from('unified_profiles')
+        .select('is_student, is_affiliate, is_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) {
+        console.error(`Middleware: Error fetching profile for user ${user.id}.`, profileError);
+        // Allow the request to proceed with default access (will be handled by UI)
+        return response;
+      }
+
+      // If profile exists, use it for all permission checks
+      if (profile) {
+        // CASE 1: Auth pages - redirect to appropriate dashboard based on role priority
+        if (isAuthPage && !isPasswordResetFlow) {
+          // Role-based redirection priority: Admin > Affiliate > Student
+          if (profile.is_admin) {
+            return NextResponse.redirect(new URL('/admin', request.url));
+          }
+          if (profile.is_affiliate) {
+            return NextResponse.redirect(new URL('/affiliate-portal', request.url));
+          }
+          if (profile.is_student) {
+            return NextResponse.redirect(new URL('/dashboard', request.url));
+          }
+          // Fallback if no specific role flag is true but user is authenticated
+          return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
+
+        // CASE 2: Access control for protected routes based on user roles
+        // Admin routes - only accessible to admins
+        if (isAdminRoute && !profile.is_admin) {
+          console.log(`Middleware: Non-admin user ${user.id} attempted to access admin route`);
+          // Redirect to appropriate route based on highest role
+          if (profile.is_affiliate) {
+            return NextResponse.redirect(new URL('/affiliate-portal', request.url));
+          }
+          return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
+
+        // Affiliate portal routes - only accessible to affiliates
+        if (isAffiliatePortalRoute && !profile.is_affiliate) {
+          console.log(`Middleware: Non-affiliate user ${user.id} attempted to access affiliate portal`);
+          // Redirect to appropriate route based on highest role
+          if (profile.is_admin) {
+            return NextResponse.redirect(new URL('/admin', request.url));
+          }
+          return NextResponse.redirect(new URL('/dashboard', request.url));
+        }
+
+        // Dashboard routes - only accessible to students
+        if (isDashboardRoute && !profile.is_student && (profile.is_affiliate || profile.is_admin)) {
+          console.log(`Middleware: Non-student user ${user.id} attempted to access dashboard`);
+          // Redirect to appropriate route based on highest role
+          if (profile.is_admin) {
+            return NextResponse.redirect(new URL('/admin', request.url));
+          }
+          if (profile.is_affiliate) {
+            return NextResponse.redirect(new URL('/affiliate-portal', request.url));
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Middleware: Unexpected error during profile fetch for access control.', e);
+      // Allow the request to proceed on error (access will be controlled by UI)
+      return response;
+    }
   }
 
   return response

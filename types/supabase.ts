@@ -475,6 +475,158 @@ export type Database = {
           },
         ]
       }
+      affiliate_clicks: {
+        Row: {
+          affiliate_id: string
+          created_at: string
+          id: string
+          ip_address: unknown | null
+          referral_url: string | null
+          updated_at: string | null
+          user_agent: string | null
+          visitor_id: string | null
+        }
+        Insert: {
+          affiliate_id: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          referral_url?: string | null
+          updated_at?: string | null
+          user_agent?: string | null
+          visitor_id?: string | null
+        }
+        Update: {
+          affiliate_id?: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          referral_url?: string | null
+          updated_at?: string | null
+          user_agent?: string | null
+          visitor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_clicks_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliate_conversions: {
+        Row: {
+          affiliate_id: string
+          cleared_at: string | null
+          click_id: string | null
+          commission_amount: number
+          created_at: string
+          gmv: number
+          id: string
+          level: number
+          order_id: string | null
+          paid_at: string | null
+          status: Database["public"]["Enums"]["conversion_status_type"]
+          updated_at: string | null
+        }
+        Insert: {
+          affiliate_id: string
+          cleared_at?: string | null
+          click_id?: string | null
+          commission_amount: number
+          created_at?: string
+          gmv: number
+          id?: string
+          level?: number
+          order_id?: string | null
+          paid_at?: string | null
+          status?: Database["public"]["Enums"]["conversion_status_type"]
+          updated_at?: string | null
+        }
+        Update: {
+          affiliate_id?: string
+          cleared_at?: string | null
+          click_id?: string | null
+          commission_amount?: number
+          created_at?: string
+          gmv?: number
+          id?: string
+          level?: number
+          order_id?: string | null
+          paid_at?: string | null
+          status?: Database["public"]["Enums"]["conversion_status_type"]
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_conversions_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_conversions_click_id_fkey"
+            columns: ["click_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_clicks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliates: {
+        Row: {
+          commission_rate: number
+          created_at: string
+          id: string
+          is_member: boolean
+          parent_affiliate: string | null
+          slug: string
+          status: Database["public"]["Enums"]["affiliate_status_type"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          commission_rate: number
+          created_at?: string
+          id?: string
+          is_member?: boolean
+          parent_affiliate?: string | null
+          slug: string
+          status?: Database["public"]["Enums"]["affiliate_status_type"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          commission_rate?: number
+          created_at?: string
+          id?: string
+          is_member?: boolean
+          parent_affiliate?: string | null
+          slug?: string
+          status?: Database["public"]["Enums"]["affiliate_status_type"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliates_parent_affiliate_fkey"
+            columns: ["parent_affiliate"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliates_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "unified_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcements: {
         Row: {
           content: string
@@ -1780,6 +1932,50 @@ export type Database = {
           },
         ]
       }
+      fraud_flags: {
+        Row: {
+          affiliate_id: string
+          created_at: string
+          details: Json | null
+          id: string
+          reason: string
+          resolved: boolean
+          resolved_at: string | null
+          resolver_notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          affiliate_id: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          reason: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolver_notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          affiliate_id?: string
+          created_at?: string
+          details?: Json | null
+          id?: string
+          reason?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolver_notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fraud_flags_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           amount: number
@@ -2064,6 +2260,30 @@ export type Database = {
         }
         Relationships: []
       }
+      membership_levels: {
+        Row: {
+          commission_rate: number
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          commission_rate: number
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          commission_rate?: number
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       membership_tiers: {
         Row: {
           created_at: string | null
@@ -2293,6 +2513,47 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      payouts: {
+        Row: {
+          affiliate_id: string
+          amount: number
+          id: string
+          processing_details: Json | null
+          requested_at: string
+          sent_at: string | null
+          status: Database["public"]["Enums"]["payout_status_type"]
+          xendit_batch_id: string | null
+        }
+        Insert: {
+          affiliate_id: string
+          amount: number
+          id?: string
+          processing_details?: Json | null
+          requested_at?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["payout_status_type"]
+          xendit_batch_id?: string | null
+        }
+        Update: {
+          affiliate_id?: string
+          amount?: number
+          id?: string
+          processing_details?: Json | null
+          requested_at?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["payout_status_type"]
+          xendit_batch_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payouts_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       permissions: {
         Row: {
@@ -3297,6 +3558,10 @@ export type Database = {
         Row: {
           acquisition_source: string | null
           admin_metadata: Json | null
+          affiliate_general_status:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id: string | null
           created_at: string
           email: string
           email_bounced: boolean
@@ -3305,9 +3570,13 @@ export type Database = {
           email_spam_complained: boolean | null
           first_name: string | null
           id: string
+          is_admin: boolean
+          is_affiliate: boolean
+          is_student: boolean
           last_login_at: string | null
           last_name: string | null
           login_count: number | null
+          membership_level_id: string | null
           phone: string | null
           status: string
           tags: string[] | null
@@ -3316,6 +3585,10 @@ export type Database = {
         Insert: {
           acquisition_source?: string | null
           admin_metadata?: Json | null
+          affiliate_general_status?:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id?: string | null
           created_at?: string
           email: string
           email_bounced?: boolean
@@ -3324,9 +3597,13 @@ export type Database = {
           email_spam_complained?: boolean | null
           first_name?: string | null
           id: string
+          is_admin?: boolean
+          is_affiliate?: boolean
+          is_student?: boolean
           last_login_at?: string | null
           last_name?: string | null
           login_count?: number | null
+          membership_level_id?: string | null
           phone?: string | null
           status?: string
           tags?: string[] | null
@@ -3335,6 +3612,10 @@ export type Database = {
         Update: {
           acquisition_source?: string | null
           admin_metadata?: Json | null
+          affiliate_general_status?:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id?: string | null
           created_at?: string
           email?: string
           email_bounced?: boolean
@@ -3343,15 +3624,34 @@ export type Database = {
           email_spam_complained?: boolean | null
           first_name?: string | null
           id?: string
+          is_admin?: boolean
+          is_affiliate?: boolean
+          is_student?: boolean
           last_login_at?: string | null
           last_name?: string | null
           login_count?: number | null
+          membership_level_id?: string | null
           phone?: string | null
           status?: string
           tags?: string[] | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_unified_profiles_affiliate_id"
+            columns: ["affiliate_id"]
+            isOneToOne: true
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unified_profiles_membership_level_id_fkey"
+            columns: ["membership_level_id"]
+            isOneToOne: false
+            referencedRelation: "membership_levels"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       User: {
         Row: {
@@ -4246,6 +4546,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       log_admin_action: {
         Args: {
           p_admin_id: string
@@ -4406,8 +4710,11 @@ export type Database = {
       }
     }
     Enums: {
+      affiliate_status_type: "pending" | "active" | "flagged" | "inactive"
       batch_status: "pending" | "processing" | "completed" | "failed"
+      conversion_status_type: "pending" | "cleared" | "paid" | "flagged"
       email_status: "pending" | "processing" | "sent" | "failed" | "retrying"
+      payout_status_type: "processing" | "sent" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4523,8 +4830,11 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      affiliate_status_type: ["pending", "active", "flagged", "inactive"],
       batch_status: ["pending", "processing", "completed", "failed"],
+      conversion_status_type: ["pending", "cleared", "paid", "flagged"],
       email_status: ["pending", "processing", "sent", "failed", "retrying"],
+      payout_status_type: ["processing", "sent", "failed"],
     },
   },
 } as const
