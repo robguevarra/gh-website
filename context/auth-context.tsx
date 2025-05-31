@@ -14,6 +14,8 @@ import {
   getCurrentUser,
   AuthError
 } from '@/lib/supabase/auth';
+import { logSessionActivity, SESSION_ACTIVITY_TYPES } from '@/lib/session/session-activity-logger';
+import { getClientInfo } from '../lib/utils/client-info';
 
 // Get the singleton browser client instance
 const supabase = getBrowserClient();
@@ -95,6 +97,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
           // Use the user from the session directly instead of making another API call
           setUser(currentSession.user);
           setSession(currentSession);
+          
+          // Log session refresh events
+          if (event === 'TOKEN_REFRESHED') {
+            try {
+              const { userAgent } = getClientInfo();
+              console.log('Logging session refresh for user:', currentSession.user.id);
+              await logSessionActivity({
+                userId: currentSession.user.id,
+                activityType: SESSION_ACTIVITY_TYPES.REFRESH,
+                sessionId: currentSession.access_token || 'unknown',
+                userAgent,
+                metadata: {
+                  method: 'auto',
+                  platform: 'web'
+                }
+              });
+              console.log('Session refresh activity logged successfully');
+            } catch (logError) {
+              console.error('Failed to log session refresh activity:', logError);
+            }
+          }
         } else if (mounted) {
           // Clear both auth state and store when no session
           setUser(null);
@@ -118,19 +141,38 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // Sign in with email and password
   const signIn = async (email: string, password: string) => {
     setIsLoading(true);
-    const { user: signedInUser, session: newSession, error } = await signInWithEmail(email, password);
+    const result = await signInWithEmail(email, password);
+    
+    // Log the login activity if successful
+    if (!result.error && result.user) {
+      try {
+        const { userAgent } = getClientInfo();
+        console.log('Logging login activity for user:', result.user.id);
+        await logSessionActivity({
+          userId: result.user.id,
+          activityType: SESSION_ACTIVITY_TYPES.LOGIN,
+          sessionId: result.session?.access_token || 'unknown',
+          userAgent,
+          metadata: {
+            method: 'email',
+            platform: 'web'
+          }
+        });
+        console.log('Login activity logged successfully');
+      } catch (logError) {
+        console.error('Failed to log login activity:', logError);
+      }
 
-    if (!error && signedInUser && newSession) {
-      setUser(signedInUser);
-      setSession(newSession);
-
-      // Simple redirect without additional database queries
+      // Update user and session in context
+      setUser(result.user);
+      setSession(result.session);
+      
       // The profile and admin status will be loaded by the hooks after redirect
       window.location.href = '/dashboard';
     }
 
     setIsLoading(false);
-    return { error };
+    return { error: result.error };
   };
 
   // Sign up with email and password
@@ -159,9 +201,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const logout = async () => {
     setIsLoading(true);
     
+    // Capture user ID before logout for logging purposes
+    const currentUserId = user?.id;
+    const currentSessionId = session?.access_token;
+    
     const { error } = await signOut();
 
     if (!error) {
+      // Log the logout activity
+      if (currentUserId) {
+        try {
+          const { userAgent } = getClientInfo();
+          console.log('Logging logout activity for user:', currentUserId);
+          await logSessionActivity({
+            userId: currentUserId,
+            activityType: SESSION_ACTIVITY_TYPES.LOGOUT,
+            sessionId: currentSessionId || 'unknown',
+            userAgent,
+            metadata: {
+              method: 'manual',
+              platform: 'web'
+            }
+          });
+          console.log('Logout activity logged successfully');
+        } catch (logError) {
+          console.error('Failed to log logout activity:', logError);
+        }
+      }
+      
+      // Update state
       setUser(null);
       setSession(null);
       // Redirect to signin page after successful logout

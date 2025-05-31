@@ -9,12 +9,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import fs from 'fs';
 import path from 'path';
 import templateManager from '@/lib/services/email/template-manager';
 import { DetailedTemplate, TemplateMetadata, TemplateVariables } from './template-types';
+import { createRouteHandlerClient, validateAdminAccess, handleUnauthorized, handleAdminOnly } from '@/lib/supabase/route-handler';
+import { securityLogger } from '@/lib/security/security-logger';
 
 // Process template variables - replaces {{variableName}} with values from variables object
 function processTemplateVariables(template: string, variables: TemplateVariables): string {
@@ -22,53 +22,15 @@ function processTemplateVariables(template: string, variables: TemplateVariables
   
   // Replace each variable in the template
   for (const [key, value] of Object.entries(variables)) {
-    const regex = new RegExp(`{{\s*${key}\s*}}`, 'g');
+    const regex = new RegExp(`{{s*${key}s*}}`, 'g');
     processed = processed.replace(regex, value ? String(value) : '');
   }
   
   // Convert literal \n to HTML <br> tags
-  processed = processed.replace(/\\n/g, '<br />');
+  processed = processed.replace(/\n/g, '<br />');
   
   return processed;
 }
-
-// Initialize Supabase client for auth checks with SSR cookie handling
-const getSupabaseClient = async () => {
-  // Create the Supabase client with Next.js 14+ cookie handling
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        async get(name: string) {
-          const cookieStore = await cookies();
-          return cookieStore.get(name)?.value;
-        },
-        async set(name: string, value: string, options: any) {
-          // Readonly in API routes - this is expected
-        },
-        async remove(name: string, options: any) {
-          // Readonly in API routes - this is expected
-        }
-      },
-    }
-  );
-};
-
-// Basic auth middleware - since this is an admin route, we just need to check if the user is authenticated
-const requireAuth = async () => {
-  const supabase = await getSupabaseClient();
-  
-  // Check if user is authenticated using getUser (more secure than getSession)
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  
-  if (userError || !user) {
-    console.error('Auth error:', userError);
-    return { isAuthenticated: false, userId: null, error: 'Not authenticated' };
-  }
-  
-  return { isAuthenticated: true, userId: user.id, error: null };
-};
 
 /**
  * Helper function to sanitize a template ID
@@ -80,28 +42,37 @@ const sanitizeTemplateId = (id: string): string => {
 
 // GET: List all templates OR get a specific template by ID
 export async function GET(request: NextRequest) {
-  // Verify user is authenticated
-  const { isAuthenticated, error } = await requireAuth();
+  // Verify user is authenticated and has admin access
+  const authResult = await validateAdminAccess();
   
-  if (!isAuthenticated) {
+  if (authResult.error) {
+    securityLogger.warn('Unauthorized access attempt to admin email templates', {
+      ip: request.headers.get('x-forwarded-for') || 'unknown',
+      userAgent: request.headers.get('user-agent') || 'unknown',
+      endpoint: 'GET /api/admin/email-templates',
+      error: authResult.error
+    });
+    
     return NextResponse.json(
-      { error: error || 'Unauthorized' },
-      { status: 401 }
+      { error: authResult.error },
+      { status: authResult.status }
     );
   }
+  
+  const user = authResult.user
   
   // Check if we're getting a specific template
   const url = new URL(request.url);
   const templateId = url.searchParams.get('templateId');
   const variables = url.searchParams.get('variables') 
-    ? JSON.parse(url.searchParams.get('variables') || '{}')
+    ? JSON.parse(url.searchParams.get('variables') || '{}') 
     : null;
   
   // If no template ID is provided, get all templates
   if (!templateId) {
     try {
       // Get Supabase client
-      const supabase = await getSupabaseClient();
+      const supabase = await createRouteHandlerClient();
       
       // Fetch templates from Supabase database
       const { data: templates, error: fetchError } = await supabase
@@ -154,7 +125,7 @@ export async function GET(request: NextRequest) {
   
   try {
     // Get Supabase client
-    const supabase = await getSupabaseClient();
+    const supabase = await createRouteHandlerClient();
     
     // Fetch the specific template from database
     const { data: template, error: fetchError } = await supabase
@@ -168,35 +139,63 @@ export async function GET(request: NextRequest) {
       
       // If not found in database, check by name as fallback
       if (fetchError.code === 'PGRST116') { // Not found error
-        const { data: templateByName, error: nameError } = await supabase
-          .from('email_templates')
-          .select('*')
-          .eq('name', templateId)
-          .single();
+        const findTemplate = async (name: string) => {
+          // Attempt to find template in database first
+          const { data: templateByName, error } = await supabase
+            .from('email_templates')
+            .select('*')
+            .eq('name', name)
+            .maybeSingle();
           
-        if (nameError || !templateByName) {
+          // Type-safe handling for database response
+          let safeTemplateByName: Record<string, any> | null = null;
+          if (templateByName) {
+            safeTemplateByName = {
+              ...templateByName,
+              previous_versions: Array.isArray(templateByName.previous_versions) 
+                ? templateByName.previous_versions 
+                : []
+            };
+          }
+          
+          return safeTemplateByName;
+        };
+        
+        const safeTemplateByName = await findTemplate(templateId);
+        
+        if (!safeTemplateByName) {
           return NextResponse.json({ error: 'Template not found' }, { status: 404 });
         }
         
         // Process template with variables if provided
-        let renderedHtml = templateByName.html_content;
+        let renderedHtml = safeTemplateByName.html_content;
         if (variables) {
-          renderedHtml = processTemplateVariables(templateByName.html_content, variables);
+          renderedHtml = processTemplateVariables(safeTemplateByName.html_content, variables);
         }
         
         // Map database fields to the expected format
         const formattedTemplate: DetailedTemplate = {
-          id: templateByName.id,
-          name: templateByName.name,
-          category: templateByName.category,
-          subcategory: templateByName.subcategory,
-          updatedAt: templateByName.updated_at,
-          version: templateByName.version || 1,
-          htmlTemplate: templateByName.html_content,
+          id: safeTemplateByName.id,
+          name: safeTemplateByName.name,
+          category: safeTemplateByName.category,
+          subcategory: safeTemplateByName.subcategory || '',
+          version: safeTemplateByName.version || 1,
+          htmlTemplate: safeTemplateByName.html_content || '',
           renderedHtml,
-          subject: templateByName.subject,
-          design: templateByName.design,
-          previousVersions: templateByName.previous_versions || []
+          subject: safeTemplateByName.subject || '',
+          design: safeTemplateByName.design,
+          updatedAt: safeTemplateByName.updated_at || new Date().toISOString(),
+          previousVersions: safeTemplateByName.previous_versions.map((versionItem: Record<string, any>) => {
+            // Safely cast JSON data from database to expected structure
+            const v = versionItem;
+            return {
+              version: typeof v?.version === 'number' ? v.version : 1,
+              htmlTemplate: typeof v?.htmlTemplate === 'string' ? v.htmlTemplate : '',
+              design: v?.design,
+              updatedAt: typeof v?.updatedAt === 'string' ? v.updatedAt : new Date().toISOString(),
+              editedBy: typeof v?.editedBy === 'string' ? v.editedBy : undefined
+            };
+          })
         };
         
         return NextResponse.json({ template: formattedTemplate });
@@ -212,20 +211,44 @@ export async function GET(request: NextRequest) {
     }
     
     // Map database fields to the expected format
-    const formattedTemplate: DetailedTemplate = {
+    const formattedTemplate = {
       id: template.id,
       name: template.name,
       category: template.category,
-      subcategory: template.subcategory,
-      updatedAt: template.updated_at,
+      subcategory: template.subcategory || '',
+      updatedAt: template.updated_at || new Date().toISOString(),
       version: template.version || 1,
-      htmlTemplate: template.html_content,
+      htmlTemplate: template.html_content || '',
       renderedHtml,
-      subject: template.subject,
+      subject: template.subject || '',
       design: template.design,
-      previousVersions: template.previous_versions || []
+      previousVersions: Array.isArray(template.previous_versions) 
+        ? template.previous_versions.map((versionItem) => {
+            // Safely handle potentially null items in the array
+            if (!versionItem || typeof versionItem !== 'object') {
+              return {
+                version: 1,
+                htmlTemplate: '',
+                design: null,
+                updatedAt: new Date().toISOString(),
+                editedBy: undefined
+              };
+            }
+            
+            // Process valid version item
+            const v = versionItem as any;
+            return {
+              version: typeof v.version === 'number' ? v.version : 1,
+              htmlTemplate: typeof v.htmlTemplate === 'string' ? v.htmlTemplate : '',
+              design: v.design,
+              updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : new Date().toISOString(),
+              editedBy: typeof v.editedBy === 'string' ? v.editedBy : undefined
+            };
+          })
+        : []
     };
     
+    // Return the properly formatted template with type-safe data
     return NextResponse.json({ template: formattedTemplate });
   } catch (error) {
     console.error('Failed to get template:', error);
@@ -238,15 +261,24 @@ export async function GET(request: NextRequest) {
 
 // POST: Create a new template
 export async function POST(request: NextRequest) {
-  // Verify user is authenticated
-  const { isAuthenticated, error, userId } = await requireAuth();
+  // Verify user is authenticated and has admin access
+  const authResult = await validateAdminAccess();
   
-  if (!isAuthenticated) {
+  if (authResult.error) {
+    securityLogger.warn('Unauthorized access attempt to create template', {
+      ip: request.headers.get('x-forwarded-for') || 'unknown',
+      userAgent: request.headers.get('user-agent') || 'unknown',
+      endpoint: 'POST /api/admin/email-templates',
+      error: authResult.error
+    });
+    
     return NextResponse.json(
-      { error: error || 'Unauthorized' },
-      { status: 401 }
+      { error: authResult.error },
+      { status: authResult.status }
     );
   }
+  
+  const user = authResult.user;
   
   try {
     const { id, name, category, description, isActive, design, htmlTemplate } = await request.json();
@@ -259,7 +291,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Use provided ID or generate a unique template ID
-    const baseTemplateId = id || `${category}-${name.toLowerCase().replace(/\\s+/g, '-')}-${Date.now().toString().substring(9)}`;
+    const baseTemplateId = id || `${category}-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now().toString().substring(9)}`;
     
     // Sanitize the template ID for consistent usage
     const sanitizedId = sanitizeTemplateId(baseTemplateId);
@@ -306,7 +338,7 @@ export async function POST(request: NextRequest) {
       isActive: isActive !== undefined ? isActive : true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      createdBy: userId,
+      createdBy: user.id,
       previousVersions: []
     };
     
@@ -339,15 +371,24 @@ export async function POST(request: NextRequest) {
 
 // PUT: Update an existing template
 export async function PUT(request: NextRequest) {
-  // Verify user is authenticated
-  const { isAuthenticated, error, userId } = await requireAuth();
+  // Verify user is authenticated and has admin access
+  const authResult = await validateAdminAccess();
   
-  if (!isAuthenticated) {
+  if (authResult.error) {
+    securityLogger.warn('Unauthorized access attempt to update template', {
+      ip: request.headers.get('x-forwarded-for') || 'unknown',
+      userAgent: request.headers.get('user-agent') || 'unknown',
+      endpoint: 'PUT /api/admin/email-templates',
+      error: authResult.error
+    });
+    
     return NextResponse.json(
-      { error: error || 'Unauthorized' },
-      { status: 401 }
+      { error: authResult.error },
+      { status: authResult.status }
     );
   }
+  
+  const user = authResult.user;
   
   try {
     const requestBody = await request.json();    
@@ -364,7 +405,7 @@ export async function PUT(request: NextRequest) {
     const now = new Date().toISOString();
     
     // Get Supabase client
-    const supabase = await getSupabaseClient();
+    const supabase = await createRouteHandlerClient();
     
     // First, get the existing template to check if it exists and to preserve any data we're not updating
     const { data: existingTemplate, error: fetchError } = await supabase
@@ -383,25 +424,43 @@ export async function PUT(request: NextRequest) {
     
     // Prepare previous versions array if we need to archive the current version
     let previousVersions = existingTemplate.previous_versions || [];
-    if (previousVersion) {
-      previousVersions.push(previousVersion);
-    } else if (existingTemplate.html_content && existingTemplate.html_content !== htmlTemplate) {
-      // Automatically create previous version if content changed
-      previousVersions.push({
-        version: existingTemplate.version || 1,
-        htmlTemplate: existingTemplate.html_content,
-        design: existingTemplate.design,
-        updatedAt: existingTemplate.updated_at
-      });
+    if (Array.isArray(previousVersions)) {
+      if (previousVersion) {
+        previousVersions.push(previousVersion);
+      } else if (existingTemplate.html_content && existingTemplate.html_content !== htmlTemplate) {
+        // Automatically create previous version if content changed
+        previousVersions.push({
+          version: existingTemplate.version || 1,
+          htmlTemplate: existingTemplate.html_content,
+          design: existingTemplate.design,
+          updatedAt: existingTemplate.updated_at
+        });
+      }
+    } else {
+      // If previousVersions is not an array, initialize it
+      previousVersions = [];
+      if (previousVersion) {
+        previousVersions.push(previousVersion);
+      } else if (existingTemplate.html_content && existingTemplate.html_content !== htmlTemplate) {
+        previousVersions.push({
+          version: existingTemplate.version || 1,
+          htmlTemplate: existingTemplate.html_content,
+          design: existingTemplate.design,
+          updatedAt: existingTemplate.updated_at
+        });
+      }
     }
     
     // Increment version if not explicitly provided
     const newVersion = version || (existingTemplate.version ? existingTemplate.version + 1 : 1);
     
     // Prepare the update payload
+    // Prepare the update payload
+    // Important: design is already a JSON object from request.json(), so we pass it as-is
+    // Supabase will store it properly in the JSONB column
     const updatePayload = {
       html_content: htmlTemplate,
-      design: design,
+      design,  // Do not stringify - pass the JSON object directly
       category: category || existingTemplate.category,
       subcategory: subcategory || existingTemplate.subcategory,
       version: newVersion,
@@ -431,18 +490,41 @@ export async function PUT(request: NextRequest) {
     }
     
     
-    // Return the updated template in the expected format
+    // Return the updated template in the expected format with safe defaults
     return NextResponse.json({
       template: {
         id: data.id,
         name: data.name,
         category: data.category,
-        subcategory: data.subcategory,
-        design: data.design,
-        version: data.version,
-        updatedAt: data.updated_at,
-        htmlTemplate: data.html_content,
-        previousVersions: data.previous_versions || []
+        subcategory: data.subcategory || '',
+        design: data.design,  // Pass design as-is (JSONB from database)
+        version: data.version || 1,
+        updatedAt: data.updated_at || new Date().toISOString(),
+        htmlTemplate: data.html_content || '',
+        previousVersions: Array.isArray(data.previous_versions) 
+          ? data.previous_versions.map((versionItem) => {
+              // Safely handle potentially null items in the array
+              if (!versionItem || typeof versionItem !== 'object') {
+                return {
+                  version: 1,
+                  htmlTemplate: '',
+                  design: null,
+                  updatedAt: new Date().toISOString(),
+                  editedBy: undefined
+                };
+              }
+            
+              // Process valid version item
+              const v = versionItem as any;
+              return {
+                version: typeof v.version === 'number' ? v.version : 1,
+                htmlTemplate: typeof v.htmlTemplate === 'string' ? v.htmlTemplate : '',
+                design: v.design,  // Pass design as-is
+                updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : new Date().toISOString(),
+                editedBy: typeof v.editedBy === 'string' ? v.editedBy : undefined
+              };
+            })
+          : []
       }
     });
   } catch (error) {
@@ -456,15 +538,24 @@ export async function PUT(request: NextRequest) {
 
 // PATCH: Preview a template with variables
 export async function PATCH(request: NextRequest) {
-  // Verify user is authenticated
-  const { isAuthenticated, error } = await requireAuth();
+  // Verify user is authenticated and has admin access
+  const authResult = await validateAdminAccess();
   
-  if (!isAuthenticated) {
+  if (authResult.error) {
+    securityLogger.warn('Unauthorized access attempt to template preview', {
+      ip: request.headers.get('x-forwarded-for') || 'unknown',
+      userAgent: request.headers.get('user-agent') || 'unknown',
+      endpoint: 'PATCH /api/admin/email-templates',
+      error: authResult.error
+    });
+    
     return NextResponse.json(
-      { error: error || 'Unauthorized' },
-      { status: 401 }
+      { error: authResult.error },
+      { status: authResult.status }
     );
   }
+  
+  const user = authResult.user;
   
   try {
     // Convert request data
@@ -489,7 +580,7 @@ export async function PATCH(request: NextRequest) {
         renderedHtml = processTemplateVariables(html, variables || {});
       } else {
         // Get template from Supabase
-        const supabase = await getSupabaseClient();
+        const supabase = await createRouteHandlerClient();
         const { data: template, error } = await supabase
           .from('email_templates')
           .select('html_content')

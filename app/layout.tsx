@@ -8,6 +8,7 @@ import Script from "next/script"
 import { SkipLink } from "@/components/ui/skip-link"
 import SupabaseProvider from "@/components/providers/supabase-provider"
 import { AuthProvider } from "@/context/auth-context"
+// Enhanced auth functionality is now directly incorporated into the main auth context
 import { AuthCoordinationProvider } from "@/components/providers/auth-coordination-provider"
 
 // Import critical CSS first for priority loading
@@ -58,7 +59,7 @@ export default function RootLayout({
         <SkipLink href="#main-content">Skip to main content</SkipLink>
         <SupabaseProvider>
           <AuthProvider>
-          <AuthCoordinationProvider>
+            <AuthCoordinationProvider>
               <ThemeProvider>
                 <main id="main-content" tabIndex={-1}>
                   {children}
@@ -67,7 +68,7 @@ export default function RootLayout({
                 <Toaster />
               </ThemeProvider>
             </AuthCoordinationProvider>
-            </AuthProvider>
+          </AuthProvider>
         </SupabaseProvider>
 
         <Script

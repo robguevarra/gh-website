@@ -11,7 +11,8 @@ import {
   BarChart4,
   Settings,
   Mail,
-  ShoppingBag
+  ShoppingBag,
+  Shield
 } from 'lucide-react';
 
 const navigation = [
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Reports', href: '/admin/reports', icon: BarChart4 },
   { name: 'Email Campaigns', href: '/admin/email', icon: Mail },
   { name: 'Shop Integration', href: '/admin/shop', icon: ShoppingBag },
+  { name: 'Security', href: '/admin/security', icon: Shield },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
