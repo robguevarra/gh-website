@@ -10,6 +10,7 @@ import SupabaseProvider from "@/components/providers/supabase-provider"
 import { AuthProvider } from "@/context/auth-context"
 // Enhanced auth functionality is now directly incorporated into the main auth context
 import { AuthCoordinationProvider } from "@/components/providers/auth-coordination-provider"
+import GlobalAffiliateTracker from "@/components/affiliate/global-affiliate-tracker"
 
 // Import critical CSS first for priority loading
 import './critical.css'
@@ -76,6 +77,8 @@ export default function RootLayout({
           strategy="lazyOnload"
           id="analytics-script"
         />
+        {/* Add site-wide affiliate tracking */}
+        <GlobalAffiliateTracker debug={true} />
       </body>
     </html>
   )
