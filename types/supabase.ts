@@ -481,9 +481,13 @@ export type Database = {
           created_at: string
           id: string
           ip_address: unknown | null
+          landing_page_url: string | null
           referral_url: string | null
+          sub_id: string | null
           updated_at: string | null
           user_agent: string | null
+          user_agent_details: Json | null
+          utm_params: Json | null
           visitor_id: string | null
         }
         Insert: {
@@ -491,9 +495,13 @@ export type Database = {
           created_at?: string
           id?: string
           ip_address?: unknown | null
+          landing_page_url?: string | null
           referral_url?: string | null
+          sub_id?: string | null
           updated_at?: string | null
           user_agent?: string | null
+          user_agent_details?: Json | null
+          utm_params?: Json | null
           visitor_id?: string | null
         }
         Update: {
@@ -501,9 +509,13 @@ export type Database = {
           created_at?: string
           id?: string
           ip_address?: unknown | null
+          landing_page_url?: string | null
           referral_url?: string | null
+          sub_id?: string | null
           updated_at?: string | null
           user_agent?: string | null
+          user_agent_details?: Json | null
+          utm_params?: Json | null
           visitor_id?: string | null
         }
         Relationships: [
@@ -529,6 +541,7 @@ export type Database = {
           order_id: string | null
           paid_at: string | null
           status: Database["public"]["Enums"]["conversion_status_type"]
+          sub_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -543,6 +556,7 @@ export type Database = {
           order_id?: string | null
           paid_at?: string | null
           status?: Database["public"]["Enums"]["conversion_status_type"]
+          sub_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -557,6 +571,7 @@ export type Database = {
           order_id?: string | null
           paid_at?: string | null
           status?: Database["public"]["Enums"]["conversion_status_type"]
+          sub_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -2438,6 +2453,56 @@ export type Database = {
             columns: ["section_id"]
             isOneToOne: false
             referencedRelation: "sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      network_postbacks: {
+        Row: {
+          attempts: number
+          conversion_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          last_attempt_at: string | null
+          network_name: string
+          postback_url: string
+          status: Database["public"]["Enums"]["postback_status_type"]
+          sub_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          conversion_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          network_name: string
+          postback_url: string
+          status?: Database["public"]["Enums"]["postback_status_type"]
+          sub_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          conversion_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          network_name?: string
+          postback_url?: string
+          status?: Database["public"]["Enums"]["postback_status_type"]
+          sub_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "network_postbacks_conversion_id_fkey"
+            columns: ["conversion_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_conversions"
             referencedColumns: ["id"]
           },
         ]
@@ -4715,6 +4780,7 @@ export type Database = {
       conversion_status_type: "pending" | "cleared" | "paid" | "flagged"
       email_status: "pending" | "processing" | "sent" | "failed" | "retrying"
       payout_status_type: "processing" | "sent" | "failed"
+      postback_status_type: "pending" | "sent" | "failed" | "retrying"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4835,6 +4901,7 @@ export const Constants = {
       conversion_status_type: ["pending", "cleared", "paid", "flagged"],
       email_status: ["pending", "processing", "sent", "failed", "retrying"],
       payout_status_type: ["processing", "sent", "failed"],
+      postback_status_type: ["pending", "sent", "failed", "retrying"],
     },
   },
 } as const
