@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { headers } from 'next/headers';
 import { rateLimit } from '@/lib/security/rate-limit';
 
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // Create supabase client
-  const supabase = getServerClient();
+  const supabase = await createServerSupabaseClient();
   
   // Check if user is admin
   const { data: { session } } = await supabase.auth.getSession();

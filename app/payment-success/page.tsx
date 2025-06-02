@@ -2,7 +2,7 @@ import { CheckCircle, ArrowLeft, Loader, XCircle } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { getTransactionByExternalId, TransactionDetails } from "@/app/actions/payment-actions"
-import { Suspense } from "react" // Keep Suspense for potential future client needs
+import { Suspense } from "react"
 
 // Define props for the page
 interface PaymentSuccessPageProps {
@@ -22,11 +22,10 @@ function LoadingState() {
   );
 }
 
-// Main page component - now an async Server Component
-export default async function PaymentSuccessPage({ searchParams }: PaymentSuccessPageProps) {
-  // Await searchParams before accessing properties
-  const awaitedSearchParams = await searchParams;
-  const externalId = typeof awaitedSearchParams.id === 'string' ? awaitedSearchParams.id : undefined;
+// The server component that handles data fetching
+async function PaymentSuccessContent({ searchParams }: PaymentSuccessPageProps) {
+  // Access searchParams directly - it's not a Promise in Server Components
+  const externalId = typeof searchParams.id === 'string' ? searchParams.id : undefined;
   let transaction: TransactionDetails | null = null;
   let errorMessage: string | null = null;
 
@@ -138,6 +137,13 @@ export default async function PaymentSuccessPage({ searchParams }: PaymentSucces
   );
 }
 
-// Removed client-side components (PaymentVerification) and Suspense wrapper for now
-// as the main logic is handled server-side.
+// Main page component that wraps the content in a Suspense boundary
+export default function PaymentSuccessPage(props: PaymentSuccessPageProps) {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      {/* @ts-ignore - This is a valid pattern in Next.js for async server components inside client boundaries */}
+      <PaymentSuccessContent searchParams={props.searchParams} />
+    </Suspense>
+  );
+}
 

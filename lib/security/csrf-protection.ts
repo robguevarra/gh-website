@@ -4,7 +4,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createHash, randomBytes } from 'crypto';
 
 // Interface for CSRF configuration
 export interface CSRFConfig {
@@ -47,19 +46,27 @@ const DEFAULT_CONFIG: CSRFConfig = {
 };
 
 /**
- * Generate a random CSRF token
+ * Generate a random CSRF token using Web Crypto API for Edge compatibility
  */
 export function generateCSRFToken(): string {
-  return randomBytes(32).toString('hex');
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
- * Hash a CSRF token
+ * Hash a CSRF token using Web Crypto API for Edge compatibility
  * This creates a hash that can be stored in a cookie while the original token
  * is sent to the client for inclusion in subsequent requests
  */
-export function hashCSRFToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
+export async function hashCSRFToken(token: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 /**
@@ -76,25 +83,36 @@ export function createCSRFProtection(config: CSRFConfig = {}) {
     },
   };
   
-  return async function csrfProtectionMiddleware(request: NextRequest, response: NextResponse) {
-    const { method } = request;
-    const ignoreMethods = mergedConfig.ignoreMethods || [];
-    
-    // Skip CSRF check for ignored methods
-    if (ignoreMethods.includes(method)) {
+  return async function csrfProtectionMiddleware(
+    request: NextRequest,
+    response: NextResponse
+  ) {
+    // Check if method should be ignored
+    if (
+      mergedConfig.ignoreMethods &&
+      mergedConfig.ignoreMethods.includes(request.method)
+    ) {
       return response;
     }
     
-    // Get the CSRF token from the request
-    const csrfToken = request.headers.get(mergedConfig.headerName || '') || 
-                      request.cookies.get(mergedConfig.cookieName || '')?.value;
+    // Get the CSRF token from the header or form data
+    let csrfToken: string | undefined;
     
-    // Get the CSRF token hash from the cookie
+    // Try to get the token from the header
+    csrfToken = request.headers.get(mergedConfig.headerName || 'X-CSRF-Token') || undefined;
+    
+    // If no token in header, try to get it from form data (if it's a form submission)
+    if (!csrfToken && request.headers.get('content-type')?.includes('application/x-www-form-urlencoded')) {
+      const formData = await request.formData();
+      csrfToken = formData.get(mergedConfig.formFieldName || '_csrf')?.toString();
+    }
+    
+    // Get the stored token hash from the cookie
     const storedTokenHash = request.cookies.get(`${mergedConfig.cookieName}-hash`)?.value;
     
     // If we have both a token and a hash, validate them
     if (csrfToken && storedTokenHash) {
-      const calculatedHash = hashCSRFToken(csrfToken);
+      const calculatedHash = await hashCSRFToken(csrfToken);
       
       // If the hashes don't match, reject the request
       if (calculatedHash !== storedTokenHash) {
@@ -129,7 +147,7 @@ export function createCSRFProtection(config: CSRFConfig = {}) {
  * Set CSRF tokens in the response
  * This should be called before sending a form to the client
  */
-export function setCSRFTokens(request: NextRequest, response: NextResponse, config: CSRFConfig = {}) {
+export async function setCSRFTokens(request: NextRequest, response: NextResponse, config: CSRFConfig = {}) {
   // Merge default config with provided config
   const mergedConfig: CSRFConfig = {
     ...DEFAULT_CONFIG,
@@ -142,7 +160,7 @@ export function setCSRFTokens(request: NextRequest, response: NextResponse, conf
   
   // Generate a new CSRF token
   const token = generateCSRFToken();
-  const tokenHash = hashCSRFToken(token);
+  const tokenHash = await hashCSRFToken(token);
   
   // Set the CSRF token cookie
   response.cookies.set({

@@ -2,14 +2,13 @@
 
 import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 /**
- * GlobalAffiliateTracker - Client component for tracking affiliate clicks
- * 
- * This is a simplified, direct implementation that uses fetch to track affiliate clicks
- * without relying on external JavaScript files.
+ * GlobalAffiliateTrackerContent - Inner component that uses useSearchParams
+ * Separated to allow for proper Suspense boundary wrapping
  */
-export default function GlobalAffiliateTracker({
+function GlobalAffiliateTrackerContent({
   debug = false,  // Set to false by default for production
 }: {
   debug?: boolean;
@@ -91,4 +90,16 @@ export default function GlobalAffiliateTracker({
 
   // This component doesn't render anything visible
   return null;
+}
+
+/**
+ * GlobalAffiliateTracker - Main component that wraps the content in a Suspense boundary
+ * Following Next.js recommendation for handling useSearchParams()
+ */
+export default function GlobalAffiliateTracker(props: { debug?: boolean }) {
+  return (
+    <Suspense fallback={null}>
+      <GlobalAffiliateTrackerContent debug={props.debug} />
+    </Suspense>
+  );
 }

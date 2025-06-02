@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -11,7 +11,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 
-export default function DebugPage() {
+// Component with actual content
+function DebugContent() {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [adminSettingLoading, setAdminSettingLoading] = useState(false);
@@ -167,4 +168,13 @@ export default function DebugPage() {
       )}
     </div>
   );
-} 
+}
+
+// Main component with Suspense boundary
+export default function DebugPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading debug information...</div>}>
+      <DebugContent />
+    </Suspense>
+  );
+}
