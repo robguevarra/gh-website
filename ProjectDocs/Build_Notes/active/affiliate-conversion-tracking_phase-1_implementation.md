@@ -18,64 +18,65 @@ A fully functional affiliate conversion tracking system that:
 ## Implementation Plan
 
 ### 1. Modify Xendit Webhook Endpoint
-- [ ] Analyze the existing webhook handler in `app/api/webhooks/xendit/route.ts`
-- [ ] Add affiliate attribution logic to the `invoice.paid` event handler
-- [ ] Extract visitor ID and affiliate cookies from the transaction context
-- [ ] Implement proper error handling and logging for the affiliate tracking portion
-- [ ] Update transaction metadata to include affiliate attribution information
+- [x] Analyze the existing webhook handler in `app/api/webhooks/xendit/route.ts`
+- [x] Add affiliate attribution logic to the `invoice.paid` event handler
+- [x] Extract visitor ID and affiliate cookies from the transaction context
+- [x] Implement proper error handling and logging for the affiliate tracking portion
+- [x] Update transaction metadata to include affiliate attribution information
 
 ### 2. Develop Affiliate Attribution Logic
-- [ ] Create a service module for affiliate conversion attribution
-- [ ] Implement cookie retrieval to identify the referring affiliate
-- [ ] Connect conversions to previously recorded clicks where possible
-- [ ] Implement "last-click-wins" attribution model for proper crediting
-- [ ] Handle edge cases like missing cookies or multiple affiliate referrals
+- [x] Create a service module for affiliate conversion attribution
+- [x] Implement cookie retrieval to identify the referring affiliate
+- [x] Connect conversions to previously recorded clicks where possible
+- [x] Implement "last-click-wins" attribution model for proper crediting
+- [x] Handle edge cases like missing cookies or multiple affiliate referrals
 
 ### 3. Implement Tiered Commission Calculation
-- [ ] Rename and redefine membership levels to align with our commission structure:
+- [x] Rename and redefine membership levels to align with our commission structure:
   - Rename "Platinum Tier" to "Course Enrollee Tier" (25%)
   - Rename "Gold Tier" to "Network Partner Tier" and adjust to 30%
   - Rename "Silver Tier" to "Standard Affiliate Tier" and adjust to 20% 
   - Rename "Bronze Tier" to "Secondary Commission Tier" (keep at 10%)
   - Add a new "Network Elite Tier" for the 35% commission level
-- [ ] Update the existing `calculate_and_set_conversion_commission` trigger to use membership levels
+- [x] Update the existing `calculate_and_set_conversion_commission` trigger to use membership levels
   - Use membership_level_id for commission rate determination instead of is_member
   - Apply rates consistently across all conversion types
-- [ ] Implement utility functions for membership level assignment
+- [x] Implement utility functions for membership level assignment
   - Automatically assign appropriate tier for course enrollees
   - Default new affiliates to standard tier
-- [ ] Create admin interface for manual tier management
+- [x] Create admin interface for manual tier management
   - Allow manual upgrade of affiliates to higher tiers
   - Support downgrading if needed for policy enforcement
-- [ ] Test all commission scenarios with various membership levels
-- [ ] Add validation to prevent commission calculation errors
+- [x] Test all commission scenarios with various membership levels
+- [x] Add validation to prevent commission calculation errors
 
 ### 4. Implement Conversion Status Management
-- [ ] Add utilities to manage conversion status transitions
-- [ ] Set up initial status as 'pending' for all new conversions
-- [ ] Create admin functions to change status to 'cleared' after verification
-- [ ] Implement batch operations for status changes to accommodate admin workflows
-- [ ] Add timestamp tracking for status changes
+- [x] Add status_history column to affiliate_conversions for tracking changes
+- [x] Create status transition logic from pending → cleared → paid
+- [x] Implement API for admins to manage conversion status
+- [x] Add validation and security for status updates to 'cleared' after verification
+- [x] Implement batch operations for status changes to accommodate admin workflows
+- [x] Add timestamp tracking for status changes
 
 ### 5. Implement Security and Error Handling
-- [ ] Enhance webhook signature verification for Xendit
-- [ ] Add rate limiting and abuse prevention for the webhook endpoint
-- [ ] Implement comprehensive logging for all conversion tracking operations
-- [ ] Create monitoring alerts for unusual activity patterns
-- [ ] Set up error recovery mechanisms for failed attribution attempts
+- [x] Enhance webhook signature verification for Xendit
+- [x] Add rate limiting and abuse prevention for the webhook endpoint
+- [x] Implement comprehensive logging for all conversion tracking operations
+- [x] Create monitoring alerts for unusual activity patterns
+- [x] Set up error recovery mechanisms for failed attribution attempts
 
 ### 6. Implement Network Partner Integration
-- [ ] Create a special account structure for affiliate networks:
+- [x] Create a special account structure for affiliate networks:
   - Set up dedicated slugs for each network (e.g., `?ref=involveasia`)
   - Assign to Network Partner Tier (30%) by default
-- [ ] Implement sub-ID tracking for network affiliates:
+- [x] Implement sub-ID tracking for network affiliates:
   - Enhance click tracking to capture sub-IDs (e.g., `?ref=involveasia&subid=12345`)
   - Store sub-ID in the `affiliate_clicks` table (add `sub_id` column)
   - Pass sub-ID through the conversion flow for network reporting
-- [ ] Create postback URL system for automated network notifications:
-  - Implement endpoint: `/api/affiliate/postback`
-  - Support parameters for network, transaction ID, and amount
-  - Add security measures to prevent unauthorized postbacks
+- [x] Create postback URL system for automated network notifications:
+  - Support dynamic postback URL generation with network, transaction ID, and amount parameters
+  - Store postback attempts in the `network_postbacks` table for retry and monitoring
+  - Add status tracking for postback attempts (pending, sent, failed, retrying)
 - [ ] Develop network-specific reporting:
   - Create aggregated views for each network's performance
   - Include sub-ID breakdown for the network's internal tracking

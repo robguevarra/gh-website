@@ -13,6 +13,14 @@ import { v4 as uuidv4 } from 'uuid'
 import { Json } from '@/types/supabase'
 import { grantFilePermission } from '@/lib/google-drive/driveApiUtils';
 import { sendTransactionalEmail } from '@/lib/email/transactional-email-service';
+// Import affiliate services
+import { 
+  extractAffiliateTrackingCookies,
+  lookupAffiliateBySlug,
+  findAttributableClick,
+  recordAffiliateConversion,
+  createNetworkPostback
+} from '@/lib/services/affiliate/conversion-service';
 
 // Define a type for the expected transaction data
 interface Transaction {
@@ -491,6 +499,88 @@ export async function POST(request: NextRequest) {
                   // Don't throw - email failure shouldn't break payment processing
                 }
                 // --- End Welcome Email ---
+                
+                // --- Affiliate Conversion Tracking ---
+                try {
+                  console.log('[Webhook][P2P] Starting affiliate conversion tracking');
+                  
+                  // Extract affiliate tracking cookies from request
+                  const { affiliateSlug, visitorId } = extractAffiliateTrackingCookies(request);
+                  
+                  if (affiliateSlug && visitorId) {
+                    console.log(`[Webhook][P2P] Affiliate cookies found: slug=${affiliateSlug}, vid=${visitorId}`);
+                    
+                    // Look up the affiliate by slug
+                    const affiliateId = await lookupAffiliateBySlug({
+                      supabase,
+                      slug: affiliateSlug
+                    });
+                    
+                    if (affiliateId) {
+                      // At this point, affiliateId is guaranteed to be a string
+                      console.log(`[Webhook][P2P] Affiliate found: ${affiliateId}`);
+                      
+                      // Find the click that led to this conversion
+                      const { clickId, subId } = await findAttributableClick({
+                        supabase,
+                        affiliateId,
+                        visitorId
+                      });
+                      
+                      // Record the conversion
+                      const { success, conversionId } = await recordAffiliateConversion({
+                        supabase,
+                        conversionData: {
+                          affiliate_id: affiliateId as string, // Use type assertion as we've checked it's non-null
+                          click_id: clickId,
+                          order_id: tx.id, // Use transaction ID as order ID
+                          customer_id: tx.user_id,
+                          gmv: tx.amount || 0,
+                          level: 1, // Level 1 conversion
+                          sub_id: subId
+                        }
+                      });
+                      
+                      if (success) {
+                        console.log(`[Webhook][P2P] Conversion recorded: ${conversionId}`);
+                        
+                        // Check if this is a network partner (with subId) and create postback if needed
+                        if (subId && affiliateSlug.includes('network_')) {
+                          const networkName = affiliateSlug.replace('network_', '');
+                          const basePostbackUrl = process.env.NETWORK_POSTBACK_URL_TEMPLATE || '';
+                          
+                          if (basePostbackUrl) {
+                            const postbackUrl = basePostbackUrl
+                              .replace('{network}', networkName)
+                              .replace('{transaction_id}', tx.id)
+                              .replace('{amount}', String(tx.amount || 0))
+                              .replace('{subid}', subId);
+                            
+                            await createNetworkPostback({
+                              supabase,
+                              conversionId: conversionId as string, // Type assertion as we've checked success is true
+                              networkName,
+                              subId,
+                              postbackUrl
+                            });
+                            
+                            console.log(`[Webhook][P2P] Network postback created for ${networkName}`);
+                          }
+                        }
+                      } else {
+                        console.error(`[Webhook][P2P] Failed to record conversion`);
+                      }
+                    } else {
+                      console.log(`[Webhook][P2P] No active affiliate found for slug: ${affiliateSlug}`);
+                    }
+                  } else {
+                    console.log('[Webhook][P2P] No affiliate cookies found');
+                  }
+                } catch (affiliateError) {
+                  console.error('[Webhook][P2P] Error processing affiliate conversion:', affiliateError);
+                  // Don't throw - affiliate processing failure shouldn't break payment processing
+                }
+                // --- End Affiliate Conversion Tracking ---
                   } catch (err) {
                     console.error("[Webhook][P2P] Failed to create enrollment:", err)
                   }
