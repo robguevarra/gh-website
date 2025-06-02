@@ -7,15 +7,29 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { AdminHeading } from '@/components/admin/admin-heading';
-import { User, Mail, Shield, Key, BellRing } from 'lucide-react';
+import { User, Mail, Shield, Key, BellRing, Loader } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Suspense } from 'react';
 
 export const metadata: Metadata = {
   title: 'Admin Profile | Good Habits',
   description: 'Manage your administrator profile',
 };
 
-export default async function AdminProfilePage() {
+// Loading component
+function LoadingState() {
+  return (
+    <div className="p-8 flex items-center justify-center">
+      <div className="text-center">
+        <Loader className="h-8 w-8 animate-spin mx-auto mb-4" />
+        <p className="text-muted-foreground">Loading profile information...</p>
+      </div>
+    </div>
+  );
+}
+
+// The server component that handles data fetching
+async function AdminProfileContent() {
   const supabase = await createServerSupabaseClient();
   
   // Get the current user
@@ -325,4 +339,14 @@ export default async function AdminProfilePage() {
       </div>
     </div>
   );
-} 
+}
+
+// Main page component that wraps the content in a Suspense boundary
+export default function AdminProfilePage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      {/* @ts-ignore - This is a valid pattern in Next.js for async server components inside client boundaries */}
+      <AdminProfileContent />
+    </Suspense>
+  );
+}

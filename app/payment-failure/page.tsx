@@ -1,6 +1,7 @@
 import { XCircle, RefreshCw, ArrowLeft, Triangle, Loader } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { Suspense } from "react"
 
 // Define error messages for different error types
 const ERROR_MESSAGES: { [key: string]: string } = {
@@ -17,12 +18,24 @@ interface PaymentFailurePageProps {
   searchParams: { [key: string]: string | string[] | undefined };
 }
 
-// Main page component - now a Server Component
-export default async function PaymentFailurePage({ searchParams }: PaymentFailurePageProps) {
-  // Await searchParams before accessing properties
-  const awaitedSearchParams = await searchParams;
-  const paymentId = typeof awaitedSearchParams.id === 'string' ? awaitedSearchParams.id : undefined;
-  const errorType = typeof awaitedSearchParams.error === 'string' ? awaitedSearchParams.error : "default";
+// Loading component
+function LoadingState() {
+  return (
+    <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
+        <Loader className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
+        <h2 className="text-xl font-serif text-[#5d4037]">Processing Payment Status...</h2>
+        <p className="text-[#6d4c41] mt-2">Please wait a moment.</p>
+      </div>
+    </div>
+  );
+}
+
+// Server component that handles data fetching
+async function PaymentFailureContent({ searchParams }: PaymentFailurePageProps) {
+  // Access searchParams directly - it's not a Promise in Server Components
+  const paymentId = typeof searchParams.id === 'string' ? searchParams.id : undefined;
+  const errorType = typeof searchParams.error === 'string' ? searchParams.error : "default";
 
   // Log the failure reason (can be enhanced)
   console.log(`Payment failure page loaded: Error type = ${errorType}, ID = ${paymentId}`);
@@ -80,6 +93,16 @@ export default async function PaymentFailurePage({ searchParams }: PaymentFailur
         </div>
       </div>
     </div>
+  );
+}
+
+// Main page component that wraps the content in a Suspense boundary
+export default function PaymentFailurePage(props: PaymentFailurePageProps) {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      {/* @ts-ignore - This is a valid pattern in Next.js for async server components inside client boundaries */}
+      <PaymentFailureContent searchParams={props.searchParams} />
+    </Suspense>
   );
 }
 

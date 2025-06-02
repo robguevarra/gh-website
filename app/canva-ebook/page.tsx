@@ -1,11 +1,11 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
-import { ArrowRight, Check, Shield, Heart } from "lucide-react"
+import { ArrowRight, Check, Shield, Heart, Loader } from "lucide-react"
 import Head from "next/head"
 
 import { Button } from "@/components/ui/button"
@@ -39,7 +39,21 @@ const ebookDetails = {
   ],
 };
 
-export default function CanvaEbookPage() {
+// Loading component for Suspense
+function LoadingState() {
+  return (
+    <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
+        <Loader className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
+        <h2 className="text-xl font-serif text-[#5d4037]">Loading...</h2>
+        <p className="text-[#6d4c41] mt-2">Please wait a moment.</p>
+      </div>
+    </div>
+  );
+}
+
+// Main content component
+function CanvaEbookContent() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false); // For potential future success message
@@ -472,5 +486,14 @@ export default function CanvaEbookPage() {
          </footer>
       </div>
     </>
+  );
+}
+
+// Main wrapper with Suspense
+export default function CanvaEbookPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <CanvaEbookContent />
+    </Suspense>
   );
 } 

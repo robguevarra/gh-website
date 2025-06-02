@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, Suspense } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { BookOpen, Heart, Calendar, PenTool, Bookmark, ChevronRight, ArrowRight, Star } from "lucide-react"
@@ -20,7 +20,8 @@ const SocialIntegration = dynamic(() => import('@/components/social-proof/social
 })
 import { useMobile } from "@/hooks/use-mobile"
 
-export default function Home() {
+// Component with the actual content
+function HomeContent() {
   const [isLoaded, setIsLoaded] = useState(false)
   const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 })
   const [isHovering, setIsHovering] = useState(false)
@@ -1092,3 +1093,16 @@ export default function Home() {
   )
 }
 
+// Default export with proper Suspense boundary
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="w-full h-screen flex items-center justify-center">
+      <div className="animate-pulse flex flex-col items-center">
+        <div className="h-12 w-12 bg-brand-purple/20 rounded-full mb-4"></div>
+        <div className="h-4 w-48 bg-gray-200 rounded"></div>
+      </div>
+    </div>}>
+      <HomeContent />
+    </Suspense>
+  );
+}
