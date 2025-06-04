@@ -64,6 +64,17 @@ export const createActions = (
       });
       
       try {
+        // First get the unified profile to access membership_level_id
+        const { data: unifiedProfile, error: unifiedProfileError } = await supabase
+          .from('unified_profiles')
+          .select('membership_level_id')
+          .eq('id', userId)
+          .single();
+          
+        if (unifiedProfileError) {
+          console.error('Error fetching unified profile:', unifiedProfileError);
+        }
+        
         // Call the API to get affiliate profile
         const { data, error } = await supabase
           .from('affiliates')
@@ -79,17 +90,69 @@ export const createActions = (
           throw new Error('No affiliate profile found');
         }
         
+        // Get membership level data if available
+        let membershipLevel = null;
+        if (unifiedProfile?.membership_level_id) {
+          const { data: membershipData, error: membershipError } = await supabase
+            .from('membership_levels')
+            .select('id, name, commission_rate')
+            .eq('id', unifiedProfile.membership_level_id)
+            .single();
+            
+          if (!membershipError && membershipData) {
+            membershipLevel = membershipData;
+          } else if (membershipError) {
+            console.error('Error fetching membership level:', membershipError);
+          }
+        }
+        
         // Transform database model to UI model
         const profile: AffiliateProfile = {
           id: data.id,
           userId: data.user_id,
           slug: data.slug,
-          commissionRate: data.commission_rate,
+          commissionRate: data.commission_rate, // Keep for backward compatibility
           isMember: data.is_member,
           status: data.status,
           createdAt: data.created_at,
-          updatedAt: data.updated_at
+          updatedAt: data.updated_at,
+          display_name: data.display_name,
+          bio: data.bio,
+          website: data.website,
+          payout_method: data.payout_method,
+          payout_details: data.payout_details,
+          email_notifications: data.email_notifications,
+          marketing_materials: data.marketing_materials
         };
+        
+        // Add membership level data if available
+        if (membershipLevel) {
+          profile.membershipLevel = {
+            id: membershipLevel.id,
+            name: membershipLevel.name,
+            commissionRate: membershipLevel.commission_rate
+          };
+        }
+        
+        // Get user details if needed
+        if (data.user_id) {
+          try {
+            const { data: userData, error: userError } = await supabase
+              .from('unified_profiles')
+              .select('email, first_name, last_name')
+              .eq('id', data.user_id)
+              .single();
+              
+            if (!userError && userData) {
+              profile.user = {
+                email: userData.email,
+                name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim(),
+              };
+            }
+          } catch (userError) {
+            console.error('Error fetching user details:', userError);
+          }
+        }
         
         // Update state with the loaded profile
         set({
