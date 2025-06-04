@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { DollarSign, RefreshCcw } from 'lucide-react';
+import { DollarSign, RefreshCcw, CreditCard, Calendar, ArrowRight, WalletCards, Award } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { usePayoutsData } from '@/lib/hooks/use-affiliate-dashboard';
+import { useAffiliateDashboardStore, AffiliateDashboardStore } from '@/lib/stores/affiliate-dashboard';
 
 export function PayoutsCard() {
   const { 
@@ -17,6 +17,9 @@ export function PayoutsCard() {
     loadPayoutTransactions,
     payoutsLastUpdated
   } = usePayoutsData();
+  
+  // Get affiliate profile to access membership level using a stable selector
+  const affiliateProfile = useAffiliateDashboardStore((state: AffiliateDashboardStore) => state.affiliateProfile);
 
   const handleRefresh = () => {
     loadPayoutTransactions();
@@ -43,8 +46,8 @@ export function PayoutsCard() {
   };
 
   const formatCurrency = (amount: number | null | undefined) => {
-    if (amount === null || amount === undefined) return '$0.00';
-    return `$${amount.toFixed(2)}`;
+    if (amount === null || amount === undefined) return '₱0.00';
+    return `₱${amount.toFixed(2)}`;
   };
 
   const formatDate = (dateString: string) => {
@@ -60,89 +63,98 @@ export function PayoutsCard() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid':
-        return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Paid</Badge>;
+        return <Badge className="bg-green-100 text-green-800 hover:bg-green-200 border-green-200">Paid</Badge>;
       case 'pending':
-        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Pending</Badge>;
+        return <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-200">Pending</Badge>;
       case 'processing':
-        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Processing</Badge>;
+        return <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200 border-blue-200">Processing</Badge>;
+      case 'failed':
+        return <Badge className="bg-red-100 text-red-800 hover:bg-red-200 border-red-200">Failed</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className="border-blue-200 text-blue-800">{status}</Badge>;
     }
   };
 
   return (
-    <Card className="w-full">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <div>
-          <CardTitle className="text-xl font-bold">Earnings & Payouts</CardTitle>
-          <CardDescription>Track your affiliate earnings and payout history</CardDescription>
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-center">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <WalletCards className="h-5 w-5 text-blue-500" />
+              Payouts
+            </CardTitle>
+            <CardDescription>Your earnings and transaction history</CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isLoadingPayouts}
+            className="h-8 gap-1"
+          >
+            <RefreshCcw className="h-3 w-3" />
+            Refresh
+          </Button>
         </div>
-        <Button size="icon" variant="ghost" onClick={handleRefresh} disabled={isLoadingPayouts}>
-          <RefreshCcw className={`h-4 w-4 ${isLoadingPayouts ? 'animate-spin' : ''}`} />
-          <span className="sr-only">Refresh</span>
-        </Button>
       </CardHeader>
       <CardContent>
         {isLoadingPayouts ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-24 w-full" />
-              ))}
-            </div>
-            <Skeleton className="h-64 w-full" />
+          <div className="space-y-3">
+            <Skeleton className="h-[125px] w-full" />
+            <Skeleton className="h-[200px] w-full" />
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-              <Card className="bg-blue-50 border-blue-100">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-blue-800">Available Balance</p>
-                    <DollarSign className="h-4 w-4 text-blue-500" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <Card className="border-blue-100">
+                <CardContent className="pt-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-sm font-medium text-muted-foreground">Available Balance</p>
+                    <div className="bg-blue-100 rounded-full p-1">
+                      <WalletCards className="h-4 w-4 text-blue-600" />
+                    </div>
                   </div>
-                  <p className="mt-3 text-2xl font-bold text-blue-900">
-                    {formatCurrency(payoutSummary?.availableBalance)}
-                  </p>
-                  <p className="mt-1 text-xs text-blue-700">
-                    Ready to be paid out on next cycle
-                  </p>
+                  <div className="text-3xl font-bold mb-2">
+                    {formatCurrency(payoutSummary?.availableBalance || 0)}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      Ready for withdrawal
+                    </p>
+                    {affiliateProfile?.membershipLevel && (
+                      <div className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
+                        <Award className="h-3 w-3" />
+                        <span>{affiliateProfile.membershipLevel.name}</span>
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-green-50 border-green-100">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-green-800">Total Paid</p>
-                    <DollarSign className="h-4 w-4 text-green-500" />
+              <Card className="border-blue-100">
+                <CardContent className="pt-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <p className="text-sm font-medium text-muted-foreground">Pending Balance</p>
+                    <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center">
+                      <CreditCard className="h-4 w-4 text-amber-600" />
+                    </div>
                   </div>
-                  <p className="mt-3 text-2xl font-bold text-green-900">
-                    {formatCurrency(payoutSummary?.totalPaid)}
+                  <p className="text-2xl font-bold text-amber-600">
+                    {formatCurrency(payoutSummary?.pendingBalance)}
                   </p>
-                  <p className="mt-1 text-xs text-green-700">
-                    All time earnings paid out
-                  </p>
-                </CardContent>
-              </Card>
-              
-              <Card className="bg-purple-50 border-purple-100">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-purple-800">Pending Earnings</p>
-                    <DollarSign className="h-4 w-4 text-purple-500" />
-                  </div>
-                  <p className="mt-3 text-2xl font-bold text-purple-900">
-                    {formatCurrency(payoutSummary?.pendingEarnings)}
-                  </p>
-                  <p className="mt-1 text-xs text-purple-700">
-                    Still in clearance period
+                  <p className="text-xs text-muted-foreground mt-1">
+                    In processing period
                   </p>
                 </CardContent>
               </Card>
             </div>
             
             <div className="mt-6">
-              <h3 className="text-lg font-medium mb-3">Transaction History</h3>
+              <h3 className="text-lg font-medium mb-3 flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-blue-500" />
+                Transaction History
+              </h3>
               
               {payouts && payouts.length > 0 ? (
                 <div className="overflow-hidden rounded-md border">
@@ -182,30 +194,70 @@ export function PayoutsCard() {
                   </Table>
                 </div>
               ) : (
-                <div className="text-center py-10 border rounded-md">
-                  <DollarSign className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
+                <div className="text-center py-10 border rounded-md bg-gray-50">
+                  <div className="h-12 w-12 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-4">
+                    <DollarSign className="h-6 w-6 text-muted-foreground" />
+                  </div>
                   <h3 className="text-lg font-medium">No payout history yet</h3>
-                  <p className="text-sm text-muted-foreground mt-2">
+                  <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
                     Your payout transactions will appear here once you start earning commissions.
                   </p>
                 </div>
               )}
             </div>
             
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-              <h3 className="text-sm font-medium text-blue-800">Next Payout Information</h3>
-              <div className="mt-2 text-sm text-blue-700 space-y-1">
-                <p><strong>Next Payout Date:</strong> {payoutSummary?.nextPayoutDate || 'Not scheduled'}</p>
-                <p><strong>Minimum Threshold:</strong> {formatCurrency(payoutSummary?.minimumThreshold || 100)}</p>
-                <p><strong>Payment Method:</strong> {payoutSummary?.paymentMethod || 'Not set'}</p>
-              </div>
+            <div className="mt-6">
+              <Card className="border-blue-100">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-blue-500" />
+                    Next Payout Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Next Payout Date:</span>
+                      <span className="font-medium">{payoutSummary?.nextPayoutDate || 'Not scheduled'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Minimum Threshold:</span>
+                      <span className="font-medium">{formatCurrency(payoutSummary?.minimumThreshold || 100)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Payment Method:</span>
+                      <span className="font-medium">{payoutSummary?.paymentMethod || 'Not set'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Commission Rate:</span>
+                      <span className="font-medium">
+                        {affiliateProfile?.membershipLevel 
+                          ? `${(affiliateProfile.membershipLevel.commissionRate * 100).toFixed(0)}%` 
+                          : `${(affiliateProfile?.commissionRate || 0) * 100}%`}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+                <CardFooter className="pt-0 pb-3">
+                  <Button variant="ghost" size="sm" className="w-full justify-between text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                    <span>Payment Settings</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </CardFooter>
+              </Card>
             </div>
           </>
         )}
       </CardContent>
       <CardFooter className="pt-2 border-t flex justify-between items-center text-xs text-muted-foreground">
-        <div>Last updated: {formatLastUpdated()}</div>
-        <div>Transactions: {payouts?.length || 0}</div>
+        <div className="flex items-center gap-1">
+          <RefreshCcw className="h-3 w-3" />
+          Last updated: {formatLastUpdated()}
+        </div>
+        <div className="flex items-center gap-1">
+          <DollarSign className="h-3 w-3" />
+          Transactions: {payouts?.length || 0}
+        </div>
       </CardFooter>
     </Card>
   );

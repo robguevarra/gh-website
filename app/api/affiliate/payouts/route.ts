@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient, handleServerError, handleUnauthorized } from '@/lib/supabase/route-handler';
 import { payoutHistoryFilterSchema, payoutProjectionSchema } from '@/lib/validation/affiliate/payout-schema';
-import { cookies } from 'next/headers';
 import { Database } from '@/lib/database.types';
 
 /**

@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/components/ui/use-toast';
 
 import { useAffiliateProfileData } from '@/lib/hooks/use-affiliate-dashboard';
+import { Award } from 'lucide-react';
 
 export function ReferralLinksCard() {
   const { affiliateProfile, isLoadingProfile } = useAffiliateProfileData();
@@ -74,8 +75,17 @@ export function ReferralLinksCard() {
       </CardContent>
       <CardFooter className="border-t px-6 py-4">
         <div className="flex items-center justify-between w-full text-xs text-muted-foreground">
-          <div>
-            <span>Commission rate: {affiliateProfile?.commissionRate ? `${affiliateProfile.commissionRate}%` : '—'}</span>
+          <div className="flex items-center gap-1">
+            {affiliateProfile?.membershipLevel ? (
+              <>
+                <Award className="h-3 w-3 text-blue-500" />
+                <span>
+                  {affiliateProfile.membershipLevel.name}: {(affiliateProfile.membershipLevel.commissionRate * 100).toFixed(0)}%
+                </span>
+              </>
+            ) : (
+              <span>Commission rate: {affiliateProfile?.commissionRate ? `${(affiliateProfile.commissionRate * 100).toFixed(0)}%` : '—'}</span>
+            )}
           </div>
           <div>
             <span>Affiliate since: {affiliateProfile?.createdAt ? new Date(affiliateProfile.createdAt).toLocaleDateString() : '—'}</span>

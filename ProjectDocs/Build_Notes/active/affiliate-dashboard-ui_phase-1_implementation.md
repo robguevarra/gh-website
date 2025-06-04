@@ -167,21 +167,21 @@ A fully functional affiliate dashboard that:
   - [x] Optimize for mobile viewing with appropriate responsive breakpoints
 
 ### 5. Simplified Referral Link Management
-- [ ] Simplify the `components/affiliate/dashboard/referral-links-card.tsx` component:
-  - [ ] Remove custom link generation functionality (no need for multiple links)
-  - [ ] Focus on a single product affiliate approach with one link per affiliate
-  - [ ] Display the affiliate's unique link using their slug: `yourdomain.com/papers-to-profits?a=slug`
-  - [ ] Keep QR code generation but simplify options (single product link only)
-  - [ ] Implement copy to clipboard functionality with toast notifications
-- [ ] Update API endpoints to support the simplified approach:
-  - [ ] Modify `/api/affiliate/links/route.ts` to focus on retrieving/managing a single link per affiliate
-  - [ ] Keep QR code generation endpoint for the single product link
-  - [ ] Remove custom UTM parameter functionality
-- [ ] Update the links page UI:
-  - [ ] Simplify `/app/affiliate-portal/links/page.tsx` to focus on a single product approach
-  - [ ] Remove the complex link creation dialog
-  - [ ] Keep promotion tips and best practices for the single product
-  - [ ] Enhance educational content about effective affiliate marketing for a single product
+- [x] Simplify the `components/affiliate/dashboard/referral-links-card.tsx` component:
+  - [x] Remove custom link generation functionality (no need for multiple links)
+  - [x] Focus on a single product affiliate approach with one link per affiliate
+  - [x] Display the affiliate's unique link using their slug: `${NEXT_PUBLIC_SITE_URL}/papers-to-profits?a=slug`
+  - [x] ~~Keep QR code generation but simplify options (single product link only)~~ Removed QR code functionality entirely per updated requirements
+  - [x] Implement copy to clipboard functionality with toast notifications
+- [x] Update API endpoints to support the simplified approach:
+  - [x] Modify `/api/affiliate/links/route.ts` to focus on retrieving/managing a single link per affiliate
+  - [x] ~~Keep QR code generation endpoint for the single product link~~ Removed QR code generation endpoint as it's no longer needed
+  - [x] Remove custom UTM parameter functionality
+- [x] Consolidate affiliate link management in the dashboard:
+  - [x] ~~Simplify `/app/affiliate-portal/links/page.tsx` to focus on a single product approach~~ Removed dedicated links page entirely
+  - [x] Remove the links page from sidebar navigation
+  - [x] Integrate `ReferralLinksCard` directly into the overview dashboard page
+  - [x] Remove referral link display from `OverviewCard` to avoid duplication
 
 ### 6. Analytics Dashboard Widgets
 - [x] Develop key performance indicator (KPI) cards in `components/affiliate/dashboard/overview-card.tsx`
@@ -190,60 +190,48 @@ A fully functional affiliate dashboard that:
   - [x] Fix data format transformation between API (snake_case) and frontend (camelCase)
   - [x] Use skeleton loaders during data fetching for better UX
   - [x] Connect to `useAffiliateMetrics` hook with proper userId parameter passing
-- [ ] Build time-series charts in `components/affiliate/performance-charts.tsx`
-  - [ ] Integrate with `recharts` (lightweight React charting library)
-  - [ ] Create daily/weekly/monthly toggle views with appropriate aggregation
-  - [ ] Implement multi-series charts comparing different metrics
-  - [ ] Add interactive tooltips with detailed information on hover
-  - [ ] Ensure charts are responsive and maintain readability at all screen sizes
-- [ ] Implement geographic visualization in `components/affiliate/geo-heatmap.tsx`
-  - [ ] Use lightweight map library compatible with React Server Components
-  - [ ] Color-code regions based on click or conversion density
-  - [ ] Include country and region filters for detailed analysis
-  - [ ] Add proper fallback for regions with no data
-- [ ] Create conversion funnel component in `components/affiliate/conversion-funnel.tsx`
-  - [ ] Visualize progression from clicks to conversions
-  - [ ] Calculate and display drop-off rates between funnel stages
-  - [ ] Use color coding to highlight problematic drop-off points
-  - [ ] Include interactive elements to drill down into specific funnel stages
+- [x] Build time-series charts in `components/affiliate/performance-charts.tsx`
+  - [x] Integrate with `recharts` (lightweight React charting library)
+  - [x] Create daily/weekly/monthly toggle views with appropriate aggregation
+  - [x] Implement multi-series charts comparing different metrics
+  - [x] Add interactive tooltips with detailed information on hover
+  - [x] Ensure charts are responsive and maintain readability at all screen sizes
 
 ### 7. Payout Dashboard Components
-- [ ] Create payout history component in `components/affiliate/payout-history.tsx`
-  - [ ] Display detailed transaction table with filterable columns
-  - [ ] Show transaction dates, amounts, status indicators, and reference IDs
-  - [ ] Add status badges using the conversion status types (pending, cleared, paid, flagged)
-  - [ ] Include pagination for large transaction histories
-  - [ ] Integrate with `usePayoutData` hook for data fetching
-- [ ] Build payout projection widget in `components/affiliate/payout-projection.tsx`
-  - [ ] Calculate and display next estimated payout amount
-  - [ ] Show progress bar toward minimum payout threshold
-  - [ ] Add estimated payout date based on current trends
-  - [ ] Implement tooltip explanations for commission calculations
+- [x] Implement complete payouts page at `app/affiliate-portal/payouts/page.tsx`
+  - [x] Create tabbed interface for transactions, projections, and payment settings
+  - [x] Implement transaction history table with sorting options
+  - [x] Add status badges for payment states (paid, pending, processing)
+  - [x] Format dates and currency values consistently
+  - [x] Integrate with `usePayoutsData` hook for data fetching
+  - [x] Implement loading states and error handling
+- [x] Add earnings projections tab with visualizations
+  - [x] Create projections card with current earnings and trend data
+  - [x] Add informational elements about future earnings potential
+  - [x] Implement placeholder for detailed earnings charts
+- [x] Create payment settings tab with placeholder content
+  - [x] Add informative alert for contacting support
+  - [x] Create placeholder UI for future payment settings management
+- [ ] Implement payout request functionality with minimum threshold
+- [ ] Add detailed transaction view with commission breakdown
+- [ ] Enable pagination for large transaction histories
 
 ### 8. API Endpoints for Dashboard Data
-- [ ] Create affiliate profile API in `app/api/affiliate/profile/route.ts`
-  - [ ] Return slug, status, commission rate, and other account details
-  - [ ] Add validation for active status before returning sensitive data
-  - [ ] Include proper error handling for unauthorized requests
+- [x] Create affiliate profile API in `app/api/affiliate/profile/route.ts`
+  - [x] Return slug, status, commission rate, and other account details
+  - [x] Add validation for active status before returning sensitive data
+  - [x] Include proper error handling for unauthorized requests
 - [x] Implement metrics API in `app/api/affiliate/metrics/route.ts`
   - [x] Add support for date range filtering with default presets
   - [x] Create aggregation functions for time-series data
   - [x] Fixed RLS issues using the admin client to bypass problematic policies
   - [x] Implement caching strategies for frequently accessed data
   - [x] Fixed column name references in queries to match the actual database schema
-- [ ] Build referral link API in `app/api/affiliate/links/route.ts`
-  - [ ] Support CRUD operations for saved custom links
-  - [ ] Track performance metrics per link
-  - [ ] Add filtering and sorting capabilities
-- [ ] Develop QR code generator in `app/api/affiliate/qrcode/route.ts`
-  - [ ] Generate QR codes with customizable parameters
-  - [ ] Support various image formats and sizes
-  - [ ] Add Graceful Homeschooling branding options
-- [ ] Create payout API in `app/api/affiliate/payouts/route.ts`
-  - [ ] Return transaction history with status information
-  - [ ] Include projection data for pending payouts
-  - [ ] Support filtering by date range and status
-  - [ ] Design aggregation queries for performance metrics
+- [x] Create payout API in `app/api/affiliate/payouts/route.ts`
+  - [x] Return transaction history with status information
+  - [x] Include projection data for pending payouts
+  - [x] Support filtering by date range and status
+  - [x] Design aggregation queries for performance metrics
   - [ ] Implement pagination for large datasets
 - [ ] Follow API design best practices for all endpoints
   - [ ] Use RESTful principles established in existing `/api/affiliate/` routes
@@ -289,7 +277,7 @@ A fully functional affiliate dashboard that:
 
 
 
-## Progress Update (June 3, 2025)
+## Progress Update (June 4, 2025)
 
 ### Completed Items
 - Successfully integrated `PerformanceChart` and `LinkPerformanceComparison` components into the performance page
@@ -302,12 +290,16 @@ A fully functional affiliate dashboard that:
 - Implemented tab-based navigation for different metrics (clicks, conversions, earnings, link performance)
 - Added responsive card grids and proper spacing between dashboard sections
 - Fixed JSX structure issues in the performance page
+- Implemented payouts page with multiple features:
+  - Transaction history table with sorting options
+  - Status badges for payment statuses (paid, pending, processing)
+  - Earnings projections tab with future earnings visualization
+  - Placeholder for payment settings with appropriate messaging
+  - Integration with `usePayoutsData` hook for data fetching
+  - Helper functions for date formatting and currency display
 
 ### Current Focus
-- Implement referral link generation with UTM parameters
-- Develop QR code generation functionality for mobile sharing
-- Create copy and sharing features with proper visual feedback
-- Build link analytics component for detailed performance tracking
+- Complete payment request functionality in the payouts section
 
 ## Next Steps After Completion
 Once the affiliate dashboard UI is fully implemented and tested, we will move on to Task 9 (Develop Admin Console) to provide administrative tools for managing affiliates, reviewing statistics, and processing payouts.

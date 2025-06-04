@@ -3,6 +3,16 @@
  */
 
 /**
+ * Membership Level type definition
+ * Represents an affiliate's membership tier and associated commission rate
+ */
+export interface MembershipLevel {
+  id: string;
+  name: string;
+  commissionRate: number;
+}
+
+/**
  * Affiliate Profile type definition
  * Represents an affiliate user's profile information
  */
@@ -10,7 +20,8 @@ export interface AffiliateProfile {
   id: string;
   userId: string;
   slug: string;
-  commissionRate: number;
+  commissionRate: number; // Legacy field, kept for backward compatibility
+  membershipLevel?: MembershipLevel; // New field for membership-based commission rates
   isMember: boolean;
   status: 'pending' | 'active' | 'inactive' | 'flagged';
   createdAt: string;
