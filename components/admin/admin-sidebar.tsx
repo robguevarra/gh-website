@@ -12,7 +12,8 @@ import {
   Settings,
   Mail,
   ShoppingBag,
-  Shield
+  Shield,
+  UserCog // Corrected icon name for Affiliates
 } from 'lucide-react';
 
 const navigation = [
@@ -20,6 +21,7 @@ const navigation = [
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Courses', href: '/admin/courses', icon: BookOpen },
   { name: 'Membership Tiers', href: '/admin/membership-tiers', icon: Tag },
+  { name: 'Affiliates', href: '/admin/affiliates', icon: UserCog }, // Corrected icon name
   { name: 'Reports', href: '/admin/reports', icon: BarChart4 },
   { name: 'Email Campaigns', href: '/admin/email', icon: Mail },
   { name: 'Shop Integration', href: '/admin/shop', icon: ShoppingBag },
