@@ -26,7 +26,7 @@ export function PerformanceMetricsCard() {
   } = useAffiliateMetricsData();
 
   const handleRefresh = () => {
-    loadAffiliateMetrics({ timeRange });
+    loadAffiliateMetrics(timeRange);
   };
 
   // Display placeholder text for empty metrics

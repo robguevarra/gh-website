@@ -297,6 +297,15 @@ A fully functional affiliate dashboard that:
   - Placeholder for payment settings with appropriate messaging
   - Integration with `usePayoutsData` hook for data fetching
   - Helper functions for date formatting and currency display
+- Implemented membership-level-based commission rates:
+  - Updated `AffiliateProfile` interface to include `membershipLevel` field
+  - Added `MembershipLevel` interface with id, name, and commissionRate properties
+  - Modified `loadAffiliateProfile` action to fetch membership level data
+  - Updated PostgreSQL trigger function to calculate commissions based on membership level
+  - Updated UI components to display membership level name and commission rate
+  - Fixed infinite loop issue in PayoutsCard component by using stable selectors
+  - Added visual indicators (badges) for membership level in dashboard UI
+  - Updated ReferralLinksCard to show membership-based commission rates
 
 ### Current Focus
 - Complete payment request functionality in the payouts section

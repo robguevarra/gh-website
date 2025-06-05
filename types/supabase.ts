@@ -541,6 +541,7 @@ export type Database = {
           order_id: string | null
           paid_at: string | null
           status: Database["public"]["Enums"]["conversion_status_type"]
+          status_history: Json | null
           sub_id: string | null
           updated_at: string | null
         }
@@ -556,6 +557,7 @@ export type Database = {
           order_id?: string | null
           paid_at?: string | null
           status?: Database["public"]["Enums"]["conversion_status_type"]
+          status_history?: Json | null
           sub_id?: string | null
           updated_at?: string | null
         }
@@ -571,6 +573,7 @@ export type Database = {
           order_id?: string | null
           paid_at?: string | null
           status?: Database["public"]["Enums"]["conversion_status_type"]
+          status_history?: Json | null
           sub_id?: string | null
           updated_at?: string | null
         }
@@ -587,6 +590,62 @@ export type Database = {
             columns: ["click_id"]
             isOneToOne: false
             referencedRelation: "affiliate_clicks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliate_links: {
+        Row: {
+          affiliate_id: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          name: string
+          slug: string
+          updated_at: string
+          url_path: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          affiliate_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          slug: string
+          updated_at?: string
+          url_path: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          affiliate_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          slug?: string
+          updated_at?: string
+          url_path?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_links_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
             referencedColumns: ["id"]
           },
         ]
@@ -3645,6 +3704,7 @@ export type Database = {
           phone: string | null
           status: string
           tags: string[] | null
+          tier_assignment_notes: string | null
           updated_at: string
         }
         Insert: {
@@ -3672,6 +3732,7 @@ export type Database = {
           phone?: string | null
           status?: string
           tags?: string[] | null
+          tier_assignment_notes?: string | null
           updated_at?: string
         }
         Update: {
@@ -3699,6 +3760,7 @@ export type Database = {
           phone?: string | null
           status?: string
           tags?: string[] | null
+          tier_assignment_notes?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -4511,6 +4573,27 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      get_affiliate_clicks_by_date_range: {
+        Args: {
+          p_affiliate_id: string
+          p_start_date: string
+          p_end_date: string
+        }
+        Returns: {
+          id: string
+          affiliate_id: string
+          visitor_id: string
+          ip_address: unknown
+          user_agent: string
+          referral_url: string
+          created_at: string
+          updated_at: string
+          utm_params: Json
+          user_agent_details: Json
+          landing_page_url: string
+          sub_id: string
+        }[]
+      }
       get_daily_p2p_enrollment_trends: {
         Args: { start_date: string; end_date: string; target_course_id: string }
         Returns: {
@@ -4602,6 +4685,15 @@ export type Database = {
       has_permission: {
         Args: { user_id: string; required_permission: string }
         Returns: boolean
+      }
+      increment: {
+        Args: {
+          x: number
+          row_id: string
+          table_name: string
+          column_name: string
+        }
+        Returns: number
       }
       increment_campaign_metric: {
         Args: {
