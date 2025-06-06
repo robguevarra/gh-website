@@ -11,20 +11,22 @@ export interface TrendDataPoint {
 }
 
 export interface AffiliateProgramTrends {
-  clicksLast30Days: TrendDataPoint[];
-  conversionsLast30Days: TrendDataPoint[];
-  gmvLast30Days: TrendDataPoint[];
-  commissionsLast30Days: TrendDataPoint[];
+  clicks: TrendDataPoint[];
+  conversions: TrendDataPoint[];
+  gmv: TrendDataPoint[];
+  commissions: TrendDataPoint[];
 }
 
 export interface AffiliateProgramKPIs {
   totalActiveAffiliates: number;
   pendingApplications: number;
-  totalClicksLast30Days: number;
-  totalConversionsLast30Days: number;
-  totalGmvLast30Days: number;
-  totalCommissionsPaidLast30Days: number;
-  averageConversionRate: number; // Percentage. Note: averageCommissionPerConversion30Days was in type but not in log, removed for now.
+  totalClicks: number;
+  totalConversions: number;
+  totalGmv: number;
+  totalCommissionsPaid: number;
+  averageConversionRate: number; // Percentage
+  dateRangeStart?: string; // ISO date string for the start of the date range
+  dateRangeEnd?: string; // ISO date string for the end of the date range
 }
 
 export interface AffiliateAnalyticsData {
@@ -434,28 +436,46 @@ export interface AffiliateAnalyticsData {
  * Fetches analytics data for the affiliate program dashboard.
  * @returns Promise<AffiliateAnalyticsData>
  */
-export async function getAffiliateProgramAnalytics(): Promise<AffiliateAnalyticsData> {
+export async function getAffiliateProgramAnalytics(startDate?: string, endDate?: string): Promise<AffiliateAnalyticsData> {
   const supabase = getAdminClient();
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoISO = thirtyDaysAgo.toISOString();
+  
+  // Set default date range to last 30 days if not provided
+  const today = new Date();
+  today.setHours(23, 59, 59, 999); // End of today
+  
+  const endDateObj = endDate ? new Date(endDate) : today;
+  endDateObj.setHours(23, 59, 59, 999); // Set to end of day
+  const endDateISO = endDateObj.toISOString();
+  
+  let startDateObj: Date;
+  if (startDate) {
+    startDateObj = new Date(startDate);
+    startDateObj.setHours(0, 0, 0, 0); // Start of day
+  } else {
+    startDateObj = new Date();
+    startDateObj.setDate(today.getDate() - 30); // Default to 30 days ago
+    startDateObj.setHours(0, 0, 0, 0); // Start of day
+  }
+  const startDateISO = startDateObj.toISOString();
 
   // Default values for KPIs in case of errors or no data
   const defaultKpis: AffiliateProgramKPIs = {
     totalActiveAffiliates: 0,
     pendingApplications: 0,
-    totalClicksLast30Days: 0,
-    totalConversionsLast30Days: 0,
-    totalGmvLast30Days: 0,
-    totalCommissionsPaidLast30Days: 0,
+    totalClicks: 0,
+    totalConversions: 0,
+    totalGmv: 0,
+    totalCommissionsPaid: 0,
     averageConversionRate: 0,
+    dateRangeStart: startDateISO,
+    dateRangeEnd: endDateISO,
   };
 
   const defaultTrends: AffiliateProgramTrends = {
-    clicksLast30Days: [],
-    conversionsLast30Days: [],
-    gmvLast30Days: [],
-    commissionsLast30Days: [],
+    clicks: [],
+    conversions: [],
+    gmv: [],
+    commissions: [],
   };
 
   try {
@@ -467,8 +487,14 @@ export async function getAffiliateProgramAnalytics(): Promise<AffiliateAnalytics
     ] = await Promise.all([
       supabase.from('affiliates').select('id', { count: 'exact', head: true }).eq('status', 'active'),
       supabase.from('affiliates').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('affiliate_clicks').select('id', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgoISO),
-      supabase.from('affiliate_conversions').select('gmv, commission_amount').gte('created_at', thirtyDaysAgoISO),
+      supabase.from('affiliate_clicks')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', startDateISO)
+        .lte('created_at', endDateISO),
+      supabase.from('affiliate_conversions')
+        .select('gmv, commission_amount')
+        .gte('created_at', startDateISO)
+        .lte('created_at', endDateISO),
     ]);
 
     if (activeAffiliatesRes.error) throw new Error(`Error fetching active affiliates: ${activeAffiliatesRes.error.message}`);
@@ -478,26 +504,32 @@ export async function getAffiliateProgramAnalytics(): Promise<AffiliateAnalytics
     const pendingApplications = pendingApplicationsRes.count || 0;
 
     if (clicksRes.error) throw new Error(`Error fetching clicks: ${clicksRes.error.message}`);
-    const totalClicksLast30Days = clicksRes.count || 0;
+    const totalClicks = clicksRes.count || 0;
     
     if (conversionsRes.error) throw new Error(`Error fetching conversions: ${conversionsRes.error.message}`);
     const conversionsInPeriod = conversionsRes.data || [];
-    const totalConversionsLast30Days = conversionsInPeriod.length;
-    const totalGmvLast30Days = conversionsInPeriod.reduce((sum, c) => sum + (c.gmv || 0), 0);
-    // Using commission_earned for totalCommissionsPaidLast30Days as a proxy for earned commissions in the period.
+    const totalConversions = conversionsInPeriod.length;
+    const totalGmv = conversionsInPeriod.reduce((sum, c) => sum + (c.gmv || 0), 0);
+    // Using commission_earned for totalCommissionsPaid as a proxy for earned commissions in the period.
     // Actual 'paid' commissions would require joining with a payouts table and checking status.
-    const totalCommissionsPaidLast30Days = conversionsInPeriod.reduce((sum, c) => sum + (c.commission_amount || 0), 0);
+    const totalCommissionsPaid = conversionsInPeriod.reduce((sum, c) => sum + (c.commission_amount || 0), 0);
 
-    const averageConversionRate = totalClicksLast30Days > 0 
-      ? parseFloat(((totalConversionsLast30Days / totalClicksLast30Days) * 100).toFixed(2)) 
+    const averageConversionRate = totalClicks > 0 
+      ? parseFloat(((totalConversions / totalClicks) * 100).toFixed(2)) 
       : 0;
 
     // Helper to generate daily trend data
     const generateDailyTrend = (records: { created_at: string; value?: number; gmv?: number; commission_amount?: number }[], valueField?: 'value' | 'gmv' | 'commission_amount'): TrendDataPoint[] => {
       const dailyMap = new Map<string, number>();
-      for (let i = 0; i < 30; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
+      
+      // Calculate number of days in the selected range
+      const diffTime = endDateObj.getTime() - startDateObj.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      // Generate empty data points for each day in the range
+      for (let i = 0; i <= diffDays; i++) {
+        const d = new Date(startDateObj);
+        d.setDate(d.getDate() + i);
         dailyMap.set(d.toISOString().split('T')[0], 0);
       }
 
@@ -521,20 +553,22 @@ export async function getAffiliateProgramAnalytics(): Promise<AffiliateAnalytics
     const { data: clicksData, error: clicksTrendError } = await supabase
       .from('affiliate_clicks')
       .select('created_at')
-      .gte('created_at', thirtyDaysAgoISO);
+      .gte('created_at', startDateISO)
+      .lte('created_at', endDateISO);
     if (clicksTrendError) throw new Error(`Error fetching clicks for trends: ${clicksTrendError.message}`);
 
     const { data: conversionsData, error: conversionsTrendError } = await supabase
       .from('affiliate_conversions')
       .select('created_at, gmv, commission_amount')
-      .gte('created_at', thirtyDaysAgoISO);
+      .gte('created_at', startDateISO)
+      .lte('created_at', endDateISO);
     if (conversionsTrendError) throw new Error(`Error fetching conversions for trends: ${conversionsTrendError.message}`);
 
     const trends: AffiliateProgramTrends = {
-      clicksLast30Days: generateDailyTrend(clicksData || []),
-      conversionsLast30Days: generateDailyTrend(conversionsData || []),
-      gmvLast30Days: generateDailyTrend(conversionsData || [], 'gmv'),
-      commissionsLast30Days: generateDailyTrend(conversionsData || [], 'commission_amount'),
+      clicks: generateDailyTrend(clicksData || []),
+      conversions: generateDailyTrend(conversionsData || []),
+      gmv: generateDailyTrend(conversionsData || [], 'gmv'),
+      commissions: generateDailyTrend(conversionsData || [], 'commission_amount'),
     };
 
     // Fetch Top Performing Affiliates by Conversions
@@ -543,7 +577,8 @@ export async function getAffiliateProgramAnalytics(): Promise<AffiliateAnalytics
       const { data: conversionCountsData, error: conversionCountsError } = await supabase
         .from('affiliate_conversions')
         .select('affiliate_id') // Select affiliate_id to count conversions
-        .gte('created_at', thirtyDaysAgoISO);
+        .gte('created_at', startDateISO)
+        .lte('created_at', endDateISO);
 
       if (conversionCountsError) {
         console.error(`Error fetching conversion counts for top affiliates: ${conversionCountsError.message}`);
@@ -595,11 +630,13 @@ export async function getAffiliateProgramAnalytics(): Promise<AffiliateAnalytics
       kpis: {
         totalActiveAffiliates,
         pendingApplications,
-        totalClicksLast30Days,
-        totalConversionsLast30Days,
-        totalGmvLast30Days,
-        totalCommissionsPaidLast30Days,
+        totalClicks,
+        totalConversions,
+        totalGmv,
+        totalCommissionsPaid,
         averageConversionRate,
+        dateRangeStart: startDateISO,
+        dateRangeEnd: endDateISO,
       },
       trends,
       topAffiliatesByConversions,
@@ -830,6 +867,47 @@ export async function updateAffiliateProgramSettings(
     console.error('Unexpected error in updateAffiliateProgramSettings:', err);
     const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
     return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Updates the status of multiple affiliates in a single operation.
+ * @param affiliateIds Array of affiliate IDs to update
+ * @param newStatus The new status to set for all selected affiliates
+ * @returns Object with success status, count of updated affiliates, and any error message
+ */
+export async function bulkUpdateAffiliateStatus(affiliateIds: string[], newStatus: AffiliateStatusType) {
+  if (!affiliateIds.length) {
+    return { success: false, error: 'No affiliates selected', count: 0 };
+  }
+
+  const supabase = getAdminClient();
+
+  try {
+    // Use the in() filter to update all selected affiliates at once
+    const { data, error } = await supabase
+      .from('affiliates')
+      .update({ status: newStatus })
+      .in('id', affiliateIds)
+      .select('id');
+
+    if (error) {
+      console.error('Error bulk updating affiliate status:', error);
+      throw new Error(`Failed to update affiliate statuses: ${error.message}`);
+    }
+
+    const updatedCount = data?.length || 0;
+    
+    revalidatePath('/admin/affiliates');
+    return { 
+      success: true, 
+      count: updatedCount,
+      message: `Successfully updated ${updatedCount} affiliate${updatedCount !== 1 ? 's' : ''}`
+    };
+  } catch (err) {
+    console.error('Unexpected error in bulkUpdateAffiliateStatus:', err);
+    const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
+    return { success: false, error: errorMessage, count: 0 };
   }
 }
 

@@ -12,9 +12,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, Eye, Edit, CheckCircle, XCircle, Flag, UserX } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,14 +21,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { MoreHorizontal, Eye, Edit, CheckCircle, XCircle, Flag, UserX, Search, Check, Loader2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { format } from "date-fns";
 import { AdminAffiliateListItem, AffiliateStatusType } from '@/types/admin/affiliate';
 import {
   getAdminAffiliates,
   approveAffiliate,
   rejectAffiliate,
   flagAffiliate,
-  updateAffiliateStatus, // Changed from deactivateAffiliate and clearAffiliateFlag
+  updateAffiliateStatus,
+  bulkUpdateAffiliateStatus
 } from '@/lib/actions/affiliate-actions';
+import { toast } from "sonner";
 
 const statusVariantMap: Record<AffiliateStatusType, 'default' | 'secondary' | 'destructive' | 'outline'> = {
   active: 'default',
@@ -44,7 +49,10 @@ export default function AffiliateList() {
   const [affiliatesData, setAffiliatesData] = useState<AdminAffiliateListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [actionStates, setActionStates] = useState<Record<string, boolean>>({}); // For row-specific loading
+  const [actionStates, setActionStates] = useState<Record<string, boolean>>({});
+  const [selectedAffiliates, setSelectedAffiliates] = useState<string[]>([]);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false); // For row-specific loading
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<AffiliateStatusType | 'all'>('all');
@@ -72,32 +80,8 @@ export default function AffiliateList() {
     fetchData();
   }, [fetchData]);
 
-  const handleAction = useCallback(async (
-    affiliateId: string, 
-    actionName: string, // For specific loading state
-    actionFn: () => Promise<{ success: boolean; error?: string }>,
-    successMessage: string,
-    errorMessagePrefix: string
-  ) => {
-    setActionStates(prev => ({ ...prev, [`${affiliateId}_${actionName}`]: true }));
-    setError(null);
-    try {
-      const result = await actionFn();
-      if (result.success) {
-        console.log(successMessage); // Placeholder for toast
-        await fetchData(); // Re-fetch data to reflect changes
-      } else {
-        console.error(`${errorMessagePrefix}: ${result.error}`);
-        setError(result.error || `${errorMessagePrefix}: An unknown error occurred.`);
-      }
-    } catch (err) {
-      console.error(`${errorMessagePrefix} (catch):`, err);
-      setError(`${errorMessagePrefix}: An unexpected error occurred.`);
-    } finally {
-      setActionStates(prev => ({ ...prev, [`${affiliateId}_${actionName}`]: false }));
-    }
-  }, [fetchData]);
-
+  // Filter affiliates based on search term and status filter
+  // Filter affiliates based on search term and status filter
   const filteredAffiliates = useMemo(() => {
     return affiliatesData.filter((affiliate) => {
       const lowerSearchTerm = searchTerm.toLowerCase();
@@ -110,6 +94,97 @@ export default function AffiliateList() {
       return matchesSearchTerm && matchesStatus;
     });
   }, [affiliatesData, searchTerm, statusFilter]);
+
+  const handleAction = async (affiliateId: string, actionType: string, actionFn: () => Promise<any>, successMessage: string, errorMessage: string) => {
+    // Set loading state for this specific action
+    setActionStates(prev => ({ ...prev, [`${affiliateId}_${actionType}`]: true }));
+    
+    try {
+      const result = await actionFn();
+      if (result.success) {
+        // Refresh the data
+        fetchData();
+        toast.success(successMessage);
+      } else {
+        toast.error(`${errorMessage}: ${result.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error(`Error in ${actionType} action:`, err);
+      toast.error(`${errorMessage}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setActionStates(prev => ({ ...prev, [`${affiliateId}_${actionType}`]: false }));
+    }
+  };
+  
+  // Handle bulk approval of selected affiliates
+  const handleBulkApprove = async () => {
+    if (selectedAffiliates.length === 0) {
+      toast.error("No affiliates selected for approval");
+      return;
+    }
+    
+    setBulkActionLoading(true);
+    try {
+      const result = await bulkUpdateAffiliateStatus(selectedAffiliates, 'active');
+      if (result.success) {
+        toast.success(result.message || `Successfully approved ${result.count} affiliates`);
+        // Clear selections after successful operation
+        setSelectedAffiliates([]);
+        // Refresh the data
+        fetchData();
+      } else {
+        toast.error(`Failed to approve affiliates: ${result.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error in bulk approve action:', err);
+      toast.error(`Failed to approve affiliates: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setBulkActionLoading(false);
+      setShowConfirmDialog(false);
+    }
+  };
+  
+  // Toggle selection of a single affiliate
+  const toggleAffiliateSelection = (affiliateId: string) => {
+    setSelectedAffiliates(prev => 
+      prev.includes(affiliateId) 
+        ? prev.filter(id => id !== affiliateId)
+        : [...prev, affiliateId]
+    );
+  };
+  
+  // Toggle selection of all visible affiliates
+  const toggleSelectAll = () => {
+    if (selectedAffiliates.length === filteredAffiliates.length) {
+      // If all are selected, deselect all
+      setSelectedAffiliates([]);
+    } else {
+      // Otherwise, select all visible affiliates
+      setSelectedAffiliates(filteredAffiliates.map(affiliate => affiliate.affiliate_id));
+    }
+  };
+  
+  // Check if all visible affiliates are selected
+  const areAllSelected = useMemo(() => {
+    return filteredAffiliates.length > 0 && 
+           selectedAffiliates.length === filteredAffiliates.length;
+  }, [filteredAffiliates, selectedAffiliates]);
+  
+  // Count of pending affiliates (for bulk approval button visibility)
+  const pendingAffiliatesCount = useMemo(() => {
+    return filteredAffiliates.filter(affiliate => affiliate.status === 'pending').length;
+  }, [filteredAffiliates]);
+  
+  // Count of selected pending affiliates
+  const selectedPendingCount = useMemo(() => {
+    const pendingIds = new Set(
+      filteredAffiliates
+        .filter(affiliate => affiliate.status === 'pending')
+        .map(affiliate => affiliate.affiliate_id)
+    );
+    return selectedAffiliates.filter(id => pendingIds.has(id)).length;
+  }, [filteredAffiliates, selectedAffiliates]);
+
 
   const paginatedAffiliates = useMemo(() => {
     return filteredAffiliates.slice(
@@ -144,14 +219,79 @@ export default function AffiliateList() {
   const handleEditAffiliate = (id: string) => console.log('Edit affiliate:', id);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Confirmation Dialog for Mass Approval */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Mass Approval</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to approve {selectedPendingCount} pending affiliate{selectedPendingCount !== 1 ? 's' : ''}?
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkActionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={(e) => {
+                e.preventDefault();
+                handleBulkApprove();
+              }}
+              disabled={bulkActionLoading}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {bulkActionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>Approve All Selected</>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {error && <div className="p-4 text-red-500 border border-red-200 rounded-md">{error}</div>}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-        <Input
-          placeholder="Search by name, email, or slug..."
-          className="max-w-full sm:max-w-xs md:max-w-sm lg:max-w-md"
-          value={searchTerm}
-          onChange={handleSearchChange}
-        />
+        <div className="flex items-center gap-4">
+          <Input
+            placeholder="Search by name, email, or slug..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+          />
+          {pendingAffiliatesCount > 0 && (
+            <Button
+              variant="default"
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => {
+                // Select all pending affiliates
+                const pendingIds = filteredAffiliates
+                  .filter(affiliate => affiliate.status === 'pending')
+                  .map(affiliate => affiliate.affiliate_id);
+                setSelectedAffiliates(pendingIds);
+                setShowConfirmDialog(true);
+              }}
+              disabled={pendingAffiliatesCount === 0}
+            >
+              <Check className="mr-2 h-4 w-4" />
+              Mass Approve ({pendingAffiliatesCount}) Pending
+            </Button>
+          )}
+          {selectedAffiliates.length > 0 && (
+            <Button
+              variant="default"
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => setShowConfirmDialog(true)}
+              disabled={selectedPendingCount === 0}
+            >
+              <Check className="mr-2 h-4 w-4" />
+              Approve Selected ({selectedPendingCount})
+            </Button>
+          )}
+        </div>
         <Tabs value={statusFilter} onValueChange={handleStatusChange} className="w-full sm:w-auto">
           <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5">
             <TabsTrigger value="all">All</TabsTrigger>
@@ -167,6 +307,13 @@ export default function AffiliateList() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[50px]">
+                <Checkbox 
+                  checked={areAllSelected}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all affiliates"
+                />
+              </TableHead>
               <TableHead>Affiliate</TableHead>
               <TableHead>Slug</TableHead>
               <TableHead>Status</TableHead>
@@ -202,13 +349,27 @@ export default function AffiliateList() {
                   key={affiliate.affiliate_id}
                   onClick={(e) => {
                     // Prevent row click when clicking on interactive elements like the dropdown trigger, buttons, or links within the row
-                    if ((e.target as HTMLElement).closest('[data-radix-dropdown-menu-trigger], button, a')) {
+                    if ((e.target as HTMLElement).closest('[data-radix-dropdown-menu-trigger], button, a, [data-state]')) {
                       return;
                     }
                     router.push(`/admin/affiliates/${affiliate.affiliate_id}`);
                   }}
                   className={`cursor-pointer hover:bg-muted/50 ${actionStates[`${affiliate.affiliate_id}_approve`] || actionStates[`${affiliate.affiliate_id}_reject`] || actionStates[`${affiliate.affiliate_id}_flag`] || actionStates[`${affiliate.affiliate_id}_deactivate`] || actionStates[`${affiliate.affiliate_id}_clearFlag`] ? 'opacity-50' : ''}`}
                 >
+                  <TableCell className="w-[50px]">
+                    <Checkbox
+                      checked={selectedAffiliates.includes(affiliate.affiliate_id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          toggleAffiliateSelection(affiliate.affiliate_id);
+                        } else {
+                          toggleAffiliateSelection(affiliate.affiliate_id);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select affiliate ${affiliate.name}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <div className="font-medium">{affiliate.name}</div>
                     <div className="text-sm text-muted-foreground">
@@ -248,7 +409,7 @@ export default function AffiliateList() {
                         </DropdownMenuItem>
                         {affiliate.status === 'pending' && (
                           <DropdownMenuItem 
-                            onClick={() => handleAction(affiliate.affiliate_id, 'approve', () => approveAffiliate(affiliate.affiliate_id), 'Affiliate approved successfully', 'Error approving affiliate')}
+                            onClick={(e) => { e.stopPropagation(); handleAction(affiliate.affiliate_id, 'approve', () => approveAffiliate(affiliate.affiliate_id), 'Affiliate approved successfully', 'Error approving affiliate'); }}
                             disabled={actionStates[`${affiliate.affiliate_id}_approve`]}
                           >
                             <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
@@ -257,7 +418,7 @@ export default function AffiliateList() {
                         )}
                         {affiliate.status === 'pending' && (
                           <DropdownMenuItem 
-                            onClick={() => handleAction(affiliate.affiliate_id, 'reject', () => rejectAffiliate(affiliate.affiliate_id), 'Affiliate rejected successfully', 'Error rejecting affiliate')}
+                            onClick={(e) => { e.stopPropagation(); handleAction(affiliate.affiliate_id, 'reject', () => rejectAffiliate(affiliate.affiliate_id), 'Affiliate rejected successfully', 'Error rejecting affiliate'); }}
                             disabled={actionStates[`${affiliate.affiliate_id}_reject`]}
                           >
                             <XCircle className="mr-2 h-4 w-4 text-red-500" />
@@ -266,7 +427,7 @@ export default function AffiliateList() {
                         )}
                         {(affiliate.status === 'active' || affiliate.status === 'pending') && (
                           <DropdownMenuItem 
-                            onClick={() => handleAction(affiliate.affiliate_id, 'flag', () => flagAffiliate(affiliate.affiliate_id), 'Affiliate flagged successfully', 'Error flagging affiliate')}
+                            onClick={(e) => { e.stopPropagation(); handleAction(affiliate.affiliate_id, 'flag', () => flagAffiliate(affiliate.affiliate_id), 'Affiliate flagged successfully', 'Error flagging affiliate'); }}
                             disabled={actionStates[`${affiliate.affiliate_id}_flag`]}
                           >
                             <Flag className="mr-2 h-4 w-4 text-orange-500" />
@@ -275,7 +436,7 @@ export default function AffiliateList() {
                         )}
                         {affiliate.status === 'active' && (
                           <DropdownMenuItem 
-                            onClick={() => handleAction(affiliate.affiliate_id, 'deactivate', () => updateAffiliateStatus(affiliate.user_id, 'inactive'), 'Affiliate deactivated successfully', 'Error deactivating affiliate')}
+                            onClick={(e) => { e.stopPropagation(); handleAction(affiliate.affiliate_id, 'deactivate', () => updateAffiliateStatus(affiliate.affiliate_id, 'inactive'), 'Affiliate deactivated successfully', 'Error deactivating affiliate'); }}
                             disabled={actionStates[`${affiliate.affiliate_id}_deactivate`]}
                           >
                             <UserX className="mr-2 h-4 w-4" />
@@ -284,7 +445,7 @@ export default function AffiliateList() {
                         )}
                         {affiliate.status === 'flagged' && (
                           <DropdownMenuItem 
-                            onClick={() => handleAction(affiliate.affiliate_id, 'clearFlag', () => updateAffiliateStatus(affiliate.user_id, 'active'), 'Affiliate flag cleared (status set to active)', 'Error clearing affiliate flag')}
+                            onClick={(e) => { e.stopPropagation(); handleAction(affiliate.affiliate_id, 'clearFlag', () => updateAffiliateStatus(affiliate.affiliate_id, 'active'), 'Affiliate flag cleared (status set to active)', 'Error clearing affiliate flag'); }}
                             disabled={actionStates[`${affiliate.affiliate_id}_clearFlag`]}
                           >
                             <CheckCircle className="mr-2 h-4 w-4 text-green-500" />

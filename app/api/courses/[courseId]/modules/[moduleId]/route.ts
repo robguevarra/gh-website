@@ -6,14 +6,19 @@ import { createRouteHandlerClient } from '@/lib/supabase/route-handler'
 import { createServiceRoleClient } from '@/lib/supabase/service-role'
 
 const moduleSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
+  title: z.string().min(1), // Keep min(1) for title if provided
+  description: z.string(),
   position: z.number().int().min(0),
-  status: z.enum(['draft', 'published', 'archived']).default('draft'),
-  metadata: z.record(z.unknown()).optional()
+  status: z.enum(['draft', 'published', 'archived']), // Default is handled by transform or DB
+  metadata: z.record(z.any())
+}).partial().refine(data => data.title === undefined || data.title.length > 0, {
+  message: "Title, if provided, cannot be empty",
+  path: ["title"],
 }).transform(data => ({
   ...data,
-  status: data.status || 'draft' // Ensure status has a default value
+  // Ensure status has a default value if not provided or if explicitly set to undefined
+  // The DB default or a separate creation schema should handle initial status
+  ...(data.status === undefined && !Object.prototype.hasOwnProperty.call(data, 'status') ? {} : { status: data.status || 'draft' })
 }));
 
 export async function GET(
@@ -121,25 +126,14 @@ export async function PATCH(
     // Await dynamic params
     const { courseId, moduleId } = await params;
 
-    // Get cookies and convert to string properly
-    const cookieStore = await cookies();
-    const cookieList = cookieStore.getAll();
-    const cookieString = cookieList.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          persistSession: false
-        },
-        global: {
-          headers: {
-            cookie: cookieString
-          }
-        }
-      }
-    );
+    const supabase = await createRouteHandlerClient();
+    
+    // Check user authentication (optional but good practice for update operations)
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.error('🔒 [API PATCH] Authentication error:', { error: authError, userId: user?.id });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     // First verify the module exists and belongs to the course
     const { data: existingModule, error: existingError } = await supabase

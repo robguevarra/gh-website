@@ -25,7 +25,7 @@ interface Course {
 
 export default function CoursesPage() {
   const router = useRouter();
-  const { user, isAdmin, isLoading: isAuthLoading } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth(); // isAdmin removed
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,16 +40,27 @@ export default function CoursesPage() {
 
   useEffect(() => {
     // Check authentication and admin status
-    if (!isAuthLoading && (!user || !isAdmin)) {
-      router.replace('/auth/signin');
-      return;
+    if (!isAuthLoading) { // Only proceed once auth loading is complete
+      const currentIsAdmin = user?.user_metadata?.is_admin === true;
+      if (!user || !currentIsAdmin) {
+        console.log('[CoursesPage] Auth check failed: User not found or not admin. Redirecting to signin.');
+        router.replace('/auth/signin');
+        return;
+      }
     }
-  }, [user, isAdmin, isAuthLoading, router]);
+  }, [user, isAuthLoading, router]); // isAdmin removed from dependencies as it's derived internally now
 
   useEffect(() => {
     async function loadCourses() {
       try {
-        if (!user || !isAdmin) return;
+        const currentIsAdmin = user?.user_metadata?.is_admin === true;
+        if (!user || !currentIsAdmin) {
+          // If not admin or no user, don't attempt to load courses.
+          // The other useEffect handles redirecting non-admins.
+          // If still on page (e.g. auth state changed rapidly), set loading false.
+          setIsLoading(false);
+          return;
+        }
         
         setIsLoading(true);
         setError(null);
@@ -75,7 +86,7 @@ export default function CoursesPage() {
     if (!isAuthLoading) {
       loadCourses();
     }
-  }, [supabase, user, isAdmin, isAuthLoading]);
+  }, [supabase, user, isAuthLoading]); // isAdmin removed from dependencies
 
   const handleEditCourse = (courseId: string) => {
     // Clear any existing course data
@@ -93,18 +104,24 @@ export default function CoursesPage() {
     );
   }
 
-  if (!user || !isAdmin) {
-    return (
-      <div className="p-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Access denied. You must be an administrator to view this page.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
+  // Final check before rendering content, after all loading states are resolved.
+  // The useEffect for redirection should handle most cases, but this is a fallback UI.
+  if (!isAuthLoading && !isLoading) { // Ensure all loading is done
+    const finalIsAdminCheck = user?.user_metadata?.is_admin === true;
+    if (!user || !finalIsAdminCheck) {
+      return (
+        <div className="p-6">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Access denied. You must be an administrator to view this page.
+            </AlertDescription>
+          </Alert>
+        </div>
+      );
+    }
   }
+
 
   if (error) {
     return (
