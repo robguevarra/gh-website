@@ -48,7 +48,6 @@ export async function GET(request: Request) {
       error: authError,
     } = await supabase.auth.getUser();
 
-    console.log('[User Context API] Auth User:', user ? { id: user.id, email: user.email } : null);
     if (authError || !user) {
       console.error('User context API: Auth error or no user', authError);
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
@@ -59,7 +58,6 @@ export async function GET(request: Request) {
       .select('id, email, is_student, is_affiliate, is_admin, first_name, last_name')
       .eq('id', user.id)
       .single();
-    console.log('[User Context API] Fetched Profile:', profile);
 
     if (profileError) {
       console.error('User context API: Profile error', profileError);
@@ -83,7 +81,6 @@ export async function GET(request: Request) {
       isAffiliate: profile.is_affiliate,
       isAdmin: profile.is_admin,
     };
-    console.log('[User Context API] Response Payload:', responsePayload);
     return NextResponse.json(responsePayload);
 
   } catch (error) {

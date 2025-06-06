@@ -16,7 +16,9 @@ interface AffiliateDetailPageProps {
 export default async function AffiliateDetailPage({
   params,
 }: AffiliateDetailPageProps) {
-  const affiliateId = params.affiliateId; 
+  // Await params before accessing its properties
+  const resolvedParams = await Promise.resolve(params);
+  const affiliateId = resolvedParams.affiliateId;
   let affiliateDetails: AdminAffiliateListItem | null = null;
   let errorFetching: string | null = null;
 

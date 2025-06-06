@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import PageHeader from '@/components/common/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DollarSign, Users, BarChart2, Link2, Activity, CheckCircle, AlertTriangle } from 'lucide-react'; // Removed unused SettingsIcon
+import { DollarSign, Users, BarChart2, Link2, Activity, CheckCircle, AlertTriangle, Calendar } from 'lucide-react';
 import {
   getAffiliateProgramAnalytics,
   AffiliateAnalyticsData,
@@ -12,66 +12,98 @@ import {
 } from '@/lib/actions/affiliate-actions';
 import TrendLineChart from '@/components/admin/analytics/trend-line-chart';
 import TopPerformersBarChart from '@/components/admin/analytics/top-performers-bar-chart';
+import DateRangePicker from '@/components/admin/analytics/date-range-picker';
+import { format } from 'date-fns';
 
-export default async function AffiliateAnalyticsPage() {
-  const rawAnalyticsData = await getAffiliateProgramAnalytics();
+export default async function AffiliateAnalyticsPage(props: { searchParams?: Record<string, string | string[]> | Promise<Record<string, string | string[]>> }) {
+  // Await searchParams if it's a Promise (Next.js dynamic API compliance)
+  const params = props.searchParams ? await props.searchParams : {};
+  const getParam = (key: string) => {
+    const val = params?.[key];
+    if (Array.isArray(val)) return val[0];
+    return val;
+  };
+  const startDate = getParam('startDate');
+  const endDate = getParam('endDate');
+
+  // Get analytics data with optional date range
+  const rawAnalyticsData = await getAffiliateProgramAnalytics(startDate, endDate);
 
   // Ensure analyticsData and its properties have defaults to prevent runtime errors
   const analyticsData: AffiliateAnalyticsData = rawAnalyticsData || {
-    kpis: {} as AffiliateProgramKPIs,
+    kpis: {
+      totalActiveAffiliates: 0,
+      pendingApplications: 0,
+      totalClicks: 0,
+      totalConversions: 0,
+      totalGmv: 0,
+      totalCommissionsPaid: 0,
+      averageConversionRate: 0,
+      dateRangeStart: '',
+      dateRangeEnd: '',
+    },
     trends: {
-      clicksLast30Days: [],
-      conversionsLast30Days: [],
-      gmvLast30Days: [],
-      commissionsLast30Days: [],
-    } as AffiliateProgramTrends,
-    topAffiliatesByConversions: [], // Default for top affiliates
+      clicks: [],
+      conversions: [],
+      gmv: [],
+      commissions: [],
+    },
+    topAffiliatesByConversions: [],
   };
-
-  const kpis = analyticsData.kpis;
   const trends = analyticsData.trends;
 
   // Helper function to transform trend data
   const transformTrendData = (
-    clicks: TrendDataPoint[], 
-    conversions: TrendDataPoint[], 
-    gmv: TrendDataPoint[], 
-    commissions: TrendDataPoint[]
+    clicksData: TrendDataPoint[], 
+    conversionsData: TrendDataPoint[], 
+    gmvData: TrendDataPoint[], 
+    commissionsData: TrendDataPoint[]
   ) => {
     const allDates = new Set<string>();
-    [...clicks, ...conversions, ...gmv, ...commissions].forEach(item => allDates.add(item.date));
+    [...clicksData, ...conversionsData, ...gmvData, ...commissionsData].forEach(item => allDates.add(item.date));
+    
     const sortedDates = Array.from(allDates).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-
-    const clicksConversionsData = sortedDates.map(date => ({
-      date,
-      clicks: clicks.find(c => c.date === date)?.value || 0,
-      conversions: conversions.find(c => c.date === date)?.value || 0,
-    }));
-
-    const gmvCommissionsData = sortedDates.map(date => ({
-      date,
-      gmv: gmv.find(g => g.date === date)?.value || 0,
-      commissions: commissions.find(c => c.date === date)?.value || 0,
-    }));
-
-    return { clicksConversionsData, gmvCommissionsData };
+    
+    if (clicksData.length > 0 || conversionsData.length > 0) {
+      // For clicks and conversions chart
+      return sortedDates.map(date => ({
+        date,
+        clicks: clicksData.find(c => c.date === date)?.value || 0,
+        conversions: conversionsData.find(c => c.date === date)?.value || 0,
+      }));
+    } else {
+      // For GMV and commissions chart
+      return sortedDates.map(date => ({
+        date,
+        gmv: gmvData.find(c => c.date === date)?.value || 0,
+        commissions: commissionsData.find(c => c.date === date)?.value || 0,
+      }));
+    }
   };
+  
+  // Generate chart data
+  const clicksConversionsData = transformTrendData(trends.clicks, trends.conversions, [], []);
+  const gmvCommissionsData = transformTrendData([], [], trends.gmv, trends.commissions);
 
-  const { clicksConversionsData, gmvCommissionsData } = transformTrendData(
-    trends?.clicksLast30Days || [],
-    trends?.conversionsLast30Days || [],
-    trends?.gmvLast30Days || [],
-    trends?.commissionsLast30Days || []
-  );
+  const kpis = analyticsData.kpis;
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
-      <PageHeader 
-        title="Affiliate Program Analytics" 
-        description="Key performance indicators and trends for the affiliate program."
-      />
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <PageHeader
+          title="Affiliate Analytics"
+          description={
+            kpis.dateRangeStart && kpis.dateRangeEnd
+              ? `Data from ${format(new Date(kpis.dateRangeStart), 'MMM d, yyyy')} to ${format(new Date(kpis.dateRangeEnd), 'MMM d, yyyy')}`
+              : "Track the performance of your affiliate program."
+          }
+        />
+        <div className="self-start">
+          <DateRangePicker startDate={startDate} endDate={endDate} />
+        </div>
+      </div>
 
-      {/* KPIs Section */}
+      {/* KPI Cards Row */}
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -101,7 +133,7 @@ export default async function AffiliateAnalyticsPage() {
             <BarChart2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{kpis.totalClicksLast30Days.toLocaleString()}</div>
+            <p className="text-3xl font-bold">{kpis.totalClicks.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
@@ -110,7 +142,7 @@ export default async function AffiliateAnalyticsPage() {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{kpis.totalConversionsLast30Days.toLocaleString()}</div>
+            <p className="text-3xl font-bold">{kpis.totalConversions.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
@@ -119,7 +151,7 @@ export default async function AffiliateAnalyticsPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${kpis.totalGmvLast30Days.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <p className="text-3xl font-bold">${kpis.totalGmv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </CardContent>
         </Card>
         <Card>
@@ -128,7 +160,7 @@ export default async function AffiliateAnalyticsPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${kpis.totalCommissionsPaidLast30Days.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <p className="text-3xl font-bold">${kpis.totalCommissionsPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
           </CardContent>
         </Card>
         <Card>
@@ -153,8 +185,8 @@ export default async function AffiliateAnalyticsPage() {
               data={clicksConversionsData}
               xAxisKey="date"
               lines={[
-                { dataKey: 'clicks', name: 'Clicks', strokeColor: 'hsl(var(--primary))' },
-                { dataKey: 'conversions', name: 'Conversions', strokeColor: 'hsl(var(--secondary-foreground))' },
+                { dataKey: 'clicks', name: 'Clicks', strokeColor: 'hsl(var(--primary))' }, 
+                { dataKey: 'conversions', name: 'Conversions', strokeColor: 'hsl(var(--secondary-foreground))' }
               ]}
               yAxisLabel="Count"
             />
