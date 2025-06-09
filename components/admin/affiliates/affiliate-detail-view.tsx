@@ -40,6 +40,21 @@ const InfoItem: React.FC<InfoItemProps> = ({ Icon, label, value, className }) =>
 
 interface AffiliateDetailViewProps {
   initialAffiliateDetails: AdminAffiliateListItem;
+  initialClicksData?: {
+    data: AffiliateClick[];
+    totalCount: number;
+    error: string | null;
+  };
+  initialConversionsData?: {
+    data: AffiliateConversion[];
+    totalCount: number;
+    error: string | null;
+  };
+  initialPayoutsData?: {
+    data: AffiliatePayout[];
+    totalCount: number;
+    error: string | null;
+  };
 }
 
 
@@ -250,13 +265,23 @@ const mockPayouts: AffiliatePayout[] = [
   },
 ];
 
-export default function AffiliateDetailView({ initialAffiliateDetails }: AffiliateDetailViewProps) {
+export const AffiliateDetailView: React.FC<AffiliateDetailViewProps> = ({ 
+  initialAffiliateDetails,
+  initialClicksData,
+  initialConversionsData,
+  initialPayoutsData 
+}) => {
   const router = useRouter();
   const [affiliate, setAffiliate] = useState<AdminAffiliateListItem>(initialAffiliateDetails);
   const [isEditing, setIsEditing] = useState(false);
-  const [clicks, setClicks] = useState<AffiliateClick[]>(mockClickHistory); // Replace with actual data
-  const [conversions, setConversions] = useState<AffiliateConversion[]>(mockConversions); // Replace with actual data
-  const [payouts, setPayouts] = useState<AffiliatePayout[]>(mockPayouts); // Replace with actual data
+  const [clicks, setClicks] = useState<AffiliateClick[]>(initialClicksData?.data || []);
+  const [clicksTotal, setClicksTotal] = useState<number>(initialClicksData?.totalCount || 0);
+  
+  const [conversions, setConversions] = useState<AffiliateConversion[]>(initialConversionsData?.data || []);
+  const [conversionsTotal, setConversionsTotal] = useState<number>(initialConversionsData?.totalCount || 0);
+  
+  const [payouts, setPayouts] = useState<AffiliatePayout[]>(initialPayoutsData?.data || mockPayouts);  
+  const [payoutsTotal, setPayoutsTotal] = useState<number>(initialPayoutsData?.totalCount || 0);
   const [isLoading, setIsLoading] = useState(false);
   // Removed duplicated state declarations for affiliate, setAffiliate, isEditing, setIsEditing, clicks, conversions, payouts as they exist later or were mock data.
 
@@ -340,22 +365,47 @@ export default function AffiliateDetailView({ initialAffiliateDetails }: Affilia
     setIsUpdatingTier(false);
   };
 
-  const [loadingClicks, setLoadingClicks] = useState(true);
+  const [loadingClicks, setLoadingClicks] = useState(!initialClicksData);
   const [currentPageClicks, setCurrentPageClicks] = useState(1);
-  const [loadingConversions, setLoadingConversions] = useState(true);
+  const [loadingConversions, setLoadingConversions] = useState(!initialConversionsData);
   const [currentPageConversions, setCurrentPageConversions] = useState(1);
-  const [loadingPayouts, setLoadingPayouts] = useState(true);
+  const [loadingPayouts, setLoadingPayouts] = useState(!initialPayoutsData);
   const [currentPagePayouts, setCurrentPagePayouts] = useState(1);
   const [clickFilter, setClickFilter] = useState('');
   const [conversionFilter, setConversionFilter] = useState('');
   const [payoutFilter, setPayoutFilter] = useState('');
-  const [clickHistoryData, setClickHistoryData] = useState<{ data: AffiliateClick[]; totalCount: number }>({ data: [], totalCount: 0 });
-  const [conversionHistoryData, setConversionHistoryData] = useState<{ data: AffiliateConversion[]; totalCount: number }>({ data: [], totalCount: 0 });
-  const [payoutHistoryData, setPayoutHistoryData] = useState<{ data: AffiliatePayout[]; totalCount: number }>({ data: [], totalCount: 0 });
+  
+  // Initialize with pre-fetched data if available
+  const [clickHistoryData, setClickHistoryData] = useState<{ data: AffiliateClick[]; totalCount: number }>({ 
+    data: initialClicksData?.data || [], 
+    totalCount: initialClicksData?.totalCount || 0 
+  });
+  
+  const [conversionHistoryData, setConversionHistoryData] = useState<{ data: AffiliateConversion[]; totalCount: number }>({ 
+    data: initialConversionsData?.data || [], 
+    totalCount: initialConversionsData?.totalCount || 0 
+  });
+  
+  const [payoutHistoryData, setPayoutHistoryData] = useState<{ data: AffiliatePayout[]; totalCount: number }>({ 
+    data: initialPayoutsData?.data || [], 
+    totalCount: initialPayoutsData?.totalCount || 0 
+  });
   // Removed duplicate declarations of [affiliate, setAffiliate] and [isEditing, setIsEditing]
   // These are already declared near the top of the component.
 
   useEffect(() => {
+    // If we have pre-fetched data and we're on the first page with no filters, skip the fetch
+    const isPrefetchedDataSufficient = 
+      initialClicksData?.data && 
+      initialClicksData.data.length > 0 && 
+      currentPageClicks === 1 && 
+      !clickFilter;
+      
+    if (isPrefetchedDataSufficient) {
+      setLoadingClicks(false);
+      return;
+    }
+    
     async function fetchClickData() {
       if (!affiliate?.affiliate_id) return;
       setLoadingClicks(true);
@@ -368,24 +418,52 @@ export default function AffiliateDetailView({ initialAffiliateDetails }: Affilia
             source: clickFilter || undefined, 
             landingPage: clickFilter || undefined 
           },
+        }).catch(error => {
+          console.error('Error calling getAffiliateClicks:', error);
+          return null; // Return null to be handled in the next step
         });
-        if (result.data) {
+        
+        if (!result) {
+          console.error('getAffiliateClicks returned undefined or failed');
+          // Keep existing data if available, otherwise reset
+          if (clickHistoryData.data.length === 0) {
+            setClickHistoryData({ data: [], totalCount: 0 });
+          }
+        } else if (result.data) {
           setClickHistoryData({ data: result.data, totalCount: result.totalCount });
         } else if (result.error) {
           console.error('Failed to fetch click history:', result.error);
-          setClickHistoryData({ data: [], totalCount: 0 }); // Reset or handle error state
+          // Keep existing data if available, otherwise reset
+          if (clickHistoryData.data.length === 0) {
+            setClickHistoryData({ data: [], totalCount: 0 });
+          }
         }
       } catch (error) {
         console.error('Error in fetchClickData:', error);
-        setClickHistoryData({ data: [], totalCount: 0 }); // Reset or handle error state
+        // Keep existing data if available, otherwise reset
+        if (clickHistoryData.data.length === 0) {
+          setClickHistoryData({ data: [], totalCount: 0 });
+        }
       }
       setLoadingClicks(false);
     }
 
     fetchClickData();
-  }, [affiliate?.affiliate_id, currentPageClicks, clickFilter]);
+  }, [affiliate?.affiliate_id, currentPageClicks, clickFilter, initialClicksData]);
 
   useEffect(() => {
+    // If we have pre-fetched data and we're on the first page with no filters, skip the fetch
+    const isPrefetchedDataSufficient = 
+      initialConversionsData?.data && 
+      initialConversionsData.data.length > 0 && 
+      currentPageConversions === 1 && 
+      !conversionFilter;
+      
+    if (isPrefetchedDataSufficient) {
+      setLoadingConversions(false);
+      return;
+    }
+    
     async function fetchConversionData() {
       if (!affiliate?.affiliate_id) return;
       setLoadingConversions(true);
@@ -401,24 +479,53 @@ export default function AffiliateDetailView({ initialAffiliateDetails }: Affilia
                     ? conversionFilter.toLowerCase() as ConversionStatusType 
                     : undefined
           },
+        }).catch(error => {
+          console.error('Error calling getAffiliateConversions:', error);
+          return null; // Return null to be handled in the next step
         });
-        if (result.data) {
+        
+        // Check if result is undefined/null first
+        if (!result) {
+          console.error('getAffiliateConversions returned undefined or failed');
+          // Keep existing data if available, otherwise reset
+          if (conversionHistoryData.data.length === 0) {
+            setConversionHistoryData({ data: [], totalCount: 0 });
+          }
+        } else if (result.data) {
           setConversionHistoryData({ data: result.data, totalCount: result.totalCount });
         } else if (result.error) {
           console.error('Failed to fetch conversion history:', result.error);
-          setConversionHistoryData({ data: [], totalCount: 0 });
+          // Keep existing data if available, otherwise reset
+          if (conversionHistoryData.data.length === 0) {
+            setConversionHistoryData({ data: [], totalCount: 0 });
+          }
         }
       } catch (error) {
         console.error('Error in fetchConversionData:', error);
-        setConversionHistoryData({ data: [], totalCount: 0 });
+        // Keep existing data if available, otherwise reset
+        if (conversionHistoryData.data.length === 0) {
+          setConversionHistoryData({ data: [], totalCount: 0 });
+        }
       }
       setLoadingConversions(false);
     }
 
     fetchConversionData();
-  }, [affiliate?.affiliate_id, currentPageConversions, conversionFilter]);
+  }, [affiliate?.affiliate_id, currentPageConversions, conversionFilter, initialConversionsData]);
 
   useEffect(() => {
+    // If we have pre-fetched data and we're on the first page with no filters, skip the fetch
+    const isPrefetchedDataSufficient = 
+      initialPayoutsData?.data && 
+      initialPayoutsData.data.length > 0 && 
+      currentPagePayouts === 1 && 
+      !payoutFilter;
+      
+    if (isPrefetchedDataSufficient) {
+      setLoadingPayouts(false);
+      return;
+    }
+    
     async function fetchPayoutData() {
       if (!affiliate?.affiliate_id) return;
       setLoadingPayouts(true);
@@ -433,25 +540,38 @@ export default function AffiliateDetailView({ initialAffiliateDetails }: Affilia
                     ? payoutFilter.toLowerCase() as PayoutMethodType 
                     : undefined
           },
+        }).catch(error => {
+          console.error('Error calling getAffiliatePayouts:', error);
+          return null; // Return null to be handled in the next step
         });
+        
         if (!result) {
-          console.error('getAffiliatePayouts returned undefined');
-          setPayoutHistoryData({ data: [], totalCount: 0 });
+          console.error('getAffiliatePayouts returned undefined or failed');
+          // Keep existing data if available, otherwise reset
+          if (payoutHistoryData.data.length === 0) {
+            setPayoutHistoryData({ data: [], totalCount: 0 });
+          }
         } else if (result.data) {
           setPayoutHistoryData({ data: result.data, totalCount: result.totalCount });
         } else if (result.error) {
           console.error('Failed to fetch payout history:', result.error);
-          setPayoutHistoryData({ data: [], totalCount: 0 });
+          // Keep existing data if available, otherwise reset
+          if (payoutHistoryData.data.length === 0) {
+            setPayoutHistoryData({ data: [], totalCount: 0 });
+          }
         }
       } catch (error) {
         console.error('Error in fetchPayoutData:', error);
-        setPayoutHistoryData({ data: [], totalCount: 0 });
+        // Keep existing data if available, otherwise reset
+        if (payoutHistoryData.data.length === 0) {
+          setPayoutHistoryData({ data: [], totalCount: 0 });
+        }
       }
       setLoadingPayouts(false);
     }
 
     fetchPayoutData();
-  }, [affiliate?.affiliate_id, currentPagePayouts, payoutFilter]); 
+  }, [affiliate?.affiliate_id, currentPagePayouts, payoutFilter, initialPayoutsData]); 
 
   // Reset page to 1 when filter changes
   useEffect(() => {

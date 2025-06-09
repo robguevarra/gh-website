@@ -10,8 +10,12 @@ import {
   AffiliateProgramTrends,
   TopAffiliateDataPoint,
 } from '@/lib/actions/affiliate-actions';
+import { getRecentActivityLogs } from '@/lib/actions/activity-log-actions';
+import { getHighRiskFraudFlags } from '@/lib/actions/fraud-notification-actions-simplified';
 import TrendLineChart from '@/components/admin/analytics/trend-line-chart';
 import TopPerformersBarChart from '@/components/admin/analytics/top-performers-bar-chart';
+import RecentActivityFeed from '@/components/admin/analytics/recent-activity-feed';
+import { FraudNotificationBadge } from '@/components/admin/analytics/fraud-notification-badge';
 import DateRangePicker from '@/components/admin/analytics/date-range-picker';
 import { format } from 'date-fns';
 
@@ -28,6 +32,12 @@ export default async function AffiliateAnalyticsPage(props: { searchParams?: Rec
 
   // Get analytics data with optional date range
   const rawAnalyticsData = await getAffiliateProgramAnalytics(startDate, endDate);
+  
+  // Fetch recent activity logs (limit to 12)
+  const { logs: activityLogs, error: activityLogsError } = await getRecentActivityLogs(12);
+  
+  // Fetch high-risk fraud flags
+  const { flags: highRiskFlags } = await getHighRiskFraudFlags();
 
   // Ensure analyticsData and its properties have defaults to prevent runtime errors
   const analyticsData: AffiliateAnalyticsData = rawAnalyticsData || {
@@ -89,16 +99,19 @@ export default async function AffiliateAnalyticsPage(props: { searchParams?: Rec
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <PageHeader
-          title="Affiliate Analytics"
-          description={
-            kpis.dateRangeStart && kpis.dateRangeEnd
-              ? `Data from ${format(new Date(kpis.dateRangeStart), 'MMM d, yyyy')} to ${format(new Date(kpis.dateRangeEnd), 'MMM d, yyyy')}`
-              : "Track the performance of your affiliate program."
-          }
-        />
-        <div className="self-start">
+      <div className="flex items-center justify-between">
+        <div className="flex-1">
+          <PageHeader
+            title="Affiliate Analytics"
+            description={
+              kpis.dateRangeStart && kpis.dateRangeEnd
+                ? `Data from ${format(new Date(kpis.dateRangeStart), 'MMM d, yyyy')} to ${format(new Date(kpis.dateRangeEnd), 'MMM d, yyyy')}`
+                : "Track the performance of your affiliate program."
+            }
+          />
+        </div>
+        <div className="flex items-center gap-4">
+          <FraudNotificationBadge initialNotifications={highRiskFlags || []} />
           <DateRangePicker startDate={startDate} endDate={endDate} />
         </div>
       </div>
@@ -231,15 +244,10 @@ export default async function AffiliateAnalyticsPage(props: { searchParams?: Rec
             <Link href="/admin/affiliates/settings" className="text-sm text-primary hover:underline">Affiliate Program Settings</Link>
           </CardContent>
         </Card>
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center"><Activity className="mr-2 h-5 w-5" /> Recent Activity</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">Activity feed placeholder: Recent sign-ups, new conversions, etc.</p>
-            {/* Placeholder for real-time activity feed */}
-          </CardContent>
-        </Card>
+        <RecentActivityFeed 
+          logs={activityLogs} 
+          error={activityLogsError}
+        />
       </section>
     </div>
   );

@@ -418,6 +418,42 @@ export type Database = {
           },
         ]
       }
+      admin_activity_log: {
+        Row: {
+          activity_type: Database["public"]["Enums"]["activity_log_type"]
+          admin_user_id: string | null
+          description: string
+          details: Json | null
+          id: number
+          ip_address: unknown | null
+          target_entity_id: string | null
+          target_user_id: string | null
+          timestamp: string
+        }
+        Insert: {
+          activity_type: Database["public"]["Enums"]["activity_log_type"]
+          admin_user_id?: string | null
+          description: string
+          details?: Json | null
+          id?: number
+          ip_address?: unknown | null
+          target_entity_id?: string | null
+          target_user_id?: string | null
+          timestamp?: string
+        }
+        Update: {
+          activity_type?: Database["public"]["Enums"]["activity_log_type"]
+          admin_user_id?: string | null
+          description?: string
+          details?: Json | null
+          id?: number
+          ip_address?: unknown | null
+          target_entity_id?: string | null
+          target_user_id?: string | null
+          timestamp?: string
+        }
+        Relationships: []
+      }
       admin_audit_log: {
         Row: {
           action_type: string
@@ -649,6 +685,80 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      affiliate_payouts: {
+        Row: {
+          affiliate_id: string
+          amount: number
+          created_at: string
+          id: string
+          payout_method: string
+          reference: string | null
+          status: Database["public"]["Enums"]["payout_status_type"]
+          transaction_date: string | null
+        }
+        Insert: {
+          affiliate_id: string
+          amount: number
+          created_at?: string
+          id?: string
+          payout_method: string
+          reference?: string | null
+          status: Database["public"]["Enums"]["payout_status_type"]
+          transaction_date?: string | null
+        }
+        Update: {
+          affiliate_id?: string
+          amount?: number
+          created_at?: string
+          id?: string
+          payout_method?: string
+          reference?: string | null
+          status?: Database["public"]["Enums"]["payout_status_type"]
+          transaction_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_payouts_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliate_program_config: {
+        Row: {
+          cookie_duration_days: number
+          created_at: string
+          id: number
+          min_payout_threshold: number
+          payout_currency: string | null
+          payout_schedule: string | null
+          terms_of_service_content: string | null
+          updated_at: string
+        }
+        Insert: {
+          cookie_duration_days?: number
+          created_at?: string
+          id?: number
+          min_payout_threshold?: number
+          payout_currency?: string | null
+          payout_schedule?: string | null
+          terms_of_service_content?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cookie_duration_days?: number
+          created_at?: string
+          id?: number
+          min_payout_threshold?: number
+          payout_currency?: string | null
+          payout_schedule?: string | null
+          terms_of_service_content?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       affiliates: {
         Row: {
@@ -4867,6 +4977,18 @@ export type Database = {
       }
     }
     Enums: {
+      activity_log_type:
+        | "AFFILIATE_STATUS_CHANGE"
+        | "AFFILIATE_APPLICATION"
+        | "AFFILIATE_SETTINGS_UPDATE"
+        | "AFFILIATE_COMMISSION_RATE_UPDATE"
+        | "AFFILIATE_PAYOUT_PROCESSED"
+        | "FRAUD_FLAG_CREATED"
+        | "FRAUD_FLAG_RESOLVED"
+        | "ADMIN_LOGIN"
+        | "USER_PROFILE_UPDATE_ADMIN"
+        | "MEMBERSHIP_LEVEL_UPDATE_ADMIN"
+        | "GENERAL_ADMIN_ACTION"
       affiliate_status_type: "pending" | "active" | "flagged" | "inactive"
       batch_status: "pending" | "processing" | "completed" | "failed"
       conversion_status_type: "pending" | "cleared" | "paid" | "flagged"
@@ -4988,6 +5110,19 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      activity_log_type: [
+        "AFFILIATE_STATUS_CHANGE",
+        "AFFILIATE_APPLICATION",
+        "AFFILIATE_SETTINGS_UPDATE",
+        "AFFILIATE_COMMISSION_RATE_UPDATE",
+        "AFFILIATE_PAYOUT_PROCESSED",
+        "FRAUD_FLAG_CREATED",
+        "FRAUD_FLAG_RESOLVED",
+        "ADMIN_LOGIN",
+        "USER_PROFILE_UPDATE_ADMIN",
+        "MEMBERSHIP_LEVEL_UPDATE_ADMIN",
+        "GENERAL_ADMIN_ACTION",
+      ],
       affiliate_status_type: ["pending", "active", "flagged", "inactive"],
       batch_status: ["pending", "processing", "completed", "failed"],
       conversion_status_type: ["pending", "cleared", "paid", "flagged"],

@@ -11,7 +11,13 @@ export default async function FraudFlagsPage() {
   let errorFetchingFlags: string | null = null;
 
   try {
-    fraudFlags = await getAllAdminFraudFlags();
+    const result = await getAllAdminFraudFlags();
+    // getAllAdminFraudFlags returns {flags: Array, error?: string}
+    if (result.error) {
+      errorFetchingFlags = result.error;
+    } else {
+      fraudFlags = result.flags || [];
+    }
   } catch (error) {
     console.error("Failed to fetch fraud flags:", error);
     errorFetchingFlags = error instanceof Error ? error.message : "An unknown error occurred.";

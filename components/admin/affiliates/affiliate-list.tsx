@@ -35,6 +35,7 @@ import {
   updateAffiliateStatus,
   bulkUpdateAffiliateStatus
 } from '@/lib/actions/affiliate-actions';
+import { CreateFraudFlagDialog } from '@/components/admin/flags/create-fraud-flag-dialog';
 import { toast } from "sonner";
 
 const statusVariantMap: Record<AffiliateStatusType, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -260,7 +261,7 @@ export default function AffiliateList() {
             placeholder="Search by name, email, or slug..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm"
+            className="w-96"
           />
           {pendingAffiliatesCount > 0 && (
             <Button
@@ -315,9 +316,9 @@ export default function AffiliateList() {
                 />
               </TableHead>
               <TableHead>Affiliate</TableHead>
-              <TableHead>Slug</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Commission</TableHead>
+              <TableHead>Membership Tier</TableHead>
+              <TableHead>Commission Rate</TableHead>
+              <TableHead>Lifetime Earnings</TableHead>
               <TableHead className="text-right">Conversions</TableHead>
               <TableHead className="text-right">Earnings</TableHead>
               <TableHead>Joined</TableHead>
@@ -371,25 +372,30 @@ export default function AffiliateList() {
                     />
                   </TableCell>
                   <TableCell>
-                    <div className="font-medium">{affiliate.name}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {affiliate.email}
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="font-medium">{affiliate.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {affiliate.email}
+                        </div>
+                      </div>
+                      <Badge variant={statusVariantMap[affiliate.status as AffiliateStatusType]} className="ml-2">
+                        {affiliate.status.charAt(0).toUpperCase() + affiliate.status.slice(1)}
+                      </Badge>
                     </div>
                   </TableCell>
-                  <TableCell>{affiliate.slug}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariantMap[affiliate.status] || 'secondary'}>
-                      {affiliate.status.charAt(0).toUpperCase() + affiliate.status.slice(1)}
-                    </Badge>
-                  </TableCell>
+                  <TableCell>{affiliate.membership_level_name}</TableCell>
                   <TableCell className="text-right">
-                    {typeof affiliate.tier_commission_rate === 'number'
+                    {affiliate.tier_commission_rate !== null && affiliate.tier_commission_rate !== undefined
                       ? `${(affiliate.tier_commission_rate * 100).toFixed(0)}%`
-                      : affiliate.membership_level_name ? 'N/A' : 'No Tier'}
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell>
+                    {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(affiliate.total_earnings || 0)}
                   </TableCell>
                   <TableCell className="text-right">{affiliate.total_conversions}</TableCell>
                   <TableCell className="text-right">
-                    ${affiliate.total_earnings.toFixed(2)}
+                    {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(affiliate.total_earnings || 0)}
                   </TableCell>
                   <TableCell>{new Date(affiliate.joined_date).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
@@ -426,12 +432,20 @@ export default function AffiliateList() {
                           </DropdownMenuItem>
                         )}
                         {(affiliate.status === 'active' || affiliate.status === 'pending') && (
-                          <DropdownMenuItem 
-                            onClick={(e) => { e.stopPropagation(); handleAction(affiliate.affiliate_id, 'flag', () => flagAffiliate(affiliate.affiliate_id), 'Affiliate flagged successfully', 'Error flagging affiliate'); }}
-                            disabled={actionStates[`${affiliate.affiliate_id}_flag`]}
-                          >
-                            <Flag className="mr-2 h-4 w-4 text-orange-500" />
-                            Flag Account
+                          <DropdownMenuItem asChild>
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <CreateFraudFlagDialog 
+                                affiliateId={affiliate.affiliate_id}
+                                affiliateName={affiliate.name}
+                                onFlagCreated={() => fetchData()}
+                                trigger={
+                                  <div className="flex items-center w-full px-2 py-1.5 text-sm">
+                                    <Flag className="mr-2 h-4 w-4 text-orange-500" />
+                                    Create Fraud Flag
+                                  </div>
+                                }
+                              />
+                            </div>
                           </DropdownMenuItem>
                         )}
                         {affiliate.status === 'active' && (

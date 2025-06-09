@@ -123,11 +123,18 @@ export interface AffiliatePayout {
  * Represents the data structure for affiliate program global configuration.
  * Based on the public.affiliate_program_config table.
  */
+export type PayoutScheduleType = 'monthly' | 'quarterly' | 'bi_annually' | 'annually';
+
+/**
+ * Represents the data structure for affiliate program global configuration.
+ * Based on the public.affiliate_program_config table.
+ */
 export interface AffiliateProgramConfigData {
   cookie_duration_days: number;
   min_payout_threshold: number;
   terms_of_service_content?: string | null; // TEXT, can be null
+  payout_schedule?: PayoutScheduleType | null; // Added
+  payout_currency?: string | null;             // Added (e.g., 'USD', 'PHP')
   created_at: string; // TIMESTAMPTZ
   updated_at: string; // TIMESTAMPTZ
 }
-
