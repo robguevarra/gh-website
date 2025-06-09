@@ -2,6 +2,7 @@
 
 import type { AffiliateClick, AffiliateConversion, ConversionStatusType, AffiliatePayout, PayoutMethodType } from '@/types/admin/affiliate';
 import { getAdminClient } from '@/lib/supabase/admin';
+import { unstable_cache } from 'next/cache';
 
 interface GetAffiliateClicksParams {
   affiliateId: string;
@@ -19,12 +20,22 @@ interface GetAffiliateClicksResult {
   totalCount: number;
 }
 
-export async function getAffiliateClicks({
+/**
+ * Fetches paginated affiliate clicks with optional filters
+ * Cached with a 60-second revalidation period
+ */
+export async function getAffiliateClicks(params: GetAffiliateClicksParams): Promise<GetAffiliateClicksResult> {
+  return getAffiliateClicksWithCache(params);
+}
+
+// Cached implementation that's called by the exported function
+const getAffiliateClicksWithCache = unstable_cache(
+  async ({
   affiliateId,
   currentPage,
   itemsPerPage,
   filters = {},
-}: GetAffiliateClicksParams): Promise<GetAffiliateClicksResult> {
+}: GetAffiliateClicksParams): Promise<GetAffiliateClicksResult> => {
   try {
     const supabase = getAdminClient();
 
@@ -67,7 +78,10 @@ export async function getAffiliateClicks({
     console.error('Unexpected error in getAffiliateClicks:', err);
     return { data: null, error: err.message || 'An unexpected error occurred', totalCount: 0 };
   }
-}
+},
+['affiliate-clicks', 'affiliate-data'],
+{ revalidate: 60, tags: ['affiliate-clicks'] }
+);
 
 // Server action to fetch affiliate conversions
 
@@ -87,12 +101,22 @@ interface GetAffiliateConversionsResult {
   totalCount: number;
 }
 
-export async function getAffiliateConversions({
+/**
+ * Fetches paginated affiliate conversions with optional filters
+ * Cached with a 60-second revalidation period
+ */
+export async function getAffiliateConversions(params: GetAffiliateConversionsParams): Promise<GetAffiliateConversionsResult> {
+  return getAffiliateConversionsWithCache(params);
+}
+
+// Cached implementation that's called by the exported function
+const getAffiliateConversionsWithCache = unstable_cache(
+  async ({
   affiliateId,
   currentPage,
   itemsPerPage,
   filters = {},
-}: GetAffiliateConversionsParams): Promise<GetAffiliateConversionsResult> {
+}: GetAffiliateConversionsParams): Promise<GetAffiliateConversionsResult> => {
   try {
     const supabase = getAdminClient();
     const offset = (currentPage - 1) * itemsPerPage;
@@ -127,7 +151,10 @@ export async function getAffiliateConversions({
     console.error('Unexpected error in getAffiliateConversions:', err);
     return { data: null, error: err.message || 'An unexpected error occurred', totalCount: 0 };
   }
-}
+},
+['affiliate-conversions', 'affiliate-data'],
+{ revalidate: 60, tags: ['affiliate-conversions'] }
+);
 
 // Server action to fetch affiliate payouts
 
@@ -147,12 +174,22 @@ interface GetAffiliatePayoutsResult {
   totalCount: number;
 }
 
-export async function getAffiliatePayouts({
+/**
+ * Fetches paginated affiliate payouts with optional filters
+ * Cached with a 60-second revalidation period
+ */
+export async function getAffiliatePayouts(params: GetAffiliatePayoutsParams): Promise<GetAffiliatePayoutsResult> {
+  return getAffiliatePayoutsWithCache(params);
+}
+
+// Cached implementation that's called by the exported function
+const getAffiliatePayoutsWithCache = unstable_cache(
+  async ({
   affiliateId,
   currentPage,
   itemsPerPage,
   filters = {},
-}: GetAffiliatePayoutsParams): Promise<GetAffiliatePayoutsResult> {
+}: GetAffiliatePayoutsParams): Promise<GetAffiliatePayoutsResult> => {
   try {
     const supabase = getAdminClient();
     const offset = (currentPage - 1) * itemsPerPage;
@@ -187,4 +224,7 @@ export async function getAffiliatePayouts({
     console.error('Unexpected error in getAffiliatePayouts:', err);
     return { data: null, error: err.message || 'An unexpected error occurred', totalCount: 0 };
   }
-}
+},
+['affiliate-payouts', 'affiliate-data'],
+{ revalidate: 60, tags: ['affiliate-payouts'] }
+);

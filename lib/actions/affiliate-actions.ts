@@ -1,8 +1,10 @@
 'use server';
 
 import { getAdminClient } from '@/lib/supabase/admin';
-import { AdminAffiliateListItem, AffiliateStatusType, AdminFraudFlagListItem, FraudFlagItem, AffiliateProgramConfigData } from '../types/admin/affiliate';
+import { AdminAffiliateListItem, AffiliateStatusType, AdminFraudFlagListItem, FraudFlagItem, AffiliateProgramConfigData, PayoutScheduleType } from '@/types/admin/affiliate';
 import { revalidatePath } from 'next/cache';
+import { logAdminActivity } from './activity-log-actions'; 
+
 
 // Define and export types for Affiliate Analytics
 export interface TrendDataPoint {
@@ -33,7 +35,14 @@ export interface AffiliateAnalyticsData {
   kpis: AffiliateProgramKPIs;
   trends: AffiliateProgramTrends;
   topAffiliatesByConversions?: TopAffiliateDataPoint[];
-  // Placeholder for future additions like recentActivity
+  // Direct access fields for convenience
+  totalActiveAffiliates: number;
+  pendingApplications: number;
+  totalClicksLast30Days: number;
+  totalConversionsLast30Days: number;
+  totalGmvLast30Days: number;
+  totalCommissionsPaidLast30Days: number;
+  averageConversionRate: number;
 }
 
 export interface TopAffiliateDataPoint {
@@ -44,7 +53,102 @@ export interface TopAffiliateDataPoint {
 }
 
 
+// At the top of lib/actions/affiliate-actions.ts, add:
+// Assuming Database type is already available or implicitly handled by activity_log_type enum usage
+// If not, and activity_log_type is directly used from Database['public']['Enums']['activity_log_type']
+// we might need: import { Database } from '@/types/supabase'; // Adjust path if necessary
+
+// ... other imports ...
+
+export async function updateAffiliateStatus(userId: string, newStatus: AffiliateStatusType) {
+  const supabase = getAdminClient();
+  let oldStatus: AffiliateStatusType | undefined;
+  let targetUserId: string = userId;
+
+  try {
+    // 1. Fetch current affiliate data by user_id
+    const { data: affiliates, error: fetchError } = await supabase
+      .from('affiliates')
+      .select('id, status')
+      .eq('user_id', userId);
+
+    if (fetchError) {
+      console.error('Error fetching current affiliate status:', fetchError);
+      throw new Error(`Failed to fetch current affiliate data: ${fetchError.message}`);
+    }
+    
+    // Check if we got any results
+    if (!affiliates || affiliates.length === 0) {
+      throw new Error(`Affiliate with user ID ${userId} not found.`);
+    }
+    
+    const currentAffiliate = affiliates[0];
+    const affiliateId = currentAffiliate.id; // Store the affiliate ID for later use
+    oldStatus = currentAffiliate.status as AffiliateStatusType;
+
+    // 2. Update affiliate status
+    const { data: updatedAffiliate, error: updateError } = await supabase
+      .from('affiliates')
+      .update({ status: newStatus })
+      .eq('id', affiliateId)
+      .select('id, user_id, status') // Keep select for return consistency if needed elsewhere
+      .single();
+
+    if (updateError) {
+      console.error('Error updating affiliate status:', updateError);
+      throw new Error(`Failed to update affiliate status: ${updateError.message}`);
+    }
+
+    if (!updatedAffiliate) {
+      // This case should ideally be caught by the fetch above, but as a safeguard:
+      throw new Error('Affiliate not found after update attempt or no change made.');
+    }
+
+    // 3. Log the admin activity
+    if (oldStatus !== newStatus) { // Only log if status actually changed
+      await logAdminActivity({
+        // admin_user_id will be fetched by logAdminActivity if not provided
+        target_user_id: userId,
+        target_entity_id: affiliateId,
+        activity_type: 'AFFILIATE_STATUS_CHANGE', // Make sure this matches your enum definition
+        description: `Affiliate status changed from ${oldStatus} to ${newStatus} for user ID ${userId}.`,
+        details: { 
+          affiliate_id: affiliateId,
+          old_status: oldStatus,
+          new_status: newStatus,
+          user_id: userId
+        },
+        // ip_address can be added if available/needed
+      });
+    }
+
+    // Revalidate affiliate pages to refresh UI after status change
+    revalidatePath('/admin/affiliates');
+    if (affiliateId) {
+      revalidatePath(`/admin/affiliates/${affiliateId}`);
+    }
+
+    return { success: true, data: updatedAffiliate };
+
+  } catch (err) {
+    console.error('Unexpected error in updateAffiliateStatus:', err);
+    const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
+    return { success: false, error: errorMessage };
+  }
+}
+
+
+/**
+ * Get list of all affiliates with basic information for admin dashboard
+ * Cached with a 60-second revalidation period
+ */
 export async function getAdminAffiliates(): Promise<AdminAffiliateListItem[]> {
+  return getAdminAffiliatesWithCache();
+}
+
+// Cached implementation that's called by the exported function
+const getAdminAffiliatesWithCache = unstable_cache(
+  async (): Promise<AdminAffiliateListItem[]> => {
   const supabase = getAdminClient();
 
   try {
@@ -62,7 +166,8 @@ export async function getAdminAffiliates(): Promise<AdminAffiliateListItem[]> {
           last_name,
           membership_level_id,
           membership_levels (name, commission_rate)
-        )
+        ),
+        affiliate_conversions (commission_amount)
       `)
       .order('created_at', { ascending: false });
 
@@ -75,41 +180,35 @@ export async function getAdminAffiliates(): Promise<AdminAffiliateListItem[]> {
       return [];
     }
 
-    const affiliates: AdminAffiliateListItem[] = data.map((item: any) => {
-      const profile = item.unified_profiles; // Assuming !affiliates_user_id_fkey ensures this is an object or null
-      
-      let name = 'N/A';
-      if (profile) {
-        if (profile.first_name && profile.last_name) {
-          name = `${profile.first_name} ${profile.last_name}`;
-        } else if (profile.first_name) {
-          name = profile.first_name;
-        } else if (profile.last_name) {
-          name = profile.last_name;
-        } else if (profile.email) {
-          name = profile.email;
-        }
-      }
+    const mappedData = data.map((item: any) => {
+      const profile = item.unified_profiles;
+      const memberLevel = profile?.membership_levels;
 
-      const membershipLevelData = profile?.membership_levels as { name: string; commission_rate: number } | undefined;
+      const totalLifetimeCommissions = item.affiliate_conversions?.reduce(
+        (sum: number, conversion: { commission_amount: number | null }) => sum + (conversion.commission_amount || 0),
+        0
+      ) || 0;
+
       return {
         affiliate_id: item.id,
         user_id: item.user_id,
-        name: name,
+        name: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || item.slug || 'N/A',
         email: profile?.email || 'N/A',
         slug: item.slug,
-        status: item.status as AffiliateStatusType,
-        membership_level_name: membershipLevelData?.name,
-        tier_commission_rate: membershipLevelData?.commission_rate,
-        current_membership_level_id: profile?.membership_level_id || null,
-        joined_date: item.created_at,
-        total_clicks: 0, // Placeholder for list view
-        total_conversions: 0, // Placeholder for list view
-        total_earnings: 0,    // Placeholder for list view
+        status: item.status,
+        membership_level_name: memberLevel?.name,
+        tier_commission_rate: memberLevel?.commission_rate,
+        current_membership_level_id: profile?.membership_level_id,
+        joined_date: item.created_at, // Will be formatted by UI if needed
+        total_clicks: 0, // Placeholder - to be implemented if needed
+        total_conversions: 0, // Placeholder - to be implemented if needed
+        total_earnings: totalLifetimeCommissions,
+        // ctr: undefined, // Placeholder for calculated metric
+        // fraud_flags: [], // Placeholder, fetch if needed
       };
     });
 
-    return affiliates;
+    return mappedData as AdminAffiliateListItem[];
   } catch (err) {
     console.error('Unexpected error in getAdminAffiliates:', err);
     if (err instanceof Error) {
@@ -117,7 +216,10 @@ export async function getAdminAffiliates(): Promise<AdminAffiliateListItem[]> {
     }
     throw new Error('An unexpected error occurred while fetching affiliates.');
   }
-}
+},
+['admin-affiliates-list', 'affiliate-data'],
+{ revalidate: 60, tags: ['affiliate-data'] }
+);
 
 export async function approveAffiliate(affiliateId: string): Promise<{ success: boolean; error?: string }> {
   const supabase = getAdminClient();
@@ -191,7 +293,21 @@ export async function flagAffiliate(affiliateId: string): Promise<{ success: boo
   }
 } // Closing flagAffiliate function
 
+// Import unstable_cache from next/cache for data caching
+import { unstable_cache } from 'next/cache';
+
+/**
+ * Get detailed information about a specific affiliate by ID
+ * Cached with a 60-second revalidation period
+ */
 export async function getAdminAffiliateById(affiliateId: string): Promise<AdminAffiliateListItem | null> {
+  // Use a wrapper function for caching
+  return getAdminAffiliateByIdWithCache(affiliateId);
+}
+
+// Cached implementation that's called by the exported function
+const getAdminAffiliateByIdWithCache = unstable_cache(
+  async (affiliateId: string): Promise<AdminAffiliateListItem | null> => {
   const supabase = getAdminClient();
 
   try {
@@ -304,9 +420,22 @@ export async function getAdminAffiliateById(affiliateId: string): Promise<AdminA
     }
     throw new Error('An unexpected error occurred while fetching affiliate details.');
   }
+},
+['admin-affiliate-detail', 'affiliate-data'],
+{ revalidate: 60, tags: ['affiliate-data'] }
+);
+
+/**
+ * Get all fraud flags across the system for admin review
+ * Cached with a 60-second revalidation period
+ */
+export async function getAllAdminFraudFlags(): Promise<{ flags: AdminFraudFlagListItem[]; error?: string }> {
+  return getAllAdminFraudFlagsWithCache();
 }
 
-export async function getAllAdminFraudFlags(): Promise<AdminFraudFlagListItem[]> {
+// Cached implementation that's called by the exported function
+const getAllAdminFraudFlagsWithCache = unstable_cache(
+  async (): Promise<{ flags: AdminFraudFlagListItem[]; error?: string }> => {
   const supabase = getAdminClient();
 
   try {
@@ -327,11 +456,11 @@ export async function getAllAdminFraudFlags(): Promise<AdminFraudFlagListItem[]>
 
     if (error) {
       console.error('Error fetching fraud flags:', error);
-      throw new Error(`Failed to fetch fraud flags: ${error.message}`);
+      return { flags: [], error: 'Failed to fetch fraud flags' };
     }
 
     if (!data) {
-      return [];
+      return { flags: [] };
     }
 
     const fraudFlags: AdminFraudFlagListItem[] = data.map((item: any) => {
@@ -372,27 +501,46 @@ export async function getAllAdminFraudFlags(): Promise<AdminFraudFlagListItem[]>
       };
     });
 
-    return fraudFlags;
+    return { flags: fraudFlags };
 
   } catch (err) {
     console.error('Unexpected error in getAllAdminFraudFlags:', err);
-    const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
-    throw new Error(`Unexpected error fetching all fraud flags: ${errorMessage}`);
+    return { flags: [], error: 'Failed to fetch fraud flags' };
   }
-}
+},
+['admin-fraud-flags', 'affiliate-data'],
+{ revalidate: 60, tags: ['fraud-flags', 'affiliate-data'] }
+);
 
-export async function resolveFraudFlag(
-  flagId: string,
-  resolverNotes: string
-): Promise<{ success: boolean; error?: string; data?: FraudFlagItem }> {
+export async function resolveFraudFlag({
+  flagId,
+  resolutionNotes,
+  resolvedById
+}: {
+  flagId: string;
+  resolutionNotes: string;
+  resolvedById?: string;
+}): Promise<{ success: boolean; error?: string; data?: FraudFlagItem }> {
   const supabase = getAdminClient();
   try {
+    // First, get the fraud flag to include affiliate details in our log
+    const { data: fraudFlag, error: fetchError } = await supabase
+      .from('fraud_flags')
+      .select('id, affiliate_id')
+      .eq('id', flagId)
+      .single();
+
+    if (fetchError) {
+      console.error(`Error fetching fraud flag ${flagId}:`, fetchError);
+      return { success: false, error: `Failed to fetch fraud flag: ${fetchError.message}` };
+    }
+
     const { data, error } = await supabase
       .from('fraud_flags')
       .update({
         resolved: true,
         resolved_at: new Date().toISOString(),
-        resolver_notes: resolverNotes,
+        resolver_notes: resolutionNotes,
       })
       .eq('id', flagId)
       .select()
@@ -403,10 +551,26 @@ export async function resolveFraudFlag(
       return { success: false, error: `Failed to resolve fraud flag: ${error.message}` };
     }
 
+    // Note: When the admin_fraud_notifications table is properly added to the schema with TypeScript types,
+    // we'll add code here to mark any associated fraud notifications as read automatically
+    // For now, we're using the simplified approach that doesn't require database schema changes
+
+    // Log admin activity after successful update
+    await logAdminActivity({
+      activity_type: 'FRAUD_FLAG_RESOLVED',
+      description: `Resolved fraud flag (ID: ${flagId})`,
+      target_entity_id: flagId,
+      target_user_id: fraudFlag?.affiliate_id || null,
+      details: {
+        flagId,
+        resolutionNotes,
+        affiliateId: fraudFlag?.affiliate_id || null
+      }
+    });
+
     revalidatePath('/admin/affiliates/flags');
-    // Consider revalidating /admin/affiliates and /admin/affiliates/[id] if resolving a flag
-    // should also trigger an update to the affiliate's status display on those pages.
-    // For now, status changes are handled by a separate admin action.
+    // Also revalidate analytics page to update notification badge
+    revalidatePath('/admin/affiliates/analytics');
 
     return { success: true, data: data as FraudFlagItem };
   } catch (err) {
@@ -418,25 +582,269 @@ export async function resolveFraudFlag(
   }
 }
 
-// Interface for the analytics data structure
-export interface AffiliateAnalyticsData {
-  kpis: {
-    totalActiveAffiliates: number;
-    pendingApplications: number;
-    totalClicksLast30Days: number;
-    totalConversionsLast30Days: number;
-    totalGmvLast30Days: number;
-    totalCommissionsPaidLast30Days: number;
-    averageConversionRate: number;
-  };
-  // TODO: Add structures for chart data (e.g., time series data for clicksOverTime, conversionsOverTime)
+/**
+ * Create a new fraud flag for an affiliate
+ */
+
+/**
+ * Get affiliate referral links for a given affiliate
+ * Cached with a 60-second revalidation period
+ */
+export async function getAffiliateLinks(affiliateId: string): Promise<{ links: any[]; error?: string }> {
+  return getAffiliateLinksWithCache(affiliateId);
+}
+
+// Cached implementation that's called by the exported function
+const getAffiliateLinksWithCache = unstable_cache(
+  async (affiliateId: string): Promise<{ links: any[]; error?: string }> => {
+  const supabase = getAdminClient();
+  try {
+    // Fetch referral links
+    const { data: links, error } = await supabase
+      .from('affiliate_links')
+      .select(`
+        id,
+        name,
+        slug,
+        url_path,
+        created_at,
+        is_active,
+        utm_source,
+        utm_medium,
+        utm_campaign
+      `)
+      .eq('affiliate_id', affiliateId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error(`Error fetching affiliate links for ${affiliateId}:`, error);
+      return { links: [], error: error.message };
+    }
+
+    // For each link, count clicks and conversions
+    if (links && links.length > 0) {
+      const enhancedLinks = await Promise.all(links.map(async (link: any) => {
+        if (!link?.id) {
+          console.error('Link object missing ID:', link);
+          return {
+            ...link,
+            click_count: 0,
+            conversion_count: 0
+          };
+        }
+
+        // Count clicks
+        const { count: clickCount, error: clickError } = await supabase
+          .from('affiliate_clicks')
+          .select('id', { count: 'exact', head: false })
+          .eq('link_id', link.id);
+
+        // Count conversions
+        const { count: conversionCount, error: conversionError } = await supabase
+          .from('affiliate_conversions')
+          .select('id', { count: 'exact', head: false })
+          .eq('link_id', link.id);
+
+        if (clickError) console.error(`Error counting clicks for link ${link.id}:`, clickError);
+        if (conversionError) console.error(`Error counting conversions for link ${link.id}:`, conversionError);
+
+        return {
+          ...link,
+          click_count: clickCount || 0,
+          conversion_count: conversionCount || 0
+        };
+      }));
+
+      return { links: enhancedLinks };
+    }
+
+    return { links: links || [] };
+  } catch (err) {
+    console.error(`Error in getAffiliateLinks for affiliate ${affiliateId}:`, err);
+    const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+    return { links: [], error: errorMessage };
+  }
+},
+['affiliate-links', 'affiliate-data'],
+{ revalidate: 60, tags: ['affiliate-links', 'affiliate-data'] }
+);
+
+/**
+ * Get all fraud flags for a specific affiliate
+ * Cached with a 60-second revalidation period
+ */
+export async function getFraudFlagsForAffiliate(affiliateId: string): Promise<{ flags: AdminFraudFlagListItem[]; error?: string }> {
+  return getFraudFlagsForAffiliateWithCache(affiliateId);
+}
+
+// Cached implementation that's called by the exported function
+const getFraudFlagsForAffiliateWithCache = unstable_cache(
+  async (affiliateId: string): Promise<{ flags: AdminFraudFlagListItem[]; error?: string }> => {
+  const supabase = getAdminClient();
+  try {
+    // Fetch fraud flags for the specific affiliate
+    const { data: fraudFlags, error } = await supabase
+      .from('fraud_flags')
+      .select(`
+        *,
+        affiliates!inner(id, user_id, unified_profiles!affiliates_user_id_fkey(first_name, last_name, email))
+      `)
+      .eq('affiliate_id', affiliateId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error(`Error getting fraud flags for affiliate ${affiliateId}:`, error);
+      return { flags: [], error: 'Failed to fetch fraud flags' };
+    }
+
+    // Format the fraud flag data with affiliate info
+    const formattedFlags: AdminFraudFlagListItem[] = fraudFlags.map(flag => ({
+      id: flag.id,
+      affiliate_id: flag.affiliate_id,
+      reason: flag.reason,
+      details: flag.details,
+      resolved: flag.resolved,
+      resolved_notes: flag.resolver_notes,
+      resolved_at: flag.resolved_at,
+      created_at: flag.created_at,
+      updated_at: flag.updated_at,
+      affiliate_name: `${flag.affiliates.unified_profiles.first_name || ''} ${flag.affiliates.unified_profiles.last_name || ''}`.trim(),
+      affiliate_email: flag.affiliates.unified_profiles.email
+    }));
+
+    return { flags: formattedFlags };
+  } catch (err) {
+    console.error(`Unexpected error fetching fraud flags for affiliate ${affiliateId}:`, err);
+    return { flags: [], error: 'Failed to fetch fraud flags' };
+  }
+},
+['affiliate-fraud-flags', 'affiliate-data'],
+{ revalidate: 60, tags: ['fraud-flags', 'affiliate-data'] }
+);
+
+export async function createFraudFlag({
+  affiliateId,
+  reason,
+  details,
+  flaggedById
+}: {
+  affiliateId: string;
+  reason: string;
+  details?: Record<string, any>;
+  flaggedById?: string;
+}): Promise<{ success: boolean; error?: string; data?: FraudFlagItem }> {
+  const supabase = getAdminClient();
+  try {
+    // Get affiliate details for logging/notification purposes
+    const { data: affiliate, error: affiliateError } = await supabase
+      .from('affiliates')
+      .select('id, user_id')
+      .eq('id', affiliateId)
+      .single();
+
+    if (affiliateError) {
+      console.error(`Error fetching affiliate ${affiliateId}:`, affiliateError);
+      return { success: false, error: `Failed to fetch affiliate: ${affiliateError.message}` };
+    }
+
+    // Create the fraud flag
+    const { data, error } = await supabase
+      .from('fraud_flags')
+      .insert({
+        affiliate_id: affiliateId,
+        reason,
+        details,
+        resolved: false,
+        flagged_by_id: flaggedById
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error(`Error creating fraud flag for affiliate ${affiliateId}:`, error);
+      return { success: false, error: `Failed to create fraud flag: ${error.message}` };
+    }
+
+    // Log admin activity after successful creation
+    await logAdminActivity({
+      activity_type: 'FRAUD_FLAG_CREATED',
+      description: `Created fraud flag for affiliate (ID: ${affiliateId})`,
+      target_entity_id: data.id,
+      target_user_id: affiliate?.user_id || null,
+      details: {
+        flagId: data.id,
+        reason,
+        affiliateId
+      }
+    });
+
+    // Get full affiliate info for notifications
+    const { data: fullAffiliateInfo, error: fullInfoError } = await supabase
+      .from('affiliates')
+      .select(`
+        id,
+        user_id,
+        unified_profiles!inner(first_name, last_name, email)
+      `)
+      .eq('id', affiliateId)
+      .single();
+
+    if (!fullInfoError && fullAffiliateInfo) {
+      // We now have all the data needed to create a complete fraud flag item for risk assessment
+      const fraudFlagWithAffiliateInfo: AdminFraudFlagListItem = {
+        ...data as FraudFlagItem,
+        affiliate_name: `${fullAffiliateInfo.unified_profiles.first_name || ''} ${fullAffiliateInfo.unified_profiles.last_name || ''}`.trim(),
+        affiliate_email: fullAffiliateInfo.unified_profiles.email
+      };
+      
+      // Import and process risk assessment here
+      // This is a dynamic import to avoid circular dependencies
+      const { assessFraudRiskLevel } = await import('@/lib/actions/fraud-notification-actions-simplified');
+      
+      // Assess the risk level - properly await the Promise
+      const riskAssessment = await assessFraudRiskLevel(fraudFlagWithAffiliateInfo);
+      
+      // Log high-risk flags for notification purposes
+      if (riskAssessment.level === 'high' || riskAssessment.level === 'medium') {
+        console.log(`High/medium risk fraud flag detected (ID: ${data.id}, Score: ${riskAssessment.score})`);
+        console.log(`Risk factors: ${riskAssessment.factors.join(', ')}`);
+        
+        // In the future, when the notifications table is properly set up, we would insert into it here
+      }
+    }
+
+    // Revalidate paths
+    revalidatePath('/admin/affiliates/flags');
+    revalidatePath('/admin/affiliates/analytics'); // For notification badge
+    revalidatePath(`/admin/affiliates/${affiliateId}`); // For individual affiliate view
+
+    return { success: true, data: data as FraudFlagItem };
+  } catch (err) {
+    console.error(`Unexpected error creating fraud flag for affiliate ${affiliateId}:`, err);
+    const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
+    
+    return { success: false, error: 'An unexpected error occurred while creating the fraud flag.' };
+  }
 }
 
 /**
  * Fetches analytics data for the affiliate program dashboard.
  * @returns Promise<AffiliateAnalyticsData>
  */
+
+/**     
+ * Fetches analytics data for the affiliate program dashboard.
+ * Cached with a 60-second revalidation period
+ * @returns Promise<AffiliateAnalyticsData>
+ */
 export async function getAffiliateProgramAnalytics(startDate?: string, endDate?: string): Promise<AffiliateAnalyticsData> {
+  // Create a cache key based on the date range
+  return getAffiliateProgramAnalyticsWithCache(startDate, endDate);
+}
+
+// Cached implementation that's called by the exported function
+const getAffiliateProgramAnalyticsWithCache = unstable_cache(
+  async (startDate?: string, endDate?: string): Promise<AffiliateAnalyticsData> => {
   const supabase = getAdminClient();
   
   // Set default date range to last 30 days if not provided
@@ -625,7 +1033,6 @@ export async function getAffiliateProgramAnalytics(startDate?: string, endDate?:
       console.error("Error processing top performing affiliates:", topAffiliatesFetchError);
       // topAffiliatesByConversions will remain []
     }
-
     return {
       kpis: {
         totalActiveAffiliates,
@@ -640,6 +1047,14 @@ export async function getAffiliateProgramAnalytics(startDate?: string, endDate?:
       },
       trends,
       topAffiliatesByConversions,
+      // Adding direct access fields required by the interface
+      totalActiveAffiliates,
+      pendingApplications,
+      totalClicksLast30Days: totalClicks,  // Using the same values since we're already fetching for the specified timeframe
+      totalConversionsLast30Days: totalConversions,
+      totalGmvLast30Days: totalGmv,
+      totalCommissionsPaidLast30Days: totalCommissionsPaid,
+      averageConversionRate,
     };
 
   } catch (error) {
@@ -649,39 +1064,21 @@ export async function getAffiliateProgramAnalytics(startDate?: string, endDate?:
       kpis: defaultKpis,
       trends: defaultTrends,
       topAffiliatesByConversions: [],
+      // Adding direct access fields required by the interface
+      totalActiveAffiliates: defaultKpis.totalActiveAffiliates,
+      pendingApplications: defaultKpis.pendingApplications,
+      totalClicksLast30Days: defaultKpis.totalClicks,
+      totalConversionsLast30Days: defaultKpis.totalConversions,
+      totalGmvLast30Days: defaultKpis.totalGmv,
+      totalCommissionsPaidLast30Days: defaultKpis.totalCommissionsPaid,
+      averageConversionRate: defaultKpis.averageConversionRate,
     };
   }
-}
+},
+['affiliate-program-analytics', 'affiliate-data'],
+{ revalidate: 60, tags: ['affiliate-analytics'] }
+);
 
-
-export async function updateAffiliateStatus(
-  affiliateId: string,
-  status: AffiliateStatusType
-): Promise<{ success: boolean; error?: string }> {
-  const supabase = getAdminClient();
-
-  try {
-    const { error } = await supabase
-      .from('affiliates')
-      .update({ status: status })
-      .eq('id', affiliateId);
-
-    if (error) {
-      console.error(`Error updating status for affiliate ${affiliateId}:`, error);
-      return { success: false, error: `Failed to update status: ${error.message}` };
-    }
-
-    revalidatePath('/admin/affiliates');
-    revalidatePath(`/admin/affiliates/${affiliateId}`);
-    return { success: true };
-  } catch (err) {
-    console.error(`Unexpected error updating status for affiliate ${affiliateId}:`, err);
-    if (err instanceof Error) {
-      return { success: false, error: `An unexpected error occurred: ${err.message}` };
-    }
-    return { success: false, error: 'An unexpected error occurred.' };
-  }
-}
 
 export async function updateAdminAffiliateDetails(
   affiliateId: string,
@@ -730,6 +1127,18 @@ export async function updateAffiliateMembershipLevel(
   const supabase = getAdminClient();
 
   try {
+    // Get the membership level name for logging if membershipLevelId is provided
+    let membershipLevelName = membershipLevelId ? null : 'None';
+    if (membershipLevelId) {
+      const { data: membershipLevel } = await supabase
+        .from('membership_levels')
+        .select('name')
+        .eq('id', membershipLevelId)
+        .single();
+      
+      membershipLevelName = membershipLevel?.name || 'Unknown';
+    }
+    
     const { error } = await supabase
       .from('unified_profiles')
       .update({ membership_level_id: membershipLevelId })
@@ -745,6 +1154,19 @@ export async function updateAffiliateMembershipLevel(
       }
       return { success: false, error: `Failed to update membership level: ${error.message}` };
     }
+    
+    // Log admin activity
+    await logAdminActivity({
+      activity_type: 'MEMBERSHIP_LEVEL_UPDATE_ADMIN',
+      description: `Updated affiliate membership level to "${membershipLevelName}"`,
+      target_user_id: userId,
+      target_entity_id: membershipLevelId,
+      details: {
+        userId,
+        membershipLevelId,
+        membershipLevelName
+      }
+    });
 
     // Revalidation will be handled by the calling component/page
     // For example: revalidatePath(`/admin/affiliates/${affiliateId}`);
@@ -765,21 +1187,29 @@ export interface UpdateAffiliateProgramSettingsArgs {
   cookie_duration_days?: number;
   min_payout_threshold?: number;
   terms_of_service_content?: string | null;
+  payout_schedule?: PayoutScheduleType | null; // Added
+  payout_currency?: string | null;             // Added
 }
 
-const DEFAULT_SETTINGS_FALLBACK: Omit<AffiliateProgramConfigData, 'default_commission_rate'> & { default_commission_rate?: number } = {
+const DEFAULT_SETTINGS_FALLBACK: Omit<AffiliateProgramConfigData, 'created_at' | 'updated_at'> = {
   cookie_duration_days: 30,
   min_payout_threshold: 50,
   terms_of_service_content: null,
-  created_at: new Date().toISOString(), // Placeholder, actual value from DB
-  updated_at: new Date().toISOString(), // Placeholder, actual value from DB
+  payout_schedule: 'monthly', // Default payout schedule
+  payout_currency: 'USD',     // Default payout currency
 };
 
 /**
  * Fetches the global affiliate program settings.
- * Converts commission rate from decimal (DB) to percentage (UI).
+ * Cached with a 60-second revalidation period
  */
 export async function getAffiliateProgramSettings(): Promise<AffiliateProgramConfigData> {
+  return getAffiliateProgramSettingsWithCache();
+}
+
+// Cached implementation that's called by the exported function
+const getAffiliateProgramSettingsWithCache = unstable_cache(
+  async (): Promise<AffiliateProgramConfigData> => {
   const supabase = getAdminClient();
   try {
     const { data, error } = await supabase
@@ -794,19 +1224,37 @@ export async function getAffiliateProgramSettings(): Promise<AffiliateProgramCon
     }
 
     if (!data) {
-      console.warn('Affiliate program settings not found, returning defaults.');
-      return { ...DEFAULT_SETTINGS_FALLBACK };
+      // If no settings found, return the default settings structure
+      console.warn('No affiliate program settings found in DB, returning default values.');
+      return {
+        ...DEFAULT_SETTINGS_FALLBACK,
+        created_at: new Date().toISOString(), // Placeholder for type conformity
+        updated_at: new Date().toISOString(), // Placeholder for type conformity
+      };
     }
-    
-    // default_commission_rate is no longer managed here.
-    // Commission rates are managed via Membership Tiers.
-    return data as AffiliateProgramConfigData;
+  
+    // Ensure all expected fields are present, merging with defaults for any missing optional fields
+    const mergedSettings: AffiliateProgramConfigData = {
+      ...DEFAULT_SETTINGS_FALLBACK, // Provide defaults for any potentially missing optional fields
+      ...data, // DB values override defaults
+      // Ensure types are correct, e.g., numbers are numbers
+      cookie_duration_days: data.cookie_duration_days !== null ? Number(data.cookie_duration_days) : DEFAULT_SETTINGS_FALLBACK.cookie_duration_days,
+      min_payout_threshold: data.min_payout_threshold !== null ? Number(data.min_payout_threshold) : DEFAULT_SETTINGS_FALLBACK.min_payout_threshold,
+      // payout_schedule and payout_currency are optional and can be null, direct assignment from data or fallback is fine if types match.
+      // If data comes from DB as potentially different types, ensure conversion or proper handling.
+      payout_schedule: data.payout_schedule || DEFAULT_SETTINGS_FALLBACK.payout_schedule,
+      payout_currency: data.payout_currency || DEFAULT_SETTINGS_FALLBACK.payout_currency,
+    };
 
+    return mergedSettings;
   } catch (err) {
     console.error('Unexpected error in getAffiliateProgramSettings:', err);
     return { ...DEFAULT_SETTINGS_FALLBACK };
   }
-}
+},
+['affiliate-program-settings', 'affiliate-data'],
+{ revalidate: 60, tags: ['affiliate-settings'] }
+);
 
 /**
  * Updates the global affiliate program settings.
@@ -852,16 +1300,20 @@ export async function updateAffiliateProgramSettings(
     if (!updatedData) {
         return { success: false, error: 'Failed to update settings (no data returned).' };
     }
+    
+    // Log admin activity
+    await logAdminActivity({
+      activity_type: 'AFFILIATE_SETTINGS_UPDATE',
+      description: `Updated affiliate program settings`,
+      details: {
+        updatedFields: Object.keys(dbUpdateData),
+        newValues: dbUpdateData
+      }
+    });
 
     revalidatePath('/admin/affiliates/settings');
 
-    // Convert commission rate back to percentage for the returned data
-    const uiData = {
-      ...updatedData,
-      default_commission_rate: updatedData.default_commission_rate * 100,
-    };
-
-    return { success: true, data: uiData as AffiliateProgramConfigData };
+    return { success: true, data: updatedData as AffiliateProgramConfigData };
 
   } catch (err) {
     console.error('Unexpected error in updateAffiliateProgramSettings:', err);

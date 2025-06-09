@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Textarea } from '@/components/ui/textarea'; // Added for ToS
+import { Textarea } from '@/components/ui/textarea';
 import {
   getAffiliateProgramSettings,
   updateAffiliateProgramSettings,
@@ -17,102 +17,82 @@ import {
   type MembershipLevelData,
   type UpdateMembershipLevelCommissionRateArgs
 } from '@/lib/actions/membership-level-actions';
-import { AffiliateProgramConfigData } from '@/types/admin/affiliate';
-import { revalidatePath } from 'next/cache';
+import { AffiliateProgramConfigData, PayoutScheduleType } from '@/types/admin/affiliate';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SettingsFormWrapper, type SettingsFormState } from '@/components/admin/affiliates/settings-form-wrapper';
 
 export default async function AffiliateSettingsPage() {
   const settings: AffiliateProgramConfigData = await getAffiliateProgramSettings();
   const membershipLevels: MembershipLevelData[] = await getMembershipLevels();
+  const payoutScheduleOptions: PayoutScheduleType[] = ['monthly', 'quarterly', 'bi_annually', 'annually'];
 
-  async function handleSaveSettings(formData: FormData) {
+  async function handleSaveSettings(prevState: SettingsFormState, formData: FormData): Promise<SettingsFormState> {
     'use server';
 
-    const newSettings: UpdateAffiliateProgramSettingsArgs = {};
+    const currentSettings: AffiliateProgramConfigData = await getAffiliateProgramSettings();
+
+    const newSettings: UpdateAffiliateProgramSettingsArgs = {
+      cookie_duration_days: currentSettings.cookie_duration_days,
+      min_payout_threshold: currentSettings.min_payout_threshold,
+      terms_of_service_content: currentSettings.terms_of_service_content,
+      payout_schedule: currentSettings.payout_schedule,
+      payout_currency: currentSettings.payout_currency, 
+    };
 
     const formType = formData.get('formType') as string;
-
-    let membershipTierRatesToUpdate: UpdateMembershipLevelCommissionRateArgs[] = [];
-
-    if (formType === 'general' || formType === 'all') {
-      if (formData.has('cookieDuration')) {
-        newSettings.cookie_duration_days = parseInt(formData.get('cookieDuration') as string, 10);
-      }
-
-      // Process membership tier commission rates
-      // Re-fetch membership levels within server action to ensure we have the latest list of IDs
-      const currentTiers = await getMembershipLevels(); 
-      currentTiers.forEach(tier => {
-        const fieldName = `commission_rate_${tier.id}`;
-        if (formData.has(fieldName)) {
-          const rateValue = formData.get(fieldName) as string;
-          // Allow empty string to set commission_rate to null, otherwise parse as float
-          const commissionRate = rateValue.trim() === '' ? null : parseFloat(rateValue);
-          if (rateValue.trim() !== '' && isNaN(commissionRate!)) {
-            // Handle error for invalid number if not empty, but allow null
-            console.error(`Invalid number format for tier ${tier.name}: ${rateValue}`);
-            // Potentially throw an error or add to an errors array
-            return; // Skip this tier or handle error appropriately
-          }
-          membershipTierRatesToUpdate.push({ id: tier.id, commission_rate: commissionRate });
-        }
-      });
-    }
-
-    if (formType === 'payouts' || formType === 'all') {
-      if (formData.has('minimumPayoutThreshold')) {
-        newSettings.min_payout_threshold = parseFloat(formData.get('minimumPayoutThreshold') as string);
-      }
-    }
-    
-    if (formType === 'agreement' || formType === 'all') {
-      if (formData.has('termsOfService')) {
-        newSettings.terms_of_service_content = formData.get('termsOfService') as string;
-      }
-    }
+    let successMessage = 'Settings saved successfully!';
 
     try {
-      let overallSuccess = true;
-      let messages: string[] = [];
-
-      // Update general affiliate program settings (e.g., cookie duration)
-      if (Object.keys(newSettings).length > 0) {
-        const generalSettingsResult = await updateAffiliateProgramSettings(newSettings);
-        if (generalSettingsResult.success) {
-          messages.push('General affiliate settings updated successfully.');
-        } else {
-          overallSuccess = false;
-          messages.push(`Failed to update general settings: ${generalSettingsResult.error}`);
+      if (formType === 'general') {
+        const cookieDuration = formData.get('cookieDuration') as string;
+        if (cookieDuration) {
+          newSettings.cookie_duration_days = parseInt(cookieDuration, 10);
         }
-      }
 
-      // Update membership tier commission rates if they were part of the form
-      if ((formType === 'general' || formType === 'all') && membershipTierRatesToUpdate.length > 0) {
-        const tierRatesResult = await updateMembershipLevelCommissionRates(membershipTierRatesToUpdate);
-        if (tierRatesResult.success) {
-          messages.push('Membership tier commission rates updated successfully.');
-        } else {
-          overallSuccess = false;
-          messages.push(`Failed to update tier commission rates: ${tierRatesResult.error}`);
+        const commissionRateUpdates: UpdateMembershipLevelCommissionRateArgs[] = [];
+        membershipLevels.forEach(tier => {
+          const rateValue = formData.get(`commission_rate_${tier.id}`) as string;
+          if (rateValue !== null && rateValue !== undefined) {
+            const newRate = rateValue.trim() === '' ? null : parseFloat(rateValue);
+            if (newRate !== tier.commission_rate) {
+              commissionRateUpdates.push({ id: tier.id, commission_rate: newRate });
+            }
+          }
+        });
+
+        if (commissionRateUpdates.length > 0) {
+          await updateMembershipLevelCommissionRates(commissionRateUpdates);
         }
-      }
-      
-      if (overallSuccess && messages.length === 0) {
-        // This case might happen if only an empty formType was submitted or no actual changes were made
-        messages.push('No changes were submitted or settings are already up to date.');
-      } else if (overallSuccess) {
-        console.log('All settings updated successfully:', messages.join(' '));
-      } else {
-        console.error('Error updating settings:', messages.join(' '));
-      }
-      // Revalidate path after all operations
-      revalidatePath('/admin/affiliates/settings');
+        await updateAffiliateProgramSettings(newSettings);
+        successMessage = 'General settings and commission rates saved successfully!';
 
+      } else if (formType === 'payouts') {
+        const minPayoutThreshold = formData.get('minimumPayoutThreshold') as string;
+        const payoutSchedule = formData.get('payoutSchedule') as PayoutScheduleType;
+
+        if (minPayoutThreshold) {
+          newSettings.min_payout_threshold = parseFloat(minPayoutThreshold);
+        }
+        if (payoutSchedule) {
+          newSettings.payout_schedule = payoutSchedule;
+        }
+        newSettings.payout_currency = 'PHP'; 
+
+        await updateAffiliateProgramSettings(newSettings);
+        successMessage = 'Payout settings saved successfully!';
+
+      } else if (formType === 'agreement') {
+        const termsOfService = formData.get('termsOfService') as string;
+        newSettings.terms_of_service_content = termsOfService;
+        await updateAffiliateProgramSettings(newSettings);
+        successMessage = 'Affiliate agreement saved successfully!';
+      }
+      // Revalidation is handled by the individual update actions (updateAffiliateProgramSettings, updateMembershipLevelCommissionRates)
+      return { status: 'success', message: successMessage, timestamp: Date.now() };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred while saving settings.';
-      console.error('Error saving settings:', errorMessage);
-      // Display error message to user (consider a toast notification system)
+      return { status: 'error', message: errorMessage, timestamp: Date.now() };
     }
-    // Revalidation is handled by updateAffiliateProgramSettings action
   }
 
   return (
@@ -130,15 +110,13 @@ export default async function AffiliateSettingsPage() {
         </TabsList>
 
         <TabsContent value="general">
-          <form action={handleSaveSettings}>
+          <SettingsFormWrapper action={handleSaveSettings} formType="general">
             <input type="hidden" name="formType" value="general" />
-            {/* Pass membership level IDs to the server action if needed, though re-fetching is safer for server actions */}
-            {/* {membershipLevels.map(tier => <input type="hidden" key={`tier_id_${tier.id}`} name="tier_ids[]" value={tier.id} />)} */}
             <Card>
               <CardHeader>
                 <CardTitle>General Settings</CardTitle>
                 <CardDescription>
-                  Manage cookie duration and other general program parameters. Commission rates are managed per Membership Tier.
+                  Manage cookie duration. Commission rates are managed per Membership Tier.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -159,7 +137,6 @@ export default async function AffiliateSettingsPage() {
                     min="0"
                   />
                 </div>
-
                 <div className="space-y-1 pt-4">
                   <h4 className="text-md font-medium">Membership Tier Commission Rates (%)</h4>
                   <p className="text-sm text-muted-foreground">
@@ -174,10 +151,10 @@ export default async function AffiliateSettingsPage() {
                       id={`commission_rate_${tier.id}`}
                       name={`commission_rate_${tier.id}`}
                       type="number"
-                      defaultValue={tier.commission_rate === null ? '' : tier.commission_rate.toString()} // Handle null for defaultValue
+                      defaultValue={tier.commission_rate === null ? '' : tier.commission_rate.toString()}
                       placeholder="e.g., 10 for 10%"
                       min="0"
-                      step="0.01" // Allows for decimal percentages like 7.5%
+                      step="0.01"
                       className="max-w-xs"
                     />
                   </div>
@@ -190,65 +167,81 @@ export default async function AffiliateSettingsPage() {
                 <Button type="submit">Save General Settings</Button>
               </CardFooter>
             </Card>
-          </form>
+          </SettingsFormWrapper>
         </TabsContent>
 
         <TabsContent value="payouts">
-          <form action={handleSaveSettings}>
+          <SettingsFormWrapper action={handleSaveSettings} formType="payouts">
             <input type="hidden" name="formType" value="payouts" />
             <Card>
               <CardHeader>
                 <CardTitle>Payout Settings</CardTitle>
                 <CardDescription>
-                  Configure minimum payout thresholds and manage payout methods.
+                  Configure minimum payout thresholds and payout schedules. Currency is fixed to PHP.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-1">
-                  <Label htmlFor="minimumPayoutThreshold">Minimum Payout Threshold ($)</Label>
-                  <Input 
-                    id="minimumPayoutThreshold" 
+                  <Label htmlFor="minimumPayoutThreshold">Minimum Payout Threshold</Label>
+                  <Input
+                    id="minimumPayoutThreshold"
                     name="minimumPayoutThreshold"
-                    type="number" 
-                    defaultValue={settings.min_payout_threshold} 
-                    placeholder="e.g., 50 for $50"
+                    type="number"
+                    defaultValue={settings.min_payout_threshold}
+                    placeholder="e.g., 50 for PHP 50"
                     min="0"
-                    step="0.01"
                   />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="payoutSchedule">Payout Schedule</Label>
+                  <Select name="payoutSchedule" defaultValue={settings.payout_schedule || 'monthly'}>
+                    <SelectTrigger id="payoutSchedule">
+                      <SelectValue placeholder="Select a schedule" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {payoutScheduleOptions.map(schedule => (
+                        <SelectItem key={schedule} value={schedule}>
+                          {schedule.charAt(0).toUpperCase() + schedule.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardContent>
               <CardFooter>
                 <Button type="submit">Save Payout Settings</Button>
               </CardFooter>
             </Card>
-          </form>
+          </SettingsFormWrapper>
         </TabsContent>
 
         <TabsContent value="agreement">
-          <form action={handleSaveSettings}>
+          <SettingsFormWrapper action={handleSaveSettings} formType="agreement">
             <input type="hidden" name="formType" value="agreement" />
             <Card>
               <CardHeader>
                 <CardTitle>Affiliate Agreement</CardTitle>
                 <CardDescription>
-                  Customize the terms of service for your affiliate program.
+                  Define the terms of service for your affiliate program.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <Label htmlFor="termsOfService">Terms of Service Content</Label>
-                <Textarea 
-                  id="termsOfService"
-                  name="termsOfService"
-                  placeholder="Enter your affiliate program terms of service here..."
-                  defaultValue={settings.terms_of_service_content || ''}
-                  className="mt-1 min-h-[200px]"
-                />
+              <CardContent className="space-y-4">
+                <div className="space-y-1">
+                  <Label htmlFor="termsOfService">Terms of Service Content</Label>
+                  <Textarea
+                    id="termsOfService"
+                    name="termsOfService"
+                    defaultValue={settings.terms_of_service_content || ''}
+                    placeholder="Enter your affiliate program terms of service here..."
+                    rows={10}
+                  />
+                </div>
               </CardContent>
               <CardFooter>
                 <Button type="submit">Save Agreement</Button>
               </CardFooter>
             </Card>
-          </form>
+          </SettingsFormWrapper>
         </TabsContent>
       </Tabs>
     </div>
