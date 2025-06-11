@@ -10,7 +10,7 @@ import {
   getAffiliateProgramSettings,
   updateAffiliateProgramSettings,
   UpdateAffiliateProgramSettingsArgs
-} from '@/lib/actions/affiliate-actions';
+} from '@/lib/actions/admin/settings-actions';
 import {
   getMembershipLevels,
   updateMembershipLevelCommissionRates,

@@ -2,14 +2,14 @@ import Link from 'next/link';
 import PageHeader from '@/components/common/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DollarSign, Users, BarChart2, Link2, Activity, CheckCircle, AlertTriangle, Calendar } from 'lucide-react';
+import { getAffiliateProgramAnalytics } from '@/lib/actions/admin/analytics-actions';
 import {
-  getAffiliateProgramAnalytics,
   AffiliateAnalyticsData,
   TrendDataPoint,
   AffiliateProgramKPIs,
   AffiliateProgramTrends,
   TopAffiliateDataPoint,
-} from '@/lib/actions/affiliate-actions';
+} from '@/types/admin/analytics';
 import { getRecentActivityLogs } from '@/lib/actions/activity-log-actions';
 import { getHighRiskFraudFlags } from '@/lib/actions/fraud-notification-actions-simplified';
 import TrendLineChart from '@/components/admin/analytics/trend-line-chart';

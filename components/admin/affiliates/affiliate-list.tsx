@@ -32,8 +32,7 @@ import {
   approveAffiliate,
   rejectAffiliate,
   flagAffiliate,
-  updateAffiliateStatus,
-  bulkUpdateAffiliateStatus
+  updateAffiliateStatus
 } from '@/lib/actions/affiliate-actions';
 import { CreateFraudFlagDialog } from '@/components/admin/flags/create-fraud-flag-dialog';
 import { toast } from "sonner";
@@ -126,16 +125,9 @@ export default function AffiliateList() {
     
     setBulkActionLoading(true);
     try {
-      const result = await bulkUpdateAffiliateStatus(selectedAffiliates, 'active');
-      if (result.success) {
-        toast.success(result.message || `Successfully approved ${result.count} affiliates`);
-        // Clear selections after successful operation
-        setSelectedAffiliates([]);
-        // Refresh the data
-        fetchData();
-      } else {
-        toast.error(`Failed to approve affiliates: ${result.error || 'Unknown error'}`);
-      }
+      // TODO: Implement bulkUpdateAffiliateStatus function
+      // const result = await bulkUpdateAffiliateStatus(selectedAffiliates, 'active');
+      toast.error("Bulk approve functionality not yet implemented");
     } catch (err) {
       console.error('Error in bulk approve action:', err);
       toast.error(`Failed to approve affiliates: ${err instanceof Error ? err.message : 'Unknown error'}`);

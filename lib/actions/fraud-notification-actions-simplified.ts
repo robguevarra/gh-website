@@ -4,8 +4,10 @@ import { unstable_cache } from 'next/cache';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { FraudRiskLevel } from '@/types/admin/fraud-notification';
 import { AdminFraudFlagListItem } from '@/types/admin/affiliate';
-import { getAllAdminFraudFlags, getFraudFlagsForAffiliate } from '@/lib/actions/affiliate-actions';
+import { getAllAdminFraudFlags, getFraudFlagsForAffiliate } from '@/lib/actions/admin/fraud-actions';
 import { logAdminActivity } from '@/lib/actions/activity-log-actions';
+import { createClient } from '@/lib/supabase/server';
+import { logError } from '../utils/error-logging';
 
 /**
  * Simplified version that assesses the risk level of a fraud flag without requiring DB integration
@@ -248,8 +250,10 @@ export async function markFraudFlagAsReviewed(
   try {
     // Log this activity in the admin_activity_log table
     await logAdminActivity({
-      admin_user_id: adminId,
-      activity_type: 'fraud_flag_reviewed',
+      admin_id: adminId,
+      activity_type: 'FRAUD_FLAG_RESOLVED',
+      entity_type: 'affiliate_fraud_flag',
+      entity_id: flagId,
       description: `Admin reviewed high-risk fraud flag ${flagId}`,
       details: {
         flagId,

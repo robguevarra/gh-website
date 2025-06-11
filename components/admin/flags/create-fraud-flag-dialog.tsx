@@ -28,7 +28,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { createFraudFlag } from '@/lib/actions/affiliate-actions';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from '@/components/ui/select';
+import { createFraudFlag } from '@/lib/actions/admin/fraud-actions';
 
 const flagSchema = z.object({
   reason: z.string().min(3, 'Reason must be at least 3 characters'),
