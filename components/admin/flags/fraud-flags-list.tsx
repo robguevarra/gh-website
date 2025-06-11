@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { resolveFraudFlag } from '@/lib/actions/affiliate-actions';
+import { resolveFraudFlag } from '@/lib/actions/admin/fraud-actions';
 import { toast } from 'sonner';
 // Remove server action import which was causing the issue
 

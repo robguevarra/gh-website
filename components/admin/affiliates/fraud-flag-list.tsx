@@ -24,7 +24,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { AdminFraudFlagListItem } from "@/types/admin/affiliate";
 import { format } from 'date-fns';
-import { resolveFraudFlag } from '@/lib/actions/affiliate-actions';
+import { useToast } from '@/components/ui/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { resolveFraudFlag } from '@/lib/actions/admin/fraud-actions';
 import { toast } from 'sonner';
 
 interface FraudFlagListProps {

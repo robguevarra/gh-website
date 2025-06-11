@@ -3,15 +3,21 @@ import Link from 'next/link';
 import { ChevronLeft, ShieldAlert, LinkIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getAdminAffiliateById, getFraudFlagsForAffiliate, getAffiliateLinks } from '@/lib/actions/affiliate-actions';
-import { getAffiliateClicks } from '@/lib/actions/admin/affiliate.actions';
-import { getAffiliateConversions } from '@/lib/actions/admin/affiliate.actions';
-import { getAffiliatePayouts } from '@/lib/actions/admin/affiliate.actions';
+import { 
+  getAdminAffiliateById,
+  getAffiliateLinks,
+} from '@/lib/actions/affiliate-actions';
+import { 
+  getAffiliateClicks,
+  getAffiliateConversions,
+  getAffiliatePayouts 
+} from '@/lib/actions/admin/affiliate.actions';
+import { getFraudFlagsForAffiliate } from '@/lib/actions/admin/fraud-actions';
+import { getHighRiskFraudFlagsForAffiliate, assessFraudRiskLevel } from '@/lib/actions/fraud-notification-actions-simplified';
 import { AdminAffiliateListItem, AdminFraudFlagListItem } from '@/types/admin/affiliate';
 import { AffiliateDetailView } from '@/components/admin/affiliates/affiliate-detail-view';
 import { FraudFlagsList } from '@/components/admin/flags/fraud-flags-list';
 import { RiskAssessmentBadge } from '@/components/admin/flags/risk-assessment-badge';
-import { getHighRiskFraudFlagsForAffiliate, assessFraudRiskLevel } from '@/lib/actions/fraud-notification-actions-simplified';
 import { AffiliateLinksTable } from '@/components/admin/affiliates/affiliate-links-table';
 import PageHeader from '@/components/common/page-header';
 

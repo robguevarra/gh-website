@@ -1,6 +1,6 @@
 import React from 'react';
 import PageHeader from '@/components/common/page-header';
-import { getAllAdminFraudFlags } from '@/lib/actions/affiliate-actions';
+import { getAllAdminFraudFlags } from '@/lib/actions/admin/fraud-actions';
 import { FraudFlagList } from '@/components/admin/affiliates/fraud-flag-list'; // Corrected import
 import { AdminFraudFlagListItem } from '@/types/admin/affiliate'; // Added for typing
 import { AlertTriangle } from "lucide-react"; // Added

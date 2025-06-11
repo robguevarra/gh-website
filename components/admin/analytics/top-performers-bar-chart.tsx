@@ -1,6 +1,6 @@
 'use client';
 
-import { TopAffiliateDataPoint } from '@/lib/actions/affiliate-actions';
+import { TopAffiliateDataPoint } from '@/types/admin/analytics';
 import { useRouter } from 'next/navigation';
 import {
   ResponsiveContainer,

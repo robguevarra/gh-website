@@ -7,6 +7,36 @@ export type ConversionStatusType = 'pending' | 'cleared' | 'paid' | 'flagged';
 // Based on public.payout_method_type enum from Supabase schema (adjust if different)
 export type PayoutMethodType = 'paypal' | 'bank_transfer' | 'wise' | 'other';
 
+// Based on public.payout_status_type enum from Supabase schema
+// Actual values from DB are: 'failed', 'processing', 'sent'
+// 'completed' is used in the UI as an alias for 'sent'
+export type PayoutStatusType = 'pending' | 'processing' | 'sent' | 'failed' | 'completed';
+export type PayoutBatchStatusType = 'pending' | 'processing' | 'completed' | 'failed';
+
+/**
+ * Represents a payout record for display in the admin interface list view.
+ * Contains basic information about payouts for listing in tables.
+ */
+export interface AdminAffiliatePayout {
+  payout_id: string;                    // From affiliate_payouts.id
+  affiliate_id: string;                 // From affiliate_payouts.affiliate_id
+  affiliate_name: string;               // Generated from unified_profiles.first_name + last_name
+  affiliate_email: string;              // From unified_profiles.email
+  amount: number;                       // From affiliate_payouts.amount
+  status: PayoutStatusType;             // From affiliate_payouts.status
+  payout_method: string;                // From affiliate_payouts.payout_method
+  reference?: string | null;            // From affiliate_payouts.reference
+  transaction_date?: string | null;     // From affiliate_payouts.transaction_date
+  created_at: string;                   // From affiliate_payouts.created_at
+  scheduled_at?: string | null;         // From affiliate_payouts.scheduled_at
+  processed_at?: string | null;         // From affiliate_payouts.processed_at
+  xendit_disbursement_id?: string | null; // From affiliate_payouts.xendit_disbursement_id
+  processing_notes?: string | null;     // From affiliate_payouts.processing_notes
+  fee_amount?: number | null;           // From affiliate_payouts.fee_amount
+  net_amount?: number | null;           // From affiliate_payouts.net_amount
+  batch_id?: string | null;             // From affiliate_payouts.batch_id
+}
+
 /**
  * Represents the data structure for an item in the admin affiliate list.
  * Combines data from 'affiliates' and 'unified_profiles' tables,
@@ -101,22 +131,90 @@ export interface AffiliateConversion {
   customer_name?: string;   // Additional info for display purposes
 }
 
-/**
- * Represents a payout record in the affiliate system.
- * Extended with UI-specific fields for display purposes.
- */
-export interface AffiliatePayout {
+export interface AdminPayoutBatch {
   id: string;
-  affiliate_id: string;
-  amount: number;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  payout_method: PayoutMethodType;
-  method?: string;         // Alias for payment_method in UI
-  reference: string;
-  created_at: string;
-  date?: string;          // Formatted date for display
-  paid_at?: string;
-  note?: string;
+  batch_name?: string;
+  status: PayoutBatchStatusType;
+  payout_count?: number;
+  total_amount?: number;
+  created_at?: string;
+  processed_at?: string | null;
+  completed_at?: string | null;
+  created_by?: string;
+}
+
+export interface PayoutBatchStats {
+  totalBatches: number;
+  pendingBatches: number;
+  processingBatches: number;
+  completedBatches: number;
+  totalAmount: number;
+}
+
+/**
+ * Represents a detailed view of an affiliate payout with additional information
+ * for the admin detail page, including items and verification history.
+ */
+export interface AdminAffiliatePayoutDetail {
+  id: string;                          // From affiliate_payouts.id (same as payout_id)
+  affiliate_id: string;                 // From affiliate_payouts.affiliate_id
+  affiliate_name: string;               // Generated from unified_profiles.first_name + last_name
+  affiliate_email: string;              // From unified_profiles.email
+  affiliate_slug: string;               // From affiliates.slug
+  amount: number;                       // From affiliate_payouts.amount
+  status: PayoutStatusType;             // From affiliate_payouts.status
+  payout_method: string;                // From affiliate_payouts.payout_method
+  reference?: string | null;            // From affiliate_payouts.reference
+  transaction_date?: string | null;     // From affiliate_payouts.transaction_date
+  created_at: string;                   // From affiliate_payouts.created_at
+  updated_at: string;                   // From affiliate_payouts.updated_at
+  scheduled_at?: string | null;         // From affiliate_payouts.scheduled_at
+  processed_at?: string | null;         // From affiliate_payouts.processed_at
+  xendit_disbursement_id?: string | null; // From affiliate_payouts.xendit_disbursement_id
+  processing_notes?: string | null;     // From affiliate_payouts.processing_notes
+  fee_amount?: number | null;           // From affiliate_payouts.fee_amount
+  net_amount?: number | null;           // From affiliate_payouts.net_amount
+  batch_id?: string | null;             // From affiliate_payouts.batch_id
+  
+  // Additional details
+  payout_details: any;                  // JSON details about the payout
+  verification_required: boolean;       // Whether verification is required
+  affiliate_avatar_url?: string | null; // From unified_profiles.avatar_url
+  
+  // Payout items (conversions included in this payout)
+  payout_items?: PayoutItemDetail[];    // Items included in this payout
+  item_count?: number;                  // Convenience count of items
+  
+  // Verification information
+  verifications?: PayoutVerificationDetail[];
+  has_verification?: boolean | null;    // Convenience flag for verification status
+}
+
+/**
+ * Represents a single item (conversion) included in a payout
+ */
+export interface PayoutItemDetail {
+  item_id: string;                      // From payout_items.id
+  conversion_id: string | null;         // From payout_items.conversion_id
+  amount: number;                       // From payout_items.amount
+  order_id?: string | null;             // From affiliate_conversions.order_id
+  gmv?: number | null;                  // From affiliate_conversions.gmv
+  commission_amount?: number | null;    // From affiliate_conversions.commission_amount
+  created_at?: string | null;           // From affiliate_conversions.created_at
+}
+
+/**
+ * Represents a verification record for a payout
+ */
+export interface PayoutVerificationDetail {
+  verification_id: string;              // From admin_verifications.id
+  admin_id: string;                     // From admin_verifications.admin_user_id
+  admin_name: string;                   // Generated from unified_profiles.first_name + last_name
+  type: string;                         // From admin_verifications.verification_type
+  is_verified: boolean;                 // From admin_verifications.is_verified
+  notes?: string | null;                // From admin_verifications.notes
+  verified_at?: string | null;          // From admin_verifications.verified_at
+  created_at: string;                   // From admin_verifications.created_at
 }
 
 /**
@@ -124,6 +222,28 @@ export interface AffiliatePayout {
  * Based on the public.affiliate_program_config table.
  */
 export type PayoutScheduleType = 'monthly' | 'quarterly' | 'bi_annually' | 'annually';
+
+/**
+ * Represents an affiliate payout item for display in admin UI lists.
+ * Based on the public.affiliate_payouts table with joined affiliate info.
+ */
+export interface AdminAffiliatePayoutItem {
+  id: string;                      // From affiliate_payouts.id
+  affiliate_id: string;            // From affiliate_payouts.affiliate_id
+  affiliate_name?: string;         // From unified_profiles.full_name or similar
+  amount: number | string;         // From affiliate_payouts.amount
+  status: string;                  // From affiliate_payouts.status
+  payout_method: string;           // From affiliate_payouts.payout_method
+  reference?: string | null;       // From affiliate_payouts.reference
+  transaction_date?: string | null; // From affiliate_payouts.transaction_date
+  created_at?: string;             // From affiliate_payouts.created_at
+  xendit_disbursement_id?: string | null; // From affiliate_payouts.xendit_disbursement_id
+  processed_at?: string | null;    // From affiliate_payouts.processed_at
+  processing_notes?: string | null; // From affiliate_payouts.processing_notes
+  fee_amount?: number | null;      // From affiliate_payouts.fee_amount
+  net_amount?: number | null;      // From affiliate_payouts.net_amount
+  scheduled_at?: string | null;    // From affiliate_payouts.scheduled_at
+}
 
 /**
  * Represents the data structure for affiliate program global configuration.
