@@ -27,6 +27,10 @@ export default async function PayoutPreviewPage() {
   const totalAmount = eligibleAffiliates?.reduce((sum, affiliate) => sum + affiliate.total_amount, 0) || 0;
   const uniqueAffiliates = eligibleAffiliates?.length || 0;
 
+  // Get pending conversion count for workflow hints
+  const { stats } = await import("@/lib/actions/admin/conversion-actions").then(m => m.getConversionStats());
+  const pendingConversions = stats?.total_pending || 0;
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -44,7 +48,22 @@ export default async function PayoutPreviewPage() {
       <AdminPageHeader
         heading="Preview Payouts"
         description="Review eligible conversions and create payout batches"
-      />
+      >
+        <div className="flex items-center space-x-2">
+          <Link href="/admin/affiliates/conversions">
+            <Button variant="outline" size="sm">
+              Review All Conversions
+            </Button>
+          </Link>
+          {pendingConversions > 0 && (
+            <Link href="/admin/affiliates/conversions?status=pending">
+              <Button variant="outline" size="sm">
+                Verify Pending ({pendingConversions})
+              </Button>
+            </Link>
+          )}
+        </div>
+      </AdminPageHeader>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -102,12 +121,24 @@ export default async function PayoutPreviewPage() {
               <p className="text-sm text-muted-foreground">
                 There are currently no conversions with "cleared" status ready for payout.
               </p>
-              <div className="mt-4">
+              {pendingConversions > 0 && (
+                <p className="text-sm text-amber-600 font-medium">
+                  💡 You have {pendingConversions} pending conversions that can be verified for payout eligibility.
+                </p>
+              )}
+              <div className="mt-4 flex space-x-2">
                 <Link href="/admin/affiliates/conversions">
                   <Button variant="outline">
-                    Review Conversions
+                    Review All Conversions
                   </Button>
                 </Link>
+                {pendingConversions > 0 && (
+                  <Link href="/admin/affiliates/conversions?status=pending">
+                    <Button>
+                      Verify {pendingConversions} Pending
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
           </CardContent>

@@ -82,6 +82,11 @@ export default async function AffiliatePayoutsPage() {
             </Link>
           </Button>
           <Button variant="outline" asChild>
+            <Link href="/admin/affiliates/conversions">
+              <PlusCircle className="mr-2 h-4 w-4" /> Manage Conversions
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
             <Link href="/admin/affiliates/payouts/calendar">
               <CalendarPlus className="mr-2 h-4 w-4" /> View Calendar
             </Link>

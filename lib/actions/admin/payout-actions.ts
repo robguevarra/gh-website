@@ -861,37 +861,107 @@ export async function deletePayoutBatch(batchId: string): Promise<{ success: boo
 }
 
 /**
- * Updates the status of a payout batch to 'processing'.
- * This is a preliminary step before sending payout data to a payment provider.
+ * Processes a verified batch by sending payouts to Xendit for disbursement.
+ * This function handles the actual payment processing workflow.
  * @param batchId The ID of the batch to process.
  */
 export async function processPayoutBatch(batchId: string): Promise<{ success: boolean; error: string | null }> {
   const supabase = getAdminClient();
   try {
-    const { data, error } = await supabase
+    // 1. Verify batch is in 'verified' status
+    const { data: batch, error: fetchError } = await supabase
       .from('affiliate_payout_batches')
-      .update({ status: 'processing' as PayoutBatchStatusType })
+      .select('id, status')
       .eq('id', batchId)
-      .select('id')
       .single();
 
-    if (error || !data) {
-      throw new Error(error?.message || 'Failed to update batch status to processing.');
+    if (fetchError || !batch) {
+      throw new Error(fetchError?.message || 'Batch not found.');
     }
 
+    if (batch.status !== 'verified') {
+      throw new Error('Only verified batches can be processed.');
+    }
+
+    // 2. Update batch status to 'processing'
+    const { error: updateError } = await supabase
+      .from('affiliate_payout_batches')
+      .update({ 
+        status: 'processing' as PayoutBatchStatusType,
+        processed_at: new Date().toISOString()
+      })
+      .eq('id', batchId);
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    // 3. Get all payouts in this batch
+    const { data: payouts, error: payoutsError } = await supabase
+      .from('affiliate_payouts')
+      .select('id')
+      .eq('batch_id', batchId)
+      .eq('status', 'pending');
+
+    if (payoutsError) {
+      throw payoutsError;
+    }
+
+    if (!payouts || payouts.length === 0) {
+      throw new Error('No pending payouts found in this batch.');
+    }
+
+    // 4. Process payouts via Xendit
+    const payoutIds = payouts.map(p => p.id);
+    const { successes, failures, error: xenditError } = await processPayoutsViaXendit({
+      payoutIds,
+      adminUserId: 'system' // TODO: Get actual admin user ID
+    });
+
+    // 5. Log the results
     await logAdminActivity({
       activity_type: 'GENERAL_ADMIN_ACTION',
-      description: `Set payout batch to processing`,
-      details: { batch_id: batchId }
+      description: `Processed payout batch`,
+      details: { 
+        batch_id: batchId,
+        successes: successes.length,
+        failures: failures.length,
+        xendit_error: xenditError
+      }
     });
+
+    // 6. Update batch status based on results
+    let finalStatus: PayoutBatchStatusType = 'completed';
+    if (failures.length > 0) {
+      finalStatus = failures.length === payoutIds.length ? 'failed' : 'processing';
+    }
+
+    await supabase
+      .from('affiliate_payout_batches')
+      .update({ status: finalStatus })
+      .eq('id', batchId);
 
     revalidatePath('/admin/affiliates/payouts/batches');
     revalidatePath(`/admin/affiliates/payouts/batches/${batchId}`);
 
-    return { success: true, error: null };
+    return { 
+      success: true, 
+      error: failures.length > 0 ? `${failures.length} payouts failed` : null 
+    };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Failed to process payout batch.';
     console.error('processPayoutBatch error:', errorMessage);
+    
+    // Revert batch status to verified on error
+    try {
+      await supabase
+        .from('affiliate_payout_batches')
+        .update({ status: 'verified' as PayoutBatchStatusType })
+        .eq('id', batchId);
+    } catch (revertError) {
+      console.error('Failed to revert batch status:', revertError);
+    }
+
     return { success: false, error: errorMessage };
   }
 }

@@ -1,7 +1,9 @@
 import { Metadata } from "next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { Clock, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, AlertTriangle, FileText, Package, Archive } from "lucide-react";
+import Link from "next/link";
 import { getAdminConversions, getConversionStats } from "@/lib/actions/admin/conversion-actions";
 import { ConversionsTable } from "@/components/admin/affiliates/conversions/conversions-table";
 import { ConversionStatsCards } from "@/components/admin/affiliates/conversions/conversion-stats-cards";
@@ -13,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 interface ConversionsPageProps {
-  searchParams?: {
+  searchParams?: Promise<{
     status?: string;
     affiliate?: string;
     page?: string;
@@ -24,10 +26,19 @@ interface ConversionsPageProps {
     dateTo?: string;
     minAmount?: string;
     maxAmount?: string;
-  };
+  }>;
 }
 
-async function ConversionsContent({ searchParams = {} }: ConversionsPageProps) {
+async function ConversionsContent({ searchParams }: ConversionsPageProps) {
+  // Await searchParams before destructuring (Next.js 15 requirement)
+  const params = await (searchParams || Promise.resolve({
+    status: 'pending',
+    page: '1',
+    pageSize: '20',
+    sortBy: 'created_at',
+    sortDirection: 'desc'
+  }));
+  
   const {
     status = 'pending',
     affiliate,
@@ -39,7 +50,7 @@ async function ConversionsContent({ searchParams = {} }: ConversionsPageProps) {
     dateTo,
     minAmount,
     maxAmount
-  } = searchParams;
+  } = params;
 
   // Fetch conversion statistics
   const { stats, error: statsError } = await getConversionStats();
@@ -93,10 +104,6 @@ async function ConversionsContent({ searchParams = {} }: ConversionsPageProps) {
         <CardContent>
           <ConversionsTable
             conversions={conversions || []}
-            totalCount={totalCount}
-            currentPage={parseInt(page)}
-            pageSize={parseInt(pageSize)}
-            searchParams={searchParams}
           />
         </CardContent>
       </Card>
@@ -108,9 +115,30 @@ export default function ConversionsPage(props: ConversionsPageProps) {
   return (
     <div className="space-y-6">
       <AdminPageHeader
-        title="Conversion Management"
+        heading="Conversion Management"
         description="Review and verify affiliate conversions for payout eligibility"
-      />
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/admin/affiliates/payouts/preview">
+            <Button size="sm">
+              <FileText className="mr-2 h-4 w-4" />
+              Preview Payouts
+            </Button>
+          </Link>
+          <Link href="/admin/affiliates/payouts">
+            <Button variant="outline" size="sm">
+              <Package className="mr-2 h-4 w-4" />
+              Manage Payouts
+            </Button>
+          </Link>
+          <Link href="/admin/affiliates/payouts/batches">
+            <Button variant="outline" size="sm">
+              <Archive className="mr-2 h-4 w-4" />
+              View Batches
+            </Button>
+          </Link>
+        </div>
+      </AdminPageHeader>
       
       <Suspense fallback={
         <div className="space-y-6">
