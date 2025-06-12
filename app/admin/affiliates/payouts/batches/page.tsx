@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/admin-page-header";
-import { BatchesList } from "@/components/admin/affiliates/payouts/batches-list";
+import { BatchesListMigrated as BatchesList } from "@/components/admin/affiliates/payouts/batches-list-migrated";
 import { 
   getAdminAffiliatePayoutBatches,
   getAdminAffiliatePayoutBatchStats 

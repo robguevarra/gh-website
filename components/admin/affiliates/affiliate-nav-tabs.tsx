@@ -6,8 +6,9 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const navItems = [
   { name: 'Affiliate List', href: '/admin/affiliates', baseRoute: '/admin/affiliates' },
+  { name: 'Conversions', href: '/admin/affiliates/conversions', baseRoute: '/admin/affiliates/conversions' },
+  { name: 'Payouts', href: '/admin/affiliates/payouts', baseRoute: '/admin/affiliates/payouts' },
   { name: 'Analytics', href: '/admin/affiliates/analytics', baseRoute: '/admin/affiliates/analytics' },
-  { name: 'Payouts', href: '/admin/affiliates/payouts', baseRoute: '/admin/affiliates/payouts' }, // New Payouts tab
   { name: 'Settings', href: '/admin/affiliates/settings', baseRoute: '/admin/affiliates/settings' },
   { name: 'Fraud Flags', href: '/admin/affiliates/flags', baseRoute: '/admin/affiliates/flags' },
 ];

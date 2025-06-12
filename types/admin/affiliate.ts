@@ -11,7 +11,7 @@ export type PayoutMethodType = 'paypal' | 'bank_transfer' | 'wise' | 'other';
 // Actual values from DB are: 'failed', 'processing', 'sent'
 // 'completed' is used in the UI as an alias for 'sent'
 export type PayoutStatusType = 'pending' | 'processing' | 'sent' | 'failed' | 'completed';
-export type PayoutBatchStatusType = 'pending' | 'processing' | 'completed' | 'failed';
+export type PayoutBatchStatusType = 'pending' | 'verified' | 'processing' | 'completed' | 'failed';
 
 /**
  * Represents a payout record for display in the admin interface list view.

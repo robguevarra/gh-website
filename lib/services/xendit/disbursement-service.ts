@@ -7,10 +7,11 @@
 
 // Types for Xendit API integration
 export interface XenditDisbursementRequest {
-  external_id: string;
+  reference_id: string;
   amount: number;
-  bank_code: string;
-  account_holder_name: string;
+  currency: string;
+  channel_code: string;
+  account_name: string;
   account_number: string;
   description?: string;
   email_to?: string[];
@@ -21,10 +22,11 @@ export interface XenditDisbursementRequest {
 export interface XenditDisbursementResponse {
   id: string;
   user_id: string;
-  external_id: string;
+  reference_id: string;
   amount: number;
-  bank_code: string;
-  account_holder_name: string;
+  currency: string;
+  channel_code: string;
+  account_name: string;
   disbursement_description: string;
   status: 'PENDING' | 'COMPLETED' | 'FAILED';
   updated: string;
@@ -192,12 +194,12 @@ class XenditDisbursementService {
   }
 
   /**
-   * Get disbursement details by external ID
+   * Get disbursement details by reference ID
    */
-  async getDisbursementByExternalId(
-    externalId: string
+  async getDisbursementByReferenceId(
+    referenceId: string
   ): Promise<{ data: XenditDisbursementResponse | null; error: XenditError | null }> {
-    return this.makeRequest<XenditDisbursementResponse>(`/disbursements?external_id=${externalId}`);
+    return this.makeRequest<XenditDisbursementResponse>(`/disbursements?reference_id=${referenceId}`);
   }
 
   /**
@@ -219,22 +221,22 @@ class XenditDisbursementService {
    * Validate bank account details
    */
   async validateBankAccount(
-    bankCode: string,
+    channelCode: string,
     accountNumber: string,
-    accountHolderName: string
+    accountName: string
   ): Promise<{
     data: {
       is_name_match: boolean;
-      account_holder_name: string;
+      account_name: string;
     } | null;
     error: XenditError | null;
   }> {
     return this.makeRequest('/account_validation', {
       method: 'POST',
       body: JSON.stringify({
-        bank_code: bankCode,
+        channel_code: channelCode,
         account_number: accountNumber,
-        account_holder_name: accountHolderName,
+        account_name: accountName,
       }),
     });
   }
@@ -288,17 +290,19 @@ class XenditDisbursementService {
     id: string;
     affiliate_id: string;
     amount: number;
-    bank_code: string;
+    channel_code: string; // Updated from bank_code
     account_number: string;
-    account_holder_name: string;
+    account_name: string; // Updated from account_holder_name
+    currency?: string; // Added optional currency
     reference?: string;
     description?: string;
   }): XenditDisbursementRequest {
     return {
-      external_id: payout.reference || `payout_${payout.id}`,
+      reference_id: payout.reference || `payout_${payout.id}`,
       amount: payout.amount,
-      bank_code: payout.bank_code,
-      account_holder_name: payout.account_holder_name,
+      currency: payout.currency || 'PHP', // Default to PHP for Philippines
+      channel_code: payout.channel_code,
+      account_name: payout.account_name,
       account_number: payout.account_number,
       description: payout.description || `Affiliate commission payout for ${payout.affiliate_id}`,
     };

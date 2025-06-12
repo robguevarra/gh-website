@@ -87,17 +87,11 @@ export async function getAdminConversions({
         `
         id,
         affiliate_id,
-        conversion_value,
+        gmv,
         commission_amount,
-        commission_rate,
         status,
-        conversion_date,
         created_at,
-        conversion_type,
-        product_name,
-        customer_email,
         order_id,
-        fraud_score,
         affiliates (
           user_id,
           unified_profiles!affiliates_user_id_fkey (
@@ -156,6 +150,9 @@ export async function getAdminConversions({
         ? Math.floor((new Date().getTime() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24))
         : undefined;
 
+      // Calculate commission rate from amounts
+      const commissionRate = c.gmv && c.gmv > 0 && c.commission_amount ? c.commission_amount / c.gmv : 0.15;
+
       return {
         conversion_id: c.id,
         affiliate_id: c.affiliate_id,
@@ -163,18 +160,18 @@ export async function getAdminConversions({
           ? `${c.affiliates.unified_profiles.first_name || ''} ${c.affiliates.unified_profiles.last_name || ''}`.trim() || 'N/A'
           : 'N/A',
         affiliate_email: c.affiliates?.unified_profiles?.email || 'N/A',
-        conversion_value: c.conversion_value || 0,
+        conversion_value: c.gmv || 0,
         commission_amount: c.commission_amount || 0,
-        commission_rate: c.commission_rate || 0,
+        commission_rate: commissionRate,
         status: c.status,
-        conversion_date: c.conversion_date || c.created_at,
+        conversion_date: c.created_at,
         created_at: c.created_at,
-        conversion_type: c.conversion_type || 'sale',
-        product_name: c.product_name,
-        customer_email: c.customer_email,
+        conversion_type: 'sale',
+        product_name: undefined,
+        customer_email: undefined,
         order_id: c.order_id,
         days_pending: daysPending,
-        fraud_score: c.fraud_score,
+        fraud_score: undefined,
       };
     });
 
@@ -186,6 +183,7 @@ export async function getAdminConversions({
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred while fetching conversions.';
     console.error('getAdminConversions error:', errorMessage);
+    console.error('Full error:', err);
     return {
       data: [],
       totalCount: 0,
