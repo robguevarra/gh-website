@@ -1,29 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { xenditDisbursementService, XenditUtils } from '@/lib/services/xendit/disbursement-service';
+import { xenditPayoutService, XenditUtils } from '@/lib/services/xendit/disbursement-service';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 
 /**
- * Xendit Disbursement Webhook Handler
+ * Xendit Payouts Webhook Handler (v2 API)
  * 
- * This endpoint receives webhook notifications from Xendit when disbursement statuses change.
- * It updates our payout records accordingly and maintains audit trails.
+ * This endpoint receives webhook notifications from Xendit when payout statuses change.
+ * Updated to handle the new v2 Payouts API payload structure.
  */
 
-interface XenditWebhookPayload {
+interface XenditPayoutWebhookPayload {
   id: string;
-  user_id: string;
-  external_id: string;
   amount: number;
-  bank_code: string;
-  account_holder_name: string;
-  disbursement_description: string;
-  status: 'PENDING' | 'COMPLETED' | 'FAILED';
-  updated: string;
+  channel_code: string;
+  currency: string;
+  description: string;
+  reference_id: string;
+  status: 'ACCEPTED' | 'PENDING' | 'LOCKED' | 'CANCELLED' | 'SUCCEEDED' | 'FAILED';
   created: string;
+  updated: string;
+  estimated_arrival_time?: string;
+  business_id: string;
+  channel_properties: {
+    account_number: string;
+    account_holder_name: string;
+  };
+  receipt_notification?: {
+    email_to?: string[];
+    email_cc?: string[];
+    email_bcc?: string[];
+  };
+  metadata?: {
+    affiliate_id?: string;
+    payout_id?: string;
+    system?: string;
+  };
   failure_code?: string;
-  email_to?: string[];
-  email_cc?: string[];
-  email_bcc?: string[];
 }
 
 export async function POST(request: NextRequest) {
@@ -33,7 +45,7 @@ export async function POST(request: NextRequest) {
     const signature = request.headers.get('x-callback-token') || '';
     
     // Verify webhook signature for security
-    const isValidSignature = xenditDisbursementService.verifyWebhookSignature(rawBody, signature);
+    const isValidSignature = xenditPayoutService.verifyWebhookSignature(rawBody, signature);
     
     if (!isValidSignature) {
       console.error('Invalid webhook signature received');
@@ -44,7 +56,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse webhook payload
-    let payload: XenditWebhookPayload;
+    let payload: XenditPayoutWebhookPayload;
     try {
       payload = JSON.parse(rawBody);
     } catch (error) {
@@ -56,7 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate required fields
-    if (!payload.id || !payload.external_id || !payload.status) {
+    if (!payload.id || !payload.reference_id || !payload.status) {
       console.error('Missing required fields in webhook payload:', payload);
       return NextResponse.json(
         { error: 'Missing required fields' },
@@ -64,29 +76,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('Processing Xendit disbursement webhook:', {
+    console.log('Processing Xendit payout webhook (v2):', {
       id: payload.id,
-      external_id: payload.external_id,
+      reference_id: payload.reference_id,
       status: payload.status,
       amount: payload.amount,
+      channel_code: payload.channel_code,
+      currency: payload.currency,
     });
 
     // Initialize Supabase client
     const supabase = await createServiceRoleClient();
 
-    // Find the payout record by external_id
-    // The external_id should match our payout reference or follow pattern "payout_{id}"
+    // Find the payout record by reference_id
+    // The reference_id should match our payout reference or follow pattern "payout_{id}"
     let payoutQuery = supabase
       .from('affiliate_payouts')
       .select('*')
-      .eq('reference', payload.external_id);
+      .eq('reference', payload.reference_id);
 
-    // If not found by reference, try extracting payout ID from external_id
-    if (payload.external_id.startsWith('payout_')) {
-      const payoutIdMatch = payload.external_id.match(/payout_(\d+)/);
+    // If not found by reference, try extracting payout ID from reference_id
+    if (payload.reference_id.startsWith('payout_')) {
+      const payoutIdMatch = payload.reference_id.match(/payout_([a-f0-9-]+)/);
       if (payoutIdMatch) {
         payoutQuery = payoutQuery.or(`id.eq.${payoutIdMatch[1]}`);
       }
+    }
+
+    // Also try to find by metadata if available
+    if (payload.metadata?.payout_id) {
+      payoutQuery = payoutQuery.or(`id.eq.${payload.metadata.payout_id}`);
     }
 
     const { data: payouts, error: payoutError } = await payoutQuery;
@@ -100,14 +119,14 @@ export async function POST(request: NextRequest) {
     }
 
     if (!payouts || payouts.length === 0) {
-      console.warn('No payout found for external_id:', payload.external_id);
+      console.warn('No payout found for reference_id:', payload.reference_id);
       // Return success to prevent webhook retries, but log the issue
       return NextResponse.json({ received: true });
     }
 
     const payout = payouts[0];
 
-    // Map Xendit status to our internal status
+    // Map Xendit v2 status to our internal status
     const newStatus = XenditUtils.mapStatusToInternal(payload.status);
 
     // Only update if status has changed
@@ -123,9 +142,9 @@ export async function POST(request: NextRequest) {
     // Prepare update data
     const updateData: any = {
       status: newStatus,
-      xendit_disbursement_id: payload.id,
-      processed_at: payload.status === 'COMPLETED' ? new Date().toISOString() : payout.processed_at,
-      failed_at: payload.status === 'FAILED' ? new Date().toISOString() : null,
+      xendit_disbursement_id: payload.id, // Keep same field name for compatibility
+      processed_at: payload.status === 'SUCCEEDED' ? new Date().toISOString() : payout.processed_at,
+      failed_at: ['FAILED', 'CANCELLED'].includes(payload.status) ? new Date().toISOString() : null,
       failure_reason: payload.failure_code || null,
       updated_at: new Date().toISOString(),
     };
@@ -150,12 +169,13 @@ export async function POST(request: NextRequest) {
       previousStatus: payout.status,
       newStatus,
       xenditId: payload.id,
-      externalId: payload.external_id,
+      referenceId: payload.reference_id,
       amount: payload.amount,
+      channelCode: payload.channel_code,
     });
 
-    // If the disbursement was completed, update related conversion statuses
-    if (payload.status === 'COMPLETED') {
+    // If the payout was completed, update related conversion statuses
+    if (payload.status === 'SUCCEEDED') {
       try {
         // Get payout items (conversions) for this payout
         const { data: payoutItems, error: itemsError } = await supabase
@@ -189,7 +209,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('Successfully processed Xendit disbursement webhook:', {
+    console.log('Successfully processed Xendit payout webhook (v2):', {
       payoutId: payout.id,
       previousStatus: payout.status,
       newStatus,
@@ -203,7 +223,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Unexpected error in Xendit webhook handler:', error);
+    console.error('Error processing Xendit payout webhook:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -211,17 +231,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Handle GET requests for webhook verification (if needed by Xendit)
+// Health check endpoint
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
-  const challenge = searchParams.get('challenge');
-  
-  if (challenge) {
-    return NextResponse.json({ challenge });
-  }
-  
-  return NextResponse.json({ 
-    status: 'Xendit disbursement webhook endpoint',
+  return NextResponse.json({
+    status: 'healthy',
+    service: 'xendit-payout-webhook',
+    version: '2.0',
     timestamp: new Date().toISOString(),
   });
 } 

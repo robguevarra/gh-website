@@ -1485,23 +1485,24 @@ export async function processPayoutsViaXendit({
           continue;
         }
 
-        // Generate unique external ID if not already set
-        const externalId = payout.reference || XenditUtils.generateExternalId('payout');
+        // Generate unique reference ID if not already set
+        const externalId = payout.reference || XenditUtils.generateReferenceId('payout');
 
-        // Create Xendit disbursement request
-        const disbursementRequest = xenditDisbursementService.formatPayoutForDisbursement({
+        // Create Xendit payout request (v2 API)
+        const payoutRequest = xenditDisbursementService.formatPayoutForXendit({
           id: payout.id,
           affiliate_id: payout.affiliate_id,
           amount: payout.net_amount || payout.amount, // Use net amount after fees
-          bank_code: payout.affiliates.bank_code,
+          channel_code: payout.affiliates.bank_code, // This should be PH_* format
           account_number: payout.affiliates.bank_account_number,
           account_holder_name: payout.affiliates.bank_account_name,
           reference: externalId,
           description: `Affiliate commission payout for ${payout.affiliates.unified_profiles?.first_name || ''} ${payout.affiliates.unified_profiles?.last_name || ''}`.trim(),
+          affiliate_email: payout.affiliates.unified_profiles?.email,
         });
 
-        // Send to Xendit
-        const { data: xenditResponse, error: xenditError } = await xenditDisbursementService.createDisbursement(disbursementRequest);
+        // Send to Xendit using v2 Payouts API
+        const { data: xenditResponse, error: xenditError } = await xenditDisbursementService.createPayout(payoutRequest);
 
         if (xenditError || !xenditResponse) {
           failures.push({
@@ -1699,8 +1700,8 @@ export async function syncXenditPayoutStatus({
           continue;
         }
 
-        // Get current status from Xendit
-        const { data: xenditResponse, error: xenditError } = await xenditDisbursementService.getDisbursement(payout.xendit_disbursement_id);
+        // Get current status from Xendit using v2 API
+        const { data: xenditResponse, error: xenditError } = await xenditDisbursementService.getPayout(payout.xendit_disbursement_id);
 
         if (xenditError || !xenditResponse) {
           errors.push({

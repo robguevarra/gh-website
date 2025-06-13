@@ -1,45 +1,62 @@
 /**
- * Xendit Disbursement Service
+ * Xendit Payouts Service (v2 API)
  * 
- * This service handles all interactions with Xendit's Disbursement API for affiliate payouts.
- * It provides methods for creating disbursements, checking statuses, and handling responses.
+ * This service handles all interactions with Xendit's modern Payouts API v2 for affiliate payouts.
+ * Updated to support Philippines market with proper channel codes and PHP currency.
  */
 
-// Types for Xendit API integration
-export interface XenditDisbursementRequest {
+// Types for Xendit Payouts API v2
+export interface XenditPayoutRequest {
   reference_id: string;
+  channel_code: string;
+  channel_properties: {
+    account_number: string;
+    account_holder_name: string;
+  };
   amount: number;
   currency: string;
-  channel_code: string;
-  account_name: string;
-  account_number: string;
   description?: string;
-  email_to?: string[];
-  email_cc?: string[];
-  email_bcc?: string[];
+  receipt_notification?: {
+    email_to?: string[];
+    email_cc?: string[];
+    email_bcc?: string[];
+  };
+  metadata?: Record<string, any>;
 }
 
-export interface XenditDisbursementResponse {
+export interface XenditPayoutResponse {
   id: string;
-  user_id: string;
-  reference_id: string;
   amount: number;
-  currency: string;
   channel_code: string;
-  account_name: string;
-  disbursement_description: string;
-  status: 'PENDING' | 'COMPLETED' | 'FAILED';
-  updated: string;
+  currency: string;
+  description: string;
+  reference_id: string;
+  status: 'ACCEPTED' | 'PENDING' | 'LOCKED' | 'CANCELLED' | 'SUCCEEDED' | 'FAILED';
   created: string;
-  email_to?: string[];
-  email_cc?: string[];
-  email_bcc?: string[];
+  updated: string;
+  estimated_arrival_time?: string;
+  business_id: string;
+  channel_properties: {
+    account_number: string;
+    account_holder_name: string;
+  };
+  receipt_notification?: {
+    email_to?: string[];
+    email_cc?: string[];
+    email_bcc?: string[];
+  };
+  metadata?: Record<string, any>;
   failure_code?: string;
 }
 
-export interface XenditBatchDisbursementRequest {
-  reference: string;
-  disbursements: XenditDisbursementRequest[];
+export interface XenditPayoutChannel {
+  channel_category: string;
+  channel_code: string;
+  channel_name: string;
+  currency: string;
+  country: string;
+  minimum_amount?: number;
+  maximum_amount?: number;
 }
 
 export interface XenditError {
@@ -60,7 +77,33 @@ interface XenditConfig {
   webhookToken?: string;
 }
 
-class XenditDisbursementService {
+// Philippines Bank Channel Codes (as per Xendit documentation)
+export const PHILIPPINES_BANK_CHANNELS = {
+  // Major Banks
+  'PH_BDO': 'Banco de Oro (BDO)',
+  'PH_BPI': 'Bank of the Philippine Islands (BPI)',
+  'PH_METROBANK': 'Metropolitan Bank & Trust Company',
+  'PH_LANDBANK': 'Land Bank of the Philippines',
+  'PH_PNB': 'Philippine National Bank',
+  'PH_UNIONBANK': 'Union Bank of the Philippines',
+  'PH_SECURITYBANK': 'Security Bank Corporation',
+  'PH_RCBC': 'Rizal Commercial Banking Corporation',
+  'PH_CHINABANK': 'China Banking Corporation',
+  'PH_EASTWESTBANK': 'EastWest Bank',
+  
+  // Digital Banks & E-Wallets
+  'PH_GCASH': 'GCash',
+  'PH_PAYMAYA': 'PayMaya',
+  'PH_GRABPAY': 'GrabPay',
+  
+  // Other Banks
+  'PH_PSB': 'Philippine Savings Bank',
+  'PH_ROBINSONSBANK': 'Robinsons Bank Corporation',
+  'PH_MAYBANK': 'Maybank Philippines',
+  'PH_CIMB': 'CIMB Bank Philippines',
+} as const;
+
+class XenditPayoutService {
   private config: XenditConfig;
 
   constructor() {
@@ -79,14 +122,21 @@ class XenditDisbursementService {
   /**
    * Get authentication headers for Xendit API requests
    */
-  private getAuthHeaders(): HeadersInit {
+  private getAuthHeaders(idempotencyKey?: string): HeadersInit {
     const credentials = Buffer.from(`${this.config.apiKey}:`).toString('base64');
     
-    return {
+    const headers: HeadersInit = {
       'Authorization': `Basic ${credentials}`,
       'Content-Type': 'application/json',
-      'User-Agent': 'GH-Website-Affiliate-System/1.0',
+      'User-Agent': 'GH-Website-Affiliate-System/2.0',
     };
+
+    // Add idempotency key for POST requests to prevent duplicates
+    if (idempotencyKey) {
+      headers['Idempotency-key'] = idempotencyKey;
+    }
+
+    return headers;
   }
 
   /**
@@ -94,7 +144,8 @@ class XenditDisbursementService {
    */
   private async makeRequest<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    idempotencyKey?: string
   ): Promise<{ data: T | null; error: XenditError | null }> {
     try {
       const url = `${this.config.baseUrl}${endpoint}`;
@@ -102,7 +153,7 @@ class XenditDisbursementService {
       const response = await fetch(url, {
         ...options,
         headers: {
-          ...this.getAuthHeaders(),
+          ...this.getAuthHeaders(idempotencyKey),
           ...options.headers,
         },
       });
@@ -140,105 +191,70 @@ class XenditDisbursementService {
   }
 
   /**
-   * Create a single disbursement
+   * Create a single payout using v2 API
    */
-  async createDisbursement(
-    request: XenditDisbursementRequest
-  ): Promise<{ data: XenditDisbursementResponse | null; error: XenditError | null }> {
-    return this.makeRequest<XenditDisbursementResponse>('/disbursements', {
+  async createPayout(
+    request: XenditPayoutRequest
+  ): Promise<{ data: XenditPayoutResponse | null; error: XenditError | null }> {
+    // Generate idempotency key to prevent duplicate payouts
+    const idempotencyKey = `payout_${request.reference_id}_${Date.now()}`;
+    
+    return this.makeRequest<XenditPayoutResponse>('/v2/payouts', {
       method: 'POST',
       body: JSON.stringify(request),
-    });
+    }, idempotencyKey);
   }
 
   /**
-   * Create multiple disbursements in a batch
-   * Note: Xendit doesn't have a native batch disbursement API, so this creates individual disbursements
+   * Create multiple payouts in a batch
+   * Note: Xendit v2 doesn't have native batch API, so this creates individual payouts
    */
-  async createBatchDisbursements(
-    disbursements: XenditDisbursementRequest[]
+  async createBatchPayouts(
+    payouts: XenditPayoutRequest[]
   ): Promise<{
-    successes: XenditDisbursementResponse[];
-    failures: Array<{ request: XenditDisbursementRequest; error: XenditError }>;
+    successes: XenditPayoutResponse[];
+    failures: Array<{ request: XenditPayoutRequest; error: XenditError }>;
   }> {
-    const successes: XenditDisbursementResponse[] = [];
-    const failures: Array<{ request: XenditDisbursementRequest; error: XenditError }> = [];
+    const successes: XenditPayoutResponse[] = [];
+    const failures: Array<{ request: XenditPayoutRequest; error: XenditError }> = [];
 
-    // Process disbursements sequentially to avoid rate limiting
-    for (const disbursement of disbursements) {
-      const result = await this.createDisbursement(disbursement);
+    // Process payouts sequentially to avoid rate limiting
+    for (const payout of payouts) {
+      const result = await this.createPayout(payout);
       
       if (result.data) {
         successes.push(result.data);
       } else if (result.error) {
         failures.push({
-          request: disbursement,
+          request: payout,
           error: result.error,
         });
       }
 
       // Add small delay to respect rate limits
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
 
     return { successes, failures };
   }
 
   /**
-   * Get disbursement details by ID
+   * Get payout details by ID
    */
-  async getDisbursement(
-    disbursementId: string
-  ): Promise<{ data: XenditDisbursementResponse | null; error: XenditError | null }> {
-    return this.makeRequest<XenditDisbursementResponse>(`/disbursements/${disbursementId}`);
+  async getPayout(
+    payoutId: string
+  ): Promise<{ data: XenditPayoutResponse | null; error: XenditError | null }> {
+    return this.makeRequest<XenditPayoutResponse>(`/v2/payouts/${payoutId}`);
   }
 
   /**
-   * Get disbursement details by reference ID
+   * Get available payout channels for Philippines
    */
-  async getDisbursementByReferenceId(
-    referenceId: string
-  ): Promise<{ data: XenditDisbursementResponse | null; error: XenditError | null }> {
-    return this.makeRequest<XenditDisbursementResponse>(`/disbursements?reference_id=${referenceId}`);
-  }
-
-  /**
-   * Get available disbursement banks
-   */
-  async getAvailableBanks(): Promise<{
-    data: Array<{
-      name: string;
-      code: string;
-      can_disburse: boolean;
-      can_name_validate: boolean;
-    }> | null;
+  async getPayoutChannels(): Promise<{
+    data: XenditPayoutChannel[] | null;
     error: XenditError | null;
   }> {
-    return this.makeRequest('/available_disbursements_banks');
-  }
-
-  /**
-   * Validate bank account details
-   */
-  async validateBankAccount(
-    channelCode: string,
-    accountNumber: string,
-    accountName: string
-  ): Promise<{
-    data: {
-      is_name_match: boolean;
-      account_name: string;
-    } | null;
-    error: XenditError | null;
-  }> {
-    return this.makeRequest('/account_validation', {
-      method: 'POST',
-      body: JSON.stringify({
-        channel_code: channelCode,
-        account_number: accountNumber,
-        account_name: accountName,
-      }),
-    });
+    return this.makeRequest<XenditPayoutChannel[]>('/payouts_channels');
   }
 
   /**
@@ -255,94 +271,186 @@ class XenditDisbursementService {
 
     try {
       const crypto = require('crypto');
-      const computedSignature = crypto
+      const expectedSignature = crypto
         .createHmac('sha256', this.config.webhookToken)
         .update(rawBody)
         .digest('hex');
 
       return crypto.timingSafeEqual(
         Buffer.from(receivedSignature),
-        Buffer.from(computedSignature)
+        Buffer.from(expectedSignature)
       );
     } catch (error) {
-      console.error('Webhook signature verification failed:', error);
+      console.error('Error verifying webhook signature:', error);
       return false;
     }
   }
 
   /**
-   * Calculate disbursement fees (approximate)
+   * Calculate payout fee for Philippines (approximate)
    * Note: Actual fees may vary based on Xendit's current pricing
    */
-  calculateDisbursementFee(amount: number, bankCode: string): number {
-    // Standard disbursement fees (as of 2024)
-    // These should be updated based on current Xendit pricing
-    const baseFee = 4000; // IDR 4,000 base fee
-    const percentageFee = amount * 0.001; // 0.1% of amount
+  calculatePayoutFee(amount: number, channelCode: string): number {
+    // Philippines payout fees (as of 2024)
+    const fees: Record<string, { base: number; percentage: number; min?: number; max?: number }> = {
+      // Bank transfers
+      'PH_BDO': { base: 15, percentage: 0 }, // PHP 15 flat fee
+      'PH_BPI': { base: 15, percentage: 0 },
+      'PH_METROBANK': { base: 15, percentage: 0 },
+      'PH_LANDBANK': { base: 15, percentage: 0 },
+      'PH_PNB': { base: 15, percentage: 0 },
+      'PH_UNIONBANK': { base: 15, percentage: 0 },
+      'PH_SECURITYBANK': { base: 15, percentage: 0 },
+      'PH_RCBC': { base: 15, percentage: 0 },
+      'PH_CHINABANK': { base: 15, percentage: 0 },
+      'PH_EASTWESTBANK': { base: 15, percentage: 0 },
+      
+      // E-wallets (typically higher fees)
+      'PH_GCASH': { base: 0, percentage: 0.025, min: 5, max: 50 }, // 2.5% with min/max
+      'PH_PAYMAYA': { base: 0, percentage: 0.025, min: 5, max: 50 },
+      'PH_GRABPAY': { base: 0, percentage: 0.025, min: 5, max: 50 },
+    };
+
+    const feeStructure = fees[channelCode] || { base: 15, percentage: 0 }; // Default to bank fee
     
-    return Math.max(baseFee, percentageFee);
+    let fee = feeStructure.base + (amount * feeStructure.percentage);
+    
+    if (feeStructure.min && fee < feeStructure.min) {
+      fee = feeStructure.min;
+    }
+    
+    if (feeStructure.max && fee > feeStructure.max) {
+      fee = feeStructure.max;
+    }
+    
+    return Math.round(fee * 100) / 100; // Round to 2 decimal places
   }
 
   /**
-   * Format payout data for Xendit disbursement request
+   * Format payout data for Xendit v2 payout request
    */
-  formatPayoutForDisbursement(payout: {
+  formatPayoutForXendit(payout: {
     id: string;
     affiliate_id: string;
     amount: number;
-    channel_code: string; // Updated from bank_code
+    channel_code: string;
     account_number: string;
-    account_name: string; // Updated from account_holder_name
-    currency?: string; // Added optional currency
+    account_holder_name: string;
     reference?: string;
     description?: string;
-  }): XenditDisbursementRequest {
+    affiliate_email?: string;
+  }): XenditPayoutRequest {
     return {
       reference_id: payout.reference || `payout_${payout.id}`,
-      amount: payout.amount,
-      currency: payout.currency || 'PHP', // Default to PHP for Philippines
       channel_code: payout.channel_code,
-      account_name: payout.account_name,
-      account_number: payout.account_number,
+      channel_properties: {
+        account_number: payout.account_number,
+        account_holder_name: payout.account_holder_name,
+      },
+      amount: Math.round(payout.amount * 100) / 100, // Ensure 2 decimal places
+      currency: 'PHP',
       description: payout.description || `Affiliate commission payout for ${payout.affiliate_id}`,
+      receipt_notification: payout.affiliate_email ? {
+        email_to: [payout.affiliate_email],
+      } : undefined,
+      metadata: {
+        affiliate_id: payout.affiliate_id,
+        payout_id: payout.id,
+        system: 'gh-website-affiliate',
+      },
     };
+  }
+
+  /**
+   * Map Xendit v2 status to our internal status
+   */
+  mapStatusToInternal(xenditStatus: string): 'processing' | 'completed' | 'failed' {
+    switch (xenditStatus.toUpperCase()) {
+      case 'ACCEPTED':
+      case 'PENDING':
+      case 'LOCKED':
+        return 'processing';
+      case 'SUCCEEDED':
+        return 'completed';
+      case 'CANCELLED':
+      case 'FAILED':
+        return 'failed';
+      default:
+        return 'processing';
+    }
+  }
+
+  /**
+   * Check if status is final (no more updates expected)
+   */
+  isFinalStatus(status: string): boolean {
+    return ['SUCCEEDED', 'FAILED', 'CANCELLED'].includes(status.toUpperCase());
+  }
+
+  /**
+   * Generate unique reference ID for payout
+   */
+  generateReferenceId(prefix: string = 'payout'): string {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    return `${prefix}_${timestamp}_${random}`;
+  }
+
+  /**
+   * Validate channel code for Philippines
+   */
+  isValidPhilippinesChannel(channelCode: string): boolean {
+    return Object.keys(PHILIPPINES_BANK_CHANNELS).includes(channelCode);
+  }
+
+  /**
+   * Get channel name from code
+   */
+  getChannelName(channelCode: string): string {
+    return PHILIPPINES_BANK_CHANNELS[channelCode as keyof typeof PHILIPPINES_BANK_CHANNELS] || channelCode;
   }
 }
 
 // Export singleton instance
-export const xenditDisbursementService = new XenditDisbursementService();
+export const xenditPayoutService = new XenditPayoutService();
 
 // Export utility functions
 export const XenditUtils = {
   /**
    * Map Xendit status to our internal status
    */
-  mapStatusToInternal(xenditStatus: string): 'processing' | 'sent' | 'failed' {
-    switch (xenditStatus.toUpperCase()) {
-      case 'PENDING':
-        return 'processing';
-      case 'COMPLETED':
-        return 'sent';
-      case 'FAILED':
-        return 'failed';
-      default:
-        return 'processing';
-    }
+  mapStatusToInternal(xenditStatus: string): 'processing' | 'completed' | 'failed' {
+    return xenditPayoutService.mapStatusToInternal(xenditStatus);
   },
 
   /**
    * Check if status is final (no more updates expected)
    */
   isFinalStatus(status: string): boolean {
-    return ['COMPLETED', 'FAILED'].includes(status.toUpperCase());
+    return xenditPayoutService.isFinalStatus(status);
   },
 
   /**
-   * Generate unique external ID for disbursement
+   * Generate unique reference ID for payout
    */
-  generateExternalId(prefix: string = 'payout'): string {
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8);
-    return `${prefix}_${timestamp}_${random}`;
+  generateReferenceId(prefix: string = 'payout'): string {
+    return xenditPayoutService.generateReferenceId(prefix);
   },
-}; 
+
+  /**
+   * Validate Philippines channel code
+   */
+  isValidPhilippinesChannel(channelCode: string): boolean {
+    return xenditPayoutService.isValidPhilippinesChannel(channelCode);
+  },
+
+  /**
+   * Get channel display name
+   */
+  getChannelName(channelCode: string): string {
+    return xenditPayoutService.getChannelName(channelCode);
+  },
+};
+
+// Backward compatibility - keep old service name but point to new implementation
+export const xenditDisbursementService = xenditPayoutService; 
