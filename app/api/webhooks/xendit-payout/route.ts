@@ -23,8 +23,16 @@ export async function POST(request: NextRequest) {
     const signature = request.headers.get('x-callback-token');
     const expectedToken = process.env.XENDIT_WEBHOOK_TOKEN;
     
+    // Temporarily log for debugging
+    console.log('Webhook auth check:', {
+      signature,
+      expectedToken,
+      hasToken: !!expectedToken,
+      match: signature === expectedToken
+    });
+    
     if (!expectedToken || signature !== expectedToken) {
-      console.error('Invalid webhook signature');
+      console.error('Invalid webhook signature - Expected:', expectedToken, 'Got:', signature);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -32,17 +40,33 @@ export async function POST(request: NextRequest) {
     console.log('Xendit webhook received:', JSON.stringify(payload, null, 2));
 
     // Extract key information from Xendit webhook
-    const {
-      id: xenditDisbursementId,
-      external_id: externalId,
-      status,
-      amount,
-      channel_code,
-      failure_code,
-      failure_reason,
-      created,
-      updated
-    } = payload;
+    // Handle both test format and real Xendit format
+    let xenditDisbursementId, externalId, status, amount, channel_code, failure_code, failure_reason, created, updated;
+    
+    if (payload.event && payload.data) {
+      // Real Xendit webhook format
+      const data = payload.data;
+      xenditDisbursementId = data.id;
+      externalId = data.reference_id; // Xendit uses reference_id as our external identifier
+      status = data.status; // SUCCEEDED, FAILED, etc.
+      amount = data.amount;
+      channel_code = data.channel_code;
+      failure_code = data.failure_code;
+      failure_reason = data.failure_reason;
+      created = data.created;
+      updated = data.updated;
+    } else {
+      // Test/legacy format
+      xenditDisbursementId = payload.id;
+      externalId = payload.external_id;
+      status = payload.status;
+      amount = payload.amount;
+      channel_code = payload.channel_code;
+      failure_code = payload.failure_code;
+      failure_reason = payload.failure_reason;
+      created = payload.created;
+      updated = payload.updated;
+    }
 
     // Find the payout record using the external_id (which should be our payout ID)
     const { data: payout, error: payoutError } = await supabase
@@ -52,8 +76,26 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (payoutError || !payout) {
-      console.error('Payout not found for external_id:', externalId);
-      return NextResponse.json({ error: 'Payout not found' }, { status: 404 });
+      console.log('Payout not found for external_id:', externalId, '- This may be a test payout or payout created outside our system');
+      
+      // Log the webhook for audit purposes even if we don't have the payout
+      console.log('External payout webhook logged:', {
+        xendit_id: xenditDisbursementId,
+        external_id: externalId,
+        status: status,
+        amount: amount,
+        channel: channel_code,
+        event_type: payload.event || 'legacy',
+        webhook_timestamp: new Date().toISOString()
+      });
+      
+      // Return success to prevent Xendit from retrying
+      return NextResponse.json({ 
+        message: 'Webhook received - payout not in our system',
+        external_id: externalId,
+        xendit_id: xenditDisbursementId,
+        status: 'acknowledged'
+      }, { status: 200 });
     }
 
     // Map Xendit status to our internal status
@@ -62,6 +104,7 @@ export async function POST(request: NextRequest) {
 
     switch (status) {
       case 'COMPLETED':
+      case 'SUCCEEDED':
         newStatus = 'paid';
         processingNotes = `Payment completed successfully via ${channel_code} on ${new Date(updated).toLocaleString()}`;
         break;
@@ -72,6 +115,7 @@ export async function POST(request: NextRequest) {
         break;
       
       case 'PENDING':
+      case 'PROCESSING':
         newStatus = 'processing';
         processingNotes = `Payment is being processed via ${channel_code} since ${new Date(created).toLocaleString()}`;
         break;
@@ -88,7 +132,7 @@ export async function POST(request: NextRequest) {
         status: newStatus,
         xendit_disbursement_id: xenditDisbursementId,
         processing_notes: processingNotes,
-        processed_at: status === 'COMPLETED' ? new Date(updated).toISOString() : null,
+        processed_at: (status === 'COMPLETED' || status === 'SUCCEEDED') ? new Date(updated).toISOString() : null,
         updated_at: new Date().toISOString()
       })
       .eq('id', payout.id);

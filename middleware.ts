@@ -1,6 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { defaultSecurityMiddleware, applyRateLimiting } from '@/lib/security'
+import { defaultSecurityMiddleware, applyRateLimiting, applyWebhookSecurityHeaders } from '@/lib/security'
 import { AUTH_ERROR_CODES } from '@/lib/session/auth-error-handler'
 
 export async function middleware(request: NextRequest) {
@@ -11,8 +11,17 @@ export async function middleware(request: NextRequest) {
     },
   })
   
-  // Apply security middleware early to set security headers
-  response = await defaultSecurityMiddleware(request, response)
+  // Skip security middleware for webhook endpoints (they need to accept external requests)
+  const isWebhookEndpoint = request.nextUrl.pathname.startsWith('/api/webhooks/') ||
+                           request.nextUrl.pathname.startsWith('/api/cron/')
+  
+  if (!isWebhookEndpoint) {
+    // Apply security middleware early to set security headers
+    response = await defaultSecurityMiddleware(request, response)
+  } else {
+    // For webhooks, apply minimal security headers without CSRF protection
+    response = applyWebhookSecurityHeaders(request, response)
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
