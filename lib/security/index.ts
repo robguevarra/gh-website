@@ -101,3 +101,35 @@ export function prepareFormResponse(
 ): NextResponse {
   return setCSRFTokens(request, response);
 }
+
+/**
+ * Apply webhook security headers to a response
+ * This is a helper function for webhook endpoints
+ */
+export function applyWebhookSecurityHeaders(
+  request: NextRequest,
+  response: NextResponse
+): NextResponse {
+  // Set basic security headers but allow external origins for webhooks
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  
+  // Relaxed CSP for webhooks - allow external sources
+  const webhookCSP = `
+    default-src 'self';
+    script-src 'none';
+    style-src 'none';
+    img-src 'none';
+    font-src 'none';
+    connect-src 'self' https://*.xendit.co https://*.facebook.com https://*.youtube.com https://*.postmarkapp.com;
+    frame-src 'none';
+    object-src 'none';
+    base-uri 'self';
+    form-action 'none';
+  `.replace(/\s+/g, ' ').trim();
+  
+  response.headers.set('Content-Security-Policy', webhookCSP);
+  
+  return response;
+}

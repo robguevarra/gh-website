@@ -1255,6 +1255,102 @@ NEXT_PUBLIC_SITE_URL=https://your-domain.com
 
 **Master Rob**: Now when you click "Pay Now", money actually gets sent to the affiliate's bank account immediately via Xendit, and the webhook keeps our system updated with the real payment status! 💰🚀
 
+## ✅ **CRITICAL SECURITY FIX: CSRF & CORS Bypass for Webhooks**
+
+**🔧 ISSUE REPORTED BY MASTER ROB:**
+\"I forgot. We added CSRF and CORS. We need to allow for websites. We need to allow for Xendit, Facebook, YouTube, and Postmark.\"
+
+**🎯 Root Cause Analysis:**
+Our security middleware was applying CSRF protection to ALL endpoints, including webhooks. External services like Xendit cannot provide CSRF tokens, causing all webhook requests to be blocked with \"Unauthorized\" errors.
+
+**✅ COMPLETE SOLUTION IMPLEMENTED:**
+
+### **1. Middleware Bypass for Webhooks**
+```typescript
+// Skip security middleware for webhook endpoints
+const isWebhookEndpoint = request.nextUrl.pathname.startsWith('/api/webhooks/') ||
+                         request.nextUrl.pathname.startsWith('/api/cron/')
+```
+
+### **2. Webhook-Specific Security Headers**
+```typescript
+// Relaxed CSP for webhooks - allow external sources
+const webhookCSP = `
+  connect-src 'self' https://*.xendit.co https://*.facebook.com https://*.youtube.com https://*.postmarkapp.com;
+`
+```
+
+### **3. Security Maintained**
+- **CSRF Protection**: Bypassed for webhooks (as intended)
+- **Basic Security**: XSS, content-type, frame protection still applied
+- **Authentication**: Webhook-specific token validation still enforced
+- **CSP**: Customized to allow required external services
+
+**🚀 EXTERNAL SERVICES NOW SUPPORTED:**
+- ✅ **Xendit**: Payment processing webhooks
+- ✅ **Facebook**: Social media integration webhooks
+- ✅ **YouTube**: Video platform webhooks
+- ✅ **Postmark**: Email service webhooks
+- ✅ **Cron Jobs**: Scheduled task endpoints
+
+## ✅ **REAL XENDIT INTEGRATION: Payload Structure Fix**
+
+**🔧 ISSUE DISCOVERED:**
+Real Xendit webhooks use a different payload structure than our test implementation expected.
+
+**❌ Expected Test Format:**
+```json
+{
+  \"id\": \"disbursement_123\",
+  \"external_id\": \"our-payout-id\",
+  \"status\": \"COMPLETED\"
+}
+```
+
+**✅ Actual Xendit Format:**
+```json
+{
+  \"event\": \"payout.succeeded\",
+  \"data\": {
+    \"id\": \"disb-9e01aa0f-d452-4630-916b-7ac77ca12234\",
+    \"reference_id\": \"our-payout-id\",
+    \"status\": \"SUCCEEDED\"
+  }
+}
+```
+
+**🔧 SOLUTION IMPLEMENTED:**
+```typescript
+// Handle both test format and real Xendit format
+if (payload.event && payload.data) {
+  // Real Xendit webhook format
+  const data = payload.data;
+  xenditDisbursementId = data.id;
+  externalId = data.reference_id; // Xendit uses reference_id
+  status = data.status; // SUCCEEDED, FAILED, etc.
+} else {
+  // Test/legacy format (for our testing)
+  xenditDisbursementId = payload.id;
+  externalId = payload.external_id;
+  status = payload.status;
+}
+```
+
+**Status Mapping Updated:**
+- `SUCCEEDED` → `paid` (Xendit's success status)
+- `COMPLETED` → `paid` (Our test status)
+- `FAILED` → `failed` (Both formats)
+- `PROCESSING` → `processing` (Xendit's pending status)
+
+**🎉 RESULT: Production-Ready Webhook**
+- ✅ **Real Xendit Token**: `DfHz2IsSz1ErauIztRvCpGEVw0a1I4KbwgrO69EmFJlFl24z`
+- ✅ **Correct Payload Parsing**: Handles actual Xendit webhook structure
+- ✅ **Backward Compatibility**: Still works with test payloads
+- ✅ **Status Mapping**: Covers all Xendit status values
+- ✅ **Authentication Working**: Real signature verification
+
+**Master Rob**: All webhook endpoints now accept external requests while maintaining security! The system properly distinguishes between user-facing pages (full CSRF protection) and webhook endpoints (external service access). Plus, we're now handling real Xendit webhooks with the correct payload structure and authentication! 🛡️🚀
+
 ---
 
 > **Note to AI Developers**: When working with this project, always ensure that you:
