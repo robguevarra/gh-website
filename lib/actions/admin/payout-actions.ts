@@ -1792,4 +1792,621 @@ export async function syncXenditPayoutStatus({
       error: error instanceof Error ? error.message : 'Failed to sync payout statuses',
     };
   }
+}
+
+/**
+ * Process immediate payout for a specific affiliate
+ * Used for "Pay Now" functionality in batch preview
+ */
+export async function payAffiliateNow({
+  affiliateId,
+  adminUserId,
+}: {
+  affiliateId: string;
+  adminUserId: string;
+}): Promise<{ success: boolean; error: string | null; payoutId?: string }> {
+  const supabase = getAdminClient();
+  
+  try {
+    // Get eligible cleared conversions for this affiliate
+    const { data: conversions, error: conversionError } = await supabase
+      .from('affiliate_conversions')
+      .select('id, commission_amount')
+      .eq('affiliate_id', affiliateId)
+      .eq('status', 'cleared')
+      .is('paid_at', null);
+      
+    if (conversionError) {
+      throw new Error(`Failed to fetch conversions: ${conversionError.message}`);
+    }
+    
+    if (!conversions || conversions.length === 0) {
+      return { success: false, error: 'No eligible conversions found for this affiliate' };
+    }
+    
+    // Calculate total amount
+    const totalAmount = conversions.reduce((sum, c) => sum + Number(c.commission_amount), 0);
+    
+    // Get affiliate info
+    const { data: affiliate, error: affiliateError } = await supabase
+      .from('affiliates')
+      .select(`
+        id,
+        user_id,
+        payout_method,
+        bank_name,
+        account_number,
+        account_holder_name,
+        unified_profiles!affiliates_user_id_fkey (
+          email,
+          first_name,
+          last_name
+        )
+      `)
+      .eq('id', affiliateId)
+      .single();
+      
+    if (affiliateError || !affiliate) {
+      throw new Error('Affiliate not found');
+    }
+    
+    // Create immediate payout record
+    const { data: payout, error: payoutError } = await supabase
+      .from('affiliate_payouts')
+      .insert({
+        affiliate_id: affiliateId,
+        amount: totalAmount,
+        status: 'pending',
+        payout_method: affiliate.payout_method || 'bank_transfer',
+        processing_notes: `Emergency payout processed by admin on ${new Date().toLocaleDateString()}. Bank: ${affiliate.bank_name || 'N/A'}, Account: ${affiliate.account_number || 'N/A'}, Holder: ${affiliate.account_holder_name || 'N/A'}`,
+        scheduled_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single();
+      
+    if (payoutError) {
+      throw new Error(`Failed to create payout: ${payoutError.message}`);
+    }
+    
+    // Mark conversions as paid
+    const { error: updateError } = await supabase
+      .from('affiliate_conversions')
+      .update({ 
+        paid_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .in('id', conversions.map(c => c.id));
+      
+    if (updateError) {
+      // Rollback payout creation
+      await supabase.from('affiliate_payouts').delete().eq('id', payout.id);
+      throw new Error(`Failed to update conversions: ${updateError.message}`);
+    }
+    
+    // Actually process the payment via Xendit
+    const xenditResult = await processPayoutsViaXendit({
+      payoutIds: [payout.id],
+      adminUserId,
+    });
+    
+    // Check if Xendit processing was successful
+    if (xenditResult.error || xenditResult.failures.length > 0) {
+      // If Xendit fails, rollback the conversion updates
+      await supabase
+        .from('affiliate_conversions')
+        .update({ 
+          paid_at: null,
+          updated_at: new Date().toISOString()
+        })
+        .in('id', conversions.map(c => c.id));
+      
+      // Delete the payout record
+      await supabase.from('affiliate_payouts').delete().eq('id', payout.id);
+      
+      const errorMsg = xenditResult.failures[0]?.error || xenditResult.error || 'Payment processing failed';
+      return { success: false, error: `Payment failed: ${errorMsg}` };
+    }
+    
+    // Log admin activity
+    await logAdminActivity({
+      activity_type: 'GENERAL_ADMIN_ACTION',
+      description: `Emergency payout processed and sent via Xendit`,
+      details: {
+        affiliate_id: affiliateId,
+        payout_id: payout.id,
+        amount: totalAmount,
+        conversion_count: conversions.length,
+        xendit_id: xenditResult.successes[0]?.xenditId
+      }
+    });
+    
+    revalidatePath('/admin/affiliates/batch-preview');
+    revalidatePath('/admin/affiliates/payouts');
+    
+    return { 
+      success: true, 
+      error: null, 
+      payoutId: payout.id,
+      xenditId: xenditResult.successes[0]?.xenditId
+    };
+    
+  } catch (error) {
+    console.error('Error in payAffiliateNow:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to process immediate payout' 
+    };
+  }
+}
+
+/**
+ * Override fraud flags for conversions and approve them
+ * Used for manual override in batch preview
+ */
+export async function overrideFraudFlags({
+  adminUserId,
+  overrideReason = 'Manual override by admin',
+}: {
+  adminUserId: string;
+  overrideReason?: string;
+}): Promise<{ success: boolean; error: string | null; overriddenCount?: number }> {
+  const supabase = getAdminClient();
+  
+  try {
+    // Get all flagged conversions
+    const { data: flaggedConversions, error: fetchError } = await supabase
+      .from('affiliate_conversions')
+      .select('id')
+      .eq('status', 'flagged');
+      
+    if (fetchError) {
+      throw new Error(`Failed to fetch flagged conversions: ${fetchError.message}`);
+    }
+    
+    if (!flaggedConversions || flaggedConversions.length === 0) {
+      return { success: false, error: 'No flagged conversions to override' };
+    }
+    
+    // Approve all flagged conversions
+    const { error: updateError } = await supabase
+      .from('affiliate_conversions')
+      .update({
+        status: 'cleared',
+        cleared_at: new Date().toISOString(),
+        fraud_notes: `${overrideReason} - Original flags overridden`,
+        updated_at: new Date().toISOString()
+      })
+      .eq('status', 'flagged');
+      
+    if (updateError) {
+      throw new Error(`Failed to override flags: ${updateError.message}`);
+    }
+    
+    // Log admin activity
+    await logAdminActivity({
+      activity_type: 'GENERAL_ADMIN_ACTION',
+      description: `Bulk fraud flag override`,
+      details: {
+        overridden_count: flaggedConversions.length,
+        reason: overrideReason,
+        admin_user_id: adminUserId
+      }
+    });
+    
+    revalidatePath('/admin/affiliates/batch-preview');
+    revalidatePath('/admin/affiliates/conversions');
+    
+    return { 
+      success: true, 
+      error: null, 
+      overriddenCount: flaggedConversions.length 
+    };
+    
+  } catch (error) {
+    console.error('Error in overrideFraudFlags:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to override fraud flags' 
+    };
+  }
+}
+
+/**
+ * Emergency disbursement - process all cleared conversions immediately
+ * Bypasses normal batch approval workflow
+ */
+export async function emergencyDisbursement({
+  adminUserId,
+  reason = 'Emergency disbursement',
+}: {
+  adminUserId: string;
+  reason?: string;
+}): Promise<{ success: boolean; error: string | null; batchId?: string; amount?: number }> {
+  const supabase = getAdminClient();
+  
+  try {
+    // Get all cleared conversions that haven't been paid
+    const { data: conversions, error: conversionError } = await supabase
+      .from('affiliate_conversions')
+      .select(`
+        id,
+        affiliate_id,
+        commission_amount,
+        affiliates!inner (
+          id,
+          user_id,
+          payout_method,
+          bank_name,
+          account_number,
+          account_holder_name,
+          unified_profiles!affiliates_user_id_fkey (
+            email,
+            first_name,
+            last_name
+          )
+        )
+      `)
+      .eq('status', 'cleared')
+      .is('paid_at', null);
+      
+    if (conversionError) {
+      throw new Error(`Failed to fetch conversions: ${conversionError.message}`);
+    }
+    
+    if (!conversions || conversions.length === 0) {
+      return { success: false, error: 'No cleared conversions available for disbursement' };
+    }
+    
+    // Group by affiliate
+    const affiliateGroups = conversions.reduce((acc, conv) => {
+      const affiliateId = conv.affiliate_id;
+      if (!acc[affiliateId]) {
+        acc[affiliateId] = {
+          affiliate: conv.affiliates,
+          conversions: [],
+          totalAmount: 0
+        };
+      }
+      acc[affiliateId].conversions.push(conv);
+      acc[affiliateId].totalAmount += Number(conv.commission_amount);
+      return acc;
+    }, {} as Record<string, any>);
+    
+    const totalAmount = Object.values(affiliateGroups).reduce((sum: number, group: any) => sum + group.totalAmount, 0);
+    
+    // Create emergency batch
+    const { data: batch, error: batchError } = await supabase
+      .from('affiliate_payout_batches')
+      .insert({
+        name: `Emergency Disbursement - ${new Date().toLocaleDateString()}`,
+        description: `${reason}. Contains ${conversions.length} conversions totaling ₱${totalAmount.toLocaleString()}.`,
+        status: 'processed', // Skip approval
+        total_amount: totalAmount,
+        total_conversions: conversions.length,
+        created_by: adminUserId,
+        auto_created: false,
+        verification_notes: `Emergency disbursement: ${reason}`,
+      })
+      .select('id')
+      .single();
+      
+    if (batchError) {
+      throw new Error(`Failed to create emergency batch: ${batchError.message}`);
+    }
+    
+    // Create individual payout records
+    const payoutRecords = Object.values(affiliateGroups).map((group: any) => ({
+      batch_id: batch.id,
+      affiliate_id: group.affiliate.id,
+      amount: group.totalAmount,
+      status: 'pending',
+      payout_method: group.affiliate.payout_method || 'bank_transfer',
+      processing_notes: `Emergency disbursement: ${reason}. Bank: ${group.affiliate.bank_name || 'N/A'}, Account: ${group.affiliate.account_number || 'N/A'}, Holder: ${group.affiliate.account_holder_name || 'N/A'}`,
+      scheduled_at: new Date().toISOString(),
+    }));
+    
+    const { error: payoutsError } = await supabase
+      .from('affiliate_payouts')
+      .insert(payoutRecords);
+      
+    if (payoutsError) {
+      // Rollback batch creation
+      await supabase.from('affiliate_payout_batches').delete().eq('id', batch.id);
+      throw new Error(`Failed to create payout records: ${payoutsError.message}`);
+    }
+    
+    // Mark conversions as paid
+    const { error: updateError } = await supabase
+      .from('affiliate_conversions')
+      .update({
+        paid_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .in('id', conversions.map(c => c.id));
+      
+    if (updateError) {
+      console.error('Failed to update conversions as paid:', updateError);
+      // Don't fail the whole operation, but log it
+    }
+    
+    // Log admin activity
+    await logAdminActivity({
+      activity_type: 'GENERAL_ADMIN_ACTION',
+      description: `Emergency disbursement processed`,
+      details: {
+        batch_id: batch.id,
+        total_amount: totalAmount,
+        conversion_count: conversions.length,
+        affiliate_count: Object.keys(affiliateGroups).length,
+        reason
+      }
+    });
+    
+    revalidatePath('/admin/affiliates/batch-preview');
+    revalidatePath('/admin/affiliates/payouts');
+    revalidatePath('/admin/affiliates/payouts/batches');
+    
+    return { 
+      success: true, 
+      error: null, 
+      batchId: batch.id,
+      amount: totalAmount
+    };
+    
+  } catch (error) {
+    console.error('Error in emergencyDisbursement:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to process emergency disbursement' 
+    };
+  }
+}
+
+/**
+ * Export batch report as CSV or JSON
+ * Used for "Export Batch Report" functionality
+ */
+export async function exportBatchReport({
+  format = 'csv',
+}: {
+  format?: 'csv' | 'json';
+}): Promise<{
+  data: string | null;
+  filename: string;
+  contentType: string;
+  error: string | null;
+}> {
+  try {
+    const { batch, error } = await getBatchPreviewData();
+    
+    if (error || !batch) {
+      return {
+        data: null,
+        filename: '',
+        contentType: '',
+        error: error || 'No batch data available'
+      };
+    }
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `batch-report-${batch.month.toLowerCase().replace(' ', '-')}-${timestamp}.${format}`;
+    
+    if (format === 'json') {
+      return {
+        data: JSON.stringify(batch, null, 2),
+        filename,
+        contentType: 'application/json',
+        error: null,
+      };
+    }
+    
+    // Generate CSV
+    const csvRows = [
+      // Headers
+      'Affiliate Name,Email,Join Date,Conversions,Total Commission,Average Commission,Cleared,Flagged,Pending'
+    ];
+    
+    // Data rows
+    batch.affiliate_payouts.forEach(affiliate => {
+      csvRows.push([
+        `"${affiliate.affiliate_name}"`,
+        `"${affiliate.email}"`,
+        `"${new Date(affiliate.join_date).toLocaleDateString()}"`,
+        affiliate.conversions_count,
+        affiliate.total_commission,
+        affiliate.average_commission.toFixed(2),
+        affiliate.cleared_count,
+        affiliate.flagged_count,
+        affiliate.pending_count
+      ].join(','));
+    });
+    
+    // Summary row
+    csvRows.push('');
+    csvRows.push('SUMMARY');
+    csvRows.push(`Total Affiliates,${batch.total_affiliates}`);
+    csvRows.push(`Total Amount,₱${batch.total_amount.toLocaleString()}`);
+    csvRows.push(`Total Conversions,${batch.total_conversions}`);
+    csvRows.push(`Cleared Conversions,${batch.cleared_conversions}`);
+    csvRows.push(`Flagged Conversions,${batch.flagged_conversions}`);
+    csvRows.push(`Pending Conversions,${batch.pending_conversions}`);
+    
+    return {
+      data: csvRows.join('\n'),
+      filename,
+      contentType: 'text/csv',
+      error: null,
+    };
+    
+  } catch (error) {
+    console.error('Error in exportBatchReport:', error);
+    return {
+      data: null,
+      filename: '',
+      contentType: '',
+      error: error instanceof Error ? error.message : 'Failed to export batch report'
+    };
+  }
+}
+
+/**
+ * Generate payment files for bank processing
+ * Used for "Generate Payment Files" functionality  
+ */
+export async function generatePaymentFiles(): Promise<{
+  data: string | null;
+  filename: string;
+  contentType: string;
+  error: string | null;
+}> {
+  try {
+    const { batch, error } = await getBatchPreviewData();
+    
+    if (error || !batch) {
+      return {
+        data: null,
+        filename: '',
+        contentType: '',
+        error: error || 'No batch data available'
+      };
+    }
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `payment-file-${batch.month.toLowerCase().replace(' ', '-')}-${timestamp}.csv`;
+    
+    // Generate payment file in standard bank format
+    const csvRows = [
+      // Headers for bank processing
+      'Account Number,Account Holder Name,Amount,Reference,Recipient Email,Bank Name'
+    ];
+    
+    // Only include affiliates with cleared conversions
+    const eligibleAffiliates = batch.affiliate_payouts.filter(a => a.cleared_count > 0);
+    
+    eligibleAffiliates.forEach(affiliate => {
+      csvRows.push([
+        `"${affiliate.account_number || 'N/A'}"`,
+        `"${affiliate.account_holder_name || affiliate.affiliate_name}"`,
+        affiliate.total_commission,
+        `"${batch.month} Commission - ${affiliate.affiliate_name}"`,
+        `"${affiliate.email}"`,
+        `"${affiliate.bank_name || 'N/A'}"`
+      ].join(','));
+    });
+    
+    // Add summary
+    csvRows.push('');
+    csvRows.push('PAYMENT SUMMARY');
+    csvRows.push(`Total Recipients,${eligibleAffiliates.length}`);
+    csvRows.push(`Total Amount,₱${eligibleAffiliates.reduce((sum, a) => sum + a.total_commission, 0).toLocaleString()}`);
+    csvRows.push(`Generated On,${new Date().toLocaleDateString()}`);
+    
+    return {
+      data: csvRows.join('\n'),
+      filename,
+      contentType: 'text/csv',
+      error: null,
+    };
+    
+  } catch (error) {
+    console.error('Error in generatePaymentFiles:', error);
+    return {
+      data: null,
+      filename: '',
+      contentType: '',
+      error: error instanceof Error ? error.message : 'Failed to generate payment files'
+    };
+  }
+}
+
+/**
+ * Approve the current batch (if eligible)
+ * Used for "Approve Batch" functionality
+ */
+export async function approveBatch({
+  adminUserId,
+}: {
+  adminUserId: string;
+}): Promise<{ success: boolean; error: string | null; batchId?: string }> {
+  try {
+    const { batch, error } = await getBatchPreviewData();
+    
+    if (error || !batch) {
+      return {
+        success: false,
+        error: error || 'No batch data available'
+      };
+    }
+    
+    // Check if batch is eligible for approval
+    if (batch.flagged_conversions > 0) {
+      return {
+        success: false,
+        error: `Cannot approve batch with ${batch.flagged_conversions} flagged conversions. Review flags first.`
+      };
+    }
+    
+    if (batch.cleared_conversions === 0) {
+      return {
+        success: false,
+        error: 'No cleared conversions available for approval.'
+      };
+    }
+    
+    // Create approved batch using existing functionality
+    const eligibleAffiliates = batch.affiliate_payouts
+      .filter(a => a.cleared_count > 0)
+      .map(a => a.affiliate_id);
+      
+    const { batch: createdBatch, error: createError } = await createPayoutBatch({
+      affiliateIds: eligibleAffiliates,
+      payoutMethod: 'bank_transfer',
+      batchName: `${batch.month} Approved Batch`
+    });
+    
+    if (createError || !createdBatch) {
+      return {
+        success: false,
+        error: createError || 'Failed to create approved batch'
+      };
+    }
+    
+    // Immediately verify the batch since it's been manually approved
+    const { success: verifySuccess, error: verifyError } = await verifyPayoutBatch({
+      batchId: createdBatch.id,
+      verificationNotes: `Manually approved by admin from batch preview on ${new Date().toLocaleDateString()}`
+    });
+    
+    if (!verifySuccess) {
+      console.error('Failed to verify batch after creation:', verifyError);
+    }
+    
+    // Log admin activity
+    await logAdminActivity({
+      activity_type: 'GENERAL_ADMIN_ACTION',
+      description: `Batch approved from preview`,
+      details: {
+        batch_id: createdBatch.id,
+        total_amount: createdBatch.total_amount,
+        conversion_count: createdBatch.conversion_count,
+        affiliate_count: createdBatch.affiliate_count
+      }
+    });
+    
+    revalidatePath('/admin/affiliates/batch-preview');
+    revalidatePath('/admin/affiliates/payouts/batches');
+    
+    return {
+      success: true,
+      error: null,
+      batchId: createdBatch.id
+    };
+    
+  } catch (error) {
+    console.error('Error in approveBatch:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to approve batch'
+    };
+  }
 } 
