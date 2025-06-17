@@ -183,9 +183,9 @@ export interface PayoutProjection {
 }
 
 /**
- * Date Range Filter Type
+ * Date Range Filter Type - Simplified options
  */
-export type DateRangeFilter = 'today' | 'yesterday' | '7days' | '30days' | '90days' | 'custom';
+export type DateRangeFilter = 'thisMonth' | 'last3Months' | 'all';
 
 /**
  * UI Filter State

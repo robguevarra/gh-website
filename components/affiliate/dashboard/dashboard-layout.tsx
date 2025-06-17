@@ -57,7 +57,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       href: '/affiliate-portal/performance',
       icon: LineChart,
     },
-
+    {
+      title: 'Resources',
+      href: '/affiliate-portal/resources',
+      icon: HelpCircle,
+    },
     {
       title: 'Payouts',
       href: '/affiliate-portal/payouts',

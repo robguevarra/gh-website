@@ -5,28 +5,24 @@ import { LineChart, BarChart3, TrendingUp, RefreshCcw } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useAffiliateMetricsData } from '@/lib/hooks/use-affiliate-dashboard';
 import { formatCurrencyPHP } from '@/lib/utils/formatting';
+import { useAffiliateProfileData } from '@/lib/hooks/use-affiliate-dashboard';
 
 export function PerformanceMetricsCard() {
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
   const { 
     metrics, 
     isLoadingMetrics, 
     loadAffiliateMetrics
   } = useAffiliateMetricsData();
 
+  // Get the user ID from the profile hook
+  const { affiliateProfile } = useAffiliateProfileData();
+
   const handleRefresh = () => {
-    loadAffiliateMetrics(timeRange);
+    if (affiliateProfile?.userId) {
+      loadAffiliateMetrics(affiliateProfile.userId);
+    }
   };
 
   // Display placeholder text for empty metrics
@@ -73,23 +69,6 @@ export function PerformanceMetricsCard() {
           <CardDescription>Track your affiliate performance</CardDescription>
         </div>
         <div className="flex items-center space-x-2">
-          <Select
-            value={timeRange}
-            onValueChange={(value) => setTimeRange(value as '7d' | '30d' | '90d' | 'all')}
-          >
-            <SelectTrigger className="w-[120px]">
-              <SelectValue placeholder="Select period" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Time Period</SelectLabel>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
-                <SelectItem value="all">All time</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
           <Button size="icon" variant="ghost" onClick={handleRefresh} disabled={isLoadingMetrics}>
             <RefreshCcw className={`h-4 w-4 ${isLoadingMetrics ? 'animate-spin' : ''}`} />
             <span className="sr-only">Refresh</span>

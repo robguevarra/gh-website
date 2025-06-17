@@ -7,13 +7,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, ShoppingCart, Receipt, WalletCards, CreditCard, RefreshCcw, TrendingUp, Calendar } from 'lucide-react';
+import { FileText, ShoppingCart, Receipt, WalletCards, CreditCard, RefreshCw, TrendingUp, Calendar } from 'lucide-react';
 import { usePayoutsData, useAffiliateDashboard } from '@/lib/hooks/use-affiliate-dashboard';
 import { useAffiliateConversions } from '@/lib/hooks/use-affiliate-conversions';
 import { formatCurrencyPHP } from '@/lib/utils/formatting';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { DateRangeFilter } from '@/components/affiliate/dashboard/date-range-filter';
 
 export default function PayoutsPage() {
   const { user } = useAuth();
@@ -138,7 +137,6 @@ export default function PayoutsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <DateRangeFilter onFilterChange={handleRefresh} />
             <Button 
               onClick={handleRefresh} 
               variant="outline" 
@@ -146,7 +144,7 @@ export default function PayoutsPage() {
               disabled={isLoadingPayouts}
               className="flex items-center gap-2"
             >
-              <RefreshCcw className={`h-4 w-4 ${isLoadingPayouts ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${isLoadingPayouts ? 'animate-spin' : ''}`} />
               {isLoadingPayouts ? 'Loading...' : 'Refresh'}
             </Button>
           </div>
@@ -223,19 +221,9 @@ export default function PayoutsPage() {
           </Card>
         </div>
 
-        {/* Transaction History with Refresh Button */}
-        <div className="flex justify-between items-center mb-4">
+        {/* Transaction History */}
+        <div className="mb-4">
           <h2 className="text-lg font-semibold">Transaction History</h2>
-          <Button 
-            onClick={handleRefresh} 
-            variant="outline" 
-            size="sm"
-            disabled={isLoadingPayouts}
-            className="flex items-center gap-2"
-          >
-            <RefreshCcw className={`h-4 w-4 ${isLoadingPayouts ? 'animate-spin' : ''}`} />
-            {isLoadingPayouts ? 'Loading...' : 'Refresh'}
-          </Button>
         </div>
 
         <Tabs defaultValue="payouts" className="w-full">

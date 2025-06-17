@@ -6,30 +6,25 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/auth-context';
 import { 
   useAffiliateProfileData, 
   useAffiliateMetricsData, 
-  useReferralLinksData 
+  useReferralLinksData,
+  useAffiliateDashboard 
 } from '@/lib/hooks/use-affiliate-dashboard';
 import { formatCurrencyPHP } from '@/lib/utils/formatting';
 
 export function OverviewCard() {
   const router = useRouter();
+  const { user } = useAuth();
   const { affiliateProfile, isLoadingProfile } = useAffiliateProfileData();
-  const { metrics, isLoadingMetrics, loadAffiliateMetrics } = useAffiliateMetricsData();
-  const { referralLinks, isLoadingReferralLinks, loadReferralLinks } = useReferralLinksData();
+  const { metrics, isLoadingMetrics } = useAffiliateMetricsData();
+  const { referralLinks, isLoadingReferralLinks } = useReferralLinksData();
 
-  // Load metrics and referral links on component mount
-  useEffect(() => {
-    // We need to wait for the profile to load to get the userId
-    if (affiliateProfile?.userId) {
-      // Load data with the userId from the profile
-      loadReferralLinks(affiliateProfile.userId);
-      
-      // Default to last 30 days of data for metrics
-      loadAffiliateMetrics(affiliateProfile.userId, { dateRange: '30days' });
-    }
-  }, [loadAffiliateMetrics, loadReferralLinks, affiliateProfile]);
+  // Auto-load affiliate dashboard data - INDUSTRY BEST PRACTICE
+  // This handles loading all data including metrics with correct date range
+  useAffiliateDashboard(user?.id || null);
 
   const handleCopyLink = (link: string) => {
     navigator.clipboard.writeText(link)
@@ -102,7 +97,7 @@ export function OverviewCard() {
                     {formatNumber(metrics?.totalClicks)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Last 30 days
+                    All time
                   </p>
                 </CardContent>
               </Card>

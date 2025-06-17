@@ -2,8 +2,6 @@
 
 import { DashboardLayout } from '@/components/affiliate/dashboard/dashboard-layout';
 import { PerformanceMetricsCard } from '@/components/affiliate/dashboard/performance-metrics-card';
-import { PerformanceChart } from '@/components/affiliate/dashboard/analytics/performance-chart';
-import { LinkPerformanceComparison } from '@/components/affiliate/dashboard/analytics/link-performance-comparison';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, BarChart3, ArrowUpRight, ArrowDownRight, RefreshCcw, ShoppingCart } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,7 +12,6 @@ import { useAffiliateDashboardStore } from '@/lib/stores/affiliate-dashboard';
 import { formatCurrencyPHP } from '@/lib/utils/formatting';
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/auth-context';
-import { DateRangeFilter } from '@/components/affiliate/dashboard/date-range-filter';
 
 export default function PerformancePage() {
   const { user } = useAuth();
@@ -23,13 +20,6 @@ export default function PerformancePage() {
   
   // Auto-load affiliate dashboard data - INDUSTRY BEST PRACTICE
   useAffiliateDashboard(user?.id || null);
-  
-  // Load metrics when date filter changes
-  useEffect(() => {
-    if (user?.id && loadAffiliateMetrics && filterState.dateRange) {
-      loadAffiliateMetrics(user.id, { dateRange: filterState.dateRange });
-    }
-  }, [filterState.dateRange, loadAffiliateMetrics, user?.id]);
   
   // Calculate real performance insights from actual data
   const performanceInsights = useMemo(() => {
@@ -64,7 +54,8 @@ export default function PerformancePage() {
   
   // Handle refresh functionality
   const handleRefresh = async () => {
-    if (user?.id && loadAffiliateMetrics && filterState.dateRange) {
+    if (user?.id && loadAffiliateMetrics) {
+      console.log('🔄 Refreshing metrics with date range:', filterState.dateRange);
       await loadAffiliateMetrics(user.id, { dateRange: filterState.dateRange }, true); // Force refresh
     }
   };
@@ -80,7 +71,6 @@ export default function PerformancePage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <DateRangeFilter onFilterChange={handleRefresh} />
             <Button 
               onClick={handleRefresh} 
               variant="outline" 
@@ -97,11 +87,10 @@ export default function PerformancePage() {
         <PerformanceMetricsCard />
 
         <Tabs defaultValue="clicks" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-3 lg:w-auto">
             <TabsTrigger value="clicks">Clicks</TabsTrigger>
             <TabsTrigger value="conversions">Conversions</TabsTrigger>
             <TabsTrigger value="earnings">Earnings</TabsTrigger>
-            <TabsTrigger value="links">Link Performance</TabsTrigger>
           </TabsList>
           
           {/* Clicks Tab */}
@@ -183,8 +172,6 @@ export default function PerformancePage() {
                 </Card>
               </div>
             )}
-            
-            <PerformanceChart />
           </TabsContent>
 
           {/* Conversions Tab */}
@@ -266,8 +253,6 @@ export default function PerformancePage() {
                 </Card>
               </div>
             )}
-            
-            <PerformanceChart />
           </TabsContent>
 
           {/* Earnings Tab */}
@@ -349,13 +334,6 @@ export default function PerformancePage() {
                 </Card>
               </div>
             )}
-            
-            <PerformanceChart />
-          </TabsContent>
-
-          {/* Link Performance Tab */}
-          <TabsContent value="links">
-            <LinkPerformanceComparison />
           </TabsContent>
         </Tabs>
       </div>

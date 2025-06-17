@@ -161,7 +161,7 @@ export interface FilterState {
  * Date Range Filter type definition
  * Possible values for date range filtering
  */
-export type DateRangeFilter = 'all' | 'today' | 'yesterday' | '7days' | '30days' | '90days' | 'custom';
+export type DateRangeFilter = 'thisMonth' | 'last3Months' | 'all';
 
 /**
  * Conversion Record type definition

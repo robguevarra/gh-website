@@ -32,8 +32,8 @@ const DEFAULT_CSP = `
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://editor.unlayer.com;
   img-src 'self' data: https: blob:;
   font-src 'self' https://fonts.gstatic.com;
-  connect-src 'self' https://*.supabase.co https://api.stripe.com https://editor.unlayer.com;
-  frame-src 'self' https://js.stripe.com https://editor.unlayer.com;
+  connect-src 'self' https://*.supabase.co https://api.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com;
+  frame-src 'self' https://js.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com https://view.officeapps.live.com;
   object-src 'none';
   base-uri 'self';
   form-action 'self';
@@ -110,7 +110,7 @@ export function createSecurityHeaders(config: SecurityHeadersConfig = {}) {
     if (mergedConfig.permissionsPolicy) {
       const permissionsValue = typeof mergedConfig.permissionsPolicy === 'string'
         ? mergedConfig.permissionsPolicy
-        : DEFAULT_CONFIG.permissionsPolicy;
+        : (typeof DEFAULT_CONFIG.permissionsPolicy === 'string' ? DEFAULT_CONFIG.permissionsPolicy : '');
       response.headers.set('Permissions-Policy', permissionsValue);
     }
     

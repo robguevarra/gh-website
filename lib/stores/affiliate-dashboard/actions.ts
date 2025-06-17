@@ -226,10 +226,7 @@ export const createActions = (
         let startDate: string | null;
         let endDate: string | null;
         
-        if (dateRange === 'custom') {
-          startDate = customStartDate;
-          endDate = customEndDate;
-        } else if (dateRange === 'all') {
+        if (dateRange === 'all') {
           // For "All Time", don't set date restrictions
           startDate = null;
           endDate = null;
@@ -238,34 +235,24 @@ export const createActions = (
           endDate = now.toISOString().split('T')[0];
           
           switch (dateRange) {
-            case 'today':
-              startDate = endDate;
+            case 'thisMonth':
+              // Start of current month
+              const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+              startDate = startOfMonth.toISOString().split('T')[0];
               break;
-            case 'yesterday':
-              const yesterday = new Date(now);
-              yesterday.setDate(now.getDate() - 1);
-              startDate = yesterday.toISOString().split('T')[0];
-              endDate = startDate;
-              break;
-            case '7days':
-              const sevenDaysAgo = new Date(now);
-              sevenDaysAgo.setDate(now.getDate() - 7);
-              startDate = sevenDaysAgo.toISOString().split('T')[0];
-              break;
-            case '30days':
-              const thirtyDaysAgo = new Date(now);
-              thirtyDaysAgo.setDate(now.getDate() - 30);
-              startDate = thirtyDaysAgo.toISOString().split('T')[0];
-              break;
-            case '90days':
-              const ninetyDaysAgo = new Date(now);
-              ninetyDaysAgo.setDate(now.getDate() - 90);
-              startDate = ninetyDaysAgo.toISOString().split('T')[0];
+            case 'last3Months':
+              // 3 months ago from today
+              const threeMonthsAgo = new Date(now);
+              threeMonthsAgo.setMonth(now.getMonth() - 3);
+              startDate = threeMonthsAgo.toISOString().split('T')[0];
               break;
             default:
-              // Default to all time if dateRange is not recognized
+              // Handle old or invalid date range formats by defaulting to "All Time"
+              console.warn('⚠️ Unknown date range format:', dateRange, '- defaulting to "All Time"');
               startDate = null;
               endDate = null;
+              // Update the store to use 'all' to prevent future errors
+              state.setFilterDateRange('all');
               break;
           }
         }
@@ -301,9 +288,21 @@ export const createActions = (
           return;
         }
         
-        // Validate that we have valid dates before making API call (except for "All Time")
-        if (dateRange !== 'all' && (!startDate || !endDate)) {
-          throw new Error('Invalid date range: start_date and end_date are required');
+        // Add debugging for date range calculation
+        console.log('📅 DATE RANGE DEBUG:');
+        console.log('- Date Range:', dateRange);
+        console.log('- Start Date:', startDate);
+        console.log('- End Date:', endDate);
+        
+        // Only validate if we have a known date range type that should have calculated dates
+        // If dateRange is 'all' or we've defaulted to null dates, this is valid
+        if (dateRange !== 'all' && (startDate === null || endDate === null)) {
+          // This should not happen with our current logic, but keeping as safety check
+          console.error('Date calculation failed for dateRange:', dateRange);
+          console.warn('Falling back to "All Time" due to date calculation failure');
+          // Don't throw error, just default to all time
+          startDate = null;
+          endDate = null;
         }
 
         // Make API request to get metrics - using the format expected by our API
@@ -589,59 +588,67 @@ export const createActions = (
     /**
      * Load payout projection data
      */
-    loadPayoutProjection: async (userId: string, force: boolean = false): Promise<void> => {
-      const state = get();
+    loadPayoutProjection: async (userId: string, force: boolean = false) => {
+      // Check if we should skip loading due to cache
+      if (!force && get().lastPayoutsLoadTime && Date.now() - get().lastPayoutsLoadTime < CACHE_DURATION) {
+        console.log('📊 STORE ACTION DEBUG - Payout projection cache hit, skipping API call')
+        return
+      }
+
+      console.log('💰 PAYOUTS API DEBUG - Starting payout projection fetch for user:', userId)
+      
+      set({ isLoadingPayouts: true, hasPayoutsError: false })
       
       try {
-        // Fetch affiliate profile if needed
-        if (!state.affiliateProfile) {
-          await state.loadAffiliateProfile(userId);
-        }
+        // NOTE: Payout projection endpoint doesn't exist yet
+        // For now, we'll calculate a simple projection based on existing data
+        console.log('💰 PAYOUTS API DEBUG - Calculating projection from existing data (no API endpoint)')
         
-        // Get fresh state after profile loading
-        const currentState = get();
+        const metrics = get().metrics
+        const payoutTransactions = get().payoutTransactions
         
-        // Check if profile loading failed - if so, user is not an affiliate
-        if (currentState.hasProfileError) {
-          console.log('User is not an affiliate, skipping payout projection loading');
-          return;
-        }
-        
-        const affiliateId = currentState.affiliateProfile?.id;
-        
-        if (!affiliateId) {
-          console.log('No affiliate profile available, skipping payout projection loading');
-          return;
-        }
-        
-        // Call API to get payout projection
-        const response = await fetch('/api/affiliate/payouts/projection', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ affiliateId })
-        });
-        
-        if (!response.ok) {
-          throw new Error(`Error fetching payout projection: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        
-        // Update state with projection
-        set({
-          payoutProjection: {
-            estimatedNextAmount: data.estimatedAmount,
-            estimatedPayoutDate: data.estimatedDate,
-            pendingConversions: data.pendingConversions,
-            minimumPayoutThreshold: data.minimumThreshold,
-            progressToThreshold: Math.min(100, (data.estimatedAmount / data.minimumThreshold) * 100)
+        if (metrics && payoutTransactions) {
+          // Simple projection calculation
+          const totalPaid = payoutTransactions
+            .filter((t: any) => t.status === 'paid' || t.status === 'sent')
+            .reduce((sum: number, t: any) => sum + t.amount, 0)
+          
+          const pendingAmount = Math.max(0, (metrics.totalEarnings || 0) - totalPaid)
+          
+          const projection = {
+            pendingAmount,
+            nextPayoutDate: null, // Would need business logic to calculate
+            estimatedPayoutAmount: pendingAmount,
+            payoutFrequency: 'monthly' as const,
+            minimumThreshold: 1000, // ₱1000 minimum payout
+            lastUpdated: new Date().toISOString()
           }
-        });
+          
+          console.log('💰 PAYOUTS API DEBUG - Calculated projection:', projection)
+          
+          set({
+            payoutProjection: projection,
+            isLoadingPayouts: false,
+            hasPayoutsError: false,
+            lastPayoutsLoadTime: Date.now()
+          })
+        } else {
+          console.log('💰 PAYOUTS API DEBUG - No metrics or payout data available for projection')
+          set({
+            payoutProjection: null,
+            isLoadingPayouts: false,
+            hasPayoutsError: false,
+            lastPayoutsLoadTime: Date.now()
+          })
+        }
       } catch (error) {
-        console.error('Error loading payout projection:', error);
-        // Don't set error state as this is a secondary feature
+        console.error('💰 PAYOUTS API DEBUG - Error calculating payout projection:', error)
+        set({
+          payoutProjection: null,
+          isLoadingPayouts: false,
+          hasPayoutsError: true,
+          lastPayoutsLoadTime: Date.now()
+        })
       }
     }
   };

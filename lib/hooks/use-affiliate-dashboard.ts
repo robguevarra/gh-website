@@ -312,12 +312,16 @@ export function useAffiliateDashboard(userId: string | null) {
   const loadPayoutTransactions = useAffiliateDashboardStore(state => state.loadPayoutTransactions)
   const loadPayoutProjection = useAffiliateDashboardStore(state => state.loadPayoutProjection)
   
+  // Get the current filter state to use the default date range
+  const filterState = useAffiliateDashboardStore(state => state.filterState)
+  
   // Effect to load all data when user ID changes
   useEffect(() => {
     const loadAllData = async () => {
       if (!userId) return
 
       console.log('🚀 DASHBOARD HOOK DEBUG - Starting to load all data for user:', userId)
+      console.log('📅 Using default date range:', filterState.dateRange)
 
       try {
         // Load profile first as other data depends on it
@@ -328,9 +332,10 @@ export function useAffiliateDashboard(userId: string | null) {
         await new Promise(resolve => setTimeout(resolve, 100))
         
         // Load other data in parallel after profile is loaded
+        // IMPORTANT: Load metrics with the current date range filter
         console.log('📊 Loading metrics, links, payouts, and projections in parallel...')
         await Promise.all([
-          loadAffiliateMetrics(userId),
+          loadAffiliateMetrics(userId, { dateRange: filterState.dateRange }),
           loadReferralLinks(userId),
           loadPayoutTransactions(userId),
           loadPayoutProjection(userId)
@@ -343,7 +348,7 @@ export function useAffiliateDashboard(userId: string | null) {
     }
     
     loadAllData()
-  }, [userId, loadAffiliateProfile, loadAffiliateMetrics, loadReferralLinks, loadPayoutTransactions, loadPayoutProjection])
+  }, [userId, filterState.dateRange, loadAffiliateProfile, loadAffiliateMetrics, loadReferralLinks, loadPayoutTransactions, loadPayoutProjection])
   
   return useMemo(() => ({
     loadAllData: async (force: boolean = false) => {
@@ -357,8 +362,9 @@ export function useAffiliateDashboard(userId: string | null) {
         await new Promise(resolve => setTimeout(resolve, 100))
         
         // Load other data in parallel after profile is loaded
+        // IMPORTANT: Load metrics with the current date range filter
         await Promise.all([
-          loadAffiliateMetrics(userId, {}, force),
+          loadAffiliateMetrics(userId, { dateRange: filterState.dateRange }, force),
           loadReferralLinks(userId, force),
           loadPayoutTransactions(userId, force),
           loadPayoutProjection(userId, force)
@@ -367,5 +373,5 @@ export function useAffiliateDashboard(userId: string | null) {
         console.error('Error loading affiliate dashboard data:', error)
       }
     }
-  }), [userId, loadAffiliateProfile, loadAffiliateMetrics, loadReferralLinks, loadPayoutTransactions, loadPayoutProjection])
+  }), [userId, filterState.dateRange, loadAffiliateProfile, loadAffiliateMetrics, loadReferralLinks, loadPayoutTransactions, loadPayoutProjection])
 }

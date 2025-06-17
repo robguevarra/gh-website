@@ -18,6 +18,32 @@ import {
 } from './types';
 
 /**
+ * Clean up old localStorage data with invalid date ranges
+ */
+function cleanupOldPersistedData() {
+  try {
+    const storedData = localStorage.getItem('affiliate-dashboard-storage');
+    if (storedData) {
+      const parsed = JSON.parse(storedData);
+      if (parsed?.state?.filterState?.dateRange && 
+          !['thisMonth', 'last3Months', 'all'].includes(parsed.state.filterState.dateRange)) {
+        console.log('🔄 Clearing old affiliate dashboard data with invalid date range:', parsed.state.filterState.dateRange);
+        localStorage.removeItem('affiliate-dashboard-storage');
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to clean up old affiliate dashboard data:', error);
+    // If there's any error parsing, just clear it to be safe
+    localStorage.removeItem('affiliate-dashboard-storage');
+  }
+}
+
+// Clean up old data before creating the store
+if (typeof window !== 'undefined') {
+  cleanupOldPersistedData();
+}
+
+/**
  * Affiliate Dashboard Store
  *
  * This store manages all state related to the affiliate dashboard experience,
@@ -203,13 +229,9 @@ export const useAffiliateDashboardStore = create<AffiliateDashboardStore>()(
         'recent-payouts': true
       },
       dateRangeOptions: [
-        { id: 'all', label: 'All Time' },
-        { id: 'today', label: 'Today' },
-        { id: 'yesterday', label: 'Yesterday' },
-        { id: '7days', label: 'Last 7 Days' },
-        { id: '30days', label: 'Last 30 Days' },
-        { id: '90days', label: 'Last 90 Days' },
-        { id: 'custom', label: 'Custom Range' }
+        { id: 'thisMonth', label: 'This Month' },
+        { id: 'last3Months', label: 'Last 3 Months' },
+        { id: 'all', label: 'All Time' }
       ],
 
       // Import all actions from actions.ts
@@ -240,19 +262,13 @@ export const useAffiliateDashboardStore = create<AffiliateDashboardStore>()(
       setFilterDateRange: (dateRange) => set((state) => ({
         filterState: {
           ...state.filterState,
-          dateRange,
-          // Reset custom dates when switching to a preset range
-          ...(dateRange !== 'custom' ? {
-            customStartDate: null,
-            customEndDate: null
-          } : {})
+          dateRange
         }
       })),
 
       setFilterCustomDateRange: (startDate, endDate) => set((state) => ({
         filterState: {
           ...state.filterState,
-          dateRange: 'custom',
           customStartDate: startDate,
           customEndDate: endDate
         }
