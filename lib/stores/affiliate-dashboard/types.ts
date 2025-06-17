@@ -164,10 +164,27 @@ export interface FilterState {
 export type DateRangeFilter = 'today' | 'yesterday' | '7days' | '30days' | '90days' | 'custom';
 
 /**
+ * Conversion Record type definition
+ * Represents an individual affiliate conversion
+ */
+export interface ConversionRecord {
+  id: string;
+  order_id: string;
+  commission_amount: number;
+  status: 'pending' | 'flagged' | 'cleared' | 'paid';
+  created_at: string;
+  updated_at: string;
+  processed_at?: string;
+  product_name?: string;
+  order_total?: number;
+}
+
+/**
  * Update Profile Data type definition
  * Fields that can be updated in the affiliate profile
  */
 export interface UpdateProfileData {
+  slug?: string;
   display_name?: string;
   bio?: string;
   website?: string;

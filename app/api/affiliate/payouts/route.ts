@@ -11,9 +11,9 @@ async function verifyActiveAffiliate() {
   const supabase = await createRouteHandlerClient();
   
   // Check if user is authenticated
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
   
-  if (sessionError || !session) {
+  if (userError || !user) {
     throw new Error('Unauthorized: User not authenticated');
   }
   
@@ -21,7 +21,7 @@ async function verifyActiveAffiliate() {
   const { data: profile, error: profileError } = await supabase
     .from('unified_profiles')
     .select('affiliate_id, affiliate_general_status')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single();
   
   if (profileError || !profile || !profile.affiliate_id) {
@@ -33,7 +33,7 @@ async function verifyActiveAffiliate() {
     throw new Error(`Unauthorized: Affiliate status is '${profile.affiliate_general_status}', must be 'active'`);
   }
   
-  return { supabase, userId: session.user.id, affiliateId: profile.affiliate_id };
+  return { supabase, userId: user.id, affiliateId: profile.affiliate_id };
 }
 
 /**
@@ -96,19 +96,19 @@ export async function GET(request: NextRequest) {
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit') as string, 10) : 10;
     const offset = searchParams.get('offset') ? parseInt(searchParams.get('offset') as string, 10) : 0;
     
-    // Validate query parameters
+    // Validate query parameters (convert null to undefined for proper optional handling)
     const validatedFilter = payoutHistoryFilterSchema.parse({
-      status: status as any,
-      start_date: startDate,
-      end_date: endDate,
+      status: status || undefined,
+      start_date: startDate || undefined,
+      end_date: endDate || undefined,
       limit,
       offset,
     });
     
     // Build query for payout transactions
     let query = supabase
-      .from('affiliate_payout_transactions' as any)
-      .select('id, amount, status, payment_method, payment_details, reference_id, notes, created_at, updated_at, processed_at', { count: 'exact' })
+      .from('affiliate_payouts')
+      .select('id, amount, status, payout_method, reference, processing_notes, created_at, updated_at, processed_at, batch_id, fee_amount, net_amount, xendit_disbursement_id', { count: 'exact' })
       .eq('affiliate_id', affiliateId)
       .order('created_at', { ascending: false })
       .range(validatedFilter.offset || 0, (validatedFilter.offset || 0) + (validatedFilter.limit || 10) - 1);
@@ -134,8 +134,26 @@ export async function GET(request: NextRequest) {
       return handleServerError('Failed to fetch payout history');
     }
     
+    // Add comprehensive logging for debugging
+    console.log('💰 PAYOUTS API DEBUG - Raw Data:');
+    console.log('- Affiliate ID:', affiliateId);
+    console.log('- Query Filters:', validatedFilter);
+    console.log('- Raw Transactions Count:', transactions?.length || 0);
+    console.log('- Raw Transactions Data:', transactions?.map(t => ({
+      id: t.id,
+      amount: t.amount,
+      status: t.status,
+      method: t.payout_method,
+      created_at: t.created_at,
+      processed_at: t.processed_at
+    })) || []);
+    console.log('- Total Count from DB:', count);
+    
     // Get payout projections
     const projectionData = await calculatePayoutProjection(supabase, affiliateId);
+    
+    console.log('📊 PAYOUTS API DEBUG - Projection Data:');
+    console.log('- Projection Data:', projectionData);
     
     // Validate projection data
     const validatedProjection = payoutProjectionSchema.parse(projectionData);

@@ -218,8 +218,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const supabase = await createServerSupabaseClient();
   
   // Check if user is admin
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 }
@@ -230,7 +230,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const { data: userData, error: userError } = await supabase
     .from('unified_profiles')
     .select('role')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single();
     
   if (userError || !userData || userData.role !== 'admin') {

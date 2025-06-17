@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const { affiliateProfile, isLoadingProfile, updateAffiliateProfile } = useAffiliateProfileData();
   
   const [profileForm, setProfileForm] = useState({
+    slug: '',
     displayName: '',
     bio: '',
     website: '',
@@ -54,6 +55,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (affiliateProfile) {
       setProfileForm({
+        slug: affiliateProfile.slug || '',
         displayName: affiliateProfile.display_name || '',
         bio: affiliateProfile.bio || '',
         website: affiliateProfile.website || '',
@@ -128,6 +130,7 @@ export default function SettingsPage() {
     
     try {
       await updateAffiliateProfile({
+        slug: profileForm.slug,
         display_name: profileForm.displayName,
         bio: profileForm.bio,
         website: profileForm.website,
@@ -229,6 +232,22 @@ export default function SettingsPage() {
               <CardContent>
                 <form className="space-y-6" onSubmit={handleSubmit}>
                   <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="slug">
+                        Affiliate Slug
+                      </Label>
+                      <Input
+                        id="slug"
+                        name="slug"
+                        value={profileForm.slug}
+                        onChange={handleInputChange}
+                        placeholder="your-affiliate-slug"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Your unique referral link identifier. This will be used in your referral links.
+                      </p>
+                    </div>
+                    
                     <div className="space-y-2">
                       <Label htmlFor="displayName">
                         Display Name

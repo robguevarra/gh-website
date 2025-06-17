@@ -11,6 +11,7 @@ import {
   useAffiliateMetricsData, 
   useReferralLinksData 
 } from '@/lib/hooks/use-affiliate-dashboard';
+import { formatCurrencyPHP } from '@/lib/utils/formatting';
 
 export function OverviewCard() {
   const router = useRouter();
@@ -128,7 +129,7 @@ export function OverviewCard() {
                     <LineChart className="h-4 w-4 text-purple-500" />
                   </div>
                   <p className="text-2xl font-bold text-green-600">
-                    ${metrics?.totalEarnings?.toFixed(2) || '0.00'}
+                    {formatCurrencyPHP(metrics?.totalEarnings) || '₱0.00'}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     All time

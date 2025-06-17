@@ -15,14 +15,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useAffiliateMetricsData } from '@/lib/hooks/use-affiliate-dashboard';
+import { formatCurrencyPHP } from '@/lib/utils/formatting';
 
 export function PerformanceMetricsCard() {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
   const { 
     metrics, 
     isLoadingMetrics, 
-    loadAffiliateMetrics,
-    metricsLastUpdated
+    loadAffiliateMetrics
   } = useAffiliateMetricsData();
 
   const handleRefresh = () => {
@@ -46,10 +46,10 @@ export function PerformanceMetricsCard() {
     : '0.00';
 
   const formatLastUpdated = () => {
-    if (!metricsLastUpdated) return 'Never updated';
+    if (!metrics?.lastUpdated) return 'Never updated';
     
     const now = new Date();
-    const updated = new Date(metricsLastUpdated);
+    const updated = new Date(metrics.lastUpdated);
     const diffMinutes = Math.round((now.getTime() - updated.getTime()) / (1000 * 60));
     
     if (diffMinutes < 1) return 'Just now';
@@ -139,9 +139,8 @@ export function PerformanceMetricsCard() {
             <div className="flex flex-col">
               <span className="text-sm font-medium text-muted-foreground">Total Earnings</span>
               <div className="mt-1 flex items-center">
-                <span className="mr-2 text-green-600 font-bold">$</span>
                 <span className="text-2xl font-semibold text-green-600">
-                  {metrics?.totalEarnings?.toFixed(2) || '0.00'}
+                  {formatCurrencyPHP(metrics?.totalEarnings) || '₱0.00'}
                 </span>
               </div>
             </div>
@@ -150,7 +149,7 @@ export function PerformanceMetricsCard() {
       </CardContent>
       <CardFooter className="pt-2 border-t flex justify-between items-center text-xs text-muted-foreground">
         <div>Last updated: {formatLastUpdated()}</div>
-        <div>Avg. earnings per click: ${earningsPerClick}</div>
+        <div>Avg. earnings per click: {formatCurrencyPHP(parseFloat(earningsPerClick))}</div>
       </CardFooter>
     </Card>
   );

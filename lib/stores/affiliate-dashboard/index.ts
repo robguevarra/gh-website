@@ -12,6 +12,7 @@ import {
   ReferralLink,
   PayoutTransaction,
   PayoutProjection,
+  ConversionRecord,
   FilterState,
   DateRangeFilter,
 } from './types';
@@ -59,6 +60,12 @@ export interface AffiliateDashboardStore {
   payoutProjection: PayoutProjection | null;
   lastPayoutsLoadTime: number | null;
 
+  // Conversions State
+  conversions: ConversionRecord[];
+  isLoadingConversions: boolean;
+  hasConversionsError: boolean;
+  lastConversionsLoadTime: number | null;
+
   // Filters and UI State
   filterState: FilterState;
   activeDashboardTab: 'overview' | 'links' | 'payouts' | 'settings';
@@ -79,6 +86,7 @@ export interface AffiliateDashboardStore {
   loadReferralLinks: (userId: string, force?: boolean) => Promise<void>;
   loadPayoutTransactions: (userId: string, force?: boolean) => Promise<void>;
   loadPayoutProjection: (userId: string, force?: boolean) => Promise<void>;
+  loadConversions: (userId: string, force?: boolean) => Promise<void>;
   createReferralLink: (userId: string, linkData: {
     name: string;
     utmSource: string;
@@ -115,6 +123,11 @@ export interface AffiliateDashboardStore {
   setIsLoadingPayouts: (isLoading: boolean) => void;
   setHasPayoutsError: (hasError: boolean) => void;
   setPayoutProjection: (projection: PayoutProjection | null) => void;
+
+  // Conversions actions
+  setConversions: (conversions: ConversionRecord[]) => void;
+  setIsLoadingConversions: (isLoading: boolean) => void;
+  setHasConversionsError: (hasError: boolean) => void;
 
   // Filter and UI actions
   setFilterDateRange: (dateRange: DateRangeFilter) => void;

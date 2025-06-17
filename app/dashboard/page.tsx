@@ -35,6 +35,7 @@ import { GoogleDriveViewer } from "@/components/dashboard/google-drive-viewer"
 import { OnboardingTour } from "@/components/dashboard/onboarding-tour"
 import { WelcomeModal } from "@/components/dashboard/welcome-modal"
 import { TemplatePreviewModal } from "@/components/dashboard/template-preview-modal"
+import { AffiliateApplicationWizard } from "@/components/dashboard/affiliate-application-wizard"
 
 // Dashboard store hooks
 import {
@@ -144,6 +145,10 @@ export default function StudentDashboard() {
   const [liveAnnouncements, setLiveAnnouncements] = useState<Announcement[]>([]); // Added state for live announcements
   const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0); // Track current announcement in carousel
   const [showPortalSwitcher, setShowPortalSwitcher] = useState(false);
+  const [showAffiliateWizard, setShowAffiliateWizard] = useState(false);
+  const [isAffiliate, setIsAffiliate] = useState(false);
+  const [affiliateStatus, setAffiliateStatus] = useState<string | null>(null);
+  const [isAffiliateBannerDismissed, setIsAffiliateBannerDismissed] = useState(false);
 
   // References for animations
   const containerRef = useRef(null)
@@ -672,6 +677,40 @@ export default function StudentDashboard() {
     markOnboardingTourShown()
   }
 
+  // Check affiliate status when user context loads
+  useEffect(() => {
+    const checkAffiliateStatus = async () => {
+      if (user?.id) {
+        try {
+          const response = await fetch(`/api/student/affiliate-status?userId=${user.id}`)
+          if (response.ok) {
+            const data = await response.json()
+            setIsAffiliate(data.isAffiliate)
+            setAffiliateStatus(data.status)
+          }
+        } catch (error) {
+          console.error('Error checking affiliate status:', error)
+        }
+      }
+    }
+
+    checkAffiliateStatus()
+  }, [user?.id])
+
+  // Check if banner was dismissed this session
+  useEffect(() => {
+    const dismissed = sessionStorage.getItem('affiliate-banner-dismissed')
+    if (dismissed === 'true') {
+      setIsAffiliateBannerDismissed(true)
+    }
+  }, [])
+
+  // Handle banner dismissal
+  const dismissAffiliateBanner = () => {
+    setIsAffiliateBannerDismissed(true)
+    sessionStorage.setItem('affiliate-banner-dismissed', 'true')
+  }
+
   return (
     <div className="min-h-screen bg-[#f9f6f2]">
 
@@ -775,6 +814,79 @@ export default function StudentDashboard() {
               </div>
             )}
           </AnimatePresence>
+
+          {/* Affiliate Program Invitation */}
+          {!isAffiliateBannerDismissed && (
+            <motion.div
+              className="mb-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+            >
+              <div className="bg-gradient-to-r from-brand-purple to-brand-pink rounded-xl p-6 text-white shadow-lg relative">
+                {/* Dismiss button */}
+                <button
+                  onClick={dismissAffiliateBanner}
+                  className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
+                  aria-label="Dismiss banner"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                
+                <div className="flex items-center justify-between pr-8">
+                  <div className="flex-1">
+                    {isAffiliate && affiliateStatus === 'active' ? (
+                      <>
+                        <h3 className="text-lg font-bold mb-2">Welcome to the Affiliate Program!</h3>
+                        <p className="text-purple-100 mb-0">
+                          You're earning 25% commission on referrals. Visit your affiliate portal to track performance and manage settings.
+                        </p>
+                      </>
+                    ) : affiliateStatus === 'pending' ? (
+                      <>
+                        <h3 className="text-lg font-bold mb-2">Application Under Review</h3>
+                        <p className="text-purple-100 mb-0">
+                          Your affiliate application is being reviewed. We'll notify you once it's approved. Thank you for your patience!
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <h3 className="text-lg font-bold mb-2">Join Our Affiliate Program!</h3>
+                        <p className="text-purple-100 mb-0">
+                          Earn 25% commission by sharing Graceful Homeschooling with others. As a student, you get special access to our affiliate program.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  {isAffiliate && affiliateStatus === 'active' ? (
+                    <Button
+                      onClick={() => window.open('/affiliate-portal', '_blank')}
+                      className="bg-white text-brand-purple hover:bg-gray-100 ml-4 font-semibold"
+                    >
+                      View Portal
+                    </Button>
+                  ) : affiliateStatus === 'pending' ? (
+                    <Button
+                      disabled
+                      className="bg-white/20 text-white/60 ml-4 font-semibold cursor-not-allowed"
+                    >
+                      Pending Review
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => setShowAffiliateWizard(true)}
+                      className="bg-white text-brand-purple hover:bg-gray-100 ml-4 font-semibold"
+                    >
+                      Apply Now
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* Quick Stats */}
           <motion.div
             className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
@@ -954,6 +1066,12 @@ export default function StudentDashboard() {
       </div>
     </div>
   </main>
+
+      {/* Affiliate Application Wizard */}
+      <AffiliateApplicationWizard
+        isOpen={showAffiliateWizard}
+        onClose={() => setShowAffiliateWizard(false)}
+      />
 </div>
   )
 }

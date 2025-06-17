@@ -13,9 +13,9 @@ async function verifyActiveAffiliate() {
   const supabase = await createRouteHandlerClient();
   
   // Check if user is authenticated
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
   
-  if (sessionError || !session) {
+  if (userError || !user) {
     throw new Error('Unauthorized: User not authenticated');
   }
   
@@ -23,7 +23,7 @@ async function verifyActiveAffiliate() {
   const { data: profile, error: profileError } = await supabase
     .from('unified_profiles')
     .select('affiliate_id, affiliate_general_status')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single();
   
   if (profileError || !profile || !profile.affiliate_id) {
@@ -35,7 +35,7 @@ async function verifyActiveAffiliate() {
     throw new Error(`Unauthorized: Affiliate status is '${profile.affiliate_general_status}', must be 'active'`);
   }
   
-  return { supabase, userId: session.user.id, affiliateId: profile.affiliate_id };
+  return { supabase, userId: user.id, affiliateId: profile.affiliate_id };
 }
 
 /**

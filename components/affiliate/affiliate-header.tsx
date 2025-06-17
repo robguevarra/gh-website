@@ -6,13 +6,9 @@ import { useRouter } from 'next/navigation'
 import {
   ChevronDown,
   LogOut,
-  Receipt,
   Settings,
-  User as UserIcon,
   BarChart2,
-  CreditCard,
-  Users,
-  HelpCircle
+  CreditCard
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -84,7 +80,7 @@ export const AffiliateHeader = memo(function AffiliateHeader() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Main navigation links */}
+          {/* Main navigation links - cleaned up to remove non-functional pages */}
           <nav className="hidden md:flex items-center space-x-4 lg:space-x-6 mx-6">
             <Link 
               href="/affiliate-portal" 
@@ -94,13 +90,6 @@ export const AffiliateHeader = memo(function AffiliateHeader() {
               <span>Dashboard</span>
             </Link>
             <Link 
-              href="/affiliate-portal/referrals" 
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-            >
-              <Users className="h-4 w-4 mr-1 inline-block" />
-              <span>Referrals</span>
-            </Link>
-            <Link 
               href="/affiliate-portal/payouts" 
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
             >
@@ -108,15 +97,15 @@ export const AffiliateHeader = memo(function AffiliateHeader() {
               <span>Payouts</span>
             </Link>
             <Link 
-              href="/affiliate-portal/help" 
+              href="/affiliate-portal/settings" 
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
             >
-              <HelpCircle className="h-4 w-4 mr-1 inline-block" />
-              <span>Help</span>
+              <Settings className="h-4 w-4 mr-1 inline-block" />
+              <span>Settings</span>
             </Link>
           </nav>
 
-          {/* User dropdown menu */}
+          {/* User dropdown menu - simplified to remove non-functional items */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="p-0 h-8 w-8 rounded-full md:h-auto md:w-auto md:px-4 md:py-2">
@@ -141,16 +130,6 @@ export const AffiliateHeader = memo(function AffiliateHeader() {
               <DropdownMenuItem asChild>
                 <Link href="/affiliate-portal/settings">
                   <Settings className="mr-2 h-4 w-4" /> Settings
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/affiliate-portal/profile">
-                  <UserIcon className="mr-2 h-4 w-4" /> Profile
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/affiliate-portal/earnings">
-                  <Receipt className="mr-2 h-4 w-4" /> Earnings History
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />

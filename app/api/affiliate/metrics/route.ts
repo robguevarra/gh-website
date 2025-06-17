@@ -145,6 +145,20 @@ async function calculateAffiliateMetrics(supabase: any, affiliateId: string, fil
     };
   }
 
+  // Add comprehensive logging for debugging
+  console.log('🔍 METRICS API DEBUG - Raw Data:');
+  console.log('- Affiliate ID:', affiliateId);
+  console.log('- Date Range:', { startDateStr, endDateStr });
+  console.log('- Raw Clicks Count:', clicksData?.length || 0);
+  console.log('- Raw Conversions Count:', conversionsData?.length || 0);
+  console.log('- Raw Conversions Data:', conversionsData?.map(c => ({
+    id: c.id,
+    status: c.status,
+    commission: c.commission_amount,
+    gmv: c.gmv,
+    created_at: c.created_at
+  })) || []);
+
   // Calculate summary metrics
   const totalClicks = clicksData.length;
   const totalConversions = conversionsData.filter((conv: any) => ['cleared', 'paid'].includes(conv.status)).length;
@@ -152,6 +166,17 @@ async function calculateAffiliateMetrics(supabase: any, affiliateId: string, fil
   const totalCommission = conversionsData
     .filter((conv: any) => ['cleared', 'paid'].includes(conv.status))
     .reduce((sum: number, conv: any) => sum + parseFloat(conv.commission_amount), 0);
+
+  console.log('🧮 METRICS API DEBUG - Calculated Values:');
+  console.log('- Total Clicks:', totalClicks);
+  console.log('- Total Conversions (cleared/paid only):', totalConversions);
+  console.log('- Total Revenue:', totalRevenue);
+  console.log('- Total Commission:', totalCommission);
+  console.log('- Filtered Conversions:', conversionsData.filter((conv: any) => ['cleared', 'paid'].includes(conv.status)).map(c => ({
+    id: c.id,
+    status: c.status,
+    commission: c.commission_amount
+  })));
   
   // Calculate derived metrics
   const conversionRate = totalClicks > 0 ? (totalConversions / totalClicks) * 100 : 0;

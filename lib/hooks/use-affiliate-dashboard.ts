@@ -317,19 +317,28 @@ export function useAffiliateDashboard(userId: string | null) {
     const loadAllData = async () => {
       if (!userId) return
 
+      console.log('🚀 DASHBOARD HOOK DEBUG - Starting to load all data for user:', userId)
+
       try {
         // Load profile first as other data depends on it
+        console.log('📝 Loading affiliate profile...')
         await loadAffiliateProfile(userId)
         
-        // Load other data in parallel
+        // Wait a bit to ensure profile is fully loaded before dependent calls
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        // Load other data in parallel after profile is loaded
+        console.log('📊 Loading metrics, links, payouts, and projections in parallel...')
         await Promise.all([
           loadAffiliateMetrics(userId),
           loadReferralLinks(userId),
           loadPayoutTransactions(userId),
           loadPayoutProjection(userId)
         ])
+        
+        console.log('✅ All affiliate dashboard data loaded successfully')
       } catch (error) {
-        console.error('Error loading affiliate dashboard data:', error)
+        console.error('❌ Error loading affiliate dashboard data:', error)
       }
     }
     
@@ -344,7 +353,10 @@ export function useAffiliateDashboard(userId: string | null) {
         // Load profile first as other data depends on it
         await loadAffiliateProfile(userId, force)
         
-        // Load other data in parallel
+        // Wait a bit to ensure profile is fully loaded before dependent calls
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        // Load other data in parallel after profile is loaded
         await Promise.all([
           loadAffiliateMetrics(userId, {}, force),
           loadReferralLinks(userId, force),

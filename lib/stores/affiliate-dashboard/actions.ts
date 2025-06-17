@@ -223,10 +223,13 @@ export const createActions = (
         const { dateRange, customStartDate, customEndDate, referralLinkId } = state.filterState;
         
         // Calculate date range based on filter
-        let startDate = customStartDate;
-        let endDate = customEndDate;
+        let startDate: string | null;
+        let endDate: string | null;
         
-        if (dateRange !== 'custom') {
+        if (dateRange === 'custom') {
+          startDate = customStartDate;
+          endDate = customEndDate;
+        } else {
           const now = new Date();
           endDate = now.toISOString().split('T')[0];
           
@@ -255,6 +258,12 @@ export const createActions = (
               ninetyDaysAgo.setDate(now.getDate() - 90);
               startDate = ninetyDaysAgo.toISOString().split('T')[0];
               break;
+            default:
+              // Default to 30 days if dateRange is not recognized
+              const defaultDaysAgo = new Date(now);
+              defaultDaysAgo.setDate(now.getDate() - 30);
+              startDate = defaultDaysAgo.toISOString().split('T')[0];
+              break;
           }
         }
         
@@ -263,12 +272,37 @@ export const createActions = (
           await state.loadAffiliateProfile(userId);
         }
         
-        const affiliateId = state.affiliateProfile?.id;
+        // Get fresh state after profile loading
+        const currentState = get();
         
-        if (!affiliateId) {
-          throw new Error('No affiliate ID available');
+        // Check if profile loading failed - if so, user is not an affiliate
+        if (currentState.hasProfileError) {
+          console.log('User is not an affiliate, skipping metrics loading');
+          set({
+            isLoadingMetrics: false,
+            hasMetricsError: false,
+            metrics: null
+          });
+          return;
         }
         
+        const affiliateId = currentState.affiliateProfile?.id;
+        
+        if (!affiliateId) {
+          console.log('No affiliate profile available, skipping metrics loading');
+          set({
+            isLoadingMetrics: false,
+            hasMetricsError: false,
+            metrics: null
+          });
+          return;
+        }
+        
+        // Validate that we have valid dates before making API call
+        if (!startDate || !endDate) {
+          throw new Error('Invalid date range: start_date and end_date are required');
+        }
+
         // Make API request to get metrics - using the format expected by our API
         const response = await fetch('/api/affiliate/metrics', {
           method: 'POST',
@@ -290,6 +324,12 @@ export const createActions = (
         }
         
         const responseData = await response.json();
+        
+        // Add comprehensive logging for debugging
+        console.log('📊 STORE ACTIONS DEBUG - Metrics API Response:');
+        console.log('- Raw API Response:', responseData);
+        console.log('- Summary Data:', responseData.summary);
+        console.log('- Data Points Count:', responseData.data_points?.length || 0);
         
         // Transform the snake_case API response to camelCase for the frontend
         const transformedMetrics = {
@@ -316,9 +356,14 @@ export const createActions = (
           lastUpdated: new Date().toISOString()
         };
         
-        // Log the transformation for debugging
-        console.log('API response data:', responseData);
-        console.log('Transformed metrics:', transformedMetrics);
+        console.log('🔄 STORE ACTIONS DEBUG - Transformed Metrics:');
+        console.log('- Total Clicks:', transformedMetrics.totalClicks);
+        console.log('- Total Conversions:', transformedMetrics.totalConversions);
+        console.log('- Total Earnings:', transformedMetrics.totalEarnings);
+        console.log('- Conversion Rate:', transformedMetrics.conversionRate);
+        console.log('- Average Order Value:', transformedMetrics.averageOrderValue);
+        console.log('- Earnings Per Click:', transformedMetrics.earningsPerClick);
+        console.log('- Daily Data Points:', transformedMetrics.timeRanges.daily.length);
         
         // Update state with transformed metrics
         set({
@@ -368,12 +413,30 @@ export const createActions = (
           await state.loadAffiliateProfile(userId);
         }
         
-        // We already have the affiliate info in the profile, no need for additional API calls
-        // Just create a single referral link based on the affiliate slug
-        const profile = state.affiliateProfile;
+        // Get fresh state after profile loading
+        const currentState = get();
+        
+        // Check if profile loading failed - if so, user is not an affiliate
+        if (currentState.hasProfileError) {
+          console.log('User is not an affiliate, skipping referral links loading');
+          set({
+            isLoadingReferralLinks: false,
+            hasReferralLinksError: false,
+            referralLinks: []
+          });
+          return;
+        }
+        
+        const profile = currentState.affiliateProfile;
         
         if (!profile || !profile.slug) {
-          throw new Error('No affiliate profile or slug available');
+          console.log('No affiliate profile or slug available, skipping referral links loading');
+          set({
+            isLoadingReferralLinks: false,
+            hasReferralLinksError: false,
+            referralLinks: []
+          });
+          return;
         }
         
         // Create a single referral link for Papers to Profits using the affiliate slug
@@ -437,40 +500,50 @@ export const createActions = (
       });
       
       try {
-        // Fetch affiliate profile if we don't have it
-        if (!state.affiliateProfile) {
-          await state.loadAffiliateProfile(userId);
+        // Call API endpoint to get payout transactions and projections
+        const response = await fetch('/api/affiliate/payouts', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Error fetching payouts: ${response.statusText}`);
         }
         
-        const affiliateId = state.affiliateProfile?.id;
+        const data = await response.json();
         
-        if (!affiliateId) {
-          throw new Error('No affiliate ID available');
-        }
+        // Add comprehensive logging for debugging
+        console.log('💰 STORE ACTIONS DEBUG - Payouts API Response:');
+        console.log('- Raw API Response:', data);
+        console.log('- Transactions Count:', data.transactions?.length || 0);
+        console.log('- Raw Transactions:', data.transactions);
+        console.log('- Projection Data:', data.projection);
         
-        // Call API to get payout transactions
-        const { data, error } = await supabase
-          .from('affiliate_payouts')
-          .select('*, affiliate_payout_items(conversion_id)')
-          .eq('affiliate_id', affiliateId)
-          .order('created_at', { ascending: false });
-        
-        if (error) {
-          throw error;
-        }
-        
-        // Transform to UI model
-        const transactions: PayoutTransaction[] = data.map(payout => ({
-          id: payout.id,
-          amount: payout.amount,
-          status: payout.status,
-          datePending: payout.created_at,
-          dateCleared: payout.cleared_at,
-          datePaid: payout.paid_at,
-          conversionIds: payout.affiliate_payout_items.map((item: any) => item.conversion_id),
-          referenceId: payout.reference_id,
-          notes: payout.notes
+        // Transform API response to UI model
+        const transactions: PayoutTransaction[] = data.transactions.map((transaction: any) => ({
+          id: transaction.id,
+          amount: transaction.amount,
+          status: transaction.status,
+          created_at: transaction.created_at,
+          processed_at: transaction.processed_at,
+          reference: transaction.reference,
+          type: 'Payment', // Default type
+          datePending: transaction.created_at,
+          dateCleared: transaction.processed_at,
+          datePaid: transaction.status === 'paid' ? transaction.processed_at : null,
+          paymentMethod: transaction.payout_method,
+          paymentDetails: transaction.batch_id ? { batch_id: transaction.batch_id } : {},
+          notes: transaction.processing_notes,
+          fee_amount: transaction.fee_amount,
+          net_amount: transaction.net_amount,
+          xendit_disbursement_id: transaction.xendit_disbursement_id
         }));
+        
+        console.log('🔄 STORE ACTIONS DEBUG - Transformed Payouts:');
+        console.log('- Transactions Count:', transactions.length);
+        console.log('- Transformed Transactions:', transactions);
         
         // Update state with transactions
         set({
@@ -479,8 +552,22 @@ export const createActions = (
           lastPayoutsLoadTime: Date.now()
         });
         
-        // Also load the payout projection
-        await state.loadPayoutProjection(userId);
+        // Update projection data if available
+        if (data.projection) {
+          set({
+            payoutProjection: {
+              thisMonth: data.projection.pending_amount || 0,
+              nextMonth: data.projection.estimated_next_payout || 0,
+              nextPayout: data.projection.estimated_next_payout || 0,
+              nextPayoutDate: data.projection.next_payout_date,
+              estimatedNextAmount: data.projection.estimated_next_payout || 0,
+              estimatedPayoutDate: data.projection.next_payout_date,
+              pendingConversions: 0, // Will be calculated from other data
+              minimumPayoutThreshold: data.projection.threshold_amount || 100,
+              progressToThreshold: Math.min(100, ((data.projection.pending_amount || 0) / (data.projection.threshold_amount || 100)) * 100)
+            }
+          });
+        }
       } catch (error) {
         console.error('Error loading payout transactions:', error);
         set({
@@ -502,10 +589,20 @@ export const createActions = (
           await state.loadAffiliateProfile(userId);
         }
         
-        const affiliateId = state.affiliateProfile?.id;
+        // Get fresh state after profile loading
+        const currentState = get();
+        
+        // Check if profile loading failed - if so, user is not an affiliate
+        if (currentState.hasProfileError) {
+          console.log('User is not an affiliate, skipping payout projection loading');
+          return;
+        }
+        
+        const affiliateId = currentState.affiliateProfile?.id;
         
         if (!affiliateId) {
-          throw new Error('No affiliate ID available');
+          console.log('No affiliate profile available, skipping payout projection loading');
+          return;
         }
         
         // Call API to get payout projection
