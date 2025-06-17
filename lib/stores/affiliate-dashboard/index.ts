@@ -185,7 +185,7 @@ export const useAffiliateDashboardStore = create<AffiliateDashboardStore>()(
       lastPayoutsLoadTime: null,
 
       filterState: {
-        dateRange: '30days',
+        dateRange: 'all',
         customStartDate: null,
         customEndDate: null,
         referralLinkId: null,
@@ -203,6 +203,7 @@ export const useAffiliateDashboardStore = create<AffiliateDashboardStore>()(
         'recent-payouts': true
       },
       dateRangeOptions: [
+        { id: 'all', label: 'All Time' },
         { id: 'today', label: 'Today' },
         { id: 'yesterday', label: 'Yesterday' },
         { id: '7days', label: 'Last 7 Days' },

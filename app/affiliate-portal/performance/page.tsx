@@ -10,32 +10,26 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAffiliateMetricsData, useAffiliateDashboard } from '@/lib/hooks/use-affiliate-dashboard';
+import { useAffiliateDashboardStore } from '@/lib/stores/affiliate-dashboard';
 import { formatCurrencyPHP } from '@/lib/utils/formatting';
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/auth-context';
+import { DateRangeFilter } from '@/components/affiliate/dashboard/date-range-filter';
 
 export default function PerformancePage() {
   const { user } = useAuth();
   const { metrics, isLoadingMetrics, loadAffiliateMetrics } = useAffiliateMetricsData();
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const { filterState, getCurrentDateRangeLabel } = useAffiliateDashboardStore();
   
   // Auto-load affiliate dashboard data - INDUSTRY BEST PRACTICE
   useAffiliateDashboard(user?.id || null);
   
-  // Load metrics when timeRange changes
+  // Load metrics when date filter changes
   useEffect(() => {
-    if (user?.id && loadAffiliateMetrics) {
-      // Map timeRange values to proper DateRangeFilter enum values
-      const dateRangeMap: Record<string, string> = {
-        '7d': '7days',
-        '30d': '30days', 
-        '90d': '90days'
-      };
-      
-      const mappedDateRange = dateRangeMap[timeRange] || '30days';
-      loadAffiliateMetrics(user.id, { dateRange: mappedDateRange as any });
+    if (user?.id && loadAffiliateMetrics && filterState.dateRange) {
+      loadAffiliateMetrics(user.id, { dateRange: filterState.dateRange });
     }
-  }, [timeRange, loadAffiliateMetrics, user?.id]);
+  }, [filterState.dateRange, loadAffiliateMetrics, user?.id]);
   
   // Calculate real performance insights from actual data
   const performanceInsights = useMemo(() => {
@@ -70,16 +64,8 @@ export default function PerformancePage() {
   
   // Handle refresh functionality
   const handleRefresh = async () => {
-    if (user?.id && loadAffiliateMetrics) {
-      // Map timeRange values to proper DateRangeFilter enum values
-      const dateRangeMap: Record<string, string> = {
-        '7d': '7days',
-        '30d': '30days', 
-        '90d': '90days'
-      };
-      
-      const mappedDateRange = dateRangeMap[timeRange] || '30days';
-      await loadAffiliateMetrics(user.id, { dateRange: mappedDateRange as any }, true); // Force refresh
+    if (user?.id && loadAffiliateMetrics && filterState.dateRange) {
+      await loadAffiliateMetrics(user.id, { dateRange: filterState.dateRange }, true); // Force refresh
     }
   };
 
@@ -94,15 +80,7 @@ export default function PerformancePage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <select
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value as '7d' | '30d' | '90d')}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
-            >
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="90d">Last 90 days</option>
-            </select>
+            <DateRangeFilter onFilterChange={handleRefresh} />
             <Button 
               onClick={handleRefresh} 
               variant="outline" 
@@ -158,7 +136,7 @@ export default function PerformancePage() {
                       </span>
                       <span className="text-xs flex items-center text-muted-foreground">
                         <LineChart className="h-3 w-3 mr-1" />
-                        {timeRange}
+                        {getCurrentDateRangeLabel()}
                       </span>
                     </div>
                   </CardContent>
@@ -168,7 +146,7 @@ export default function PerformancePage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium">Daily Average</CardTitle>
                     <CardDescription>
-                      Last {timeRange}
+                      {getCurrentDateRangeLabel()}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -241,7 +219,7 @@ export default function PerformancePage() {
                       </span>
                       <span className="text-xs flex items-center text-muted-foreground">
                         <ShoppingCart className="h-3 w-3 mr-1" />
-                        {timeRange}
+                        {getCurrentDateRangeLabel()}
                       </span>
                     </div>
                   </CardContent>
@@ -324,7 +302,7 @@ export default function PerformancePage() {
                       </span>
                       <span className="text-xs flex items-center text-muted-foreground">
                         <ArrowUpRight className="h-3 w-3 mr-1" />
-                        {timeRange}
+                        {getCurrentDateRangeLabel()}
                       </span>
                     </div>
                   </CardContent>

@@ -13,6 +13,7 @@ import { useAffiliateConversions } from '@/lib/hooks/use-affiliate-conversions';
 import { formatCurrencyPHP } from '@/lib/utils/formatting';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/context/auth-context';
+import { DateRangeFilter } from '@/components/affiliate/dashboard/date-range-filter';
 
 export default function PayoutsPage() {
   const { user } = useAuth();
@@ -129,11 +130,26 @@ export default function PayoutsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        <div>
-          <h1 className="text-2xl font-bold mb-2">Earnings & Payouts</h1>
-          <p className="text-muted-foreground">
-            Track your earnings, payouts, and conversion history
-          </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-bold mb-2">Earnings & Payouts</h1>
+            <p className="text-muted-foreground">
+              Track your earnings, payouts, and conversion history
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <DateRangeFilter onFilterChange={handleRefresh} />
+            <Button 
+              onClick={handleRefresh} 
+              variant="outline" 
+              size="sm"
+              disabled={isLoadingPayouts}
+              className="flex items-center gap-2"
+            >
+              <RefreshCcw className={`h-4 w-4 ${isLoadingPayouts ? 'animate-spin' : ''}`} />
+              {isLoadingPayouts ? 'Loading...' : 'Refresh'}
+            </Button>
+          </div>
         </div>
         
         {/* Enhanced Summary Cards - Industry Best Practice */}

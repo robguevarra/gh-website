@@ -229,6 +229,10 @@ export const createActions = (
         if (dateRange === 'custom') {
           startDate = customStartDate;
           endDate = customEndDate;
+        } else if (dateRange === 'all') {
+          // For "All Time", don't set date restrictions
+          startDate = null;
+          endDate = null;
         } else {
           const now = new Date();
           endDate = now.toISOString().split('T')[0];
@@ -259,10 +263,9 @@ export const createActions = (
               startDate = ninetyDaysAgo.toISOString().split('T')[0];
               break;
             default:
-              // Default to 30 days if dateRange is not recognized
-              const defaultDaysAgo = new Date(now);
-              defaultDaysAgo.setDate(now.getDate() - 30);
-              startDate = defaultDaysAgo.toISOString().split('T')[0];
+              // Default to all time if dateRange is not recognized
+              startDate = null;
+              endDate = null;
               break;
           }
         }
@@ -298,25 +301,31 @@ export const createActions = (
           return;
         }
         
-        // Validate that we have valid dates before making API call
-        if (!startDate || !endDate) {
+        // Validate that we have valid dates before making API call (except for "All Time")
+        if (dateRange !== 'all' && (!startDate || !endDate)) {
           throw new Error('Invalid date range: start_date and end_date are required');
         }
 
         // Make API request to get metrics - using the format expected by our API
+        const requestBody: any = {
+          referral_link_id: referralLinkId || undefined,
+          group_by: 'day' // Default to daily grouping
+        };
+        
+        // Only add date_range if we have specific dates (not "All Time")
+        if (startDate && endDate) {
+          requestBody.date_range = {
+            start_date: startDate,
+            end_date: endDate
+          };
+        }
+        
         const response = await fetch('/api/affiliate/metrics', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            date_range: {
-              start_date: startDate,
-              end_date: endDate
-            },
-            referral_link_id: referralLinkId || undefined,
-            group_by: 'day' // Default to daily grouping
-          })
+          body: JSON.stringify(requestBody)
         });
         
         if (!response.ok) {

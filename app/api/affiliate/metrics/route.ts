@@ -57,30 +57,44 @@ async function calculateAffiliateMetrics(supabase: any, affiliateId: string, fil
     group_by = 'day',
   } = filters;
 
-  // Set up date filters
-  const now = new Date();
-  const startDate = date_range?.start_date 
-    ? new Date(date_range.start_date) 
-    : new Date(now.setMonth(now.getMonth() - 1)); // Default to 1 month ago
+  // Set up date filters - if no date_range provided, fetch all data (All Time)
+  let startDate: Date | null = null;
+  let endDate: Date | null = null;
+  let startDateStr: string | null = null;
+  let endDateStr: string | null = null;
   
-  const endDate = date_range?.end_date 
-    ? new Date(date_range.end_date) 
-    : new Date(); // Default to today
-  
-  // Format dates for Postgres
-  const startDateStr = startDate.toISOString();
-  const endDateStr = endDate.toISOString();
+  if (date_range) {
+    const now = new Date();
+    startDate = date_range.start_date 
+      ? new Date(date_range.start_date) 
+      : new Date(now.setMonth(now.getMonth() - 1)); // Default to 1 month ago
+    
+    endDate = date_range.end_date 
+      ? new Date(date_range.end_date) 
+      : new Date(); // Default to today
+    
+    // Format dates for Postgres
+    startDateStr = startDate.toISOString();
+    endDateStr = endDate.toISOString();
+  }
 
   // Import the admin client which bypasses RLS
   const adminClient = await getAdminClient();
   
   // Use the admin client to fetch data directly, bypassing RLS policies
-  const { data: clicksData, error: clicksError } = await adminClient
+  let clicksQuery = adminClient
     .from('affiliate_clicks')
     .select('id, created_at, visitor_id, ip_address, user_agent, referral_url, landing_page_url')
-    .eq('affiliate_id', affiliateId)
-    .gte('created_at', startDateStr)
-    .lte('created_at', endDateStr)
+    .eq('affiliate_id', affiliateId);
+  
+  // Add date filters only if date range is specified
+  if (startDateStr && endDateStr) {
+    clicksQuery = clicksQuery
+      .gte('created_at', startDateStr)
+      .lte('created_at', endDateStr);
+  }
+  
+  const { data: clicksData, error: clicksError } = await clicksQuery
     .order('created_at', { ascending: false });
   
   // Debug output for query results
@@ -108,9 +122,14 @@ async function calculateAffiliateMetrics(supabase: any, affiliateId: string, fil
   let conversionsQuery = adminClient
     .from('affiliate_conversions')
     .select('id, created_at, order_id, status, gmv, commission_amount, level')
-    .eq('affiliate_id', affiliateId)
-    .gte('created_at', startDateStr)
-    .lte('created_at', endDateStr);
+    .eq('affiliate_id', affiliateId);
+  
+  // Add date filters only if date range is specified
+  if (startDateStr && endDateStr) {
+    conversionsQuery = conversionsQuery
+      .gte('created_at', startDateStr)
+      .lte('created_at', endDateStr);
+  }
   
   // Filter by status (only count cleared or paid conversions)
   conversionsQuery = conversionsQuery.in('status', ['cleared', 'paid']);
@@ -130,7 +149,9 @@ async function calculateAffiliateMetrics(supabase: any, affiliateId: string, fil
     const clickCount = clicksData?.length || 0;
     
     // Create empty data points that match the required schema format
-    const emptyDataPoints = generateEmptyDataPoints(startDate, endDate, group_by);
+    const emptyDataPoints = startDate && endDate 
+      ? generateEmptyDataPoints(startDate, endDate, group_by)
+      : []; // For "All Time" with no data, return empty array
     
     return {
       summary: {
@@ -183,7 +204,10 @@ async function calculateAffiliateMetrics(supabase: any, affiliateId: string, fil
   const earningsPerClick = totalClicks > 0 ? totalCommission / totalClicks : 0;
   
   // Format data points for the response
-  const dataPoints = generateEmptyDataPoints(startDate, endDate, group_by).map(emptyPoint => {
+  const dataPoints = (startDate && endDate 
+    ? generateEmptyDataPoints(startDate, endDate, group_by)
+    : [] // For "All Time", return empty data points array
+  ).map(emptyPoint => {
     const date = emptyPoint.date;
     const dayClicks = clicksData.filter((click: any) => {
       const clickDate = new Date(click.created_at).toISOString().split('T')[0];
