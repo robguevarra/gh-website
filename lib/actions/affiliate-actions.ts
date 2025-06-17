@@ -519,5 +519,105 @@ export async function updateAffiliateMembershipLevel(
   }
 }
 
+/**
+ * Get affiliate statistics for admin dashboard
+ */
+export async function getAffiliateStats(): Promise<{
+  totalAffiliates: number;
+  activeAffiliates: number;
+  pendingApplications: number;
+  newThisMonth: number;
+  growthPercentage: number;
+  error: string | null;
+}> {
+  try {
+    const supabase = getAdminClient();
+
+    // Get current date boundaries
+    const now = new Date();
+    const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+
+    // Get total affiliates count
+    const { count: totalAffiliates, error: totalError } = await supabase
+      .from('affiliates')
+      .select('*', { count: 'exact', head: true });
+
+    if (totalError) {
+      throw new Error(`Error fetching total affiliates: ${totalError.message}`);
+    }
+
+    // Get active affiliates count
+    const { count: activeAffiliates, error: activeError } = await supabase
+      .from('affiliates')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'active');
+
+    if (activeError) {
+      throw new Error(`Error fetching active affiliates: ${activeError.message}`);
+    }
+
+    // Get pending applications count
+    const { count: pendingApplications, error: pendingError } = await supabase
+      .from('affiliates')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+
+    if (pendingError) {
+      throw new Error(`Error fetching pending applications: ${pendingError.message}`);
+    }
+
+    // Get new affiliates this month
+    const { count: newThisMonth, error: newThisMonthError } = await supabase
+      .from('affiliates')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', firstDayThisMonth.toISOString());
+
+    if (newThisMonthError) {
+      throw new Error(`Error fetching new affiliates this month: ${newThisMonthError.message}`);
+    }
+
+    // Get new affiliates last month for growth calculation
+    const { count: newLastMonth, error: newLastMonthError } = await supabase
+      .from('affiliates')
+      .select('*', { count: 'exact', head: true })
+      .gte('created_at', firstDayLastMonth.toISOString())
+      .lte('created_at', lastDayLastMonth.toISOString());
+
+    if (newLastMonthError) {
+      throw new Error(`Error fetching new affiliates last month: ${newLastMonthError.message}`);
+    }
+
+    // Calculate growth percentage
+    let growthPercentage = 0;
+    if (newLastMonth && newLastMonth > 0) {
+      growthPercentage = ((newThisMonth || 0) - newLastMonth) / newLastMonth * 100;
+    } else if (newThisMonth && newThisMonth > 0) {
+      growthPercentage = 100; // 100% growth if we had 0 last month and some this month
+    }
+
+    return {
+      totalAffiliates: totalAffiliates || 0,
+      activeAffiliates: activeAffiliates || 0,
+      pendingApplications: pendingApplications || 0,
+      newThisMonth: newThisMonth || 0,
+      growthPercentage: Math.round(growthPercentage * 10) / 10, // Round to 1 decimal place
+      error: null,
+    };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Failed to fetch affiliate statistics.';
+    console.error('getAffiliateStats error:', errorMessage);
+    return {
+      totalAffiliates: 0,
+      activeAffiliates: 0,
+      pendingApplications: 0,
+      newThisMonth: 0,
+      growthPercentage: 0,
+      error: errorMessage,
+    };
+  }
+}
+
 
 

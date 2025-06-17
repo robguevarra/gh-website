@@ -9,6 +9,8 @@ import {
   TrendDataPoint,
 } from '@/types/admin/analytics';
 import { unstable_cache } from 'next/cache';
+import { createServerSupabaseClient } from '@/lib/supabase/client';
+import { logAdminActivity } from '@/lib/actions/activity-log-actions';
 
 /**
  * Fetches analytics data for the affiliate program dashboard.
@@ -256,3 +258,209 @@ const getAffiliateProgramAnalyticsWithCache = unstable_cache(
 ['affiliate-program-analytics', 'affiliate-data'],
 { revalidate: 60, tags: ['affiliate-analytics'] }
 ); 
+
+/**
+ * Export affiliate analytics data in various formats
+ */
+export async function exportAnalyticsReport({
+  reportType,
+  format = 'csv',
+  startDate,
+  endDate,
+}: {
+  reportType: 'performance' | 'financial' | 'conversions';
+  format?: 'csv' | 'json';
+  startDate?: string;
+  endDate?: string;
+}): Promise<{
+  data: string | null;
+  filename: string;
+  contentType: string;
+  error: string | null;
+}> {
+  try {
+    // Get analytics data
+    const analyticsData = await getAffiliateProgramAnalytics(startDate, endDate);
+    
+    const timestamp = new Date().toISOString().split('T')[0];
+    let filename: string;
+    let contentType: string;
+    let exportData: string;
+
+    if (format === 'csv') {
+      contentType = 'text/csv';
+      
+      switch (reportType) {
+        case 'performance':
+          filename = `affiliate-performance-report-${timestamp}.csv`;
+          exportData = generatePerformanceCSV(analyticsData);
+          break;
+        case 'financial':
+          filename = `affiliate-financial-report-${timestamp}.csv`;
+          exportData = generateFinancialCSV(analyticsData);
+          break;
+        case 'conversions':
+          filename = `affiliate-conversions-report-${timestamp}.csv`;
+          exportData = generateConversionsCSV(analyticsData);
+          break;
+        default:
+          throw new Error('Invalid report type');
+      }
+    } else {
+      // JSON format
+      contentType = 'application/json';
+      
+      const exportObject = {
+        export_metadata: {
+          generated_at: new Date().toISOString(),
+          report_type: reportType,
+          date_range: {
+            start: startDate || analyticsData.kpis.dateRangeStart,
+            end: endDate || analyticsData.kpis.dateRangeEnd,
+          },
+          format: 'json'
+        },
+        data: analyticsData
+      };
+
+      filename = `affiliate-${reportType}-report-${timestamp}.json`;
+      exportData = JSON.stringify(exportObject, null, 2);
+    }
+
+    // Log admin activity
+    await logAdminActivity({
+      activity_type: 'GENERAL_ADMIN_ACTION',
+      description: `Exported ${reportType} analytics report`,
+      details: { 
+        format,
+        report_type: reportType,
+        filename,
+        date_range: { startDate, endDate }
+      }
+    });
+
+    return {
+      data: exportData,
+      filename,
+      contentType,
+      error: null,
+    };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Failed to export analytics report.';
+    console.error('exportAnalyticsReport error:', errorMessage);
+    return {
+      data: null,
+      filename: '',
+      contentType: '',
+      error: errorMessage,
+    };
+  }
+}
+
+/**
+ * Generate CSV for affiliate performance report
+ */
+function generatePerformanceCSV(data: AffiliateAnalyticsData): string {
+  const headers = [
+    'Metric',
+    'Value',
+    'Description'
+  ];
+
+  const rows = [
+    headers.join(','),
+    `"Total Active Affiliates","${data.kpis.totalActiveAffiliates}","Number of currently active affiliate partners"`,
+    `"Pending Applications","${data.kpis.pendingApplications}","Affiliate applications awaiting review"`,
+    `"Total Clicks","${data.kpis.totalClicks}","Total affiliate link clicks in period"`,
+    `"Total Conversions","${data.kpis.totalConversions}","Total successful conversions in period"`,
+    `"Conversion Rate","${data.kpis.averageConversionRate}%","Average conversion rate across all affiliates"`,
+    `"Total Revenue (GMV)","₱${data.kpis.totalGmv.toLocaleString()}","Gross merchandise value from affiliate sales"`,
+    `"Total Commissions","₱${data.kpis.totalCommissionsPaid.toLocaleString()}","Total commissions paid to affiliates"`,
+    '',
+    '"Top Performing Affiliates"',
+    '"Rank","Affiliate Name","Conversions","Slug"'
+  ];
+
+  // Add top affiliates data
+  data.topAffiliatesByConversions.forEach((affiliate, index) => {
+    rows.push(`"${index + 1}","${affiliate.name}","${affiliate.value}","${affiliate.slug || 'N/A'}"`);
+  });
+
+  return rows.join('\n');
+}
+
+/**
+ * Generate CSV for financial report
+ */
+function generateFinancialCSV(data: AffiliateAnalyticsData): string {
+  const headers = [
+    'Financial Metric',
+    'Amount (PHP)',
+    'Percentage',
+    'Description'
+  ];
+
+  const netRevenue = data.kpis.totalGmv - data.kpis.totalCommissionsPaid;
+  const commissionRate = data.kpis.totalGmv > 0 ? (data.kpis.totalCommissionsPaid / data.kpis.totalGmv) * 100 : 0;
+
+  const rows = [
+    headers.join(','),
+    `"Total Revenue (GMV)","${data.kpis.totalGmv.toLocaleString()}","100%","Gross merchandise value from all affiliate sales"`,
+    `"Total Commissions Paid","${data.kpis.totalCommissionsPaid.toLocaleString()}","${commissionRate.toFixed(1)}%","Total commissions paid to affiliates"`,
+    `"Net Revenue","${netRevenue.toLocaleString()}","${(100 - commissionRate).toFixed(1)}%","Revenue after commission payments"`,
+    `"Average Commission per Conversion","${data.kpis.totalConversions > 0 ? (data.kpis.totalCommissionsPaid / data.kpis.totalConversions).toLocaleString() : '0'}","","Average commission amount per successful conversion"`,
+    `"Revenue per Click","${data.kpis.totalClicks > 0 ? (data.kpis.totalGmv / data.kpis.totalClicks).toFixed(2) : '0'}","","Average revenue generated per affiliate click"`,
+    '',
+    '"Financial Health Indicators"',
+    `"Commission Efficiency","${commissionRate.toFixed(1)}%","","Percentage of revenue paid as commissions"`,
+    `"Conversion Value","${data.kpis.totalConversions > 0 ? (data.kpis.totalGmv / data.kpis.totalConversions).toLocaleString() : '0'}","","Average order value per conversion"`,
+    `"Active Affiliate ROI","${data.kpis.totalActiveAffiliates > 0 ? (data.kpis.totalGmv / data.kpis.totalActiveAffiliates).toLocaleString() : '0'}","","Average revenue per active affiliate"`
+  ];
+
+  return rows.join('\n');
+}
+
+/**
+ * Generate CSV for conversions report
+ */
+function generateConversionsCSV(data: AffiliateAnalyticsData): string {
+  const headers = [
+    'Conversion Metric',
+    'Value',
+    'Rate/Percentage',
+    'Analysis'
+  ];
+
+  const clickToConversionRate = data.kpis.totalClicks > 0 ? (data.kpis.totalConversions / data.kpis.totalClicks) * 100 : 0;
+  const avgConversionsPerAffiliate = data.kpis.totalActiveAffiliates > 0 ? data.kpis.totalConversions / data.kpis.totalActiveAffiliates : 0;
+
+  const rows = [
+    headers.join(','),
+    `"Total Conversions","${data.kpis.totalConversions}","","Total successful conversions in reporting period"`,
+    `"Total Clicks","${data.kpis.totalClicks}","","Total affiliate link clicks in reporting period"`,
+    `"Overall Conversion Rate","${clickToConversionRate.toFixed(2)}%","${clickToConversionRate.toFixed(2)}%","Percentage of clicks that resulted in conversions"`,
+    `"Average Conversions per Affiliate","${avgConversionsPerAffiliate.toFixed(1)}","","Average number of conversions per active affiliate"`,
+    `"Conversion Efficiency Score","${data.kpis.averageConversionRate.toFixed(1)}","${data.kpis.averageConversionRate.toFixed(1)}%","Weighted average conversion rate across all affiliates"`,
+    '',
+    '"Conversion Performance Analysis"',
+    `"High Performers","${data.topAffiliatesByConversions.filter(a => a.value >= 5).length}","","Affiliates with 5+ conversions"`,
+    `"Active Contributors","${data.topAffiliatesByConversions.filter(a => a.value >= 1).length}","","Affiliates with at least 1 conversion"`,
+    `"Top Performer Contribution","${data.topAffiliatesByConversions.length > 0 ? data.topAffiliatesByConversions[0]?.value || 0 : 0}","${data.kpis.totalConversions > 0 && data.topAffiliatesByConversions.length > 0 ? ((data.topAffiliatesByConversions[0]?.value || 0) / data.kpis.totalConversions * 100).toFixed(1) : 0}%","Conversions from top performing affiliate"`,
+    '',
+    '"Detailed Affiliate Conversion Data"',
+    '"Rank","Affiliate Name","Conversions","Conversion Share","Performance Level"'
+  ];
+
+  // Add detailed affiliate conversion data
+  data.topAffiliatesByConversions.forEach((affiliate, index) => {
+    const conversionShare = data.kpis.totalConversions > 0 ? (affiliate.value / data.kpis.totalConversions * 100).toFixed(1) : '0';
+    let performanceLevel = 'Low';
+    if (affiliate.value >= 10) performanceLevel = 'Excellent';
+    else if (affiliate.value >= 5) performanceLevel = 'High';
+    else if (affiliate.value >= 2) performanceLevel = 'Medium';
+
+    rows.push(`"${index + 1}","${affiliate.name}","${affiliate.value}","${conversionShare}%","${performanceLevel}"`);
+  });
+
+  return rows.join('\n');
+} 
