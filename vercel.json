@@ -1,0 +1,17 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/auto-clear-conversions",
+      "schedule": "0 2,14 * * *"
+    },
+    {
+      "path": "/api/cron/batch-automation", 
+      "schedule": "0 9 25-31 * *"
+    }
+  ],
+  "functions": {
+    "app/api/cron/**": {
+      "maxDuration": 300
+    }
+  }
+} 
