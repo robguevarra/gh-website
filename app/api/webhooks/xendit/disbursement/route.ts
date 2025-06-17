@@ -144,8 +144,12 @@ export async function POST(request: NextRequest) {
       status: newStatus,
       xendit_disbursement_id: payload.id, // Keep same field name for compatibility
       processed_at: payload.status === 'SUCCEEDED' ? new Date().toISOString() : payout.processed_at,
-      failed_at: ['FAILED', 'CANCELLED'].includes(payload.status) ? new Date().toISOString() : null,
-      failure_reason: payload.failure_code || null,
+      // Note: failed_at field doesn't exist in our schema, removing it
+      processing_notes: payload.status === 'SUCCEEDED' 
+        ? `Payment completed successfully via ${payload.channel_code} on ${new Date().toLocaleString()}`
+        : (payload.status === 'FAILED' || payload.status === 'CANCELLED')
+        ? `Payment failed: ${payload.failure_code || 'Unknown error'} on ${new Date().toLocaleString()}`
+        : null,
       updated_at: new Date().toISOString(),
     };
 

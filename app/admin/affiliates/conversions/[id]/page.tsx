@@ -80,6 +80,28 @@ async function handleRejectConversion(conversionId: string) {
   // No redirect needed - page will refresh with new data
 }
 
+// Server action to handle manual clearing of pending conversions
+async function handleClearPendingConversion(conversionId: string) {
+  'use server';
+  
+  console.log('Manually clearing pending conversion:', conversionId);
+  
+  const result = await updateConversionStatus({
+    conversionId,
+    status: 'cleared',
+    notes: 'Manually cleared by admin - ready for next batch processing'
+  });
+  
+  console.log('Clear result:', result);
+  
+  if (!result.success) {
+    console.error('Failed to clear conversion:', result.error);
+  }
+  
+  // The updateConversionStatus function already calls revalidatePath
+  // No redirect needed - page will refresh with new data
+}
+
 async function getConversionDetailsWrapper(conversionId: string) {
   const { conversion, error } = await getConversionDetails(conversionId);
   
@@ -222,6 +244,36 @@ async function ConversionDetailsContent({ conversionId }: { conversionId: string
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending Conversion Actions */}
+      {conversion.status === 'pending' && (
+        <Card className="border-blue-200 bg-blue-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-blue-900">
+              <Clock className="h-5 w-5" />
+              Pending Conversion Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-blue-900">Ready for Manual Review</p>
+                <p className="text-sm text-blue-700">
+                  This conversion is pending and can be manually cleared for the next batch payout.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <form action={handleClearPendingConversion.bind(null, conversion.conversion_id)}>
+                  <Button type="submit" size="sm" variant="default">
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Clear for Payout
+                  </Button>
+                </form>
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

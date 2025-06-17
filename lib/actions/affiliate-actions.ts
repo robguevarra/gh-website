@@ -121,6 +121,9 @@ const getAdminAffiliatesWithCache = unstable_cache(
         slug,
         status,
         created_at,
+        payout_method,
+        gcash_verified,
+        bank_account_verified,
         unified_profiles!affiliates_user_id_fkey (
           email,
           first_name,
@@ -128,7 +131,11 @@ const getAdminAffiliatesWithCache = unstable_cache(
           membership_level_id,
           membership_levels (name, commission_rate)
         ),
-        affiliate_conversions (commission_amount)
+        affiliate_conversions (commission_amount),
+        gcash_verifications!gcash_verifications_affiliate_id_fkey (
+          status,
+          created_at
+        )
       `)
       .order('created_at', { ascending: false });
 
@@ -150,6 +157,11 @@ const getAdminAffiliatesWithCache = unstable_cache(
         0
       ) || 0;
 
+      // Get the latest GCash verification status
+      const latestVerification = item.gcash_verifications?.sort((a: any, b: any) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )[0];
+
       return {
         affiliate_id: item.id,
         user_id: item.user_id,
@@ -161,6 +173,13 @@ const getAdminAffiliatesWithCache = unstable_cache(
         tier_commission_rate: memberLevel?.commission_rate,
         current_membership_level_id: profile?.membership_level_id,
         joined_date: item.created_at, // Will be formatted by UI if needed
+        
+        // Payout information
+        payout_method: item.payout_method,
+        gcash_verified: item.gcash_verified,
+        gcash_verification_status: latestVerification?.status || 'unverified',
+        bank_account_verified: item.bank_account_verified,
+        
         total_clicks: 0, // Placeholder - to be implemented if needed
         total_conversions: 0, // Placeholder - to be implemented if needed
         total_earnings: totalLifetimeCommissions,

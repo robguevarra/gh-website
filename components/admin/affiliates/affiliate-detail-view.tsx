@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { AdminAffiliateListItem, AffiliateStatusType, AffiliateClick, AffiliateConversion, AffiliatePayout, ConversionStatusType, PayoutMethodType } from '@/types/admin/affiliate';
+import { AdminAffiliateListItem, AffiliateStatusType, AffiliateClick, AffiliateConversion, AdminAffiliatePayout, ConversionStatusType, PayoutMethodType } from '@/types/admin/affiliate';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Edit, BarChart2, AlertTriangle, UserCheck, UserX, Calendar, Percent, Link as LinkIcon, User, MousePointerClick, CreditCard, DollarSign, FileText } from 'lucide-react';
+import { Edit, BarChart2, AlertTriangle, UserCheck, UserX, Calendar, Percent, Link as LinkIcon, User, MousePointerClick, CreditCard, DollarSign, FileText, Smartphone, CheckCircle, XCircle, Clock } from 'lucide-react';
 import EditAffiliateForm from './edit-affiliate-form';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
@@ -51,10 +51,11 @@ interface AffiliateDetailViewProps {
     error: string | null;
   };
   initialPayoutsData?: {
-    data: AffiliatePayout[];
+    data: AdminAffiliatePayout[];
     totalCount: number;
     error: string | null;
   };
+  payoutValidation?: any;
 }
 
 
@@ -207,59 +208,59 @@ const mockConversions: AffiliateConversion[] = [
   },
 ];
 
-const mockPayouts: AffiliatePayout[] = [
+const mockPayouts: AdminAffiliatePayout[] = [
   { 
-    id: '1', 
+    payout_id: '1', 
     affiliate_id: '123', 
-    date: '2025-05-15T10:00:00Z', 
+    affiliate_name: 'John Doe',
+    affiliate_email: 'john@example.com',
     amount: 120.00, 
-    method: 'PayPal', 
     payout_method: 'paypal', 
-    status: 'completed', 
+    status: 'sent', 
     reference: 'PAY-98765',
     created_at: '2025-05-15T10:00:00Z'
   },
   { 
-    id: '2', 
+    payout_id: '2', 
     affiliate_id: '123', 
-    date: '2025-04-15T10:00:00Z', 
+    affiliate_name: 'John Doe',
+    affiliate_email: 'john@example.com',
     amount: 90.00, 
-    method: 'Bank Transfer', 
     payout_method: 'bank_transfer', 
-    status: 'completed', 
+    status: 'sent', 
     reference: 'PAY-87654',
     created_at: '2025-04-15T10:00:00Z'
   },
   { 
-    id: '3', 
+    payout_id: '3', 
     affiliate_id: '123', 
-    date: '2025-03-15T10:00:00Z', 
+    affiliate_name: 'John Doe',
+    affiliate_email: 'john@example.com',
     amount: 75.00, 
-    method: 'PayPal', 
     payout_method: 'paypal', 
-    status: 'completed', 
+    status: 'sent', 
     reference: 'PAY-76543',
     created_at: '2025-03-15T10:00:00Z'
   },
   { 
-    id: '4', 
+    payout_id: '4', 
     affiliate_id: '123', 
-    date: '2025-02-15T10:00:00Z', 
+    affiliate_name: 'John Doe',
+    affiliate_email: 'john@example.com',
     amount: 60.00, 
-    method: 'Bank Transfer', 
     payout_method: 'bank_transfer', 
-    status: 'completed', 
+    status: 'sent', 
     reference: 'PAY-65432',
     created_at: '2025-02-15T10:00:00Z'
   },
   { 
-    id: '5', 
+    payout_id: '5', 
     affiliate_id: '123', 
-    date: '2025-01-15T10:00:00Z', 
+    affiliate_name: 'John Doe',
+    affiliate_email: 'john@example.com',
     amount: 45.00, 
-    method: 'PayPal', 
     payout_method: 'paypal', 
-    status: 'completed', 
+    status: 'sent', 
     reference: 'PAY-54321',
     created_at: '2025-01-15T10:00:00Z'
   },
@@ -269,7 +270,8 @@ export const AffiliateDetailView: React.FC<AffiliateDetailViewProps> = ({
   initialAffiliateDetails,
   initialClicksData,
   initialConversionsData,
-  initialPayoutsData 
+  initialPayoutsData,
+  payoutValidation 
 }) => {
   const router = useRouter();
   const [affiliate, setAffiliate] = useState<AdminAffiliateListItem>(initialAffiliateDetails);
@@ -280,7 +282,7 @@ export const AffiliateDetailView: React.FC<AffiliateDetailViewProps> = ({
   const [conversions, setConversions] = useState<AffiliateConversion[]>(initialConversionsData?.data || []);
   const [conversionsTotal, setConversionsTotal] = useState<number>(initialConversionsData?.totalCount || 0);
   
-  const [payouts, setPayouts] = useState<AffiliatePayout[]>(initialPayoutsData?.data || mockPayouts);  
+  const [payouts, setPayouts] = useState<AdminAffiliatePayout[]>(initialPayoutsData?.data || mockPayouts);  
   const [payoutsTotal, setPayoutsTotal] = useState<number>(initialPayoutsData?.totalCount || 0);
   const [isLoading, setIsLoading] = useState(false);
   // Removed duplicated state declarations for affiliate, setAffiliate, isEditing, setIsEditing, clicks, conversions, payouts as they exist later or were mock data.
@@ -386,7 +388,7 @@ export const AffiliateDetailView: React.FC<AffiliateDetailViewProps> = ({
     totalCount: initialConversionsData?.totalCount || 0 
   });
   
-  const [payoutHistoryData, setPayoutHistoryData] = useState<{ data: AffiliatePayout[]; totalCount: number }>({ 
+  const [payoutHistoryData, setPayoutHistoryData] = useState<{ data: AdminAffiliatePayout[]; totalCount: number }>({ 
     data: initialPayoutsData?.data || [], 
     totalCount: initialPayoutsData?.totalCount || 0 
   });
@@ -677,6 +679,199 @@ export const AffiliateDetailView: React.FC<AffiliateDetailViewProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Payout Details Section */}
+          <Separator className="my-6" />
+          <div className="mb-8">
+            <h3 className="text-md font-medium mb-4 text-primary/80 font-serif">Payout Details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+              {/* Payout Method */}
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-full bg-primary/10">
+                  {affiliate.payout_method === 'gcash' ? (
+                    <Smartphone size={16} className="text-primary" />
+                  ) : (
+                    <CreditCard size={16} className="text-primary" />
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Payout Method</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium capitalize">
+                      {affiliate.payout_method || 'Not Set'}
+                    </p>
+                    {affiliate.payout_method === 'gcash' && (
+                      <Badge variant={affiliate.gcash_verified ? 'default' : 'secondary'} className="text-xs">
+                        {affiliate.gcash_verified ? 'Verified' : 'Unverified'}
+                      </Badge>
+                    )}
+                    {affiliate.payout_method === 'bank_transfer' && (
+                      <Badge variant={affiliate.bank_account_verified ? 'default' : 'secondary'} className="text-xs">
+                        {affiliate.bank_account_verified ? 'Verified' : 'Unverified'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* GCash Details (if GCash method) */}
+              {affiliate.payout_method === 'gcash' && (
+                <>
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <Smartphone size={16} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">GCash Number</p>
+                      <p className="text-sm font-medium font-mono">
+                        {affiliate.gcash_number || 'Not provided'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <User size={16} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">GCash Account Name</p>
+                      <p className="text-sm font-medium">
+                        {affiliate.gcash_name || 'Not provided'}
+                      </p>
+                    </div>
+                  </div>
+                  {affiliate.gcash_verification_status && (
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2 rounded-full bg-primary/10">
+                        {affiliate.gcash_verification_status === 'verified' ? (
+                          <CheckCircle size={16} className="text-green-600" />
+                        ) : affiliate.gcash_verification_status === 'rejected' ? (
+                          <XCircle size={16} className="text-red-600" />
+                        ) : (
+                          <Clock size={16} className="text-amber-600" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Verification Status</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium capitalize">
+                            {affiliate.gcash_verification_status.replace('_', ' ')}
+                          </p>
+                          <Badge 
+                            variant={
+                              affiliate.gcash_verification_status === 'verified' ? 'default' :
+                              affiliate.gcash_verification_status === 'rejected' ? 'destructive' :
+                              'secondary'
+                            }
+                            className="text-xs"
+                          >
+                            {affiliate.gcash_verification_status === 'verified' ? 'Verified' :
+                             affiliate.gcash_verification_status === 'rejected' ? 'Rejected' :
+                             affiliate.gcash_verification_status === 'pending_review' ? 'Pending Review' :
+                             affiliate.gcash_verification_status === 'pending_documents' ? 'Needs Documents' :
+                             'Unverified'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Bank Details (if bank transfer method) */}
+              {affiliate.payout_method === 'bank_transfer' && (
+                <>
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <CreditCard size={16} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Bank Name</p>
+                      <p className="text-sm font-medium">
+                        {affiliate.bank_name || 'Not provided'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <FileText size={16} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Account Number</p>
+                      <p className="text-sm font-medium font-mono">
+                        {affiliate.account_number ? 
+                          `****${affiliate.account_number.slice(-4)}` : 
+                          'Not provided'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <User size={16} className="text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Account Holder</p>
+                      <p className="text-sm font-medium">
+                        {affiliate.account_holder_name || 'Not provided'}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Validation Status */}
+              {payoutValidation && (
+                <div className="col-span-full">
+                  <div className="p-4 rounded-lg border bg-muted/50">
+                    <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                      {payoutValidation.isValid ? (
+                        <CheckCircle size={16} className="text-green-600" />
+                      ) : (
+                        <XCircle size={16} className="text-red-600" />
+                      )}
+                      Payout Validation Status
+                    </h4>
+                    {payoutValidation.errors && payoutValidation.errors.length > 0 && (
+                      <div className="mb-2">
+                        <p className="text-xs text-muted-foreground mb-1">Errors:</p>
+                        <ul className="text-sm text-red-600 space-y-1">
+                          {payoutValidation.errors.map((error: string, index: number) => (
+                            <li key={index} className="flex items-start gap-1">
+                              <span className="text-red-500">•</span>
+                              {error}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {payoutValidation.warnings && payoutValidation.warnings.length > 0 && (
+                      <div className={payoutValidation.errors && payoutValidation.errors.length > 0 ? "mt-2" : ""}>
+                        <p className="text-xs text-muted-foreground mb-1">Warnings:</p>
+                        <ul className="text-sm text-amber-600 space-y-1">
+                          {payoutValidation.warnings.map((warning: string, index: number) => (
+                            <li key={index} className="flex items-start gap-1">
+                              <span className="text-amber-500">⚠</span>
+                              {warning}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {payoutValidation.isValid && (!payoutValidation.warnings || payoutValidation.warnings.length === 0) && (
+                      <p className="text-sm text-green-600">
+                        ✓ All payout details are valid and ready for processing
+                      </p>
+                    )}
+                    {payoutValidation.isValid && payoutValidation.warnings && payoutValidation.warnings.length > 0 && (
+                      <p className="text-sm text-green-600 mt-2">
+                        ✓ Payout details are valid but please review warnings above
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -918,7 +1113,7 @@ export const AffiliateDetailView: React.FC<AffiliateDetailViewProps> = ({
                   Page {conversionHistoryData.totalCount > 0 ? currentPageConversions : 0} of {totalPagesConversions}
                 </span>
                 <Button variant="outline" size="sm" asChild>
-                  <Link href={`/admin/affiliates/conversions?affiliateId=${affiliate.affiliate_id}`}>
+                  <Link href={`/admin/affiliates/conversions/list?affiliateId=${affiliate.affiliate_id}`}>
                     <CreditCard size={14} className="mr-2" /> View All Conversions
                   </Link>
                 </Button>
@@ -968,7 +1163,7 @@ export const AffiliateDetailView: React.FC<AffiliateDetailViewProps> = ({
                     ))
                   ) : paginatedPayouts && paginatedPayouts.length > 0 ? (
                     paginatedPayouts.map((payout) => (
-                      <TableRow key={payout.id}>
+                      <TableRow key={payout.payout_id}>
                         <TableCell>
                           {new Date(payout.created_at).toLocaleString()}
                         </TableCell>

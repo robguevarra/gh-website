@@ -7,6 +7,31 @@ export type Json =
   | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          operationName?: string
+          query?: string
+          variables?: Json
+          extensions?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       _prisma_migrations: {
@@ -558,6 +583,56 @@ export type Database = {
           },
         ]
       }
+      affiliate_bank_validations: {
+        Row: {
+          account_holder_name: string
+          account_number: string
+          affiliate_id: string | null
+          bank_code: string | null
+          created_at: string | null
+          id: string
+          payout_method: string
+          phone_number: string | null
+          validated_at: string | null
+          validation_response: Json | null
+          validation_status: string | null
+        }
+        Insert: {
+          account_holder_name: string
+          account_number: string
+          affiliate_id?: string | null
+          bank_code?: string | null
+          created_at?: string | null
+          id?: string
+          payout_method: string
+          phone_number?: string | null
+          validated_at?: string | null
+          validation_response?: Json | null
+          validation_status?: string | null
+        }
+        Update: {
+          account_holder_name?: string
+          account_number?: string
+          affiliate_id?: string | null
+          bank_code?: string | null
+          created_at?: string | null
+          id?: string
+          payout_method?: string
+          phone_number?: string | null
+          validated_at?: string | null
+          validation_response?: Json | null
+          validation_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_bank_validations_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       affiliate_clicks: {
         Row: {
           affiliate_id: string
@@ -733,53 +808,140 @@ export type Database = {
           },
         ]
       }
+      affiliate_payout_batches: {
+        Row: {
+          affiliate_count: number
+          conversion_count: number
+          created_at: string | null
+          fee_amount: number
+          id: string
+          name: string
+          net_amount: number
+          payout_method: string
+          processed_at: string | null
+          processing_log: Json | null
+          status: Database["public"]["Enums"]["payout_batch_status_type"]
+          total_amount: number
+          updated_at: string | null
+        }
+        Insert: {
+          affiliate_count?: number
+          conversion_count?: number
+          created_at?: string | null
+          fee_amount?: number
+          id?: string
+          name: string
+          net_amount?: number
+          payout_method: string
+          processed_at?: string | null
+          processing_log?: Json | null
+          status?: Database["public"]["Enums"]["payout_batch_status_type"]
+          total_amount?: number
+          updated_at?: string | null
+        }
+        Update: {
+          affiliate_count?: number
+          conversion_count?: number
+          created_at?: string | null
+          fee_amount?: number
+          id?: string
+          name?: string
+          net_amount?: number
+          payout_method?: string
+          processed_at?: string | null
+          processing_log?: Json | null
+          status?: Database["public"]["Enums"]["payout_batch_status_type"]
+          total_amount?: number
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      affiliate_payout_rules: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          rule_type: string
+          updated_at: string | null
+          value: Json
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          rule_type: string
+          updated_at?: string | null
+          value: Json
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          rule_type?: string
+          updated_at?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       affiliate_payouts: {
         Row: {
           affiliate_id: string
           amount: number
-          created_at: string
+          batch_id: string | null
+          created_at: string | null
           fee_amount: number | null
           id: string
           net_amount: number | null
-          payout_method: string
+          payout_method: string | null
           processed_at: string | null
           processing_notes: string | null
           reference: string | null
           scheduled_at: string | null
           status: Database["public"]["Enums"]["payout_status_type"]
           transaction_date: string | null
+          updated_at: string | null
           xendit_disbursement_id: string | null
         }
         Insert: {
           affiliate_id: string
           amount: number
-          created_at?: string
+          batch_id?: string | null
+          created_at?: string | null
           fee_amount?: number | null
           id?: string
           net_amount?: number | null
-          payout_method: string
-          processed_at?: string | null
-          processing_notes?: string | null
-          reference?: string | null
-          scheduled_at?: string | null
-          status: Database["public"]["Enums"]["payout_status_type"]
-          transaction_date?: string | null
-          xendit_disbursement_id?: string | null
-        }
-        Update: {
-          affiliate_id?: string
-          amount?: number
-          created_at?: string
-          fee_amount?: number | null
-          id?: string
-          net_amount?: number | null
-          payout_method?: string
+          payout_method?: string | null
           processed_at?: string | null
           processing_notes?: string | null
           reference?: string | null
           scheduled_at?: string | null
           status?: Database["public"]["Enums"]["payout_status_type"]
           transaction_date?: string | null
+          updated_at?: string | null
+          xendit_disbursement_id?: string | null
+        }
+        Update: {
+          affiliate_id?: string
+          amount?: number
+          batch_id?: string | null
+          created_at?: string | null
+          fee_amount?: number | null
+          id?: string
+          net_amount?: number | null
+          payout_method?: string | null
+          processed_at?: string | null
+          processing_notes?: string | null
+          reference?: string | null
+          scheduled_at?: string | null
+          status?: Database["public"]["Enums"]["payout_status_type"]
+          transaction_date?: string | null
+          updated_at?: string | null
           xendit_disbursement_id?: string | null
         }
         Relationships: [
@@ -788,6 +950,13 @@ export type Database = {
             columns: ["affiliate_id"]
             isOneToOne: false
             referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_payouts_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_payout_batches"
             referencedColumns: ["id"]
           },
         ]
@@ -827,33 +996,69 @@ export type Database = {
       }
       affiliates: {
         Row: {
+          account_holder_name: string | null
+          account_number: string | null
+          bank_account_verified: boolean | null
+          bank_code: string | null
+          bank_name: string | null
+          bank_verification_date: string | null
           commission_rate: number
           created_at: string
+          gcash_name: string | null
+          gcash_number: string | null
+          gcash_verification_date: string | null
+          gcash_verified: boolean | null
           id: string
           is_member: boolean
           parent_affiliate: string | null
+          payout_method: string | null
+          phone_number: string | null
           slug: string
           status: Database["public"]["Enums"]["affiliate_status_type"]
           updated_at: string
           user_id: string
         }
         Insert: {
+          account_holder_name?: string | null
+          account_number?: string | null
+          bank_account_verified?: boolean | null
+          bank_code?: string | null
+          bank_name?: string | null
+          bank_verification_date?: string | null
           commission_rate: number
           created_at?: string
+          gcash_name?: string | null
+          gcash_number?: string | null
+          gcash_verification_date?: string | null
+          gcash_verified?: boolean | null
           id?: string
           is_member?: boolean
           parent_affiliate?: string | null
+          payout_method?: string | null
+          phone_number?: string | null
           slug: string
           status?: Database["public"]["Enums"]["affiliate_status_type"]
           updated_at?: string
           user_id: string
         }
         Update: {
+          account_holder_name?: string | null
+          account_number?: string | null
+          bank_account_verified?: boolean | null
+          bank_code?: string | null
+          bank_name?: string | null
+          bank_verification_date?: string | null
           commission_rate?: number
           created_at?: string
+          gcash_name?: string | null
+          gcash_number?: string | null
+          gcash_verification_date?: string | null
+          gcash_verified?: boolean | null
           id?: string
           is_member?: boolean
           parent_affiliate?: string | null
+          payout_method?: string | null
+          phone_number?: string | null
           slug?: string
           status?: Database["public"]["Enums"]["affiliate_status_type"]
           updated_at?: string
@@ -2225,6 +2430,96 @@ export type Database = {
           },
         ]
       }
+      gcash_verifications: {
+        Row: {
+          address_proof_url: string | null
+          affiliate_id: string
+          created_at: string | null
+          current_step: string
+          expires_at: string | null
+          gcash_name: string
+          gcash_number: string
+          id: string
+          id_document_type: string | null
+          id_document_url: string | null
+          phone_verification_code: string | null
+          phone_verification_expires: string | null
+          phone_verified: boolean | null
+          rejection_reason: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          selfie_url: string | null
+          status: string
+          submitted_at: string | null
+          updated_at: string | null
+          verified_at: string | null
+        }
+        Insert: {
+          address_proof_url?: string | null
+          affiliate_id: string
+          created_at?: string | null
+          current_step?: string
+          expires_at?: string | null
+          gcash_name: string
+          gcash_number: string
+          id?: string
+          id_document_type?: string | null
+          id_document_url?: string | null
+          phone_verification_code?: string | null
+          phone_verification_expires?: string | null
+          phone_verified?: boolean | null
+          rejection_reason?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          selfie_url?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string | null
+          verified_at?: string | null
+        }
+        Update: {
+          address_proof_url?: string | null
+          affiliate_id?: string
+          created_at?: string | null
+          current_step?: string
+          expires_at?: string | null
+          gcash_name?: string
+          gcash_number?: string
+          id?: string
+          id_document_type?: string | null
+          id_document_url?: string | null
+          phone_verification_code?: string | null
+          phone_verification_expires?: string | null
+          phone_verified?: boolean | null
+          rejection_reason?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          selfie_url?: string | null
+          status?: string
+          submitted_at?: string | null
+          updated_at?: string | null
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gcash_verifications_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gcash_verifications_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "unified_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           amount: number
@@ -2844,54 +3139,6 @@ export type Database = {
             columns: ["conversion_id"]
             isOneToOne: false
             referencedRelation: "affiliate_conversions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "payout_items_payout_id_fkey"
-            columns: ["payout_id"]
-            isOneToOne: false
-            referencedRelation: "affiliate_payouts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      payouts: {
-        Row: {
-          affiliate_id: string
-          amount: number
-          id: string
-          processing_details: Json | null
-          requested_at: string
-          sent_at: string | null
-          status: Database["public"]["Enums"]["payout_status_type"]
-          xendit_batch_id: string | null
-        }
-        Insert: {
-          affiliate_id: string
-          amount: number
-          id?: string
-          processing_details?: Json | null
-          requested_at?: string
-          sent_at?: string | null
-          status?: Database["public"]["Enums"]["payout_status_type"]
-          xendit_batch_id?: string | null
-        }
-        Update: {
-          affiliate_id?: string
-          amount?: number
-          id?: string
-          processing_details?: Json | null
-          requested_at?: string
-          sent_at?: string | null
-          status?: Database["public"]["Enums"]["payout_status_type"]
-          xendit_batch_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "payouts_affiliate_id_fkey"
-            columns: ["affiliate_id"]
-            isOneToOne: false
-            referencedRelation: "affiliates"
             referencedColumns: ["id"]
           },
         ]
@@ -4832,6 +5079,17 @@ export type Database = {
           total_revenue: number
         }[]
       }
+      get_payout_batch_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          totalBatches: number
+          pendingBatches: number
+          processingBatches: number
+          completedBatches: number
+          failedBatches: number
+          totalAmount: number
+        }[]
+      }
       get_revenue_by_product: {
         Args: {
           p_start_date?: string
@@ -5100,7 +5358,20 @@ export type Database = {
       batch_status: "pending" | "processing" | "completed" | "failed"
       conversion_status_type: "pending" | "cleared" | "paid" | "flagged"
       email_status: "pending" | "processing" | "sent" | "failed" | "retrying"
-      payout_status_type: "processing" | "sent" | "failed"
+      payout_batch_status_type:
+        | "pending"
+        | "verified"
+        | "processing"
+        | "completed"
+        | "failed"
+      payout_status_type:
+        | "processing"
+        | "sent"
+        | "failed"
+        | "pending"
+        | "scheduled"
+        | "paid"
+        | "cancelled"
       postback_status_type: "pending" | "sent" | "failed" | "retrying"
     }
     CompositeTypes: {
@@ -5215,6 +5486,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       activity_log_type: [
@@ -5234,7 +5508,22 @@ export const Constants = {
       batch_status: ["pending", "processing", "completed", "failed"],
       conversion_status_type: ["pending", "cleared", "paid", "flagged"],
       email_status: ["pending", "processing", "sent", "failed", "retrying"],
-      payout_status_type: ["processing", "sent", "failed"],
+      payout_batch_status_type: [
+        "pending",
+        "verified",
+        "processing",
+        "completed",
+        "failed",
+      ],
+      payout_status_type: [
+        "processing",
+        "sent",
+        "failed",
+        "pending",
+        "scheduled",
+        "paid",
+        "cancelled",
+      ],
       postback_status_type: ["pending", "sent", "failed", "retrying"],
     },
   },

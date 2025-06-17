@@ -5,7 +5,16 @@ export type AffiliateStatusType = 'pending' | 'active' | 'flagged' | 'inactive';
 export type ConversionStatusType = 'pending' | 'cleared' | 'paid' | 'flagged';
 
 // Based on public.payout_method_type enum from Supabase schema (adjust if different)
-export type PayoutMethodType = 'paypal' | 'bank_transfer' | 'wise' | 'other';
+export type PayoutMethodType = 'paypal' | 'bank_transfer' | 'wise' | 'gcash' | 'other';
+
+// GCash verification status types
+export type GCashVerificationStatus = 
+  | 'unverified' 
+  | 'pending_documents' 
+  | 'pending_review' 
+  | 'verified' 
+  | 'rejected' 
+  | 'expired';
 
 // Based on public.payout_status_type enum from Supabase schema
 // Actual values from DB are: 'failed', 'processing', 'sent'
@@ -53,6 +62,17 @@ export interface AdminAffiliateListItem {
   tier_commission_rate?: number;  // From membership_levels.commission_rate via unified_profiles
   current_membership_level_id?: string | null; // The ID of the affiliate's current membership level from unified_profiles via unified_profiles
   joined_date: string;        // From affiliates.created_at (ISO string or formatted)
+  
+  // Payout information
+  payout_method?: string;     // From affiliates.payout_method
+  gcash_verified?: boolean;   // From affiliates.gcash_verified
+  gcash_verification_status?: GCashVerificationStatus; // From gcash_verifications.status
+  gcash_number?: string;      // From affiliates.gcash_number
+  gcash_name?: string;        // From affiliates.gcash_name
+  bank_account_verified?: boolean; // From affiliates.bank_account_verified
+  bank_name?: string;         // From affiliates.bank_name
+  account_number?: string;    // From affiliates.account_number
+  account_holder_name?: string; // From affiliates.account_holder_name
   
   // Aggregated data
   total_clicks: number;
@@ -255,6 +275,9 @@ export interface AffiliateProgramConfigData {
   terms_of_service_content?: string | null; // TEXT, can be null
   payout_schedule?: PayoutScheduleType | null; // Added
   payout_currency?: string | null;             // Added (e.g., 'USD', 'PHP')
+  enabled_payout_methods?: string[];          // Array of enabled payout methods
+  require_verification_for_bank_transfer?: boolean; // Whether bank transfers require verification
+  require_verification_for_gcash?: boolean;   // Whether GCash requires verification
   created_at: string; // TIMESTAMPTZ
   updated_at: string; // TIMESTAMPTZ
 }

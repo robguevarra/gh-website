@@ -344,7 +344,26 @@ export async function getAdminAffiliatePayoutById(payoutId: string): Promise<{
  * Represents a conversion that is eligible for payout with extra affiliate information.
  * Used by the payout preview system to display and process pending conversions.
  */
-export interface EligiblePayoutConversion extends AffiliateConversion {
+export interface EligiblePayoutConversion {
+  // From AffiliateConversion
+  id: string;
+  affiliate_id: string;
+  click_id?: string;
+  order_id: string;
+  customer_id?: string;
+  gmv: number;
+  commission_amount: number;
+  amount?: number;
+  commission?: number;
+  level?: number;
+  status: ConversionStatusType;
+  created_at: string;
+  updated_at: string;
+  date?: string;
+  product_name?: string;
+  customer_name?: string;
+  
+  // Additional properties
   affiliate_name: string;      // From unified_profiles.first_name + last_name
   affiliate_email: string;     // From unified_profiles.email
   affiliate_tier?: string;     // From membership_levels.name
@@ -372,19 +391,54 @@ export async function getEligiblePayouts(): Promise<{
   const supabase = getAdminClient();
   
   try {
-    // First, get all conversion IDs that are already assigned to payouts
-    const { data: assignedConversions, error: assignedError } = await supabase
-      .from('payout_items')
-      .select('conversion_id');
+    // Get conversion IDs that are part of valid, non-failed batches
+    // We need to do this in multiple steps due to Supabase query limitations
+    
+    // First, get all valid batch IDs (not failed)
+    const { data: validBatches, error: batchError } = await supabase
+      .from('affiliate_payout_batches')
+      .select('id')
+      .neq('status', 'failed');
 
-    if (assignedError) {
-      console.error('Error fetching assigned conversions:', assignedError);
-      return { affiliates: [], error: assignedError.message };
+    if (batchError) {
+      console.error('Error fetching valid batches:', batchError);
+      return { affiliates: [], error: batchError.message };
     }
 
-    const assignedConversionIds = assignedConversions?.map(item => item.conversion_id) || [];
+    const validBatchIds = validBatches?.map(batch => batch.id).filter(id => id !== null) || [];
+    
+    // Get payouts that belong to valid batches
+    let excludedConversionIds: string[] = [];
+    if (validBatchIds.length > 0) {
+      const { data: validPayouts, error: payoutError } = await supabase
+        .from('affiliate_payouts')
+        .select('id')
+        .in('batch_id', validBatchIds);
 
-    // Fetch cleared conversions that haven't been assigned to a payout yet
+      if (payoutError) {
+        console.error('Error fetching valid payouts:', payoutError);
+        return { affiliates: [], error: payoutError.message };
+      }
+
+      const validPayoutIds = validPayouts?.map(payout => payout.id).filter(id => id !== null) || [];
+      
+      // Get conversion IDs from valid payouts
+      if (validPayoutIds.length > 0) {
+        const { data: payoutItems, error: itemsError } = await supabase
+      .from('payout_items')
+          .select('conversion_id')
+          .in('payout_id', validPayoutIds);
+
+        if (itemsError) {
+          console.error('Error fetching payout items:', itemsError);
+          return { affiliates: [], error: itemsError.message };
+    }
+
+        excludedConversionIds = payoutItems?.map(item => item.conversion_id).filter(id => id !== null) || [];
+      }
+    }
+
+    // Fetch cleared conversions that haven't been assigned to valid payouts
     let query = supabase
       .from('affiliate_conversions')
       .select(`
@@ -410,9 +464,9 @@ export async function getEligiblePayouts(): Promise<{
       .eq('status', 'cleared')
       .order('created_at', { ascending: false });
 
-    // Exclude conversions that are already assigned to payouts
-    if (assignedConversionIds.length > 0) {
-      query = query.not('id', 'in', `(${assignedConversionIds.join(',')})`);
+    // Exclude conversions that are part of valid batches
+    if (excludedConversionIds.length > 0) {
+      query = query.not('id', 'in', `(${excludedConversionIds.join(',')})`);
     }
 
     const { data: conversions, error } = await query;
@@ -423,7 +477,7 @@ export async function getEligiblePayouts(): Promise<{
     }
 
     // Process conversions into required format
-    const eligibleConversions: EligiblePayoutConversion[] = conversions.map(conversion => {
+    const eligibleConversions: EligiblePayoutConversion[] = (conversions || []).map((conversion: any) => {
       const affiliateInfo = conversion.affiliates;
       const profile = affiliateInfo?.unified_profiles;
       
@@ -437,6 +491,7 @@ export async function getEligiblePayouts(): Promise<{
         affiliate_id: conversion.affiliate_id,
         click_id: conversion.click_id ?? '',
         order_id: conversion.order_id ?? '',
+
         gmv: conversion.gmv,
         commission_amount: conversion.commission_amount,
         status: conversion.status as ConversionStatusType,
@@ -498,6 +553,7 @@ export interface PayoutBatchPreview {
     affiliate_name: string;
     affiliate_email: string;
     tier_commission_rate?: number;
+    conversions: EligiblePayoutConversion[];
     total_amount: number;
     conversion_count: number;
     fee_amount: number;
@@ -541,7 +597,7 @@ function calculatePayoutFee(amount: number, payoutMethod: string = 'bank_transfe
  */
 export async function previewPayoutBatch({
   affiliateIds,
-  payoutMethod = 'bank_transfer'
+  payoutMethod = 'gcash'
 }: {
   affiliateIds?: string[];
   payoutMethod?: string;
@@ -549,7 +605,30 @@ export async function previewPayoutBatch({
   preview: PayoutBatchPreview | null;
   error: string | null;
 }> {
+  const supabase = getAdminClient();
+  
   try {
+    // Get admin settings for validation
+    const { data: adminSettings, error: settingsError } = await supabase
+      .from('affiliate_program_config')
+      .select('*')
+      .eq('id', 1)
+      .single();
+      
+    if (settingsError) {
+      return { preview: null, error: `Failed to load admin settings: ${settingsError.message}` };
+    }
+    
+    const minThreshold = (adminSettings as any)?.min_payout_threshold || 2000;
+    const enabledMethods = (adminSettings as any)?.enabled_payout_methods || ['gcash'];
+    const requireBankVerification = (adminSettings as any)?.require_verification_for_bank_transfer ?? true;
+    const requireGcashVerification = (adminSettings as any)?.require_verification_for_gcash ?? false;
+    
+    // Check if the selected payout method is enabled
+    if (!enabledMethods.includes(payoutMethod)) {
+      return { preview: null, error: `${payoutMethod === 'gcash' ? 'GCash' : 'Bank transfer'} payments are currently disabled by admin` };
+    }
+    
     // First fetch all eligible payouts
     const { affiliates, error } = await getEligiblePayouts();
     
@@ -564,6 +643,29 @@ export async function previewPayoutBatch({
         affiliateIds.includes(a.affiliate_id)
       );
     }
+    
+    // Use the new validation module for comprehensive validation
+    const { validatePayoutBatch } = await import('./payout-validation');
+    
+    const batchValidation = await validatePayoutBatch(filteredAffiliates, payoutMethod);
+    
+    if (!batchValidation.isValid) {
+      return { 
+        preview: null, 
+        error: `Validation failed for ${batchValidation.errors.length} affiliate(s):\n\n${batchValidation.errors.join('\n')}\n\nSummary: ${batchValidation.summary.valid}/${batchValidation.summary.total} affiliates passed validation.` 
+      };
+    }
+    
+    // Use only the validated affiliates (extract the affiliate data without validation metadata)
+    filteredAffiliates = batchValidation.validAffiliates.map(item => ({
+      affiliate_id: item.affiliate_id,
+      affiliate_name: item.affiliate_name,
+      affiliate_email: item.affiliate_email,
+      tier_commission_rate: item.tier_commission_rate,
+      total_amount: item.total_amount,
+      conversion_count: item.conversion_count,
+      conversions: [] // Will be populated later if needed
+    }));
     
     // Calculate fee and net amount for each affiliate
     const affiliatesWithFees = filteredAffiliates.map(affiliate => {
@@ -635,7 +737,7 @@ export interface CreatedPayoutBatch {
  */
 export async function createPayoutBatch({
   affiliateIds,
-  payoutMethod = 'bank_transfer',
+  payoutMethod = 'gcash',
   batchName
 }: {
   affiliateIds: string[];
@@ -865,7 +967,10 @@ export async function deletePayoutBatch(batchId: string): Promise<{ success: boo
  * This function handles the actual payment processing workflow.
  * @param batchId The ID of the batch to process.
  */
-export async function processPayoutBatch(batchId: string): Promise<{ success: boolean; error: string | null }> {
+export async function processPayoutBatch(
+  batchId: string, 
+  adminUserId?: string
+): Promise<{ success: boolean; error: string | null }> {
   const supabase = getAdminClient();
   try {
     // 1. Verify batch is in 'verified' status
@@ -913,13 +1018,15 @@ export async function processPayoutBatch(batchId: string): Promise<{ success: bo
 
     // 4. Process payouts via Xendit
     const payoutIds = payouts.map(p => p.id);
+    const finalAdminUserId = adminUserId || '8f8f67ff-7a2c-4515-82d1-214bb8807932'; // Default to Rob's admin ID
     const { successes, failures, error: xenditError } = await processPayoutsViaXendit({
       payoutIds,
-      adminUserId: 'system' // TODO: Get actual admin user ID
+      adminUserId: finalAdminUserId
     });
 
     // 5. Log the results
     await logAdminActivity({
+      admin_user_id: finalAdminUserId, // Pass proper admin user ID
       activity_type: 'GENERAL_ADMIN_ACTION',
       description: `Processed payout batch`,
       details: { 
@@ -1026,10 +1133,12 @@ export async function getAdminAffiliatePayoutBatchStats(): Promise<{
  */
 export async function verifyPayoutBatch({
   batchId,
-  verificationNotes
+  verificationNotes,
+  adminUserId
 }: {
   batchId: string;
   verificationNotes?: string;
+  adminUserId?: string;
 }): Promise<{ success: boolean; error: string | null }> {
   const supabase = getAdminClient();
   
@@ -1055,6 +1164,7 @@ export async function verifyPayoutBatch({
       .insert([{
         target_entity_type: 'payout_batch',
         target_entity_id: batchId,
+        admin_user_id: adminUserId || '8f8f67ff-7a2c-4515-82d1-214bb8807932', // Rob's admin ID if not provided
         verification_type: 'batch_verification',
         is_verified: true,
         notes: verificationNotes || null,
@@ -1077,6 +1187,7 @@ export async function verifyPayoutBatch({
 
     // 4. Log admin activity
     await logAdminActivity({
+      admin_user_id: adminUserId || '8f8f67ff-7a2c-4515-82d1-214bb8807932', // Pass proper admin user ID
       activity_type: 'GENERAL_ADMIN_ACTION',
       description: `Verified payout batch`,
       details: { 
@@ -1438,9 +1549,16 @@ export async function processPayoutsViaXendit({
         net_amount,
         affiliates (
           id,
+          payout_method,
           bank_code,
-          bank_account_number,
-          bank_account_name,
+          bank_name,
+          account_number,
+          account_holder_name,
+          phone_number,
+          bank_account_verified,
+          gcash_number,
+          gcash_name,
+          gcash_verified,
           unified_profiles!affiliates_user_id_fkey (
             email,
             first_name,
@@ -1474,13 +1592,55 @@ export async function processPayoutsViaXendit({
     // Process each payout through Xendit
     for (const payout of payouts) {
       try {
-        // Validate required bank information
-        if (!payout.affiliates?.bank_code || 
-            !payout.affiliates?.bank_account_number || 
-            !payout.affiliates?.bank_account_name) {
+        // Validate affiliate payout details
+        const validation = await validateAffiliatePayoutDetails(payout.affiliate_id);
+        
+        if (!validation.isValid) {
           failures.push({
             payoutId: payout.id,
-            error: 'Missing required bank information for affiliate',
+            error: `Invalid payout details: ${validation.errors.filter(e => !e.startsWith('⚠️')).join(', ')}`,
+          });
+          continue;
+        }
+        
+        // Get the affiliate's preferred payout method
+        const payoutMethod = payout.affiliates?.payout_method || 'gcash';
+        
+        // Prepare payout details based on method
+        let channelCode: string;
+        let accountNumber: string;
+        let accountHolderName: string;
+        
+        if (payoutMethod === 'gcash') {
+          // GCash payout configuration
+          channelCode = 'PH_GCASH';
+          accountNumber = payout.affiliates?.gcash_number || '';
+          accountHolderName = payout.affiliates?.gcash_name || '';
+          
+          if (!accountNumber || !accountHolderName) {
+            failures.push({
+              payoutId: payout.id,
+              error: 'Missing GCash details (number or account holder name)',
+            });
+            continue;
+          }
+        } else if (payoutMethod === 'bank_transfer') {
+          // Traditional bank transfer
+          channelCode = payout.affiliates?.bank_code || '';
+          accountNumber = payout.affiliates?.account_number || '';
+          accountHolderName = payout.affiliates?.account_holder_name || '';
+          
+          if (!channelCode || !accountNumber || !accountHolderName) {
+            failures.push({
+              payoutId: payout.id,
+              error: 'Missing bank transfer details (code, account number, or holder name)',
+            });
+            continue;
+          }
+        } else {
+          failures.push({
+            payoutId: payout.id,
+            error: `Unsupported payout method: ${payoutMethod}`,
           });
           continue;
         }
@@ -1493,11 +1653,11 @@ export async function processPayoutsViaXendit({
           id: payout.id,
           affiliate_id: payout.affiliate_id,
           amount: payout.net_amount || payout.amount, // Use net amount after fees
-          channel_code: payout.affiliates.bank_code, // This should be PH_* format
-          account_number: payout.affiliates.bank_account_number,
-          account_holder_name: payout.affiliates.bank_account_name,
+          channel_code: channelCode, // PH_GCASH or bank code
+          account_number: accountNumber, // Phone number for GCash or account number for bank
+          account_holder_name: accountHolderName, // Name matching the account
           reference: externalId,
-          description: `Affiliate commission payout for ${payout.affiliates.unified_profiles?.first_name || ''} ${payout.affiliates.unified_profiles?.last_name || ''}`.trim(),
+          description: `${payoutMethod === 'gcash' ? 'GCash' : 'Bank'} payout for ${payout.affiliates.unified_profiles?.first_name || ''} ${payout.affiliates.unified_profiles?.last_name || ''}`.trim(),
           affiliate_email: payout.affiliates.unified_profiles?.email,
         });
 
@@ -1536,16 +1696,18 @@ export async function processPayoutsViaXendit({
         // Log admin activity
         await logAdminActivity({
           admin_user_id: adminUserId,
-          action: 'payout_sent_to_xendit',
-          target_type: 'payout',
-          target_id: payout.id,
+          activity_type: 'AFFILIATE_PAYOUT_PROCESSED',
+          description: 'Payout sent to Xendit for processing',
           details: {
             xendit_disbursement_id: xenditResponse.id,
             external_id: externalId,
             amount: payout.amount,
             net_amount: payout.net_amount,
             affiliate_id: payout.affiliate_id,
-            bank_code: payout.affiliates.bank_code,
+            payout_method: payoutMethod,
+            channel_code: channelCode,
+            account_number: accountNumber.replace(/(\d{2})\d+(\d{4})/, '$1****$2'), // Mask sensitive info
+            account_holder_name: accountHolderName,
           },
         });
 
@@ -1711,7 +1873,7 @@ export async function syncXenditPayoutStatus({
           continue;
         }
 
-        // Map Xendit status to our internal status
+        // Map Xendit status to our internal status using fixed XenditUtils
         const newStatus = XenditUtils.mapStatusToInternal(xenditResponse.status);
         
         // Only update if status has changed
@@ -1722,9 +1884,10 @@ export async function syncXenditPayoutStatus({
           };
 
           // Set appropriate timestamps based on status
-          if (xenditResponse.status === 'COMPLETED') {
+          // Fix: Check for SUCCEEDED, not COMPLETED
+          if (xenditResponse.status === 'SUCCEEDED') {
             updateData.processed_at = new Date().toISOString();
-          } else if (xenditResponse.status === 'FAILED') {
+          } else if (['FAILED', 'CANCELLED'].includes(xenditResponse.status)) {
             updateData.failed_at = new Date().toISOString();
             updateData.failure_reason = xenditResponse.failure_code || 'Unknown failure';
           }
@@ -1745,9 +1908,8 @@ export async function syncXenditPayoutStatus({
           // Log the sync activity
           await logAdminActivity({
             admin_user_id: adminUserId,
-            action: 'payout_status_synced',
-            target_type: 'payout',
-            target_id: payout.id,
+            activity_type: 'GENERAL_ADMIN_ACTION',
+            description: 'Synced payout status with Xendit',
             details: {
               previous_status: payout.status,
               new_status: newStatus,
@@ -1834,9 +1996,14 @@ export async function payAffiliateNow({
         id,
         user_id,
         payout_method,
+        bank_code,
         bank_name,
         account_number,
         account_holder_name,
+        gcash_number,
+        gcash_name,
+        gcash_verified,
+        bank_account_verified,
         unified_profiles!affiliates_user_id_fkey (
           email,
           first_name,
@@ -1850,6 +2017,15 @@ export async function payAffiliateNow({
       throw new Error('Affiliate not found');
     }
     
+    // Validate affiliate payout details before processing
+    const validation = await validateAffiliatePayoutDetails(affiliateId);
+    if (!validation.isValid) {
+      const criticalErrors = validation.errors.filter(e => !e.startsWith('⚠️'));
+      if (criticalErrors.length > 0) {
+        throw new Error(`Cannot process payout: ${criticalErrors.join(', ')}`);
+      }
+    }
+    
     // Create immediate payout record
     const { data: payout, error: payoutError } = await supabase
       .from('affiliate_payouts')
@@ -1857,8 +2033,12 @@ export async function payAffiliateNow({
         affiliate_id: affiliateId,
         amount: totalAmount,
         status: 'pending',
-        payout_method: affiliate.payout_method || 'bank_transfer',
-        processing_notes: `Emergency payout processed by admin on ${new Date().toLocaleDateString()}. Bank: ${affiliate.bank_name || 'N/A'}, Account: ${affiliate.account_number || 'N/A'}, Holder: ${affiliate.account_holder_name || 'N/A'}`,
+        payout_method: affiliate.payout_method || 'gcash',
+        processing_notes: `Emergency payout processed by admin on ${new Date().toLocaleDateString()}. Method: ${affiliate.payout_method || 'gcash'}${
+          affiliate.payout_method === 'gcash' 
+            ? `, GCash: ${affiliate.gcash_number || 'N/A'}, Name: ${affiliate.gcash_name || 'N/A'}` 
+            : `, Bank: ${affiliate.bank_name || 'N/A'}, Account: ${affiliate.account_number || 'N/A'}, Holder: ${affiliate.account_holder_name || 'N/A'}`
+        }`,
         scheduled_at: new Date().toISOString(),
       })
       .select('id')
@@ -2177,6 +2357,8 @@ export async function exportBatchReport({
   error: string | null;
 }> {
   try {
+    // Import the function from conversion-actions
+    const { getBatchPreviewData } = await import('@/lib/actions/admin/conversion-actions');
     const { batch, error } = await getBatchPreviewData();
     
     if (error || !batch) {
@@ -2260,6 +2442,8 @@ export async function generatePaymentFiles(): Promise<{
   error: string | null;
 }> {
   try {
+    // Import the function from conversion-actions
+    const { getBatchPreviewData } = await import('@/lib/actions/admin/conversion-actions');
     const { batch, error } = await getBatchPreviewData();
     
     if (error || !batch) {
@@ -2328,7 +2512,11 @@ export async function approveBatch({
 }: {
   adminUserId: string;
 }): Promise<{ success: boolean; error: string | null; batchId?: string }> {
+  const supabase = getAdminClient();
+  
   try {
+    // Import the function from conversion-actions
+    const { getBatchPreviewData } = await import('@/lib/actions/admin/conversion-actions');
     const { batch, error } = await getBatchPreviewData();
     
     if (error || !batch) {
@@ -2353,6 +2541,32 @@ export async function approveBatch({
       };
     }
     
+    // Check if we already have a pending/verified batch for this month
+    const batchName = `${batch.month} Approved Batch`;
+    const { data: existingBatch, error: checkError } = await supabase
+      .from('affiliate_payout_batches')
+      .select('id, status')
+      .eq('name', batchName)
+      .in('status', ['pending', 'verified', 'processing'])
+      .maybeSingle();
+    
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      console.error('Error checking for existing batch:', checkError);
+      return {
+        success: false,
+        error: 'Failed to check for existing batches'
+      };
+    }
+    
+    // If batch already exists, return success with existing batch ID
+    if (existingBatch) {
+      return {
+        success: true,
+        error: null,
+        batchId: existingBatch.id
+      };
+    }
+    
     // Create approved batch using existing functionality
     const eligibleAffiliates = batch.affiliate_payouts
       .filter(a => a.cleared_count > 0)
@@ -2360,8 +2574,8 @@ export async function approveBatch({
       
     const { batch: createdBatch, error: createError } = await createPayoutBatch({
       affiliateIds: eligibleAffiliates,
-      payoutMethod: 'bank_transfer',
-      batchName: `${batch.month} Approved Batch`
+      payoutMethod: 'gcash', // Use GCash as default, not bank_transfer
+      batchName
     });
     
     if (createError || !createdBatch) {
@@ -2374,12 +2588,19 @@ export async function approveBatch({
     // Immediately verify the batch since it's been manually approved
     const { success: verifySuccess, error: verifyError } = await verifyPayoutBatch({
       batchId: createdBatch.id,
-      verificationNotes: `Manually approved by admin from batch preview on ${new Date().toLocaleDateString()}`
+      verificationNotes: `Manually approved by admin from batch preview on ${new Date().toLocaleDateString()}`,
+      adminUserId
     });
     
     if (!verifySuccess) {
       console.error('Failed to verify batch after creation:', verifyError);
     }
+    
+    // Set processed_at timestamp since this is an approved batch
+    await supabase
+      .from('affiliate_payout_batches')
+      .update({ processed_at: new Date().toISOString() })
+      .eq('id', createdBatch.id);
     
     // Log admin activity
     await logAdminActivity({
@@ -2410,3 +2631,189 @@ export async function approveBatch({
     };
   }
 } 
+
+/**
+ * Validate affiliate payout details based on payout method
+ * Ensures all required information is present before processing payments
+ */
+export async function validateAffiliatePayoutDetails(affiliateId: string): Promise<{
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  payoutMethod: string;
+  details: {
+    gcash?: { number: string; name: string; verified: boolean };
+    bank?: { code: string; name: string; accountNumber: string; accountHolderName: string; verified: boolean };
+  };
+}> {
+  const supabase = getAdminClient();
+  
+  try {
+    // Get admin settings for payment methods
+    const { data: adminSettings, error: settingsError } = await supabase
+      .from('affiliate_program_config')
+      .select('enabled_payout_methods, require_verification_for_bank_transfer, require_verification_for_gcash')
+      .eq('id', 1)
+      .single();
+      
+    if (settingsError) {
+      console.error('Error fetching admin settings:', settingsError);
+    }
+    
+    const enabledMethods = adminSettings?.enabled_payout_methods || ['gcash'];
+    const requireBankVerification = adminSettings?.require_verification_for_bank_transfer ?? true;
+    const requireGcashVerification = adminSettings?.require_verification_for_gcash ?? false;
+    
+    // Get affiliate payout information
+    const { data: affiliate, error: affiliateError } = await supabase
+      .from('affiliates')
+      .select(`
+        id,
+        payout_method,
+        bank_code,
+        bank_name,
+        account_number,
+        account_holder_name,
+        phone_number,
+        bank_account_verified,
+        bank_verification_date,
+        gcash_number,
+        gcash_name,
+        gcash_verified,
+        gcash_verification_date,
+        unified_profiles!affiliates_user_id_fkey (
+          email,
+          first_name,
+          last_name
+        )
+      `)
+      .eq('id', affiliateId)
+      .single();
+      
+          if (affiliateError || !affiliate) {
+      return {
+        isValid: false,
+        errors: ['Affiliate not found'],
+        warnings: [],
+        payoutMethod: 'unknown',
+        details: {}
+      };
+    }
+    
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    const payoutMethod = affiliate.payout_method || 'gcash'; // Default to GCash
+    
+    // Check if the selected payout method is enabled by admin
+    if (!enabledMethods.includes(payoutMethod)) {
+      errors.push(`${payoutMethod === 'gcash' ? 'GCash' : 'Bank transfer'} payments are currently disabled by admin`);
+      return {
+        isValid: false,
+        errors,
+        warnings,
+        payoutMethod,
+        details: {}
+      };
+    }
+    
+    // Validate based on payout method
+    if (payoutMethod === 'gcash') {
+      // GCash validation - primary method for Philippines
+      if (!affiliate.gcash_number) {
+        errors.push('GCash mobile number is required');
+      } else {
+        // Validate Philippine mobile number format (09XXXXXXXXX)
+        const gcashNumberRegex = /^09\d{9}$/;
+        if (!gcashNumberRegex.test(affiliate.gcash_number)) {
+          errors.push('GCash number must be in format 09XXXXXXXXX (11 digits starting with 09)');
+        }
+      }
+      
+      if (!affiliate.gcash_name || affiliate.gcash_name.trim().length < 2) {
+        errors.push('GCash account holder name is required');
+      }
+      
+      // Check verification requirements based on admin settings
+      if (requireGcashVerification && !affiliate.gcash_verified) {
+        errors.push('GCash account verification is required before payouts can be processed');
+      } else if (!affiliate.gcash_verified) {
+        warnings.push('GCash account not verified - payouts may fail if name/number mismatch');
+      }
+      
+      return {
+        isValid: errors.length === 0,
+        errors,
+        warnings,
+        payoutMethod,
+        details: {
+          gcash: {
+            number: affiliate.gcash_number || '',
+            name: affiliate.gcash_name || '',
+            verified: affiliate.gcash_verified || false
+          }
+        }
+      };
+      
+    } else if (payoutMethod === 'bank_transfer') {
+      // Traditional bank transfer validation
+      if (!affiliate.bank_code) {
+        errors.push('Bank code is required for bank transfers');
+      }
+      
+      if (!affiliate.account_number) {
+        errors.push('Bank account number is required');
+      }
+      
+      if (!affiliate.account_holder_name || affiliate.account_holder_name.trim().length < 2) {
+        errors.push('Bank account holder name is required');
+      }
+      
+      if (!affiliate.bank_name) {
+        errors.push('Bank name is required');
+      }
+      
+      // Check verification requirements based on admin settings
+      if (requireBankVerification && !affiliate.bank_account_verified) {
+        errors.push('Bank account verification is required before payouts can be processed');
+      } else if (!affiliate.bank_account_verified) {
+        warnings.push('Bank account not verified - payouts may fail if details are incorrect');
+      }
+      
+      return {
+        isValid: errors.length === 0,
+        errors,
+        warnings,
+        payoutMethod,
+        details: {
+          bank: {
+            code: affiliate.bank_code || '',
+            name: affiliate.bank_name || '',
+            accountNumber: affiliate.account_number || '',
+            accountHolderName: affiliate.account_holder_name || '',
+            verified: affiliate.bank_account_verified || false
+          }
+        }
+      };
+      
+    } else {
+      errors.push(`Unsupported payout method: ${payoutMethod}. Please use 'gcash' or 'bank_transfer'`);
+      return {
+        isValid: false,
+        errors,
+        warnings: [],
+        payoutMethod,
+        details: {}
+      };
+    }
+    
+  } catch (error) {
+    console.error('Error validating affiliate payout details:', error);
+    return {
+      isValid: false,
+      errors: ['Failed to validate payout details'],
+      warnings: [],
+      payoutMethod: 'unknown',
+      details: {}
+    };
+  }
+}

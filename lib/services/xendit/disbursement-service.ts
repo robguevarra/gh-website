@@ -364,14 +364,14 @@ class XenditPayoutService {
   /**
    * Map Xendit v2 status to our internal status
    */
-  mapStatusToInternal(xenditStatus: string): 'processing' | 'completed' | 'failed' {
+  mapStatusToInternal(xenditStatus: string): 'processing' | 'paid' | 'failed' {
     switch (xenditStatus.toUpperCase()) {
       case 'ACCEPTED':
       case 'PENDING':
       case 'LOCKED':
         return 'processing';
       case 'SUCCEEDED':
-        return 'completed';
+        return 'paid'; // Fix: Use 'paid' instead of 'completed' for payout status
       case 'CANCELLED':
       case 'FAILED':
         return 'failed';
@@ -419,7 +419,7 @@ export const XenditUtils = {
   /**
    * Map Xendit status to our internal status
    */
-  mapStatusToInternal(xenditStatus: string): 'processing' | 'completed' | 'failed' {
+  mapStatusToInternal(xenditStatus: string): 'processing' | 'paid' | 'failed' {
     return xenditPayoutService.mapStatusToInternal(xenditStatus);
   },
 

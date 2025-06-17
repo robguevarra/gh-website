@@ -1,6 +1,6 @@
 'use server';
 
-import type { AffiliateClick, AffiliateConversion, ConversionStatusType, AffiliatePayout, PayoutMethodType } from '@/types/admin/affiliate';
+import type { AffiliateClick, AffiliateConversion, ConversionStatusType, AdminAffiliatePayout, PayoutMethodType } from '@/types/admin/affiliate';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { unstable_cache } from 'next/cache';
 
@@ -25,7 +25,12 @@ interface GetAffiliateClicksResult {
  * Cached with a 60-second revalidation period
  */
 export async function getAffiliateClicks(params: GetAffiliateClicksParams): Promise<GetAffiliateClicksResult> {
-  return getAffiliateClicksWithCache(params);
+  try {
+    return await getAffiliateClicksWithCache(params);
+  } catch (error) {
+    console.error('Error in getAffiliateClicks wrapper:', error);
+    return { data: [], error: 'Failed to fetch clicks', totalCount: 0 };
+  }
 }
 
 // Cached implementation that's called by the exported function
@@ -64,7 +69,7 @@ const getAffiliateClicksWithCache = unstable_cache(
 
     if (error) {
       console.error('Error fetching affiliate clicks:', error);
-      return { data: null, error: error.message, totalCount: 0 };
+      return { data: [], error: error.message, totalCount: 0 };
     }
 
     // The 'data' from Supabase query should align with AffiliateClick.
@@ -76,7 +81,7 @@ const getAffiliateClicksWithCache = unstable_cache(
 
   } catch (err: any) {
     console.error('Unexpected error in getAffiliateClicks:', err);
-    return { data: null, error: err.message || 'An unexpected error occurred', totalCount: 0 };
+    return { data: [], error: err.message || 'An unexpected error occurred', totalCount: 0 };
   }
 },
 ['affiliate-clicks', 'affiliate-data'],
@@ -106,7 +111,12 @@ interface GetAffiliateConversionsResult {
  * Cached with a 60-second revalidation period
  */
 export async function getAffiliateConversions(params: GetAffiliateConversionsParams): Promise<GetAffiliateConversionsResult> {
-  return getAffiliateConversionsWithCache(params);
+  try {
+    return await getAffiliateConversionsWithCache(params);
+  } catch (error) {
+    console.error('Error in getAffiliateConversions wrapper:', error);
+    return { data: [], error: 'Failed to fetch conversions', totalCount: 0 };
+  }
 }
 
 // Cached implementation that's called by the exported function
@@ -142,14 +152,14 @@ const getAffiliateConversionsWithCache = unstable_cache(
 
     if (error) {
       console.error('Error fetching affiliate conversions:', error);
-      return { data: null, error: error.message, totalCount: 0 };
+      return { data: [], error: error.message, totalCount: 0 };
     }
 
     return { data: data as AffiliateConversion[], error: null, totalCount: count ?? 0 };
 
   } catch (err: any) {
     console.error('Unexpected error in getAffiliateConversions:', err);
-    return { data: null, error: err.message || 'An unexpected error occurred', totalCount: 0 };
+    return { data: [], error: err.message || 'An unexpected error occurred', totalCount: 0 };
   }
 },
 ['affiliate-conversions', 'affiliate-data'],
@@ -169,7 +179,7 @@ interface GetAffiliatePayoutsParams {
 }
 
 interface GetAffiliatePayoutsResult {
-  data: AffiliatePayout[] | null;
+  data: AdminAffiliatePayout[] | null;
   error: string | null;
   totalCount: number;
 }
@@ -179,7 +189,12 @@ interface GetAffiliatePayoutsResult {
  * Cached with a 60-second revalidation period
  */
 export async function getAffiliatePayouts(params: GetAffiliatePayoutsParams): Promise<GetAffiliatePayoutsResult> {
-  return getAffiliatePayoutsWithCache(params);
+  try {
+    return await getAffiliatePayoutsWithCache(params);
+  } catch (error) {
+    console.error('Error in getAffiliatePayouts wrapper:', error);
+    return { data: [], error: 'Failed to fetch payouts', totalCount: 0 };
+  }
 }
 
 // Cached implementation that's called by the exported function
@@ -196,7 +211,31 @@ const getAffiliatePayoutsWithCache = unstable_cache(
 
     let query = supabase
       .from('affiliate_payouts')
-      .select('*', { count: 'exact' })
+      .select(`
+        id,
+        affiliate_id,
+        amount,
+        status,
+        payout_method,
+        reference,
+        transaction_date,
+        created_at,
+        scheduled_at,
+        processed_at,
+        xendit_disbursement_id,
+        processing_notes,
+        fee_amount,
+        net_amount,
+        batch_id,
+        affiliates (
+          user_id,
+          unified_profiles!affiliates_user_id_fkey (
+            first_name,
+            last_name,
+            email
+          )
+        )
+      `, { count: 'exact' })
       .eq('affiliate_id', affiliateId);
 
     if (filters.method) {
@@ -218,7 +257,28 @@ const getAffiliatePayoutsWithCache = unstable_cache(
       return { data: null, error: error.message, totalCount: 0 };
     }
 
-    return { data: data as AffiliatePayout[], error: null, totalCount: count ?? 0 };
+    // Transform the data to match AdminAffiliatePayout interface
+    const transformedData: AdminAffiliatePayout[] = (data || []).map((p: any) => ({
+      payout_id: p.id,
+      affiliate_id: p.affiliate_id,
+      affiliate_name: p.affiliates?.unified_profiles ? `${p.affiliates.unified_profiles.first_name || ''} ${p.affiliates.unified_profiles.last_name || ''}`.trim() || 'N/A' : 'N/A',
+      affiliate_email: p.affiliates?.unified_profiles?.email || 'N/A',
+      amount: p.amount,
+      status: p.status,
+      payout_method: p.payout_method || 'bank_transfer',
+      reference: p.reference,
+      transaction_date: p.transaction_date,
+      created_at: p.created_at,
+      scheduled_at: p.scheduled_at,
+      processed_at: p.processed_at,
+      xendit_disbursement_id: p.xendit_disbursement_id,
+      processing_notes: p.processing_notes,
+      fee_amount: p.fee_amount,
+      net_amount: p.net_amount,
+      batch_id: p.batch_id,
+    }));
+
+    return { data: transformedData, error: null, totalCount: count ?? 0 };
 
   } catch (err: any) {
     console.error('Unexpected error in getAffiliatePayouts:', err);

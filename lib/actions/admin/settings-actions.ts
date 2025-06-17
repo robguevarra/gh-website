@@ -16,6 +16,9 @@ export interface UpdateAffiliateProgramSettingsArgs {
   terms_of_service_content?: string | null;
   payout_schedule?: PayoutScheduleType | null; // Added
   payout_currency?: string | null; // Added
+  enabled_payout_methods?: string[]; // Array of enabled payout methods
+  require_verification_for_bank_transfer?: boolean; // Whether bank transfers require verification
+  require_verification_for_gcash?: boolean; // Whether GCash requires verification
 }
 
 const DEFAULT_SETTINGS_FALLBACK: Omit<
@@ -26,7 +29,10 @@ const DEFAULT_SETTINGS_FALLBACK: Omit<
   min_payout_threshold: 50,
   terms_of_service_content: null,
   payout_schedule: 'monthly', // Default payout schedule
-  payout_currency: 'USD', // Default payout currency
+  payout_currency: 'PHP', // Default payout currency for Philippines
+  enabled_payout_methods: ['gcash'], // Default to GCash only
+  require_verification_for_bank_transfer: true, // Bank transfers require verification
+  require_verification_for_gcash: false, // GCash doesn't require verification by default
 };
 
 /**
@@ -141,6 +147,15 @@ export async function updateAffiliateProgramSettings(
   }
   if (settings.payout_currency !== undefined) {
     dbUpdateData.payout_currency = settings.payout_currency;
+  }
+  if (settings.enabled_payout_methods !== undefined) {
+    dbUpdateData.enabled_payout_methods = settings.enabled_payout_methods;
+  }
+  if (settings.require_verification_for_bank_transfer !== undefined) {
+    dbUpdateData.require_verification_for_bank_transfer = settings.require_verification_for_bank_transfer;
+  }
+  if (settings.require_verification_for_gcash !== undefined) {
+    dbUpdateData.require_verification_for_gcash = settings.require_verification_for_gcash;
   }
 
   if (Object.keys(dbUpdateData).length === 0) {

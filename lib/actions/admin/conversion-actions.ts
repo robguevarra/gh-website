@@ -22,6 +22,7 @@ export interface AdminConversion {
   order_id?: string;
   days_pending?: number;
   fraud_score?: number;
+  payout_id?: string | null;
 }
 
 export interface ConversionStats {
@@ -94,14 +95,10 @@ export async function getAdminConversions({
         created_at,
         order_id,
         sub_id,
-        affiliates (
+        payout_id,
+        affiliates!inner (
           user_id,
-          commission_rate,
-          unified_profiles!affiliates_user_id_fkey (
-            first_name,
-            last_name,
-            email
-          )
+          commission_rate
         )
       `,
         { count: 'exact' }
@@ -127,7 +124,14 @@ export async function getAdminConversions({
       query = query.lte('commission_amount', filters.maxAmount);
     }
     if (filters.orderId) {
-      query = query.ilike('order_id', `%${filters.orderId}%`);
+      // For UUID fields, use exact match or cast to text for partial matching
+      if (filters.orderId.length === 36 && filters.orderId.includes('-')) {
+        // Looks like a full UUID, use exact match
+        query = query.eq('order_id', filters.orderId);
+      } else {
+        // Partial search, cast UUID to text
+        query = query.ilike('order_id::text', `%${filters.orderId}%`);
+      }
     }
     // Note: customerEmail filter removed as customer_email column doesn't exist in current schema
 
@@ -145,19 +149,36 @@ export async function getAdminConversions({
       throw error;
     }
 
+    // Get unique user IDs to fetch profile data
+    const userIds = [...new Set((rawConversions || []).map((c: any) => c.affiliates?.user_id).filter(Boolean))];
+    
+    // Fetch profile data separately
+    const { data: profiles } = await supabase
+      .from('unified_profiles')
+      .select('id, first_name, last_name, email')
+      .in('id', userIds);
+
+    // Create a map for quick profile lookup
+    const profileMap = new Map();
+    (profiles || []).forEach((profile: any) => {
+      profileMap.set(profile.id, profile);
+    });
+
     // Transform data to match AdminConversion interface
     const transformedData: AdminConversion[] = (rawConversions || []).map((c: any) => {
       const daysPending = c.status === 'pending' && c.created_at
         ? Math.floor((new Date().getTime() - new Date(c.created_at).getTime()) / (1000 * 60 * 60 * 24))
         : undefined;
 
+      const profile = profileMap.get(c.affiliates?.user_id);
+
       return {
         conversion_id: c.id,
         affiliate_id: c.affiliate_id,
-        affiliate_name: c.affiliates?.unified_profiles 
-          ? `${c.affiliates.unified_profiles.first_name || ''} ${c.affiliates.unified_profiles.last_name || ''}`.trim() || 'N/A'
+        affiliate_name: profile 
+          ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'N/A'
           : 'N/A',
-        affiliate_email: c.affiliates?.unified_profiles?.email || 'N/A',
+        affiliate_email: profile?.email || 'N/A',
         conversion_value: c.gmv || 0, // GMV is the actual conversion value
         commission_amount: c.commission_amount || 0,
         commission_rate: c.affiliates?.commission_rate || 0, // Commission rate comes from affiliates table
@@ -170,6 +191,7 @@ export async function getAdminConversions({
         order_id: c.order_id,
         days_pending: daysPending,
         fraud_score: undefined, // Not available in current schema
+        payout_id: c.payout_id,
       };
     });
 
@@ -181,6 +203,10 @@ export async function getAdminConversions({
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred while fetching conversions.';
     console.error('getAdminConversions error:', errorMessage);
+    console.error('getAdminConversions error details:', err);
+    console.error('getAdminConversions filters:', filters);
+    console.error('getAdminConversions pagination:', pagination);
+    console.error('getAdminConversions sort:', sort);
     return {
       data: [],
       totalCount: 0,
@@ -581,7 +607,38 @@ export interface BatchPreviewData {
     flagged_count: number;
     cleared_count: number;
     pending_count: number;
+    is_eligible: boolean;
+    rejection_reasons: string[];
+    payout_method: 'bank_transfer' | 'gcash' | null;
+    has_payment_details: boolean;
+    is_verified: boolean;
   }>;
+  ineligible_affiliates: Array<{
+    affiliate_id: string;
+    affiliate_name: string;
+    email: string;
+    conversions_count: number;
+    total_commission: number;
+    average_commission: number;
+    join_date: string;
+    flagged_count: number;
+    cleared_count: number;
+    pending_count: number;
+    is_eligible: boolean;
+    rejection_reasons: string[];
+    payout_method: 'bank_transfer' | 'gcash' | null;
+    has_payment_details: boolean;
+    is_verified: boolean;
+  }>;
+  validation_summary: {
+    total_affiliates_with_conversions: number;
+    eligible_count: number;
+    ineligible_count: number;
+    total_eligible_amount: number;
+    total_ineligible_amount: number;
+    min_threshold: number;
+    enabled_methods: string[];
+  };
   summary: {
     new_affiliates_this_month: number;
     repeat_affiliates: number;
@@ -598,7 +655,19 @@ export async function getBatchPreviewData(): Promise<{
   const supabase = getAdminClient();
 
   try {
-    // Get only conversions that haven't been paid yet (eligible for batch processing)
+    // Get admin settings for validation
+    const { data: settings } = await supabase
+      .from('affiliate_program_config')
+      .select('*')
+      .eq('id', 1)
+      .single();
+    
+    const minThreshold = Number(settings?.min_payout_threshold) || 2000;
+    const enabledMethods = (settings as any)?.enabled_payout_methods || ['gcash'];
+    const requireBankVerification = (settings as any)?.require_verification_for_bank_transfer ?? true;
+    const requireGcashVerification = (settings as any)?.require_verification_for_gcash ?? false;
+
+    // Get all unpaid conversions to show complete context
     const { data: conversions, error } = await supabase
       .from('affiliate_conversions')
       .select(`
@@ -609,8 +678,16 @@ export async function getBatchPreviewData(): Promise<{
         created_at,
         paid_at,
         affiliates (
+          id,
           user_id,
           created_at,
+          account_holder_name,
+          account_number,
+          bank_name,
+          gcash_number,
+          gcash_name,
+          bank_account_verified,
+          gcash_verified,
           unified_profiles!affiliates_user_id_fkey (
             first_name,
             last_name,
@@ -618,7 +695,7 @@ export async function getBatchPreviewData(): Promise<{
           )
         )
       `)
-      .is('paid_at', null); // Only include conversions that haven't been paid
+      .is('paid_at', null);     // Include all unpaid conversions for context
 
     if (error) throw error;
 
@@ -643,6 +720,7 @@ export async function getBatchPreviewData(): Promise<{
           affiliate_name: affiliateName,
           email: email,
           join_date: joinDate,
+          affiliate_data: conversion.affiliates, // Store full affiliate data for validation
           conversions: [],
           total_commission: 0,
           flagged_count: 0,
@@ -653,63 +731,132 @@ export async function getBatchPreviewData(): Promise<{
 
       const affiliate = affiliateMap.get(affiliateId);
       affiliate.conversions.push(conversion);
-      affiliate.total_commission += parseFloat(conversion.commission_amount) || 0;
-
-      // Count by status
-      if (conversion.status === 'flagged') affiliate.flagged_count++;
-      else if (conversion.status === 'cleared') affiliate.cleared_count++;
-      else if (conversion.status === 'pending') affiliate.pending_count++;
+      
+      // Only add cleared conversions to the commission total for payout calculation
+      if (conversion.status === 'cleared') {
+        affiliate.total_commission += parseFloat(conversion.commission_amount) || 0;
+        affiliate.cleared_count++;
+      } else if (conversion.status === 'flagged') {
+        affiliate.flagged_count++;
+      } else if (conversion.status === 'pending') {
+        affiliate.pending_count++;
+      }
     });
 
-    // Convert to array and filter out affiliates with no eligible conversions
-    const affiliatePayouts = Array.from(affiliateMap.values())
-      .filter(affiliate => affiliate.cleared_count > 0) // Only show affiliates with cleared conversions
-      .map(affiliate => ({
+    // Convert to array and validate each affiliate
+    const allAffiliates = Array.from(affiliateMap.values())
+      .filter(affiliate => affiliate.cleared_count > 0) // Only consider affiliates with cleared conversions
+      .map(affiliate => {
+        const affiliateData = affiliate.affiliate_data;
+        
+        // Determine preferred payout method and validation
+        const hasBank = !!(affiliateData.account_holder_name && affiliateData.account_number && affiliateData.bank_name);
+        const hasGcash = !!(affiliateData.gcash_number && affiliateData.gcash_name);
+        
+        let payoutMethod: 'bank_transfer' | 'gcash' | null = null;
+        let hasPaymentDetails = false;
+        let isVerified = false;
+        const rejectionReasons: string[] = [];
+        
+        // Determine payout method
+        if (hasBank && enabledMethods.includes('bank_transfer')) {
+          payoutMethod = 'bank_transfer';
+          hasPaymentDetails = true;
+          isVerified = requireBankVerification ? affiliateData.bank_account_verified : true;
+        } else if (hasGcash && enabledMethods.includes('gcash')) {
+          payoutMethod = 'gcash';
+          hasPaymentDetails = true;
+          isVerified = requireGcashVerification ? affiliateData.gcash_verified : true;
+        }
+        
+        // Validate eligibility
+        if (affiliate.total_commission < minThreshold) {
+          rejectionReasons.push(`Amount ₱${affiliate.total_commission.toFixed(2)} below minimum threshold of ₱${minThreshold}`);
+        }
+        
+        if (!hasPaymentDetails) {
+          rejectionReasons.push('Missing payment details (bank account or GCash)');
+        }
+        
+        if (!isVerified && payoutMethod) {
+          rejectionReasons.push(`${payoutMethod === 'bank_transfer' ? 'Bank account' : 'GCash'} not verified`);
+        }
+        
+        if (!payoutMethod) {
+          rejectionReasons.push('No enabled payment method available');
+        }
+        
+        return {
         ...affiliate,
-        conversions_count: affiliate.conversions.length,
-        average_commission: affiliate.total_commission / affiliate.conversions.length,
-      }));
+          conversions_count: affiliate.cleared_count, // Only show cleared conversions in the payout table
+          average_commission: affiliate.cleared_count > 0 ? affiliate.total_commission / affiliate.cleared_count : 0,
+          is_eligible: rejectionReasons.length === 0,
+          rejection_reasons: rejectionReasons,
+          payout_method: payoutMethod,
+          has_payment_details: hasPaymentDetails,
+          is_verified: isVerified,
+        };
+      });
 
-    // Calculate summary statistics
+    // Separate eligible and ineligible affiliates
+    const eligibleAffiliates = allAffiliates.filter(a => a.is_eligible);
+    const ineligibleAffiliates = allAffiliates.filter(a => !a.is_eligible);
+
+    // Calculate summary statistics based on ALL unpaid conversions (for context)
     const totalConversions = conversions.length;
     const clearedConversions = conversions.filter(c => c.status === 'cleared').length;
     const flaggedConversions = conversions.filter(c => c.status === 'flagged').length;
     const pendingConversions = conversions.filter(c => c.status === 'pending').length;
-    const totalAmount = affiliatePayouts.reduce((sum, a) => sum + a.total_commission, 0);
+    
+    // Calculate amounts based on ELIGIBLE affiliates only
+    const totalAmount = eligibleAffiliates.reduce((sum, a) => sum + a.total_commission, 0);
+    const totalIneligibleAmount = ineligibleAffiliates.reduce((sum, a) => sum + a.total_commission, 0);
 
     // Determine new vs repeat affiliates (simplified - could be enhanced with actual date logic)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
-    const newAffiliates = affiliatePayouts.filter(a => 
+    const newEligibleAffiliates = eligibleAffiliates.filter(a => 
       new Date(a.join_date) > thirtyDaysAgo
     ).length;
 
-    const highestEarning = affiliatePayouts.reduce((max, current) => 
+    const highestEarning = eligibleAffiliates.length > 0 
+      ? eligibleAffiliates.reduce((max, current) => 
       current.total_commission > max.total_commission ? current : max
-    );
+        )
+      : { affiliate_name: 'N/A', total_commission: 0 };
 
     const batchData: BatchPreviewData = {
       batch_id: `batch_${new Date().getFullYear()}_${String(new Date().getMonth() + 1).padStart(2, '0')}`,
       month: `${new Date().toLocaleString('default', { month: 'long' })} ${new Date().getFullYear()}`,
-      status: flaggedConversions > 0 ? 'ready_for_review' : 'auto_approved',
+      status: flaggedConversions > 0 ? 'ready_for_review' : (eligibleAffiliates.length > 0 ? 'auto_approved' : 'no_eligible_affiliates'),
       created_date: new Date().toISOString().split('T')[0],
       scheduled_payout_date: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0], // Last day of month
-      total_affiliates: affiliatePayouts.length,
-      total_amount: totalAmount,
+      total_affiliates: eligibleAffiliates.length, // Only count eligible affiliates
+      total_amount: totalAmount, // Only eligible amounts
       total_conversions: totalConversions,
       cleared_conversions: clearedConversions,
       flagged_conversions: flaggedConversions,
       pending_conversions: pendingConversions,
-      auto_approved: flaggedConversions === 0 && totalAmount < 10000,
+      auto_approved: flaggedConversions === 0 && totalAmount < 10000 && eligibleAffiliates.length > 0,
       requires_manual_review: flaggedConversions > 0 || totalAmount >= 10000,
-      affiliate_payouts: affiliatePayouts.sort((a, b) => b.total_commission - a.total_commission), // Sort by highest earning
+      affiliate_payouts: eligibleAffiliates.sort((a, b) => b.total_commission - a.total_commission), // Sort by highest earning
+      ineligible_affiliates: ineligibleAffiliates.sort((a, b) => b.total_commission - a.total_commission), // Add ineligible affiliates
+      validation_summary: {
+        total_affiliates_with_conversions: allAffiliates.length,
+        eligible_count: eligibleAffiliates.length,
+        ineligible_count: ineligibleAffiliates.length,
+        total_eligible_amount: totalAmount,
+        total_ineligible_amount: totalIneligibleAmount,
+        min_threshold: minThreshold,
+        enabled_methods: enabledMethods,
+      },
       summary: {
-        new_affiliates_this_month: newAffiliates,
-        repeat_affiliates: affiliatePayouts.length - newAffiliates,
+        new_affiliates_this_month: newEligibleAffiliates,
+        repeat_affiliates: eligibleAffiliates.length - newEligibleAffiliates,
         highest_earning_affiliate: highestEarning.affiliate_name,
         highest_earning_amount: highestEarning.total_commission,
-        average_payout_per_affiliate: totalAmount / affiliatePayouts.length,
+        average_payout_per_affiliate: eligibleAffiliates.length > 0 ? totalAmount / eligibleAffiliates.length : 0,
       },
     };
 
@@ -718,6 +865,98 @@ export async function getBatchPreviewData(): Promise<{
     const errorMessage = err instanceof Error ? err.message : 'Failed to fetch batch preview data';
     console.error('getBatchPreviewData error:', errorMessage);
     return { batch: null, error: errorMessage };
+  }
+}
+
+export async function bulkClearPendingConversions({
+  conversionIds,
+  notes,
+}: {
+  conversionIds: string[];
+  notes?: string;
+}): Promise<{ success: boolean; error: string | null; clearedCount: number }> {
+  const supabase = getAdminClient();
+
+  try {
+    console.log('bulkClearPendingConversions called with:', { conversionIds, notes });
+
+    // Update all pending conversions to cleared status
+    const { data, error: updateError } = await supabase
+      .from('affiliate_conversions')
+      .update({ 
+        status: 'cleared',
+        updated_at: new Date().toISOString()
+      })
+      .in('id', conversionIds)
+      .eq('status', 'pending') // Only clear pending conversions
+      .select('id');
+
+    if (updateError) {
+      console.error('Error bulk clearing conversions:', updateError);
+      throw updateError;
+    }
+
+    const clearedCount = data?.length || 0;
+    console.log(`Successfully cleared ${clearedCount} conversions`);
+
+    try {
+      // Get current admin user (this might fail in some contexts)
+      const { data: adminUser } = await supabase.auth.getUser();
+      
+      if (adminUser.user && clearedCount > 0) {
+        // Create admin verification records for each cleared conversion
+        const verificationRecords = (data || []).map(conversion => ({
+          admin_user_id: adminUser.user.id,
+          target_entity_type: 'conversion',
+          target_entity_id: conversion.id,
+          verification_type: 'bulk_status_change',
+          is_verified: true,
+          notes: notes || 'Bulk cleared by admin - ready for batch processing',
+          verified_at: new Date().toISOString(),
+        }));
+
+        const { error: verificationError } = await supabase
+          .from('admin_verifications')
+          .insert(verificationRecords);
+
+        if (verificationError) {
+          console.error('Error creating bulk verification records (non-fatal):', verificationError);
+        } else {
+          console.log('Bulk verification records created successfully');
+        }
+
+        // Log admin activity
+        try {
+          await logAdminActivity({
+            activity_type: 'GENERAL_ADMIN_ACTION',
+            description: `Bulk cleared ${clearedCount} pending conversions`,
+            details: { 
+              conversion_ids: conversionIds,
+              cleared_count: clearedCount,
+              notes 
+            }
+          });
+          console.log('Admin activity logged successfully');
+        } catch (logError) {
+          console.error('Error logging admin activity (non-fatal):', logError);
+        }
+      } else {
+        console.log('No admin user found or no conversions cleared - skipping verification records');
+      }
+    } catch (authError) {
+      console.error('Error getting admin user (non-fatal):', authError);
+    }
+
+    // Revalidate relevant paths
+    revalidatePath('/admin/affiliates/conversions');
+    revalidatePath('/admin/affiliates/payouts/preview');
+
+    console.log('bulkClearPendingConversions completed successfully');
+    return { success: true, error: null, clearedCount };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : 'Failed to bulk clear conversions.';
+    console.error('bulkClearPendingConversions error:', errorMessage);
+    return { success: false, error: errorMessage, clearedCount: 0 };
   }
 }
 

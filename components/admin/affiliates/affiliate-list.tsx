@@ -23,10 +23,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { MoreHorizontal, Eye, Edit, CheckCircle, XCircle, Flag, UserX, Search, Check, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Eye, Edit, CheckCircle, XCircle, Flag, UserX, Search, Check, Loader2, Smartphone, CreditCard, AlertTriangle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format } from "date-fns";
-import { AdminAffiliateListItem, AffiliateStatusType } from '@/types/admin/affiliate';
+import { AdminAffiliateListItem, AffiliateStatusType, GCashVerificationStatus } from '@/types/admin/affiliate';
 import {
   getAdminAffiliates,
   approveAffiliate,
@@ -43,6 +43,53 @@ const statusVariantMap: Record<AffiliateStatusType, 'default' | 'secondary' | 'd
   flagged: 'destructive',
   inactive: 'outline',
 };
+
+const verificationStatusMap: Record<GCashVerificationStatus, { variant: 'default' | 'secondary' | 'destructive' | 'outline', icon: React.ReactNode, label: string }> = {
+  unverified: { variant: 'outline', icon: <AlertTriangle className="h-3 w-3" />, label: 'Unverified' },
+  pending_documents: { variant: 'secondary', icon: <Loader2 className="h-3 w-3 animate-spin" />, label: 'Pending Docs' },
+  pending_review: { variant: 'secondary', icon: <Loader2 className="h-3 w-3 animate-spin" />, label: 'Pending Review' },
+  verified: { variant: 'default', icon: <CheckCircle className="h-3 w-3" />, label: 'Verified' },
+  rejected: { variant: 'destructive', icon: <XCircle className="h-3 w-3" />, label: 'Rejected' },
+  expired: { variant: 'outline', icon: <AlertTriangle className="h-3 w-3" />, label: 'Expired' },
+};
+
+function PayoutMethodBadge({ method, verified, verificationStatus }: { 
+  method?: string; 
+  verified?: boolean; 
+  verificationStatus?: GCashVerificationStatus;
+}) {
+  if (!method) return <span className="text-muted-foreground">Not set</span>;
+  
+  const isGCash = method === 'gcash';
+  const icon = isGCash ? <Smartphone className="h-3 w-3" /> : <CreditCard className="h-3 w-3" />;
+  
+  return (
+    <div className="flex items-center gap-2">
+      <Badge variant="outline" className="flex items-center gap-1">
+        {icon}
+        {isGCash ? 'GCash' : method.replace('_', ' ').toUpperCase()}
+      </Badge>
+      {isGCash && verificationStatus && (
+        <Badge 
+          variant={verificationStatusMap[verificationStatus].variant}
+          className="flex items-center gap-1 text-xs"
+        >
+          {verificationStatusMap[verificationStatus].icon}
+          {verificationStatusMap[verificationStatus].label}
+        </Badge>
+      )}
+      {!isGCash && verified !== undefined && (
+        <Badge 
+          variant={verified ? 'default' : 'outline'}
+          className="flex items-center gap-1 text-xs"
+        >
+          {verified ? <CheckCircle className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+          {verified ? 'Verified' : 'Unverified'}
+        </Badge>
+      )}
+    </div>
+  );
+}
 
 export default function AffiliateList() {
   const router = useRouter();
@@ -310,7 +357,7 @@ export default function AffiliateList() {
               <TableHead>Affiliate</TableHead>
               <TableHead>Membership Tier</TableHead>
               <TableHead>Commission Rate</TableHead>
-              <TableHead>Lifetime Earnings</TableHead>
+              <TableHead>Payout Method</TableHead>
               <TableHead className="text-right">Conversions</TableHead>
               <TableHead className="text-right">Earnings</TableHead>
               <TableHead>Joined</TableHead>
@@ -383,7 +430,11 @@ export default function AffiliateList() {
                       : 'N/A'}
                   </TableCell>
                   <TableCell>
-                    {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(affiliate.total_earnings || 0)}
+                    <PayoutMethodBadge 
+                      method={affiliate.payout_method}
+                      verified={affiliate.payout_method === 'gcash' ? affiliate.gcash_verified : affiliate.bank_account_verified}
+                      verificationStatus={affiliate.gcash_verification_status}
+                    />
                   </TableCell>
                   <TableCell className="text-right">{affiliate.total_conversions}</TableCell>
                   <TableCell className="text-right">
@@ -442,7 +493,7 @@ export default function AffiliateList() {
                         )}
                         {affiliate.status === 'active' && (
                           <DropdownMenuItem 
-                            onClick={(e) => { e.stopPropagation(); handleAction(affiliate.affiliate_id, 'deactivate', () => updateAffiliateStatus(affiliate.affiliate_id, 'inactive'), 'Affiliate deactivated successfully', 'Error deactivating affiliate'); }}
+                            onClick={(e) => { e.stopPropagation(); handleAction(affiliate.affiliate_id, 'deactivate', () => updateAffiliateStatus(affiliate.user_id, 'inactive'), 'Affiliate deactivated successfully', 'Error deactivating affiliate'); }}
                             disabled={actionStates[`${affiliate.affiliate_id}_deactivate`]}
                           >
                             <UserX className="mr-2 h-4 w-4" />
@@ -451,7 +502,7 @@ export default function AffiliateList() {
                         )}
                         {affiliate.status === 'flagged' && (
                           <DropdownMenuItem 
-                            onClick={(e) => { e.stopPropagation(); handleAction(affiliate.affiliate_id, 'clearFlag', () => updateAffiliateStatus(affiliate.affiliate_id, 'active'), 'Affiliate flag cleared (status set to active)', 'Error clearing affiliate flag'); }}
+                            onClick={(e) => { e.stopPropagation(); handleAction(affiliate.affiliate_id, 'clearFlag', () => updateAffiliateStatus(affiliate.user_id, 'active'), 'Affiliate flag cleared (status set to active)', 'Error clearing affiliate flag'); }}
                             disabled={actionStates[`${affiliate.affiliate_id}_clearFlag`]}
                           >
                             <CheckCircle className="mr-2 h-4 w-4 text-green-500" />

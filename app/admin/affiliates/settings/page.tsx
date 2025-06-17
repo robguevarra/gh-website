@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   getAffiliateProgramSettings,
   updateAffiliateProgramSettings,
@@ -69,6 +70,14 @@ export default async function AffiliateSettingsPage() {
       } else if (formType === 'payouts') {
         const minPayoutThreshold = formData.get('minimumPayoutThreshold') as string;
         const payoutSchedule = formData.get('payoutSchedule') as PayoutScheduleType;
+        
+        // Handle payment method checkboxes
+        const enabledMethods: string[] = [];
+        if (formData.get('enableGcash') === 'on') enabledMethods.push('gcash');
+        if (formData.get('enableBankTransfer') === 'on') enabledMethods.push('bank_transfer');
+        
+        const requireBankVerification = formData.get('requireBankVerification') === 'on';
+        const requireGcashVerification = formData.get('requireGcashVerification') === 'on';
 
         if (minPayoutThreshold) {
           newSettings.min_payout_threshold = parseFloat(minPayoutThreshold);
@@ -76,7 +85,10 @@ export default async function AffiliateSettingsPage() {
         if (payoutSchedule) {
           newSettings.payout_schedule = payoutSchedule;
         }
-        newSettings.payout_currency = 'PHP'; 
+        newSettings.payout_currency = 'PHP';
+        newSettings.enabled_payout_methods = enabledMethods;
+        newSettings.require_verification_for_bank_transfer = requireBankVerification;
+        newSettings.require_verification_for_gcash = requireGcashVerification;
 
         await updateAffiliateProgramSettings(newSettings);
         successMessage = 'Payout settings saved successfully!';
@@ -177,10 +189,10 @@ export default async function AffiliateSettingsPage() {
               <CardHeader>
                 <CardTitle>Payout Settings</CardTitle>
                 <CardDescription>
-                  Configure minimum payout thresholds and payout schedules. Currency is fixed to PHP.
+                  Configure minimum payout thresholds, payout schedules, and payment methods. Currency is fixed to PHP.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-6">
                 <div className="space-y-1">
                   <Label htmlFor="minimumPayoutThreshold">Minimum Payout Threshold</Label>
                   <Input
@@ -206,6 +218,82 @@ export default async function AffiliateSettingsPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                
+                {/* Payment Methods Section */}
+                <div className="space-y-4 pt-4 border-t">
+                  <div>
+                    <h4 className="text-md font-medium mb-2">Enabled Payment Methods</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Select which payment methods affiliates can use for payouts.
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="enableGcash"
+                        name="enableGcash"
+                        defaultChecked={settings.enabled_payout_methods?.includes('gcash') ?? true}
+                        className="rounded border-gray-300"
+                      />
+                      <Label htmlFor="enableGcash" className="text-sm font-medium">
+                        GCash (Recommended for Philippines)
+                      </Label>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="enableBankTransfer"
+                        name="enableBankTransfer"
+                        defaultChecked={settings.enabled_payout_methods?.includes('bank_transfer') ?? false}
+                        className="rounded border-gray-300"
+                      />
+                      <Label htmlFor="enableBankTransfer" className="text-sm font-medium">
+                        Bank Transfer
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Verification Requirements Section */}
+                <div className="space-y-4 pt-4 border-t">
+                  <div>
+                    <h4 className="text-md font-medium mb-2">Verification Requirements</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Configure which payment methods require identity verification before payouts.
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="requireGcashVerification"
+                        name="requireGcashVerification"
+                        defaultChecked={settings.require_verification_for_gcash ?? false}
+                        className="rounded border-gray-300"
+                      />
+                      <Label htmlFor="requireGcashVerification" className="text-sm font-medium">
+                        Require verification for GCash payouts
+                      </Label>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="requireBankVerification"
+                        name="requireBankVerification"
+                        defaultChecked={settings.require_verification_for_bank_transfer ?? true}
+                        className="rounded border-gray-300"
+                      />
+                      <Label htmlFor="requireBankVerification" className="text-sm font-medium">
+                        Require verification for bank transfers
+                      </Label>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter>

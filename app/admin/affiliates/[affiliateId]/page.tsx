@@ -7,6 +7,7 @@ import {
   getAdminAffiliateById,
   getAffiliateLinks,
 } from '@/lib/actions/affiliate-actions';
+import { validateAffiliatePayoutDetails } from '@/lib/actions/admin/payout-actions';
 import { 
   getAffiliateClicks,
   getAffiliateConversions,
@@ -46,6 +47,7 @@ export default async function AffiliateDetailPage({
   let clicksData: { data: any[]; totalCount: number; error: string | null } = { data: [], totalCount: 0, error: null };
   let conversionsData: { data: any[]; totalCount: number; error: string | null } = { data: [], totalCount: 0, error: null };
   let payoutsData: { data: any[]; totalCount: number; error: string | null } = { data: [], totalCount: 0, error: null };
+  let payoutValidation: any = null;
 
   try {
     // Fetch all affiliate data in parallel
@@ -56,7 +58,8 @@ export default async function AffiliateDetailPage({
       linksResult,
       clicksResult,
       conversionsResult,
-      payoutsResult
+      payoutsResult,
+      payoutValidationResult
     ] = await Promise.all([
       getAdminAffiliateById(affiliateId),
       getFraudFlagsForAffiliate(affiliateId),
@@ -76,12 +79,14 @@ export default async function AffiliateDetailPage({
         affiliateId,
         currentPage: 1,
         itemsPerPage: 5
-      })
+      }),
+      validateAffiliatePayoutDetails(affiliateId).catch(() => null)
     ]);
     
     affiliateDetails = affiliateResult;
     fraudFlags = fraudFlagsResult?.flags || [];
     affiliateLinks = linksResult?.links || [];
+    payoutValidation = payoutValidationResult;
     
     // Pre-process fraud flags with risk assessment on the server side
     // to avoid calling server actions during component rendering
@@ -170,6 +175,7 @@ export default async function AffiliateDetailPage({
             initialClicksData={clicksData}
             initialConversionsData={conversionsData}
             initialPayoutsData={payoutsData}
+            payoutValidation={payoutValidation}
           />
           
           {/* Fraud Flags Section */}

@@ -37,7 +37,7 @@ export function PayoutPreviewTable({ eligibleAffiliates }: PayoutPreviewTablePro
   const [isCreatingBatch, setIsCreatingBatch] = useState(false);
   const [batchPreview, setBatchPreview] = useState<any>(null);
   const [batchName, setBatchName] = useState('');
-  const [payoutMethod, setPayoutMethod] = useState('bank_transfer');
+  const [payoutMethod, setPayoutMethod] = useState('gcash');
   const [verificationNotes, setVerificationNotes] = useState('');
 
   // Calculate selected totals
@@ -254,6 +254,7 @@ export function PayoutPreviewTable({ eligibleAffiliates }: PayoutPreviewTablePro
                 value={payoutMethod}
                 onChange={(e) => setPayoutMethod(e.target.value)}
               >
+                <option value="gcash">GCash (Recommended)</option>
                 <option value="bank_transfer">Bank Transfer</option>
                 <option value="xendit">Xendit</option>
                 <option value="manual">Manual</option>
