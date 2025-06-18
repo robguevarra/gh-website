@@ -111,7 +111,7 @@ class XenditPayoutService {
     this.config = {
       apiKey: process.env.XENDIT_SECRET_KEY || '',
       baseUrl: process.env.XENDIT_BASE_URL || 'https://api.xendit.co',
-      webhookToken: process.env.XENDIT_WEBHOOK_VERIFICATION_TOKEN || '',
+      webhookToken: process.env.XENDIT_WEBHOOK_TOKEN || '',
     };
 
     if (!this.config.apiKey) {

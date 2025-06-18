@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { 
+  sendPayoutProcessingEmail,
+  sendPayoutSuccessEmail,
+  sendPayoutFailedEmail 
+} from '@/lib/services/email/payout-notification-service';
 // Note: logAdminActivity import will be added when admin-actions is available
 
 // Initialize Supabase client with service role key for webhook operations
@@ -170,6 +175,35 @@ export async function POST(request: NextRequest) {
       failure_reason: failure_reason,
       webhook_timestamp: new Date().toISOString()
     });
+
+    // --- Send Payout Status Email Notifications ---
+    try {
+      console.log(`[Webhook][Payout] Sending ${newStatus} email notification for payout: ${payout.id}`);
+      
+      let emailSent = false;
+      switch (newStatus) {
+        case 'processing':
+          emailSent = await sendPayoutProcessingEmail(payout.id);
+          break;
+        case 'paid':
+          emailSent = await sendPayoutSuccessEmail(payout.id);
+          break;
+        case 'failed':
+          emailSent = await sendPayoutFailedEmail(payout.id);
+          break;
+        default:
+          console.log(`[Webhook][Payout] No email template for status: ${newStatus}`);
+      }
+      
+      if (emailSent) {
+        console.log(`[Webhook][Payout] ✅ ${newStatus} email sent successfully for payout: ${payout.id}`);
+      } else {
+        console.log(`[Webhook][Payout] ⚠️ ${newStatus} email failed to send for payout: ${payout.id}`);
+      }
+    } catch (emailError) {
+      console.error(`[Webhook][Payout] ❌ Error sending ${newStatus} email for payout ${payout.id}:`, emailError);
+      // Don't fail the webhook for email errors - payment processing is more important
+    }
 
     console.log(`Payout ${payout.id} status updated to ${newStatus}`);
     

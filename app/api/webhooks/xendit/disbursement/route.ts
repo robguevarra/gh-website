@@ -17,17 +17,17 @@ import {
 
 interface XenditPayoutWebhookPayload {
   id: string;
-  amount: number;
-  channel_code: string;
-  currency: string;
-  description: string;
-  reference_id: string;
-  status: 'ACCEPTED' | 'PENDING' | 'LOCKED' | 'CANCELLED' | 'SUCCEEDED' | 'FAILED';
+  amount?: number;
+  channel_code?: string;
+  currency?: string;
+  description?: string;
+  reference_id?: string;
+  status: 'ACCEPTED' | 'PENDING' | 'LOCKED' | 'CANCELLED' | 'SUCCEEDED' | 'FAILED' | 'COMPLETED';
   created: string;
-  updated: string;
+  updated?: string;
   estimated_arrival_time?: string;
-  business_id: string;
-  channel_properties: {
+  business_id?: string;
+  channel_properties?: {
     account_number: string;
     account_holder_name: string;
   };
@@ -42,6 +42,26 @@ interface XenditPayoutWebhookPayload {
     system?: string;
   };
   failure_code?: string;
+  
+  // Batch disbursement fields
+  disbursements?: Array<{
+    id: string;
+    reference_id: string;
+    status: string;
+    amount: number;
+    channel_code: string;
+    account_number: string;
+    account_holder_name: string;
+  }>;
+  total_disbursed_count?: number;
+  total_disbursed_amount?: number;
+  total_error_count?: number;
+  total_error_amount?: number;
+  approver_id?: string;
+  approved_at?: string;
+  total_uploaded_count?: number;
+  reference?: string;
+  user_id?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -50,11 +70,15 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text();
     const signature = request.headers.get('x-callback-token') || '';
     
-    // Verify webhook signature for security
-    const isValidSignature = xenditPayoutService.verifyWebhookSignature(rawBody, signature);
+    // Verify webhook token for security (simple token comparison)
+    const expectedToken = process.env.XENDIT_WEBHOOK_TOKEN;
     
-    if (!isValidSignature) {
-      console.error('Invalid webhook signature received');
+    if (!expectedToken || signature !== expectedToken) {
+      console.error('Invalid webhook token received:', { 
+        expected: expectedToken, 
+        received: signature,
+        hasToken: !!expectedToken 
+      });
       return NextResponse.json(
         { error: 'Invalid signature' },
         { status: 401 }
@@ -62,9 +86,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse webhook payload
+    let rawPayload: any;
     let payload: XenditPayoutWebhookPayload;
     try {
-      payload = JSON.parse(rawBody);
+      rawPayload = JSON.parse(rawBody);
+      
+      // Extract the actual payout data from the webhook payload
+      // Xendit sends data in this format: { event: "payout.succeeded", data: { id, reference_id, ... } }
+      if (rawPayload.data && rawPayload.event) {
+        // Real Xendit webhook format
+        payload = rawPayload.data;
+        console.log('Processing Xendit webhook event:', rawPayload.event);
+      } else {
+        // Direct payload format (for testing)
+        payload = rawPayload;
+      }
     } catch (error) {
       console.error('Failed to parse webhook payload:', error);
       return NextResponse.json(
@@ -73,11 +109,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate required fields
+    // Check if this is a batch disbursement or single payout
+    const isBatchDisbursement = payload.disbursements && Array.isArray(payload.disbursements);
+    
+    if (isBatchDisbursement) {
+      console.log('Processing batch disbursement webhook:', {
+        batchId: payload.id,
+        status: payload.status,
+        totalCount: payload.total_disbursed_count,
+        totalAmount: payload.total_disbursed_amount
+      });
+      
+      // For batch disbursements, we need to process each individual disbursement
+      // Return success for now - batch processing can be implemented later if needed
+      return NextResponse.json({
+        received: true,
+        type: 'batch_disbursement',
+        batch_id: payload.id,
+        processed_count: payload.total_disbursed_count || 0
+      });
+    }
+    
+    // Validate required fields for single payout webhooks
     if (!payload.id || !payload.reference_id || !payload.status) {
-      console.error('Missing required fields in webhook payload:', payload);
+      console.error('Missing required fields in single payout webhook payload:', {
+        rawPayload,
+        extractedPayload: payload,
+        hasId: !!payload.id,
+        hasReferenceId: !!payload.reference_id,
+        hasStatus: !!payload.status
+      });
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields for single payout' },
         { status: 400 }
       );
     }
