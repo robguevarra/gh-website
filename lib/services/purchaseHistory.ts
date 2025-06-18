@@ -25,9 +25,11 @@ export interface Purchase {
 
 // Fetch and unify purchase history for a user
 export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] | null> {
+  console.log(`[fetchPurchaseHistory] Called with userId: ${userId}`);
   const supabase = getBrowserClient();
   try {
     // 1. Fetch Ecommerce Orders
+    console.log('[fetchPurchaseHistory] Fetching ecommerce orders...');
     const { data: ecommerceData, error: ecommerceError } = await supabase
       .from('ecommerce_orders')
       .select(
@@ -48,8 +50,10 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     if (ecommerceError) console.error('[fetchPurchaseHistory] Ecommerce error:', ecommerceError);
+    console.log(`[fetchPurchaseHistory] Ecommerce orders fetched: ${ecommerceData?.length || 0} records`);
 
     // 2. Fetch Shopify Orders
+    console.log('[fetchPurchaseHistory] Starting Shopify orders fetch...');
     let shopifyData: any[] | null = null;
     try {
       const { data: profileData, error: profileError } = await supabase
@@ -308,6 +312,10 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
 
     // 5. Sort by date
     unified.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    console.log(`[fetchPurchaseHistory] Returning ${unified.length} total unified purchases`);
+    console.log('[fetchPurchaseHistory] Sample purchases:', unified.slice(0, 2).map(p => ({ id: p.id, order_number: p.order_number, source: p.source })));
+    
     return unified;
   } catch (err) {
     console.error('[fetchPurchaseHistory] Main error:', err);

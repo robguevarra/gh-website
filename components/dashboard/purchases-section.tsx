@@ -7,8 +7,9 @@ import { Download, ExternalLink, ShoppingBag, ChevronDown, ChevronUp, ChevronRig
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { usePurchasesData } from "@/lib/hooks/use-dashboard-store"
+import { useStudentDashboardStore } from "@/lib/stores/student-dashboard"
 import { useSectionExpansion } from "@/lib/hooks/use-dashboard-store"
+import type { Purchase as StorePurchase, PurchaseItem as StorePurchaseItem } from "@/lib/services/purchaseHistory"
 
 // Update interfaces to match the actual API data structure
 export interface PurchaseItem {
@@ -47,24 +48,21 @@ export function PurchasesSection({
   viewAllUrl = "/dashboard/purchase-history",
   userId
 }: PurchasesSectionProps) {
-  // Use the enhanced hook for purchases data
-  const { 
-    purchases: recentPurchases, 
-    isLoadingPurchases: isLoading, 
-    hasPurchasesError,
-    loadPurchases,
-    isStale
-  } = usePurchasesData()
+  console.log(`[PurchasesSection] Rendered with userId: ${userId}`);
+  
+  // Use direct Zustand selectors for better performance (avoid intermediate hooks)
+  const recentPurchases = useStudentDashboardStore((state) => state.purchases || [])
+  const isLoading = useStudentDashboardStore((state) => state.isLoadingPurchases)
+  const hasPurchasesError = useStudentDashboardStore((state) => state.hasPurchasesError)
+  
+  console.log(`[PurchasesSection] Hook state: purchases=${recentPurchases?.length || 0}, loading=${isLoading}, error=${hasPurchasesError}`);
   
   // Get section expansion state from centralized store
   const { isSectionExpanded, toggleSection } = useSectionExpansion()
   
-  // Load purchases data when component mounts or when userId changes
-  useEffect(() => {
-    if (userId && (recentPurchases.length === 0 || isStale())) {
-      loadPurchases(userId)
-    }
-  }, [userId, recentPurchases.length, isStale, loadPurchases])
+  // Note: Purchases are loaded by the dashboard's loadUserDashboardData function
+  // This component only displays the data from the store
+  // No need for separate useEffect to load purchases since dashboard handles it
   // Memoize animation variants to prevent recreation on each render
   const fadeInUp = useMemo(() => ({
     hidden: { opacity: 0, y: 20 },
@@ -136,7 +134,7 @@ export function PurchasesSection({
               </div>
             </div>
 
-            {isLoading ? (
+            {isLoading && recentPurchases.length === 0 ? (
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
                   <div key={`skeleton-${i}`} className="border rounded-lg p-4 space-y-3 animate-pulse">
@@ -162,30 +160,30 @@ export function PurchasesSection({
             ) : recentPurchases.length > 0 ? (
               <div className="space-y-4">
                 {/* Render purchases list - Using fragment to avoid key warning */}
-              {recentPurchases.map((purchase) => {
+              {recentPurchases.map((purchase: StorePurchase) => {
                 // Format date string if it's ISO format - using pure function instead of hook
                 const formattedDate = (() => {
                   try {
-                    return new Date(purchase.created_at || purchase.date || '')
+                    return new Date(purchase.created_at || '')
                       .toLocaleDateString('en-US', { 
                         year: 'numeric', 
                         month: 'short', 
                         day: 'numeric' 
                       });
                   } catch (e) {
-                    return purchase.date || 'N/A';
+                    return 'N/A';
                   }
                 })();
                 
                 // Format status with proper capitalization - using pure function instead of hook
                 const formattedStatus = (() => {
-                  const status = purchase.order_status || purchase.status || 'Processing';
+                  const status = purchase.order_status || 'Processing';
                   return status.charAt(0).toUpperCase() + status.slice(1);
                 })();
                 
                 // Calculate total with proper formatting - using pure function instead of hook
                 const formattedTotal = (() => {
-                  const amount = purchase.total_amount || purchase.total || 0;
+                  const amount = purchase.total_amount || 0;
                   return `₱${(amount / 100).toFixed(2)}`;
                 })();
                 
@@ -200,7 +198,7 @@ export function PurchasesSection({
                     <div className="text-xs text-muted-foreground">{formattedDate}</div>
 
                     <div className="space-y-3">
-                      {purchase.items?.map((item, index) => {
+                      {purchase.items?.map((item: StorePurchaseItem, index: number) => {
                         // Format price with proper currency - using pure function instead of hook
                         const itemPrice = (() => {
                           // Use price_at_purchase as the primary source of price

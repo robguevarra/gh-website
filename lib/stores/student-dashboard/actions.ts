@@ -282,22 +282,39 @@ export const createActions = (
    */
   loadUserDashboardData: async (userId: string, force?: boolean) => {
     console.log(`[Store Action] loadUserDashboardData called. UserID: ${userId}, Force: ${force}`);
-    if (!userId) return;
+    if (!userId) {
+      console.log('[Store Action] loadUserDashboardData: No userId provided, returning early');
+      return;
+    }
 
     const store = get() as StudentDashboardStore;
+    console.log('[Store Action] loadUserDashboardData: Starting parallel data loading...');
 
     try {
       // Load data in parallel including purchases
-      await Promise.all([
+      const promises = [
         store.loadUserEnrollments(userId, force),
         store.loadUserProgress(userId, force),
         store.loadStoreProducts(userId, undefined, force),
         store.loadStoreCollections(force),
         store.loadPurchases(userId, force)
-      ]);
-      console.log('[Store Action] loadUserDashboardData: All parallel fetches initiated.');
+      ];
+      
+      console.log('[Store Action] loadUserDashboardData: About to execute Promise.all with 5 promises including loadPurchases');
+      await Promise.all(promises);
+      console.log('[Store Action] loadUserDashboardData: All parallel fetches completed successfully');
+      
+      // Log current purchases state after loading
+      const currentState = get();
+      console.log('[Store Action] loadUserDashboardData: Final purchases state:', {
+        purchasesCount: currentState.purchases?.length || 0,
+        isLoadingPurchases: currentState.isLoadingPurchases,
+        hasPurchasesError: currentState.hasPurchasesError,
+        lastPurchasesLoadTime: currentState.lastPurchasesLoadTime
+      });
+      
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
+      console.error('[Store Action] loadUserDashboardData: Error loading dashboard data:', error);
       set({
         hasEnrollmentError: true,
         hasProgressError: true,
@@ -1417,20 +1434,41 @@ export const createActions = (
    * Fetch purchase history with caching based on staleness
    */
   loadPurchases: async (userId: string, force = false) => {
-    const { lastPurchasesLoadTime, purchases } = get() as StudentDashboardStore;
-    if (!force && purchases.length > 0 && lastPurchasesLoadTime && Date.now() - lastPurchasesLoadTime < STALE_THRESHOLD) {
+    console.log(`[Store Action] loadPurchases called. UserID: ${userId}, Force: ${force}`);
+    
+    const { lastPurchasesLoadTime, purchases, isLoadingPurchases } = get() as StudentDashboardStore;
+    console.log(`[Store Action] loadPurchases: Current state check - purchases.length: ${purchases?.length || 0}, lastLoadTime: ${lastPurchasesLoadTime}, force: ${force}, isLoading: ${isLoadingPurchases}`);
+    
+    // Prevent simultaneous calls
+    if (isLoadingPurchases) {
+      console.log('[Store Action] loadPurchases: Already loading, skipping to prevent race condition');
       return;
     }
+    
+    if (!force && purchases.length > 0 && lastPurchasesLoadTime && Date.now() - lastPurchasesLoadTime < STALE_THRESHOLD) {
+      console.log('[Store Action] loadPurchases: Data is fresh, skipping fetch');
+      return;
+    }
+    
+    console.log('[Store Action] loadPurchases: Setting loading state and starting fetch');
     // trigger loading state
     set({ isLoadingPurchases: true, hasPurchasesError: false });
+    
     try {
+      console.log('[Store Action] loadPurchases: Calling fetchPurchaseHistory...');
       const data = await fetchPurchaseHistory(userId);
-      set({ purchases: data ?? [] });
+      console.log(`[Store Action] loadPurchases: fetchPurchaseHistory returned:`, data ? `${data.length} purchases` : 'null/undefined');
+      
+      const purchasesToSet = data ?? [];
+      set({ purchases: purchasesToSet });
       set({ lastPurchasesLoadTime: Date.now() });
+      
+      console.log(`[Store Action] loadPurchases: Successfully set ${purchasesToSet.length} purchases in store`);
     } catch (error) {
       console.error('[Store Action] loadPurchases error:', error);
       set({ hasPurchasesError: true });
     } finally {
+      console.log('[Store Action] loadPurchases: Setting isLoadingPurchases to false');
       set({ isLoadingPurchases: false });
     }
   },
@@ -1465,10 +1503,10 @@ export const createActions = (
   // setIsLoadingTemplates: (isLoading: boolean) => set({ isLoadingTemplates: isLoading }),
   // setHasTemplatesError: (hasError: boolean) => set({ hasTemplatesError: hasError }),
 
-  // Purchases setters (Assuming similar structure if implemented)
-  // setPurchases: (purchases: Purchase[]) => set({ purchases }),
-  // setIsLoadingPurchases: (isLoading: boolean) => set({ isLoadingPurchases: isLoading }),
-  // setHasPurchasesError: (hasError: boolean) => set({ hasPurchasesError: hasError }),
+  // Purchases setters
+  setPurchases: (purchases: any[]) => set({ purchases, lastPurchasesLoadTime: Date.now() }),
+  setIsLoadingPurchases: (isLoading: boolean) => set({ isLoadingPurchases: isLoading }),
+  setHasPurchasesError: (hasError: boolean) => set({ hasPurchasesError: hasError }),
 
   // Live classes setters (Assuming similar structure if implemented)
   // setLiveClasses: (classes: LiveClass[]) => set({ liveClasses }),

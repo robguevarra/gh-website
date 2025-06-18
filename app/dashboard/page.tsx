@@ -119,9 +119,7 @@ export default function StudentDashboard() {
   // Use optimized loading states hook for better performance
   const {
     isLoadingEnrollments,
-    isLoadingProgress,
-    loadUserEnrollments,
-    loadUserProgress
+    isLoadingProgress
   } = useLoadingStates()
 
   // Use optimized UI state hook for better performance
@@ -173,21 +171,24 @@ export default function StudentDashboard() {
       setUserId(user.id);
 
       // Loading dashboard data for user
+      console.log('[Dashboard] Starting loadUserDashboardData for user:', user.id);
 
-      // Load enrollments and progress data in parallel
-      Promise.all([
-        loadUserEnrollments(user.id),
-        loadUserProgress(user.id)
-      ]).then(() => {
+      // Load ALL dashboard data including purchases
+      loadUserDashboardData(user.id).then(() => {
         // Dashboard data loaded successfully
-        // Add debugging to see the current course progress after loading
+        console.log('[Dashboard] loadUserDashboardData completed successfully');
+        
+        // Log the current state to see what was loaded
         const currentState = useStudentDashboardStore.getState();
-        const courseId = currentState.enrollments?.[0]?.course?.id;
-        if (courseId) {
-          // Check current course progress after loading
-        }
+        console.log('[Dashboard] Current store state after loading:', {
+          enrollments: currentState.enrollments?.length || 0,
+          purchases: currentState.purchases?.length || 0,
+          isLoadingPurchases: currentState.isLoadingPurchases,
+          hasPurchasesError: currentState.hasPurchasesError,
+          lastPurchasesLoadTime: currentState.lastPurchasesLoadTime
+        });
       }).catch(error => {
-        console.error('Error loading dashboard data:', error);
+        console.error('[Dashboard] Error loading dashboard data:', error);
         // Reset the ref if loading fails so we can retry
         dataLoadedRef.current = false;
       });
@@ -202,8 +203,7 @@ export default function StudentDashboard() {
     isAuthLoading,
     router,
     setUserId,
-    loadUserEnrollments,
-    loadUserProgress
+    loadUserDashboardData
   ]);
 
   // Add focus listener to refresh data when tab becomes visible
@@ -225,6 +225,16 @@ export default function StudentDashboard() {
       window.removeEventListener('focus', handleFocus);
     };
   }, [user?.id, loadUserDashboardData]); // Depend on user ID and the load function
+
+  // Debug user state for PurchasesSection
+  useEffect(() => {
+    console.log('[Dashboard] User state changed:', { 
+      userId: user?.id, 
+      userLoaded: !!user, 
+      isAuthLoading,
+      userEmail: user?.email 
+    });
+  }, [user, isAuthLoading]);
 
   // Fetch live announcements
   useEffect(() => {
@@ -681,12 +691,16 @@ export default function StudentDashboard() {
   useEffect(() => {
     const checkAffiliateStatus = async () => {
       if (user?.id) {
+        console.log('[Dashboard] 🎯 Checking affiliate status for user:', user.id)
         try {
           const response = await fetch(`/api/student/affiliate-status?userId=${user.id}`)
           if (response.ok) {
             const data = await response.json()
+            console.log('[Dashboard] 🎯 Affiliate status response:', data)
             setIsAffiliate(data.isAffiliate)
             setAffiliateStatus(data.status)
+          } else {
+            console.log('[Dashboard] 🎯 Affiliate status response not ok:', response.status)
           }
         } catch (error) {
           console.error('Error checking affiliate status:', error)
@@ -700,9 +714,22 @@ export default function StudentDashboard() {
   // Check if banner was dismissed this session
   useEffect(() => {
     const dismissed = sessionStorage.getItem('affiliate-banner-dismissed')
-    if (dismissed === 'true') {
-      setIsAffiliateBannerDismissed(true)
+    console.log('[Dashboard] 🎯 STORAGE AUDIT - All storage keys:')
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i)
+      if (key) {
+        const value = sessionStorage.getItem(key)
+        console.log(`[Dashboard] 🎯 STORAGE: ${key} = ${value}`)
+      }
     }
+    console.log('[Dashboard] 🎯 Affiliate banner check - dismissed in sessionStorage:', dismissed)
+    console.log('[Dashboard] 🎯 Raw sessionStorage value type:', typeof dismissed)
+    
+    // FOR NEW USERS: Reset on every new session for testing
+    console.log('[Dashboard] 🎯 Clearing sessionStorage for fresh user experience')
+    sessionStorage.removeItem('affiliate-banner-dismissed')
+    setIsAffiliateBannerDismissed(false)
+    console.log('[Dashboard] 🎯 Banner should now be visible for all users')
   }, [])
 
   // Handle banner dismissal
@@ -816,7 +843,15 @@ export default function StudentDashboard() {
           </AnimatePresence>
 
           {/* Affiliate Program Invitation */}
-          {!isAffiliateBannerDismissed && (
+          {(() => {
+            console.log('[Dashboard] 🎯 Affiliate banner render check:', {
+              isAffiliateBannerDismissed,
+              shouldShow: !isAffiliateBannerDismissed,
+              isAffiliate,
+              affiliateStatus
+            })
+            return !isAffiliateBannerDismissed
+          })() && (
             <motion.div
               className="mb-6"
               initial={{ opacity: 0, y: 20 }}
@@ -1000,10 +1035,22 @@ export default function StudentDashboard() {
         {/* Recent Purchases from Shopify */}
         <ErrorBoundary componentName="Purchases Section">
           <div>
-            <PurchasesSection
-              userId={user?.id}
-              viewAllUrl="/dashboard/purchase-history"
-            />
+            {user?.id ? (
+              <PurchasesSection
+                userId={user.id}
+                viewAllUrl="/dashboard/purchase-history"
+              />
+            ) : (
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <div className="animate-pulse">
+                  <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                  <div className="space-y-3">
+                    <div className="h-4 bg-gray-200 rounded"></div>
+                    <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </ErrorBoundary>
 

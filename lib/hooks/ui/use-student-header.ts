@@ -40,10 +40,11 @@ export function useStudentHeader() {
 
   const loadUserData = useCallback((userId: string) => {
     if (userId) {
-      console.log(`[useStudentHeader] Calling main store loadUserDashboardData for userId: ${userId}`);
-      loadUserDashboardData(userId);
+      console.log(`[useStudentHeader] Data should already be loaded by dashboard - skipping redundant call`);
+      // Note: loadUserDashboardData is called by the dashboard page, not here
+      // This prevents redundant calls and infinite loops
     }
-  }, [loadUserDashboardData]);
+  }, []);
 
   return useMemo(() => ({
     courseProgress,

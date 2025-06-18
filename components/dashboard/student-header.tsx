@@ -163,12 +163,8 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
     }
   }, [isAuthReady, user?.id, userProfile, initializeAuthenticatedUser, clearUserState])
 
-  // Load additional dashboard data
-  useEffect(() => {
-    if (user?.id) {
-      loadUserData(user.id)
-    }
-  }, [user?.id, loadUserData])
+  // Note: Dashboard data is loaded by the dashboard page, not here
+  // This prevents redundant calls and infinite loops
 
   // Redirect to login if no user
   useEffect(() => {
