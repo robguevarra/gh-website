@@ -267,10 +267,10 @@ export const createTrackingPixelResponse = (): NextResponse => {
  * Extract affiliate tracking cookies from server-side cookies (for checkout)
  * @returns Object containing affiliate slug and visitor ID from server-side cookies
  */
-export const extractAffiliateTrackingFromServerCookies = (): { affiliateSlug: string | null; visitorId: string | null } => {
+export const extractAffiliateTrackingFromServerCookies = async (): Promise<{ affiliateSlug: string | null; visitorId: string | null }> => {
   try {
     const { cookies } = require('next/headers');
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     
     const affiliateSlug = cookieStore.get('gh_aff')?.value || null;
     const visitorId = cookieStore.get('gh_vid')?.value || null;

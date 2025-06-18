@@ -4,6 +4,7 @@
 
 import { getAdminClient } from '@/lib/supabase/admin';
 import { logTransaction } from './payment-utils'; // Import logTransaction
+import { extractAffiliateTrackingFromServerCookies } from '@/lib/services/affiliate/tracking-service';
 
 // Define payment method types
 export type PaymentMethod = "invoice" | "card" | "ewallet" | "direct_debit"
@@ -126,6 +127,16 @@ export async function createPaymentIntent(params: PaymentIntentParams): Promise<
 
     // --- Log Transaction Locally --- 
     try {
+      // Extract affiliate tracking cookies from server-side session
+      const { affiliateSlug, visitorId } = await extractAffiliateTrackingFromServerCookies();
+      
+      // Log affiliate tracking capture for debugging
+      if (affiliateSlug && visitorId) {
+        console.log(`[PaymentAction] Affiliate tracking captured: affiliate=${affiliateSlug}, visitor=${visitorId}`);
+      } else {
+        console.log('[PaymentAction] No affiliate tracking cookies found during checkout');
+      }
+      
       // Determine transaction type (assuming 'course' if description includes it)
       const transactionType = params.description?.includes("Course") ? 'course' : 'ebook';
       
@@ -139,7 +150,13 @@ export async function createPaymentIntent(params: PaymentIntentParams): Promise<
         // Add other relevant fields from params.metadata if needed
         promo_code: params.metadata?.promo_code,
         source: params.metadata?.source || 'website',
-        plan: params.metadata?.plan
+        plan: params.metadata?.plan,
+        // Add affiliate tracking data for conversion attribution
+        affiliateTracking: {
+          affiliateSlug,
+          visitorId,
+          capturedAt: new Date().toISOString()
+        }
       };
 
       // Remove null/undefined values from metadata before logging

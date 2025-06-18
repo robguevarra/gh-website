@@ -536,6 +536,11 @@ export async function POST(request: NextRequest) {
                         visitorId
                       });
                       
+                      // Calculate commission amount (assuming 25% commission rate for P2P)
+                      const gmvAmount = tx.amount || 0;
+                      const commissionRate = 0.25; // 25% commission
+                      const commissionAmount = gmvAmount * commissionRate;
+                      
                       // Record the conversion
                       const { success, conversionId } = await recordAffiliateConversion({
                         supabase,
@@ -543,8 +548,8 @@ export async function POST(request: NextRequest) {
                           affiliate_id: affiliateId as string, // Use type assertion as we've checked it's non-null
                           click_id: clickId,
                           order_id: tx.id, // Use transaction ID as order ID
-                          customer_id: tx.user_id,
-                          gmv: tx.amount || 0,
+                          gmv: gmvAmount,
+                          commission_amount: commissionAmount, // Required field matching database schema
                           level: 1, // Level 1 conversion
                           sub_id: subId
                         }

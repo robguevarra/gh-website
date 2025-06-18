@@ -1,13 +1,13 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
-// Define the conversion insert type until we create the schema file
+// Define the conversion insert type matching actual database schema
 type AffiliateConversionInsert = {
   affiliate_id: string;
   click_id: string | null;
   order_id: string;
-  customer_id: string | null;
   gmv: number;
+  commission_amount: number; // Required field in database
   level?: number;
   sub_id?: string | null;
 };
@@ -174,8 +174,8 @@ export const recordAffiliateConversion = async ({
         affiliate_id: conversionData.affiliate_id,
         click_id: conversionData.click_id,
         order_id: conversionData.order_id,
-        customer_id: conversionData.customer_id,
         gmv: conversionData.gmv,
+        commission_amount: conversionData.commission_amount, // Required field
         level: conversionData.level || 1, // Default to level 1
         status: 'pending', // Always start as pending
         sub_id: conversionData.sub_id

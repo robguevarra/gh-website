@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button"
 import { getTransactionByExternalId, TransactionDetails } from "@/app/actions/payment-actions"
 import { Suspense } from "react"
 
-// Define props for the page
+// Define props for the page (in Next.js 15, searchParams is a Promise)
 interface PaymentSuccessPageProps {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 // Loading component (can be reused)
@@ -24,8 +24,9 @@ function LoadingState() {
 
 // The server component that handles data fetching
 async function PaymentSuccessContent({ searchParams }: PaymentSuccessPageProps) {
-  // Access searchParams directly - it's not a Promise in Server Components
-  const externalId = typeof searchParams.id === 'string' ? searchParams.id : undefined;
+  // In Next.js 15, searchParams is a Promise and needs to be awaited
+  const resolvedSearchParams = await searchParams;
+  const externalId = typeof resolvedSearchParams.id === 'string' ? resolvedSearchParams.id : undefined;
   let transaction: TransactionDetails | null = null;
   let errorMessage: string | null = null;
 

@@ -240,3 +240,13 @@ The original conversion tracking system tried to extract affiliate cookies (`gh_
 - **Legacy transactions** will continue to work through fallback cookie method
 - **Conversion tracking accuracy** will improve significantly for future transactions
 - **Commission attribution** will be reliable and automatic
+
+### ✅ Critical Fix Applied
+- [x] **Identified missing implementation** - Realized affiliate tracking was only applied to cart-based checkout, not lead-based checkout
+- [x] **Updated payment-actions.ts** - Added affiliate tracking to `createPaymentIntent` function used by P2P and Canva flows
+- [x] **Added comprehensive logging** - Enhanced debugging to show when affiliate tracking is captured vs missing
+- [x] **Ensured complete coverage** - Both checkout flows (cart-based and lead-based) now capture affiliate tracking
+
+**Root Issue**: The logs showed transactions going through lead-based checkout (P2P/Canva pages) but affiliate tracking was only implemented in cart-based checkout. The recent transaction `e076b873-0848-42d7-b2a0-0602c05aebdc` used lead-based flow and missed affiliate attribution.
+
+**Solution**: Enhanced `createPaymentIntent` action to extract affiliate cookies and include them in transaction metadata, matching the implementation in cart checkout.
