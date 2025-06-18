@@ -12,7 +12,9 @@ import {
   CreditCard, 
   Eye, 
   Shield,
-  ArrowRight 
+  ArrowRight,
+  Clock,
+  AlertCircle
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -89,6 +91,16 @@ export interface ApplicationData {
   understandsPayout: boolean
 }
 
+// Affiliate status interface
+interface AffiliateStatus {
+  isAffiliate: boolean
+  status: string | null
+  existingData?: {
+    gcashNumber?: string
+    gcashName?: string
+  }
+}
+
 export function AffiliateApplicationWizard({ 
   isOpen, 
   onClose, 
@@ -98,6 +110,8 @@ export function AffiliateApplicationWizard({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true)
+  const [affiliateStatus, setAffiliateStatus] = useState<AffiliateStatus | null>(null)
   
   // Application data state
   const [applicationData, setApplicationData] = useState<ApplicationData>({
@@ -111,6 +125,13 @@ export function AffiliateApplicationWizard({
 
   const { user } = useAuth()
   const userContext = useStudentDashboardStore((state) => state.userContext)
+
+  // Check affiliate status when component opens
+  useEffect(() => {
+    if (isOpen && user?.id) {
+      checkAffiliateStatus()
+    }
+  }, [isOpen, user?.id])
 
   // Reset state when modal opens
   useEffect(() => {
@@ -129,6 +150,36 @@ export function AffiliateApplicationWizard({
       })
     }
   }, [isOpen])
+
+  // Function to check existing affiliate status and data
+  const checkAffiliateStatus = async () => {
+    if (!user?.id) return
+
+    setIsLoadingStatus(true)
+    try {
+      const response = await fetch(`/api/student/affiliate-status?userId=${user.id}`)
+      const data = await response.json()
+      
+      if (response.ok) {
+        setAffiliateStatus(data)
+        
+        // If user has existing data, pre-populate the form
+        if (data.existingData) {
+          setApplicationData(prev => ({
+            ...prev,
+            gcashNumber: data.existingData.gcashNumber || '',
+            gcashName: data.existingData.gcashName || ''
+          }))
+        }
+      } else {
+        console.error('Error checking affiliate status:', data.error)
+      }
+    } catch (error) {
+      console.error('Error checking affiliate status:', error)
+    } finally {
+      setIsLoadingStatus(false)
+    }
+  }
 
   // Check if current step is valid
   const isCurrentStepValid = () => {
@@ -229,8 +280,144 @@ export function AffiliateApplicationWizard({
 
   if (!isOpen) return null
 
+  // Show loading state while checking affiliate status
+  if (isLoadingStatus) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+          >
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-purple mx-auto mb-4"></div>
+              <p className="text-gray-600">Checking your application status...</p>
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    )
+  }
+
+  // Show different content based on affiliate status
+  if (affiliateStatus?.status === 'active') {
+    return (
+      <AnimatePresence>
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+          >
+            <div className="relative bg-gradient-to-r from-green-500 to-green-600 p-6">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-2 right-2 z-10 bg-white/80 backdrop-blur-sm hover:bg-white text-gray-700"
+                onClick={onClose}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              <div className="text-center text-white">
+                <CheckCircle className="h-12 w-12 mx-auto mb-3" />
+                <h2 className="text-xl font-medium">You're Already an Affiliate!</h2>
+                <p className="text-white/80 text-sm">Your application has been approved</p>
+              </div>
+            </div>
+            <div className="p-6 text-center">
+              <p className="text-gray-600 mb-4">
+                Congratulations! You're already an approved affiliate. Visit your affiliate portal to manage your account and track your performance.
+              </p>
+              <Button 
+                onClick={() => window.open('/affiliate-portal', '_blank')}
+                className="bg-brand-purple hover:bg-brand-purple/90"
+              >
+                Go to Affiliate Portal
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    )
+  }
+
+  // Show pending status if application already exists
+  if (affiliateStatus?.status === 'pending') {
+    return (
+      <AnimatePresence>
+        <motion.div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+          >
+            <div className="relative bg-gradient-to-r from-brand-purple to-brand-pink p-6">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-2 right-2 z-10 bg-white/80 backdrop-blur-sm hover:bg-white text-gray-700"
+                onClick={onClose}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              <div className="text-center text-white">
+                <Clock className="h-12 w-12 mx-auto mb-3" />
+                <h2 className="text-xl font-medium">Application Under Review</h2>
+                <p className="text-white/80 text-sm">Your affiliate application is being processed</p>
+              </div>
+            </div>
+            <div className="p-6 text-center">
+              <p className="text-gray-600 mb-4">
+                Your affiliate application is currently under review. We'll notify you by email once it's been approved. Thank you for your patience!
+              </p>
+              <div className="space-y-3">
+                <Button 
+                  onClick={onClose}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Close
+                </Button>
+                <Button 
+                  onClick={() => {
+                    // Allow user to update their application
+                    setAffiliateStatus({ ...affiliateStatus, status: null })
+                  }}
+                  variant="ghost"
+                  className="w-full text-sm text-gray-500 hover:text-gray-700"
+                >
+                  Update My Application
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    )
+  }
+
   const currentStepConfig = WIZARD_STEPS[currentStep]
   const StepComponent = currentStepConfig.component
+  const isUpdatingExisting = affiliateStatus?.isAffiliate && !affiliateStatus?.status
 
   return (
     <AnimatePresence>
@@ -265,10 +452,24 @@ export function AffiliateApplicationWizard({
                   {currentStepConfig.icon}
                 </div>
                 <div className="text-white">
-                  <h2 className="text-xl font-medium">{currentStepConfig.title}</h2>
-                  <p className="text-white/80 text-sm">{currentStepConfig.description}</p>
+                  <h2 className="text-xl font-medium">
+                    {isUpdatingExisting ? 'Update Your Application' : currentStepConfig.title}
+                  </h2>
+                  <p className="text-white/80 text-sm">
+                    {isUpdatingExisting ? 'Modify your affiliate application details' : currentStepConfig.description}
+                  </p>
                 </div>
               </div>
+
+              {/* Show update notice if applicable */}
+              {isUpdatingExisting && (
+                <Alert className="bg-white/10 border-white/20 text-white mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription className="text-white/90">
+                    You're updating an existing application. Changes will be reviewed before approval.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {/* Progress bar */}
               <div className="flex gap-1 mt-4">
@@ -291,10 +492,13 @@ export function AffiliateApplicationWizard({
                     <CheckCircle className="h-8 w-8 text-green-600" />
                   </div>
                   <h3 className="text-xl font-medium text-gray-900 mb-2">
-                    Application Submitted Successfully!
+                    {isUpdatingExisting ? 'Application Updated Successfully!' : 'Application Submitted Successfully!'}
                   </h3>
                   <p className="text-gray-600 mb-4">
-                    Your affiliate application is now pending review. You'll receive an email confirmation shortly.
+                    {isUpdatingExisting 
+                      ? 'Your affiliate application updates have been submitted for review.' 
+                      : 'Your affiliate application is now pending review. You\'ll receive an email confirmation shortly.'
+                    }
                   </p>
                   <p className="text-sm text-gray-500">
                     You can check your application status in your dashboard.
@@ -342,7 +546,7 @@ export function AffiliateApplicationWizard({
                     {isSubmitting ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                        Submitting...
+                        {isUpdatingExisting ? 'Updating...' : 'Submitting...'}
                       </>
                     ) : currentStep < WIZARD_STEPS.length - 1 ? (
                       <>
@@ -351,7 +555,7 @@ export function AffiliateApplicationWizard({
                       </>
                     ) : (
                       <>
-                        Submit Application
+                        {isUpdatingExisting ? 'Update Application' : 'Submit Application'}
                         <ArrowRight className="h-4 w-4 ml-1" />
                       </>
                     )}

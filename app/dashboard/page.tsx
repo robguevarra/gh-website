@@ -693,8 +693,11 @@ export default function StudentDashboard() {
 
   // Calculate if banner should show (simplified logic without debug logs)
   const shouldShowAffiliateBanner = useMemo(() => {
-    return !isAffiliateBannerDismissed && !isAffiliate;
-  }, [isAffiliateBannerDismissed, isAffiliate]);
+    // Show banner if:
+    // 1. Not dismissed AND
+    // 2. (Not an affiliate yet OR has pending status)
+    return !isAffiliateBannerDismissed && (!isAffiliate || affiliateStatus === 'pending');
+  }, [isAffiliateBannerDismissed, isAffiliate, affiliateStatus]);
 
 
 

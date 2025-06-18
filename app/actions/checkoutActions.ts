@@ -6,6 +6,7 @@ import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supab
 import { CartItem } from '@/stores/cartStore'; // Type for cart items
 import { type Database } from '@/types/supabase';
 import { type SupabaseClient } from '@supabase/supabase-js'; // Import SupabaseClient type
+import { extractAffiliateTrackingFromServerCookies } from '@/lib/services/affiliate/tracking-service';
 // TODO: Import Xendit client and necessary types
 // TODO: Import transaction logging utility (e.g., logTransaction from '@/lib/payment-utils')
 
@@ -227,12 +228,21 @@ export async function createXenditEcommercePayment(
     const randomSuffix = Math.random().toString(36).substring(2, 8);
     const externalId = `ecom-inv-${timestamp}-${randomSuffix}`;
 
+    // 4. Extract affiliate tracking cookies from server-side session
+    const { affiliateSlug, visitorId } = extractAffiliateTrackingFromServerCookies();
+    
     // 4. Prepare metadata for transaction log
     const transactionMetadata = {
       // Use the validated data collected above
       cartItems: validatedItemsData,
       userId: user.id,
       userEmail: user.email,
+      // Add affiliate tracking data for conversion attribution
+      affiliateTracking: {
+        affiliateSlug,
+        visitorId,
+        capturedAt: new Date().toISOString()
+      }
       // Add any other relevant info needed by the webhook
     };
 

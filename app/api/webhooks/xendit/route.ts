@@ -14,8 +14,9 @@ import { Json } from '@/types/supabase'
 import { grantFilePermission } from '@/lib/google-drive/driveApiUtils';
 import { sendTransactionalEmail } from '@/lib/email/transactional-email-service';
 // Import affiliate services
-import { 
+import {
   extractAffiliateTrackingCookies,
+  extractAffiliateTrackingFromMetadata,
   lookupAffiliateBySlug,
   findAttributableClick,
   recordAffiliateConversion,
@@ -504,8 +505,16 @@ export async function POST(request: NextRequest) {
                 try {
                   console.log('[Webhook][P2P] Starting affiliate conversion tracking');
                   
-                  // Extract affiliate tracking cookies from request
-                  const { affiliateSlug, visitorId } = extractAffiliateTrackingCookies(request);
+                  // First try to extract affiliate tracking from transaction metadata
+                  let { affiliateSlug, visitorId } = extractAffiliateTrackingFromMetadata(tx.metadata);
+                  
+                  // Fallback to cookies (legacy method) if not found in metadata
+                  if (!affiliateSlug || !visitorId) {
+                    console.log('[Webhook][P2P] No affiliate tracking in metadata, trying cookies (legacy)');
+                    const cookieData = extractAffiliateTrackingCookies(request);
+                    affiliateSlug = cookieData.affiliateSlug;
+                    visitorId = cookieData.visitorId;
+                  }
                   
                   if (affiliateSlug && visitorId) {
                     console.log(`[Webhook][P2P] Affiliate cookies found: slug=${affiliateSlug}, vid=${visitorId}`);

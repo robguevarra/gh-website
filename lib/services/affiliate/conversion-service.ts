@@ -13,7 +13,7 @@ type AffiliateConversionInsert = {
 };
 
 /**
- * Extract affiliate tracking cookies from the request headers
+ * Extract affiliate tracking cookies from the request headers (legacy method)
  * @param request The NextRequest object
  * @returns Object containing affiliate slug and visitor ID
  */
@@ -34,6 +34,31 @@ export const extractAffiliateTrackingCookies = (request: Request): { affiliateSl
     return { affiliateSlug, visitorId };
   } catch (error) {
     console.error('Error extracting affiliate tracking cookies:', error);
+    return { affiliateSlug: null, visitorId: null };
+  }
+};
+
+/**
+ * Extract affiliate tracking data from transaction metadata
+ * @param metadata Transaction metadata object
+ * @returns Object containing affiliate slug and visitor ID
+ */
+export const extractAffiliateTrackingFromMetadata = (metadata: any): { affiliateSlug: string | null; visitorId: string | null } => {
+  try {
+    // Extract affiliate tracking from transaction metadata
+    const affiliateTracking = metadata?.affiliateTracking;
+    if (!affiliateTracking) {
+      return { affiliateSlug: null, visitorId: null };
+    }
+    
+    const affiliateSlug = affiliateTracking.affiliateSlug || null;
+    const visitorId = affiliateTracking.visitorId || null;
+    
+    console.log(`[AffiliateTracking] Extracted from metadata: affiliate=${affiliateSlug}, visitor=${visitorId}`);
+    
+    return { affiliateSlug, visitorId };
+  } catch (error) {
+    console.error('Error extracting affiliate tracking from metadata:', error);
     return { affiliateSlug: null, visitorId: null };
   }
 };

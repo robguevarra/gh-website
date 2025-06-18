@@ -27,10 +27,10 @@ export async function GET(request: NextRequest) {
       }
     )
 
-    // Check if user is already an affiliate
+    // Check if user is already an affiliate and get their data
     const { data: affiliate, error } = await supabase
       .from('affiliates')
-      .select('id, status')
+      .select('id, status, gcash_number, gcash_name')
       .eq('user_id', userId)
       .single()
 
@@ -42,10 +42,16 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({
+    const response = {
       isAffiliate: !!affiliate,
-      status: affiliate?.status || null
-    })
+      status: affiliate?.status || null,
+      existingData: affiliate ? {
+        gcashNumber: affiliate.gcash_number || '',
+        gcashName: affiliate.gcash_name || ''
+      } : undefined
+    }
+
+    return NextResponse.json(response)
 
   } catch (error) {
     console.error('Affiliate status check error:', error)
