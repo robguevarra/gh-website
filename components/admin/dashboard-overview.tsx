@@ -32,10 +32,9 @@ export function DashboardOverview() {
         const currentState = useDashboardOverviewStore.getState();
         
         if (currentState.data === null) {
-             console.log("DashboardOverview: Data is null in store, calling fetchOverview...");
              fetchOverview(dateRange, granularity);
         } else {
-            console.log("DashboardOverview: Data exists in store, skipping fetch.");
+            // Data exists in store, skipping fetch
         }
     } else {
         console.warn("DashboardOverview: Skipping fetch, dateRange or granularity not ready.");

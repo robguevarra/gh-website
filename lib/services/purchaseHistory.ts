@@ -25,12 +25,15 @@ export interface Purchase {
 
 // Fetch and unify purchase history for a user
 export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] | null> {
-  console.log(`[fetchPurchaseHistory] Called with userId: ${userId}`);
   const supabase = getBrowserClient();
+  
+  // Declare variables at function scope
+  let ecommerceData: any[] | null = null;
+  let shopifyData: any[] | null = null;
+  
   try {
     // 1. Fetch Ecommerce Orders
-    console.log('[fetchPurchaseHistory] Fetching ecommerce orders...');
-    const { data: ecommerceData, error: ecommerceError } = await supabase
+    const { data: ecommerceOrdersData, error: ecommerceError } = await supabase
       .from('ecommerce_orders')
       .select(
         `
@@ -49,18 +52,21 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
       )
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    if (ecommerceError) console.error('[fetchPurchaseHistory] Ecommerce error:', ecommerceError);
-    console.log(`[fetchPurchaseHistory] Ecommerce orders fetched: ${ecommerceData?.length || 0} records`);
-
+    
+    if (ecommerceError) {
+      console.error('[fetchPurchaseHistory] Ecommerce error:', ecommerceError);
+    } else {
+      ecommerceData = ecommerceOrdersData;
+    }
+    
     // 2. Fetch Shopify Orders
-    console.log('[fetchPurchaseHistory] Starting Shopify orders fetch...');
-    let shopifyData: any[] | null = null;
     try {
       const { data: profileData, error: profileError } = await supabase
         .from('unified_profiles')
         .select('id')
         .eq('id', userId)
         .maybeSingle();
+        
       if (profileError) {
         console.error('[fetchPurchaseHistory] Profile error:', profileError);
       } else if (profileData?.id) {
@@ -68,6 +74,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
           .from('shopify_customers')
           .select('id')
           .eq('unified_profile_id', profileData.id);
+          
         if (customerError) {
           console.error('[fetchPurchaseHistory] Customer error:', customerError);
         } else if (customerData?.length) {
@@ -98,6 +105,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
             )
             .in('customer_id', customerIds)
             .order('created_at', { ascending: false});
+            
           if (shopifyError) {
             console.error('[fetchPurchaseHistory] Shopify orders error:', shopifyError);
           } else {
@@ -114,15 +122,15 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
                   
                 // Specifically check if shopify_products is included
                 if (fetchedShopify[0].shopify_order_items[0].shopify_products) {
-                  console.log('[fetchPurchaseHistory] Product data found in order item! 🎉');
+                  // Product data found
                 } else {
-                  console.log('[fetchPurchaseHistory] No product data in order item. Check RLS or query.');
+                  // No product data in order item
                 }
               } else {
-                console.log('[fetchPurchaseHistory] No order items found in first order');
+                // No order items found in first order
               }
             } else {
-              console.log('[fetchPurchaseHistory] No Shopify orders found');
+              // No Shopify orders found
             }
           }
         }
@@ -312,9 +320,6 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
 
     // 5. Sort by date
     unified.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    
-    console.log(`[fetchPurchaseHistory] Returning ${unified.length} total unified purchases`);
-    console.log('[fetchPurchaseHistory] Sample purchases:', unified.slice(0, 2).map(p => ({ id: p.id, order_number: p.order_number, source: p.source })));
     
     return unified;
   } catch (err) {

@@ -29,8 +29,8 @@ export const AffiliateTracker = ({
     // Check if URL contains affiliate parameter
     const params = new URLSearchParams(window.location.search);
     const hasAffParam = params.has('a') && Boolean(params.get('a'));
-    console.log('[AffiliateTracker] URL Params:', Object.fromEntries(params.entries()));
-    console.log('[AffiliateTracker] Has affiliate param:', hasAffParam);
+  
+    
     setHasAffiliateParam(hasAffParam);
   }, []);
 

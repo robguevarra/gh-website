@@ -155,10 +155,8 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
   // Initialize dashboard data when user is authenticated
   useEffect(() => {
     if (isAuthReady && user?.id && !userProfile) {
-      console.log('Initializing student dashboard store for user:', user.id);
       initializeAuthenticatedUser();
     } else if (isAuthReady && !user) {
-      console.log('Clearing student dashboard store - no user');
       clearUserState();
     }
   }, [isAuthReady, user?.id, userProfile, initializeAuthenticatedUser, clearUserState])

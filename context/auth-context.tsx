@@ -91,7 +91,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        console.log('Auth state change:', event, currentSession ? 'session exists' : 'no session');
+  
         
         if (currentSession && mounted) {
           // Use the user from the session directly instead of making another API call

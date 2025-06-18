@@ -48,14 +48,10 @@ export function PurchasesSection({
   viewAllUrl = "/dashboard/purchase-history",
   userId
 }: PurchasesSectionProps) {
-  console.log(`[PurchasesSection] Rendered with userId: ${userId}`);
-  
   // Use direct Zustand selectors for better performance (avoid intermediate hooks)
   const recentPurchases = useStudentDashboardStore((state) => state.purchases || [])
   const isLoading = useStudentDashboardStore((state) => state.isLoadingPurchases)
   const hasPurchasesError = useStudentDashboardStore((state) => state.hasPurchasesError)
-  
-  console.log(`[PurchasesSection] Hook state: purchases=${recentPurchases?.length || 0}, loading=${isLoading}, error=${hasPurchasesError}`);
   
   // Get section expansion state from centralized store
   const { isSectionExpanded, toggleSection } = useSectionExpansion()

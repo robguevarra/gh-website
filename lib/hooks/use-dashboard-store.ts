@@ -62,7 +62,7 @@ const logRender = (hookName: string): void => {
     useEffect(() => {
       // Return cleanup function to help with debugging
       return () => {
-        console.log(`[Performance] ${hookName} unmounted after ${renderCount.current} renders`)
+  
       }
     }, []) // Empty dependency array to ensure this only runs once
   }

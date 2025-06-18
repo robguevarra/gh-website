@@ -207,7 +207,7 @@ export const EnhancedAuthProvider = ({
                   // Log session activity with proper awaiting
                   try {
                     const { userAgent } = getClientInfo();
-                    console.log('Auth state change: Logging login for user:', signedInUser.id);
+            
                     await logSessionActivity({
                       userId: signedInUser.id,
                       activityType: SESSION_ACTIVITY_TYPES.LOGIN,
@@ -218,7 +218,7 @@ export const EnhancedAuthProvider = ({
                         loginMethod: 'auth_state_change'
                       }
                     });
-                    console.log('Auth state change: Login activity logged successfully');
+          
                   } catch (logError) {
                     console.error('Auth state change: Failed to log login activity:', logError);
                   }
@@ -230,7 +230,7 @@ export const EnhancedAuthProvider = ({
                 if (enhancedSession.user && enhancedSession.session) {
                   try {
                     const { userAgent } = getClientInfo();
-                    console.log('Auth state change: Logging logout for user:', enhancedSession.user.id);
+        
                     await logSessionActivity({
                       userId: enhancedSession.user.id,
                       activityType: SESSION_ACTIVITY_TYPES.LOGOUT,
@@ -241,7 +241,7 @@ export const EnhancedAuthProvider = ({
                         reason: 'auth_state_change'
                       }
                     });
-                    console.log('Auth state change: Logout activity logged successfully');
+        
                   } catch (logError) {
                     console.error('Auth state change: Failed to log logout activity:', logError);
                   }

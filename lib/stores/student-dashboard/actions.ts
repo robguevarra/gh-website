@@ -281,14 +281,11 @@ export const createActions = (
    * Load all user data for the dashboard
    */
   loadUserDashboardData: async (userId: string, force?: boolean) => {
-    console.log(`[Store Action] loadUserDashboardData called. UserID: ${userId}, Force: ${force}`);
     if (!userId) {
-      console.log('[Store Action] loadUserDashboardData: No userId provided, returning early');
       return;
     }
 
     const store = get() as StudentDashboardStore;
-    console.log('[Store Action] loadUserDashboardData: Starting parallel data loading...');
 
     try {
       // Load data in parallel including purchases
@@ -300,18 +297,7 @@ export const createActions = (
         store.loadPurchases(userId, force)
       ];
       
-      console.log('[Store Action] loadUserDashboardData: About to execute Promise.all with 5 promises including loadPurchases');
       await Promise.all(promises);
-      console.log('[Store Action] loadUserDashboardData: All parallel fetches completed successfully');
-      
-      // Log current purchases state after loading
-      const currentState = get();
-      console.log('[Store Action] loadUserDashboardData: Final purchases state:', {
-        purchasesCount: currentState.purchases?.length || 0,
-        isLoadingPurchases: currentState.isLoadingPurchases,
-        hasPurchasesError: currentState.hasPurchasesError,
-        lastPurchasesLoadTime: currentState.lastPurchasesLoadTime
-      });
       
     } catch (error) {
       console.error('[Store Action] loadUserDashboardData: Error loading dashboard data:', error);
@@ -334,7 +320,7 @@ export const createActions = (
     if (!userId || !courseId) return;
 
     set({ isLoadingEnrollments: true });
-    console.log(`[Store Action] Loading specific enrollment for user ${userId}, course ${courseId}`);
+
     
     try {
       const supabase = getBrowserClient();
@@ -375,7 +361,7 @@ export const createActions = (
       
       let lessonsData: any[] = [];
       if (modulesData && modulesData.length > 0) {
-        console.log(`[Store Action] Found ${modulesData.length} modules, fetching lessons...`);
+
         
         const moduleIds = modulesData.map(module => module.id);
         
@@ -389,7 +375,7 @@ export const createActions = (
           console.error('Error fetching lessons:', lessonsError);
         } else if (lessons) {
           lessonsData = lessons;
-          console.log(`[Store Action] Found ${lessonsData.length} lessons for course ${courseId}`);
+
         }
       }
       
@@ -493,7 +479,7 @@ export const createActions = (
       const supabase = getBrowserClient();
 
       // STEP 1: Fetch user enrollments with related course data - with specific user filter
-      console.log('[Store Action] Fetching enrollments from enrollments table for specific user...');
+  
       const { data: enrollments, error } = await supabase
         .from('enrollments')
         .select(`
@@ -527,7 +513,7 @@ export const createActions = (
       let formattedEnrollments: UserEnrollment[] = [];
       
       if (enrollments && enrollments.length > 0) {
-        console.log(`[Store Action] Found ${enrollments.length} enrollments, now fetching modules...`);
+
         
         // Get all course IDs from enrollments
         const courseIds = enrollments
@@ -547,7 +533,7 @@ export const createActions = (
         // STEP 3: Fetch lessons for all modules
         let lessonsData: any[] = [];
         if (modulesData && modulesData.length > 0) {
-          console.log(`[Store Action] Found ${modulesData.length} modules, now fetching lessons...`);
+
           
           const moduleIds = modulesData.map(module => module.id);
           
@@ -560,7 +546,7 @@ export const createActions = (
             console.error('Error fetching lessons:', lessonsError);
           } else if (lessons) {
             lessonsData = lessons;
-            console.log(`[Store Action] Found ${lessonsData.length} lessons`);
+
           }
         }
         
@@ -1125,7 +1111,7 @@ export const createActions = (
         appliedFilterType = 'collection';
         appliedFilterValue = filter.collectionHandle;
         const filterCondition = `{"${filter.collectionHandle}"}`;
-        console.log(`[Store Action] Applying collection filter: collection_handles cs ${filterCondition}`);
+
         // --- END LOGGING ---
 
         // Use contains filter for array column
@@ -1139,26 +1125,23 @@ export const createActions = (
         appliedFilterType = 'query';
         appliedFilterValue = filter.query;
         const filterCondition = `%${filter.query}%`;
-        console.log(`[Store Action] Applying search filter: title ilike ${filterCondition}`);
+
         // --- END LOGGING ---
 
         queryBuilder = queryBuilder.ilike('title', filterCondition); // Use logged variable
       } else {
-        console.log('[Store Action] Fetching all active products (no filter).');
+
         appliedFilterType = 'all'; // Log that no specific filter applied
       }
 
       // --- LOGGING QUERY EXECUTION ---
-      console.log(`[Store Action] Executing query with filter type: ${appliedFilterType}, value: ${appliedFilterValue}`);
+      
       // --- END LOGGING ---
 
       const { data, error } = await queryBuilder.returns<ProductWithVariantPrice[]>();
 
       // --- LOGGING RAW RESULTS ---
-      console.log('[Store Action] Raw Supabase response:', { data: data ? `(${data.length} items)` : data, error });
-      if (data && data.length > 0) {
-        console.log('[Store Action] First raw item:', data[0]); // Log first item for structure inspection
-      }
+      
       // --- END LOGGING ---
 
       if (error) {
@@ -1434,41 +1417,31 @@ export const createActions = (
    * Fetch purchase history with caching based on staleness
    */
   loadPurchases: async (userId: string, force = false) => {
-    console.log(`[Store Action] loadPurchases called. UserID: ${userId}, Force: ${force}`);
-    
     const { lastPurchasesLoadTime, purchases, isLoadingPurchases } = get() as StudentDashboardStore;
-    console.log(`[Store Action] loadPurchases: Current state check - purchases.length: ${purchases?.length || 0}, lastLoadTime: ${lastPurchasesLoadTime}, force: ${force}, isLoading: ${isLoadingPurchases}`);
     
     // Prevent simultaneous calls
     if (isLoadingPurchases) {
-      console.log('[Store Action] loadPurchases: Already loading, skipping to prevent race condition');
       return;
     }
     
     if (!force && purchases.length > 0 && lastPurchasesLoadTime && Date.now() - lastPurchasesLoadTime < STALE_THRESHOLD) {
-      console.log('[Store Action] loadPurchases: Data is fresh, skipping fetch');
       return;
     }
     
-    console.log('[Store Action] loadPurchases: Setting loading state and starting fetch');
     // trigger loading state
     set({ isLoadingPurchases: true, hasPurchasesError: false });
     
     try {
-      console.log('[Store Action] loadPurchases: Calling fetchPurchaseHistory...');
       const data = await fetchPurchaseHistory(userId);
-      console.log(`[Store Action] loadPurchases: fetchPurchaseHistory returned:`, data ? `${data.length} purchases` : 'null/undefined');
       
       const purchasesToSet = data ?? [];
       set({ purchases: purchasesToSet });
       set({ lastPurchasesLoadTime: Date.now() });
       
-      console.log(`[Store Action] loadPurchases: Successfully set ${purchasesToSet.length} purchases in store`);
     } catch (error) {
       console.error('[Store Action] loadPurchases error:', error);
       set({ hasPurchasesError: true });
     } finally {
-      console.log('[Store Action] loadPurchases: Setting isLoadingPurchases to false');
       set({ isLoadingPurchases: false });
     }
   },
@@ -1619,7 +1592,6 @@ export const createActions = (
 
     // Prevent re-fetch if already loading
     if (userContextLoading) {
-      console.log('[Store Action] fetchUserContext: Already loading, skipping.');
       return;
     }
 
@@ -1630,7 +1602,6 @@ export const createActions = (
       lastUserContextLoadTime &&
       Date.now() - lastUserContextLoadTime < STALE_THRESHOLD
     ) {
-      console.log('[Store Action] fetchUserContext: Data is fresh, skipping.');
       return;
     }
 

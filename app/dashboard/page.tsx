@@ -170,23 +170,9 @@ export default function StudentDashboard() {
       // Set user ID in store
       setUserId(user.id);
 
-      // Loading dashboard data for user
-      console.log('[Dashboard] Starting loadUserDashboardData for user:', user.id);
-
       // Load ALL dashboard data including purchases
       loadUserDashboardData(user.id).then(() => {
         // Dashboard data loaded successfully
-        console.log('[Dashboard] loadUserDashboardData completed successfully');
-        
-        // Log the current state to see what was loaded
-        const currentState = useStudentDashboardStore.getState();
-        console.log('[Dashboard] Current store state after loading:', {
-          enrollments: currentState.enrollments?.length || 0,
-          purchases: currentState.purchases?.length || 0,
-          isLoadingPurchases: currentState.isLoadingPurchases,
-          hasPurchasesError: currentState.hasPurchasesError,
-          lastPurchasesLoadTime: currentState.lastPurchasesLoadTime
-        });
       }).catch(error => {
         console.error('[Dashboard] Error loading dashboard data:', error);
         // Reset the ref if loading fails so we can retry
@@ -212,7 +198,6 @@ export default function StudentDashboard() {
       // Refresh data when the window gains focus
       // Use the loadUserDashboardData action, which now contains staleness logic
       if (user?.id) {
-        console.log('Window focused, triggering dashboard data refresh check...');
         // Call the function retrieved outside the effect
         loadUserDashboardData(user.id, true); // Pass true to indicate a refresh check
       }
@@ -226,15 +211,7 @@ export default function StudentDashboard() {
     };
   }, [user?.id, loadUserDashboardData]); // Depend on user ID and the load function
 
-  // Debug user state for PurchasesSection
-  useEffect(() => {
-    console.log('[Dashboard] User state changed:', { 
-      userId: user?.id, 
-      userLoaded: !!user, 
-      isAuthLoading,
-      userEmail: user?.email 
-    });
-  }, [user, isAuthLoading]);
+
 
   // Fetch live announcements
   useEffect(() => {
@@ -690,53 +667,36 @@ export default function StudentDashboard() {
   // Check affiliate status when user context loads
   useEffect(() => {
     const checkAffiliateStatus = async () => {
-      if (user?.id) {
-        console.log('[Dashboard] 🎯 Checking affiliate status for user:', user.id)
-        try {
-          const response = await fetch(`/api/student/affiliate-status?userId=${user.id}`)
-          if (response.ok) {
-            const data = await response.json()
-            console.log('[Dashboard] 🎯 Affiliate status response:', data)
-            setIsAffiliate(data.isAffiliate)
-            setAffiliateStatus(data.status)
-          } else {
-            console.log('[Dashboard] 🎯 Affiliate status response not ok:', response.status)
-          }
-        } catch (error) {
-          console.error('Error checking affiliate status:', error)
+      if (!user?.id) return;
+      
+      try {
+        const response = await fetch('/api/student/affiliate-status');
+        if (response.ok) {
+          const data = await response.json();
+          setIsAffiliate(data.isAffiliate);
+          setAffiliateStatus(data.status);
         }
+      } catch (error) {
+        console.error('Error checking affiliate status:', error);
       }
-    }
+    };
 
-    checkAffiliateStatus()
-  }, [user?.id])
+    checkAffiliateStatus();
+  }, [user?.id]);
 
-  // Check if banner was dismissed this session
+  // Force banner to show for all users - no debug logs needed
   useEffect(() => {
-    const dismissed = sessionStorage.getItem('affiliate-banner-dismissed')
-    console.log('[Dashboard] 🎯 STORAGE AUDIT - All storage keys:')
-    for (let i = 0; i < sessionStorage.length; i++) {
-      const key = sessionStorage.key(i)
-      if (key) {
-        const value = sessionStorage.getItem(key)
-        console.log(`[Dashboard] 🎯 STORAGE: ${key} = ${value}`)
-      }
-    }
-    console.log('[Dashboard] 🎯 Affiliate banner check - dismissed in sessionStorage:', dismissed)
-    console.log('[Dashboard] 🎯 Raw sessionStorage value type:', typeof dismissed)
-    
-    // FOR NEW USERS: Reset on every new session for testing
-    console.log('[Dashboard] 🎯 Clearing sessionStorage for fresh user experience')
-    sessionStorage.removeItem('affiliate-banner-dismissed')
-    setIsAffiliateBannerDismissed(false)
-    console.log('[Dashboard] 🎯 Banner should now be visible for all users')
-  }, [])
+    // Clear any dismissed state to ensure banner shows for all users
+    sessionStorage.removeItem('isAffiliateBannerDismissed');
+    setIsAffiliateBannerDismissed(false);
+  }, []);
 
-  // Handle banner dismissal
-  const dismissAffiliateBanner = () => {
-    setIsAffiliateBannerDismissed(true)
-    sessionStorage.setItem('affiliate-banner-dismissed', 'true')
-  }
+  // Calculate if banner should show (simplified logic without debug logs)
+  const shouldShowAffiliateBanner = useMemo(() => {
+    return !isAffiliateBannerDismissed && !isAffiliate;
+  }, [isAffiliateBannerDismissed, isAffiliate]);
+
+
 
   return (
     <div className="min-h-screen bg-[#f9f6f2]">
@@ -843,15 +803,7 @@ export default function StudentDashboard() {
           </AnimatePresence>
 
           {/* Affiliate Program Invitation */}
-          {(() => {
-            console.log('[Dashboard] 🎯 Affiliate banner render check:', {
-              isAffiliateBannerDismissed,
-              shouldShow: !isAffiliateBannerDismissed,
-              isAffiliate,
-              affiliateStatus
-            })
-            return !isAffiliateBannerDismissed
-          })() && (
+          {shouldShowAffiliateBanner && (
             <motion.div
               className="mb-6"
               initial={{ opacity: 0, y: 20 }}
@@ -861,7 +813,7 @@ export default function StudentDashboard() {
               <div className="bg-gradient-to-r from-brand-purple to-brand-pink rounded-xl p-6 text-white shadow-lg relative">
                 {/* Dismiss button */}
                 <button
-                  onClick={dismissAffiliateBanner}
+                  onClick={() => setIsAffiliateBannerDismissed(true)}
                   className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
                   aria-label="Dismiss banner"
                 >
