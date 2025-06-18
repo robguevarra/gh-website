@@ -333,12 +333,22 @@ export default function ConversionsPage() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const { stats: conversionStats } = await getConversionStats();
-        if (conversionStats) {
-          setStats(conversionStats);
+        const result = await getConversionStats();
+        if (result && result.stats) {
+          // Only update with the basic stats needed for this page
+          setStats({
+            total_pending: result.stats.total_pending,
+            total_flagged: result.stats.total_flagged,
+            total_cleared: result.stats.total_cleared,
+            total_paid: result.stats.total_paid
+          });
+        } else {
+          console.log('No stats returned, using defaults');
+          // Keep default stats (all zeros)
         }
       } catch (error) {
         console.error('Error fetching conversion stats:', error);
+        // Keep default stats on error
       } finally {
         setLoading(false);
       }

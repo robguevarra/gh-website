@@ -28,12 +28,13 @@ export interface SecurityHeadersConfig {
 // Default CSP directive
 const DEFAULT_CSP = `
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://apis.google.com https://www.googletagmanager.com https://editor.unlayer.com;
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://apis.google.com https://www.googletagmanager.com https://editor.unlayer.com https://player.vimeo.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://editor.unlayer.com;
-  img-src 'self' data: https: blob:;
+  img-src 'self' data: https: blob: https://i.vimeocdn.com https://*.vimeocdn.com;
   font-src 'self' https://fonts.gstatic.com;
-  connect-src 'self' https://*.supabase.co https://api.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com;
-  frame-src 'self' https://js.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com https://view.officeapps.live.com;
+  connect-src 'self' https://*.supabase.co https://api.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com https://api.vimeo.com https://*.vimeocdn.com;
+  frame-src 'self' https://js.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com https://view.officeapps.live.com https://player.vimeo.com;
+  media-src 'self' https://*.vimeocdn.com;
   object-src 'none';
   base-uri 'self';
   form-action 'self';

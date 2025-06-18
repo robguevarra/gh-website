@@ -23,7 +23,9 @@ const nextConfig = {
   images: {
     domains: [
       'gracefulhomeschooling.blob.core.windows.net',
-      'hebbkx1anhila5yf.public.blob.vercel-storage.com'
+      'hebbkx1anhila5yf.public.blob.vercel-storage.com',
+      'i.vimeocdn.com',
+      'f.vimeocdn.com'
     ],
     unoptimized: true,
   },
