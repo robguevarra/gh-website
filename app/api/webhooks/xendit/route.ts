@@ -22,6 +22,7 @@ import {
   recordAffiliateConversion,
   createNetworkPostback
 } from '@/lib/services/affiliate/conversion-service';
+import { sendAffiliateConversionNotification } from '@/lib/services/email/affiliate-notification-service';
 
 // Define a type for the expected transaction data
 interface Transaction {
@@ -557,6 +558,17 @@ export async function POST(request: NextRequest) {
                       
                       if (success) {
                         console.log(`[Webhook][P2P] Conversion recorded: ${conversionId}`);
+                        
+                        // --- Send Affiliate Conversion Email Notification ---
+                        try {
+                          console.log(`[Webhook][P2P] Sending affiliate conversion email for conversion: ${conversionId}`);
+                          await sendAffiliateConversionNotification(conversionId as string);
+                          console.log(`[Webhook][P2P] ✅ Affiliate conversion email sent successfully`);
+                        } catch (emailError) {
+                          console.error(`[Webhook][P2P] ❌ Failed to send affiliate conversion email:`, emailError);
+                          // Don't throw - email failure shouldn't break payment processing
+                        }
+                        // --- End Affiliate Email Notification ---
                         
                         // Check if this is a network partner (with subId) and create postback if needed
                         if (subId && affiliateSlug.includes('network_')) {

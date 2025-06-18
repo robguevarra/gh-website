@@ -192,6 +192,40 @@ const TEMPLATE_VARIABLES: TemplateVariablesMap = {
       category: 'system'
     }
   },
+
+  // Affiliate conversion notification variables
+  'affiliate-conversion': {
+    affiliateName: {
+      value: 'John Doe',
+      description: 'Name of the affiliate',
+      category: 'user'
+    },
+    customerName: {
+      value: 'Jane Smith',
+      description: 'Name of the customer who made the purchase',
+      category: 'user'
+    },
+    productName: {
+      value: 'Homeschooling Essentials Course',
+      description: 'Name of the product purchased',
+      category: 'content'
+    },
+    commissionAmount: {
+      value: '$25.00',
+      description: 'Commission amount earned',
+      category: 'content'
+    },
+    conversionDate: {
+      value: 'December 15, 2024',
+      description: 'Date when the conversion occurred',
+      category: 'event'
+    },
+    dashboardUrl: {
+      value: 'https://gracefulhomeschooling.com/affiliate-portal',
+      description: 'URL to affiliate dashboard',
+      category: 'action'
+    }
+  },
 };
 
 // Default variables for templates that don't have specific suggestions
@@ -242,6 +276,9 @@ export default function EmailTemplatesManager() {
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [templateToRename, setTemplateToRename] = useState<EmailTemplate | null>(null);
   const [newTemplateNameInput, setNewTemplateNameInput] = useState('');
+  
+  // ADD: Create template dialog state
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   
   // Fetch templates on mount
   useEffect(() => {
@@ -319,16 +356,34 @@ export default function EmailTemplatesManager() {
   const createNewTemplate = async (templateType: string, name: string, category: string) => {
     setIsLoading(true);
     try {
-      // Check if we have a template for this type
+      // Check if we have a starter template for this type
       const templateDesign = unlayerTemplates[templateType as keyof typeof unlayerTemplates];
       
-      if (!templateDesign) {
-        throw new Error(`No template found for type: ${templateType}`);
-      }
-      
-      // Generate a more predictable template ID format
-      // const sanitizedName = name.toLowerCase().replace(/\s+/g, '-'); // No longer needed
-      // const templateId = `${category}-${sanitizedName}-${Date.now().toString().slice(-6)}`; // Backend will generate UUID
+      // If no starter template exists, create a basic template structure
+      const designToUse = templateDesign || {
+        counters: { u_row: 1, u_column: 1, u_content_text: 1 },
+        body: {
+          rows: [{
+            cells: [1],
+            columns: [{
+              contents: [{
+                type: "text",
+                values: {
+                  containerPadding: "20px",
+                  text: `<h1>Welcome to ${name}</h1><p>This is your new ${templateType} template. You can customize it using the Unlayer editor.</p>`,
+                }
+              }],
+              values: { backgroundColor: "#ffffff", padding: "20px" }
+            }],
+            values: { backgroundColor: "#f8f9fa" }
+          }],
+          values: {
+            backgroundColor: "#f8f9fa",
+            contentWidth: "600px",
+            fontFamily: { label: "Arial", value: "arial,helvetica,sans-serif" }
+          }
+        }
+      };
 
       // Create the template in the database
       const response = await fetch('/api/admin/email-templates', {
@@ -337,20 +392,18 @@ export default function EmailTemplatesManager() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          // id: templateId, // Remove: Backend will generate the UUID
           name: name,
           category: category,
+          subcategory: templateType,
           description: `${name} template created using Unlayer Editor`,
-          isActive: true,
-          // Store the design JSON
-          design: templateDesign,
-          // Generate basic HTML from design
-          htmlTemplate: '',
+          design: designToUse,
+          subject: name,
         }),
       });
       
       if (!response.ok) {
-        throw new Error('Failed to create template');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create template');
       }
       
       const data = await response.json();
@@ -364,12 +417,11 @@ export default function EmailTemplatesManager() {
       await fetchTemplates();
       
       // Set the template details directly
-      if (data.template && data.template.id) { // Ensure template and its ID exist in response
-        // Use the complete template data from the response
+      if (data.template && data.template.id) {
         setSelectedTemplate(data.template);
         setEditedHtml(data.template.htmlTemplate || '');
         setDesignJson(data.template.design || null);
-        setPreviewVariables(getTemplateSuggestions(data.template.id)); // Use the new ID from response
+        setPreviewVariables(getTemplateSuggestions(data.template.id));
         setView('edit');
       }
     } catch (err) {
@@ -1148,6 +1200,7 @@ export default function EmailTemplatesManager() {
         { name: 'class-reminder', label: 'Class Reminder' },
         { name: 'purchase-confirmation', label: 'Purchase Confirmation' },
         { name: 'account-update', label: 'Account Update' },
+        { name: 'affiliate-conversion', label: 'Affiliate Conversion Notification' },
       ],
     },
     {
@@ -1205,7 +1258,7 @@ export default function EmailTemplatesManager() {
             </CardDescription>
           </div>
           <div className="flex items-center space-x-2">
-            <Dialog>
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
               <DialogTrigger asChild>
                 <Button variant="default">
                   <FileCode className="h-4 w-4 mr-2" />
@@ -1225,8 +1278,8 @@ export default function EmailTemplatesManager() {
                       Template Type
                     </Label>
                     <Select
+                      value={newTemplateType}
                       onValueChange={(value) => {
-                        // Store selected template type in state
                         setNewTemplateType(value);
                       }}
                     >
@@ -1234,12 +1287,19 @@ export default function EmailTemplatesManager() {
                         <SelectValue placeholder="Select a template type" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectGroup>
-                          <SelectLabel>Authentication</SelectLabel>
-                          <SelectItem value="email-verification">Email Verification</SelectItem>
-                          <SelectItem value="password-reset">Password Reset</SelectItem>
-                          <SelectItem value="welcome">Welcome</SelectItem>
-                        </SelectGroup>
+                        {TEMPLATE_CATEGORIES.map((category) => (
+                          <SelectGroup key={category.name}>
+                            <SelectLabel>{category.label}</SelectLabel>
+                            {category.subcategories.map((subcategory) => (
+                              <SelectItem 
+                                key={subcategory.name} 
+                                value={subcategory.name}
+                              >
+                                {subcategory.label}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1251,6 +1311,7 @@ export default function EmailTemplatesManager() {
                       id="name"
                       className="col-span-3"
                       placeholder="Template name"
+                      value={newTemplateName}
                       onChange={(e) => setNewTemplateName(e.target.value)}
                     />
                   </div>
@@ -1259,6 +1320,7 @@ export default function EmailTemplatesManager() {
                   <Button type="button" variant="secondary" onClick={() => {
                     setNewTemplateType('');
                     setNewTemplateName('');
+                    setShowCreateDialog(false);
                   }}>
                     Cancel
                   </Button>
@@ -1272,25 +1334,20 @@ export default function EmailTemplatesManager() {
                       return;
                     }
                     
-                    const name = newTemplateName || (
-                      TEMPLATE_CATEGORIES
-                        .find(c => {
-                          const subcategory = c.subcategories.find(s => newTemplateType.includes(s.name));
-                          return subcategory != null;
-                        })?.subcategories
-                        .find(s => newTemplateType.includes(s.name))?.label || 'New Template'
+                    const selectedCategory = TEMPLATE_CATEGORIES.find(c => 
+                      c.subcategories.some(s => s.name === newTemplateType)
                     );
                     
-                    const category = newTemplateType.includes('welcome') || newTemplateType.includes('password-reset') || newTemplateType.includes('verification') 
-                      ? 'authentication' 
-                      : newTemplateType.includes('reminder') 
-                        ? 'transactional' 
-                        : 'marketing';
+                    const selectedSubcategory = selectedCategory?.subcategories.find(s => s.name === newTemplateType);
+                    
+                    const name = newTemplateName || selectedSubcategory?.label || 'New Template';
+                    const category = selectedCategory?.name || 'transactional';
                       
                     createNewTemplate(newTemplateType, name, category);
                     
                     setNewTemplateType('');
                     setNewTemplateName('');
+                    setShowCreateDialog(false);
                   }}>
                     Create Template
                   </Button>

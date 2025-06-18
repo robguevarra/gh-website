@@ -9,8 +9,6 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
 import templateManager from '@/lib/services/email/template-manager';
 import { DetailedTemplate, TemplateMetadata, TemplateVariables } from './template-types';
 import { createRouteHandlerClient, validateAdminAccess, handleUnauthorized, handleAdminOnly } from '@/lib/supabase/route-handler';
@@ -59,7 +57,15 @@ export async function GET(request: NextRequest) {
     );
   }
   
-  const user = authResult.user
+  const user = authResult.user;
+  
+  // Ensure user is valid
+  if (!user) {
+    return NextResponse.json(
+      { error: 'User authentication failed' },
+      { status: 401 }
+    );
+  }
   
   // Check if we're getting a specific template
   const url = new URL(request.url);
@@ -280,8 +286,16 @@ export async function POST(request: NextRequest) {
   
   const user = authResult.user;
   
+  // Ensure user is valid
+  if (!user) {
+    return NextResponse.json(
+      { error: 'User authentication failed' },
+      { status: 401 }
+    );
+  }
+  
   try {
-    const { id, name, category, description, isActive, design, htmlTemplate } = await request.json();
+    const { name, category, subcategory, description, design, htmlTemplate, subject } = await request.json();
     
     if (!name || !category) {
       return NextResponse.json(
@@ -290,30 +304,10 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Use provided ID or generate a unique template ID
-    const baseTemplateId = id || `${category}-${name.toLowerCase().replace(/\s+/g, '-')}-${Date.now().toString().substring(9)}`;
+    // Get Supabase client
+    const supabase = await createRouteHandlerClient();
     
-    // Sanitize the template ID for consistent usage
-    const sanitizedId = sanitizeTemplateId(baseTemplateId);
-    
-    // Ensure the templates directory exists
-    const templatesDir = path.join(process.cwd(), 'lib/services/email/templates');
-    if (!fs.existsSync(templatesDir)) {
-      fs.mkdirSync(templatesDir, { recursive: true });
-    }
-    
-    // Create directory for category if it doesn't exist
-    const categoryDir = path.join(templatesDir, category);
-    if (!fs.existsSync(categoryDir)) {
-      fs.mkdirSync(categoryDir, { recursive: true });
-    }
-    
-    console.log(`Creating template: ${sanitizedId} in directory: ${categoryDir}`);
-    
-    // Create template file with sanitized ID
-    const templatePath = path.join(categoryDir, `${sanitizedId}.html`);
-    
-    // If we have HTML from the request, use it; otherwise, create a minimal starter template
+    // Create initial HTML content from design or use minimal template
     const initialHtml = htmlTemplate || `<!DOCTYPE html>
 <html>
 <head>
@@ -321,44 +315,62 @@ export async function POST(request: NextRequest) {
 </head>
 <body>
     <h1>${name}</h1>
-    <p>This is a starter template.</p>
+    <p>This is a starter template created with Unlayer.</p>
 </body>
 </html>`;
     
-    // Write the HTML file
-    fs.writeFileSync(templatePath, initialHtml, 'utf-8');
+    // Create the template in Supabase database
+    const { data: newTemplate, error: createError } = await supabase
+      .from('email_templates')
+      .insert({
+        name,
+        category,
+        subcategory: subcategory || null,
+        description: description || `${name} template created using Unlayer Editor`,
+        subject: subject || name,
+        html_content: initialHtml,
+        text_content: '', // Will be generated from HTML if needed
+        design: design || null,
+        version: 1,
+        active: true,
+        variables: [],
+        previous_versions: [],
+        metadata: {
+          createdBy: user.id,
+          createdAt: new Date().toISOString()
+        }
+      })
+      .select()
+      .single();
     
-    // Create metadata file with design JSON using sanitized ID
-    const metadataPath = path.join(categoryDir, `${sanitizedId}.metadata.json`);
-    const metadata = {
-      version: 1,
-      design: design || null,
-      category,
-      description: description || `${name} template`,
-      isActive: isActive !== undefined ? isActive : true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      createdBy: user.id,
+    if (createError) {
+      console.error('Error creating template in Supabase:', createError);
+      return NextResponse.json(
+        { error: `Failed to create template: ${createError.message}` },
+        { status: 500 }
+      );
+    }
+    
+    console.log(`✅ Template created successfully in Supabase:`, newTemplate.id);
+    
+    // Format the response to match the expected frontend structure
+    const formattedTemplate = {
+      id: newTemplate.id,
+      name: newTemplate.name,
+      category: newTemplate.category,
+      subcategory: newTemplate.subcategory,
+      design: newTemplate.design,
+      htmlTemplate: newTemplate.html_content,
+      renderedHtml: newTemplate.html_content,
+      subject: newTemplate.subject,
+      version: newTemplate.version,
+      updatedAt: newTemplate.updated_at,
       previousVersions: []
     };
     
-    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
-    
-    // Initialize template manager to refresh templates
-    await templateManager.initialize();
-    
-    // Return the sanitized ID to ensure consistency
     return NextResponse.json({ 
-      template: {
-        id: sanitizedId, // Use sanitized ID for consistency
-        name,
-        category,
-        design: metadata.design,
-        htmlTemplate: initialHtml,
-        renderedHtml: initialHtml, // For initial render
-        version: 1,
-        updatedAt: metadata.updatedAt
-      }
+      template: formattedTemplate,
+      message: 'Template created successfully'
     });
   } catch (error) {
     console.error('Failed to create template:', error);
@@ -389,6 +401,14 @@ export async function PUT(request: NextRequest) {
   }
   
   const user = authResult.user;
+  
+  // Ensure user is valid
+  if (!user) {
+    return NextResponse.json(
+      { error: 'User authentication failed' },
+      { status: 401 }
+    );
+  }
   
   try {
     const requestBody = await request.json();    
@@ -556,6 +576,14 @@ export async function PATCH(request: NextRequest) {
   }
   
   const user = authResult.user;
+  
+  // Ensure user is valid
+  if (!user) {
+    return NextResponse.json(
+      { error: 'User authentication failed' },
+      { status: 401 }
+    );
+  }
   
   try {
     // Convert request data

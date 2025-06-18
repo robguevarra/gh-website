@@ -12,7 +12,7 @@ export interface EmailVariable {
   placeholder: string; // e.g., '{{first_name}}' (for copying and substitution)
   description: string; // e.g., "The recipient's first name."
   sampleValue: string; // e.g., 'Alex'
-  category: 'Recipient Details' | 'Company & Legal' | 'Utility Links'; // Simplified categories
+  category: 'Recipient Details' | 'Company & Legal' | 'Utility Links' | 'Affiliate'; // Added Affiliate category
   dataKey?: string; // How the backend will identify this data point for substitution
   notes?: string; // Internal notes on sourcing or generation
 }
@@ -105,6 +105,71 @@ export const ALL_EMAIL_VARIABLES: EmailVariable[] = [
     sampleValue: '{{{pm:unsubscribe}}}',
     category: 'Utility Links', 
     notes: "This is a Postmark-specific tag, not a variable substituted by our system. The user inserts it directly into the template." 
+  },
+
+  // Affiliate Variables
+  { 
+    name: 'Affiliate Name', 
+    placeholder: '{{affiliate_name}}', 
+    description: "The affiliate's full name.", 
+    sampleValue: 'Jane Smith', 
+    category: 'Affiliate', 
+    dataKey: 'affiliate_name', 
+    notes: 'Source: unified_profiles.first_name + unified_profiles.last_name (via affiliates table)' 
+  },
+  { 
+    name: 'Customer Name', 
+    placeholder: '{{customer_name}}', 
+    description: "The customer's full name who made the purchase.", 
+    sampleValue: 'John Doe', 
+    category: 'Affiliate', 
+    dataKey: 'customer_name', 
+    notes: 'Source: unified_profiles.first_name + unified_profiles.last_name (via transactions table)' 
+  },
+  { 
+    name: 'Product Name', 
+    placeholder: '{{product_name}}', 
+    description: 'The name of the product that was purchased.', 
+    sampleValue: 'Digital Course Bundle', 
+    category: 'Affiliate', 
+    dataKey: 'product_name', 
+    notes: 'Source: Product metadata or transaction details' 
+  },
+  { 
+    name: 'Sale Amount', 
+    placeholder: '{{sale_amount}}', 
+    description: 'The total amount of the sale that generated the commission.', 
+    sampleValue: '₱1,000.00', 
+    category: 'Affiliate', 
+    dataKey: 'sale_amount', 
+    notes: 'Source: affiliate_conversions.gmv (formatted as currency)' 
+  },
+  { 
+    name: 'Commission Rate', 
+    placeholder: '{{commission_rate}}', 
+    description: 'The commission percentage rate for this affiliate.', 
+    sampleValue: '25%', 
+    category: 'Affiliate', 
+    dataKey: 'commission_rate', 
+    notes: 'Source: affiliates.commission_rate (formatted as percentage)' 
+  },
+  { 
+    name: 'Commission Amount', 
+    placeholder: '{{commission_amount}}', 
+    description: 'The commission amount earned by the affiliate.', 
+    sampleValue: '₱250.00', 
+    category: 'Affiliate', 
+    dataKey: 'commission_amount', 
+    notes: 'Source: affiliate_conversions.commission_amount (formatted as currency)' 
+  },
+  { 
+    name: 'Dashboard URL', 
+    placeholder: '{{dashboard_url}}', 
+    description: 'Link to the affiliate\'s dashboard.', 
+    sampleValue: 'https://new.gracefulhomeschooling.com/affiliate-portal', 
+    category: 'Affiliate', 
+    dataKey: 'dashboard_url', 
+    notes: 'Static URL to affiliate portal' 
   },
 ];
 
