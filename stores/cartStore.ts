@@ -40,6 +40,9 @@ interface CartState {
   openCartSheet: () => void;
   closeCartSheet: () => void;
   toggleCartSheet: () => void;
+
+  // New functions
+  clearLocalStorage: () => void;
 }
 
 // Get the supabase client
@@ -140,6 +143,13 @@ export const useCartStore = create<CartState>()(
       clearCart: () => {
         set({ items: [] });
         
+        // Also clear from localStorage to prevent persistence
+        try {
+          localStorage.removeItem('cart-storage');
+        } catch (error) {
+          console.error('Failed to clear cart from localStorage:', error);
+        }
+        
         // Schedule a sync with the database if user is logged in
         setTimeout(() => {
           const store = get();
@@ -149,15 +159,37 @@ export const useCartStore = create<CartState>()(
         }, 300);
       },
       
+      // Utility function to manually clear localStorage (for debugging/admin use)
+      clearLocalStorage: () => {
+        try {
+          localStorage.removeItem('cart-storage');
+          set({ items: [], userId: null, lastSynced: null });
+        } catch (error) {
+          console.error('Failed to clear localStorage:', error);
+        }
+      },
+      
       // Set the user ID when logging in/out
       setUserId: (userId) => {
+        const currentState = get();
+        const previousUserId = currentState.userId;
+        
         set({ userId });
         
         if (userId) {
-          // User just logged in, load their cart
+          // User just logged in
+          if (previousUserId && previousUserId !== userId) {
+            // Different user logging in - clear cart completely first
+            set({ items: [] });
+          }
+          
+          // Load their cart from database
           setTimeout(() => {
             get().loadUserCart(userId);
           }, 0);
+        } else {
+          // User logged out - clear the cart completely
+          set({ items: [] });
         }
       },
       
@@ -221,30 +253,25 @@ export const useCartStore = create<CartState>()(
             const cartItems: CartItem[] = data.map(item => ({
               productId: item.product_id,
               quantity: item.quantity,
-              title: item.title,
+              title: item.title || 'Untitled Product', // Handle null title
               price: item.price,
-              imageUrl: item.image_url,
+              imageUrl: item.image_url || '', // Handle null image_url
             }));
             
-            // Merge with existing items - prioritize database items but keep local ones if they don't exist in DB
-            const localItems = get().items;
-            const mergedItems: CartItem[] = [...cartItems];
-            
-            // Add local items that don't exist in the database
-            localItems.forEach(localItem => {
-              const exists = mergedItems.some(item => item.productId === localItem.productId);
-              if (!exists) {
-                mergedItems.push(localItem);
-              }
-            });
-            
-            set({ items: mergedItems });
+            // For security and data integrity, ONLY use database items
+            // Do not merge with local storage to prevent cross-user contamination
+            set({ items: cartItems });
+          } else {
+            // User has no saved cart items, start with empty cart
+            set({ items: [] });
           }
           
           set({ isSyncing: false, lastSynced: Date.now() });
         } catch (error) {
           console.error('Failed to load user cart:', error);
           set({ isSyncing: false });
+          // On error, clear cart to prevent potential contamination
+          set({ items: [] });
         }
       },
       
