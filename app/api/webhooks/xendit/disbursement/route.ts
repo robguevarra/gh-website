@@ -157,27 +157,45 @@ export async function POST(request: NextRequest) {
     // Initialize Supabase client
     const supabase = await createServiceRoleClient();
 
-    // Find the payout record by reference_id
-    // The reference_id should match our payout reference or follow pattern "payout_{id}"
-    let payoutQuery = supabase
-      .from('affiliate_payouts')
-      .select('*')
-      .eq('reference', payload.reference_id);
+    // Find the payout record - try multiple strategies
+    let payouts: any[] | null = null;
+    let payoutError: any = null;
 
-    // If not found by reference, try extracting payout ID from reference_id
-    if (payload.reference_id.startsWith('payout_')) {
-      const payoutIdMatch = payload.reference_id.match(/payout_([a-f0-9-]+)/);
-      if (payoutIdMatch) {
-        payoutQuery = payoutQuery.or(`id.eq.${payoutIdMatch[1]}`);
-      }
-    }
-
-    // Also try to find by metadata if available
+    // Strategy 1: Try by metadata payout_id first (most reliable)
     if (payload.metadata?.payout_id) {
-      payoutQuery = payoutQuery.or(`id.eq.${payload.metadata.payout_id}`);
+      console.log('Searching payout by metadata payout_id:', payload.metadata.payout_id);
+      const result = await supabase
+        .from('affiliate_payouts')
+        .select('*')
+        .eq('id', payload.metadata.payout_id);
+      
+      payouts = result.data;
+      payoutError = result.error;
     }
 
-    const { data: payouts, error: payoutError } = await payoutQuery;
+    // Strategy 2: If not found, try by reference_id
+    if ((!payouts || payouts.length === 0) && !payoutError) {
+      console.log('Searching payout by reference:', payload.reference_id);
+      const result = await supabase
+        .from('affiliate_payouts')
+        .select('*')
+        .eq('reference', payload.reference_id);
+      
+      payouts = result.data;
+      payoutError = result.error;
+    }
+
+    // Strategy 3: If still not found, try by xendit_disbursement_id
+    if ((!payouts || payouts.length === 0) && !payoutError) {
+      console.log('Searching payout by xendit_disbursement_id:', payload.id);
+      const result = await supabase
+        .from('affiliate_payouts')
+        .select('*')
+        .eq('xendit_disbursement_id', payload.id);
+      
+      payouts = result.data;
+      payoutError = result.error;
+    }
 
     if (payoutError) {
       console.error('Error querying payout:', payoutError);
