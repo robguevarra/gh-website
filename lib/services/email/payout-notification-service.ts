@@ -6,8 +6,7 @@
  * Replaces Xendit's generic email notifications with branded communications.
  */
 
-import { createPostmarkClient } from './postmark-client';
-import { substituteVariables, getStandardVariableDefaults } from './template-utils';
+import { sendTransactionalEmail } from '../../email/transactional-email-service';
 import { getAdminClient } from '../../supabase/admin';
 
 /**
@@ -192,50 +191,36 @@ export async function sendPayoutProcessingEmail(payoutId: string): Promise<boole
       return false;
     }
 
-    // Get the email template
-    const supabase = getAdminClient();
-    const { data: template, error: templateError } = await supabase
-      .from('email_templates')
-      .select('html_content, text_content, subject')
-      .eq('name', 'Affiliate Payout Processing')
-      .single();
+    // Prepare variables for the transactional email service
+    const variables = {
+      affiliateName: payoutData.affiliateName,
+      payoutAmount: payoutData.payoutAmount,
+      payoutMethod: payoutData.payoutMethod,
+      processingDate: payoutData.processingDate,
+      referenceId: payoutData.referenceId,
+      dashboardUrl: payoutData.dashboardUrl,
+    };
 
-    if (templateError || !template) {
-      console.error('❌ Payout processing template not found:', templateError);
+    // Validate email address
+    if (!payoutData.affiliateEmail) {
+      console.error('❌ No email address found for affiliate');
       return false;
     }
 
-    // Prepare variable substitutions
-    const variables = {
-      ...getStandardVariableDefaults(),
-      affiliate_name: payoutData.affiliateName,
-      payout_amount: payoutData.payoutAmount,
-      payout_method: payoutData.payoutMethod,
-      processing_date: payoutData.processingDate,
-      reference_id: payoutData.referenceId,
-      dashboard_url: payoutData.dashboardUrl,
-    };
+    // Send email using the centralized transactional email service
+    const result = await sendTransactionalEmail(
+      'Affiliate Payout Processing',
+      payoutData.affiliateEmail,
+      variables
+    );
 
-    // Substitute variables in content
-    const htmlContent = substituteVariables(template.html_content, variables);
-    const textContent = substituteVariables(template.text_content || '', variables);
-    const subject = substituteVariables(template.subject, variables);
-
-    // Send email via Postmark
-    const postmarkClient = createPostmarkClient();
-    const result = await postmarkClient.sendEmail({
-      from: { email: process.env.POSTMARK_FROM_EMAIL || 'noreply@gracefulhomeschooling.com', name: 'Graceful Homeschooling' },
-      to: { email: payoutData.affiliateEmail, name: payoutData.affiliateName },
-      subject: subject,
-      htmlBody: htmlContent,
-      textBody: textContent,
-      tag: 'affiliate-payout-processing',
-      trackOpens: true,
-      trackLinks: 'TextOnly',
-    });
-
-    console.log(`✅ Payout processing email sent successfully to ${payoutData.affiliateEmail}`);
-    return true;
+    if (result.success) {
+      console.log(`✅ Payout processing email sent successfully to ${payoutData.affiliateEmail}`);
+      return true;
+    } else {
+      console.error('❌ Failed to send payout processing email:', result.error);
+      return false;
+    }
 
   } catch (error) {
     console.error('❌ Error sending payout processing email:', error);
@@ -260,50 +245,36 @@ export async function sendPayoutSuccessEmail(payoutId: string): Promise<boolean>
       return false;
     }
 
-    // Get the email template
-    const supabase = getAdminClient();
-    const { data: template, error: templateError } = await supabase
-      .from('email_templates')
-      .select('html_content, text_content, subject')
-      .eq('name', 'Affiliate Payout Success')
-      .single();
-
-    if (templateError || !template) {
-      console.error('❌ Payout success template not found:', templateError);
+    // Validate email address
+    if (!payoutData.affiliateEmail) {
+      console.error('❌ No email address found for affiliate');
       return false;
     }
 
-    // Prepare variable substitutions
+    // Prepare variables for the transactional email service
     const variables = {
-      ...getStandardVariableDefaults(),
-      affiliate_name: payoutData.affiliateName,
-      payout_amount: payoutData.payoutAmount,
-      payout_method: payoutData.payoutMethod,
-      completion_date: payoutData.completionDate || payoutData.processingDate,
-      reference_id: payoutData.referenceId,
-      dashboard_url: payoutData.dashboardUrl,
+      affiliateName: payoutData.affiliateName,
+      payoutAmount: payoutData.payoutAmount,
+      payoutMethod: payoutData.payoutMethod,
+      completionDate: payoutData.completionDate || payoutData.processingDate,
+      referenceId: payoutData.referenceId,
+      dashboardUrl: payoutData.dashboardUrl,
     };
 
-    // Substitute variables in content
-    const htmlContent = substituteVariables(template.html_content, variables);
-    const textContent = substituteVariables(template.text_content || '', variables);
-    const subject = substituteVariables(template.subject, variables);
+    // Send email using the centralized transactional email service
+    const result = await sendTransactionalEmail(
+      'Affiliate Payout Success',
+      payoutData.affiliateEmail,
+      variables
+    );
 
-    // Send email via Postmark
-    const postmarkClient = createPostmarkClient();
-    const result = await postmarkClient.sendEmail({
-      from: { email: process.env.POSTMARK_FROM_EMAIL || 'noreply@gracefulhomeschooling.com', name: 'Graceful Homeschooling' },
-      to: { email: payoutData.affiliateEmail, name: payoutData.affiliateName },
-      subject: subject,
-      htmlBody: htmlContent,
-      textBody: textContent,
-      tag: 'affiliate-payout-success',
-      trackOpens: true,
-      trackLinks: 'TextOnly',
-    });
-
-    console.log(`✅ Payout success email sent successfully to ${payoutData.affiliateEmail}`);
-    return true;
+    if (result.success) {
+      console.log(`✅ Payout success email sent successfully to ${payoutData.affiliateEmail}`);
+      return true;
+    } else {
+      console.error('❌ Failed to send payout success email:', result.error);
+      return false;
+    }
 
   } catch (error) {
     console.error('❌ Error sending payout success email:', error);
@@ -328,50 +299,36 @@ export async function sendPayoutFailedEmail(payoutId: string): Promise<boolean> 
       return false;
     }
 
-    // Get the email template
-    const supabase = getAdminClient();
-    const { data: template, error: templateError } = await supabase
-      .from('email_templates')
-      .select('html_content, text_content, subject')
-      .eq('name', 'Affiliate Payout Failed')
-      .single();
-
-    if (templateError || !template) {
-      console.error('❌ Payout failed template not found:', templateError);
+    // Validate email address
+    if (!payoutData.affiliateEmail) {
+      console.error('❌ No email address found for affiliate');
       return false;
     }
 
-    // Prepare variable substitutions
+    // Prepare variables for the transactional email service
     const variables = {
-      ...getStandardVariableDefaults(),
-      affiliate_name: payoutData.affiliateName,
-      payout_amount: payoutData.payoutAmount,
-      failure_reason: payoutData.failureReason || 'Payment processing error occurred',
-      support_url: payoutData.supportUrl,
-      retry_date: payoutData.retryDate || 'Next scheduled payout cycle',
-      dashboard_url: payoutData.dashboardUrl,
+      affiliateName: payoutData.affiliateName,
+      payoutAmount: payoutData.payoutAmount,
+      failureReason: payoutData.failureReason || 'Payment processing error occurred',
+      supportUrl: payoutData.supportUrl,
+      retryDate: payoutData.retryDate || 'Next scheduled payout cycle',
+      dashboardUrl: payoutData.dashboardUrl,
     };
 
-    // Substitute variables in content
-    const htmlContent = substituteVariables(template.html_content, variables);
-    const textContent = substituteVariables(template.text_content || '', variables);
-    const subject = substituteVariables(template.subject, variables);
+    // Send email using the centralized transactional email service
+    const result = await sendTransactionalEmail(
+      'Affiliate Payout Failed',
+      payoutData.affiliateEmail,
+      variables
+    );
 
-    // Send email via Postmark
-    const postmarkClient = createPostmarkClient();
-    const result = await postmarkClient.sendEmail({
-      from: { email: process.env.POSTMARK_FROM_EMAIL || 'noreply@gracefulhomeschooling.com', name: 'Grace Homeschooling' },
-      to: { email: payoutData.affiliateEmail, name: payoutData.affiliateName },
-      subject: subject,
-      htmlBody: htmlContent,
-      textBody: textContent,
-      tag: 'affiliate-payout-failed',
-      trackOpens: true,
-      trackLinks: 'TextOnly',
-    });
-
-    console.log(`✅ Payout failed email sent successfully to ${payoutData.affiliateEmail}`);
-    return true;
+    if (result.success) {
+      console.log(`✅ Payout failed email sent successfully to ${payoutData.affiliateEmail}`);
+      return true;
+    } else {
+      console.error('❌ Failed to send payout failed email:', result.error);
+      return false;
+    }
 
   } catch (error) {
     console.error('❌ Error sending payout failed email:', error);

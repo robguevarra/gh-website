@@ -5,8 +5,7 @@
  * Integrates with Postmark email service and our template system.
  */
 
-import { createPostmarkClient } from './postmark-client';
-import { substituteVariables, getStandardVariableDefaults } from './template-utils';
+import { sendTransactionalEmail } from '../../email/transactional-email-service';
 import { getAdminClient } from '../../supabase/admin';
 
 /**
@@ -34,23 +33,12 @@ export async function fetchAffiliateConversionData(conversionId: string): Promis
   const supabase = getAdminClient();
   
   try {
-    // Get conversion with affiliate data
+    console.log(`[Debug] Fetching conversion data for ID: ${conversionId}`);
+    
+    // Step 1: Get conversion data
     const { data: conversion, error: conversionError } = await supabase
       .from('affiliate_conversions')
-      .select(`
-        id,
-        gmv,
-        commission_amount,
-        order_id,
-        affiliates!inner(
-          commission_rate,
-          unified_profiles!inner(
-            first_name,
-            last_name,
-            email
-          )
-        )
-      `)
+      .select('id, gmv, commission_amount, order_id, affiliate_id')
       .eq('id', conversionId)
       .single();
 
@@ -59,42 +47,60 @@ export async function fetchAffiliateConversionData(conversionId: string): Promis
       return null;
     }
 
-    // Get customer data from transaction
-    let transaction = null;
+    // Step 2: Get affiliate data
+    const { data: affiliate, error: affiliateError } = await supabase
+      .from('affiliates')
+      .select('id, commission_rate, user_id')
+      .eq('id', conversion.affiliate_id)
+      .single();
+
+    if (affiliateError || !affiliate) {
+      console.error('Error fetching affiliate data:', affiliateError);
+      return null;
+    }
+
+    // Step 3: Get affiliate profile data
+    const { data: profile, error: profileError } = await supabase
+      .from('unified_profiles')
+      .select('id, first_name, last_name, email')
+      .eq('id', affiliate.user_id)
+      .single();
+
+    if (profileError || !profile) {
+      console.error('Error fetching profile data:', profileError);
+      return null;
+    }
+
+    // Step 4: Get customer data from transaction (optional)
+    let customer = null;
     if (conversion.order_id) {
-      const { data: transactionData, error: transactionError } = await supabase
+      const { data: transaction, error: transactionError } = await supabase
         .from('transactions')
-        .select(`
-          id,
-          user_id,
-          unified_profiles(
-            first_name,
-            last_name,
-            email
-          )
-        `)
+        .select('id, user_id')
         .eq('id', conversion.order_id)
         .single();
 
-      if (transactionError) {
-        console.warn('Could not fetch customer data:', transactionError);
-      } else {
-        transaction = transactionData;
+      if (transaction?.user_id) {
+        const { data: customerProfile, error: customerError } = await supabase
+          .from('unified_profiles')
+          .select('first_name, last_name, email')
+          .eq('id', transaction.user_id)
+          .single();
+
+        if (!customerError && customerProfile) {
+          customer = customerProfile;
+        }
       }
     }
 
-    // Type assertion to handle the complex nested structure
-    const affiliate = (conversion as any).affiliates.unified_profiles;
-    const customer = transaction?.unified_profiles as any;
-    
     return {
       conversionId: conversion.id,
-      affiliateName: `${affiliate.first_name} ${affiliate.last_name}`.trim(),
-      affiliateEmail: affiliate.email,
+      affiliateName: `${profile.first_name} ${profile.last_name}`.trim(),
+      affiliateEmail: profile.email,
       customerName: customer ? `${customer.first_name} ${customer.last_name}`.trim() : 'Unknown Customer',
       productName: 'Digital Course Bundle', // TODO: Get from product/order data
       saleAmount: `₱${Number(conversion.gmv).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
-      commissionRate: `${Math.round(Number((conversion as any).affiliates.commission_rate) * 100)}%`,
+      commissionRate: `${Math.round(Number(affiliate.commission_rate) * 100)}%`,
       commissionAmount: `₱${Number(conversion.commission_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
       dashboardUrl: 'https://new.gracefulhomeschooling.com/affiliate-portal'
     };
@@ -114,74 +120,65 @@ export async function fetchAffiliateConversionData(conversionId: string): Promis
 export async function sendAffiliateConversionNotification(
   conversionId: string, 
   templateName: string = 'Affiliate Conversion Notification'
-) {
+): Promise<boolean> {
   try {
     console.log(`🎯 Starting affiliate notification for conversion: ${conversionId}`);
     
     // Fetch conversion data
     const conversionData = await fetchAffiliateConversionData(conversionId);
     if (!conversionData) {
-      throw new Error(`Could not fetch data for conversion: ${conversionId}`);
+      console.error('❌ Failed to fetch conversion data for affiliate notification');
+      return false;
     }
 
     console.log(`📧 Sending notification to: ${conversionData.affiliateEmail}`);
     console.log(`💰 Commission: ${conversionData.commissionAmount} from ${conversionData.saleAmount} sale`);
 
-    // Get the email template
-    const supabase = getAdminClient();
-    const { data: template, error: templateError } = await supabase
-      .from('email_templates')
-      .select('html_content, text_content, subject')
-      .eq('name', templateName)
-      .single();
-
-    if (templateError || !template) {
-      throw new Error(`Email template '${templateName}' not found: ${templateError?.message}`);
+    // Validate email address
+    if (!conversionData.affiliateEmail) {
+      console.error('❌ No email address found for affiliate');
+      return false;
     }
 
-    // Prepare variable substitution data
-    const emailVariables = {
-      ...getStandardVariableDefaults(),
-      affiliate_name: conversionData.affiliateName,
-      customer_name: conversionData.customerName,
-      product_name: conversionData.productName,
-      sale_amount: conversionData.saleAmount,
-      commission_rate: conversionData.commissionRate,
-      commission_amount: conversionData.commissionAmount,
-      dashboard_url: conversionData.dashboardUrl,
-      // Standard recipient details for this specific affiliate
-      first_name: conversionData.affiliateName.split(' ')[0],
-      last_name: conversionData.affiliateName.split(' ').slice(1).join(' '),
-      full_name: conversionData.affiliateName,
-      email_address: conversionData.affiliateEmail,
+    // Prepare variables for the transactional email service
+    const variables = {
+      affiliateName: conversionData.affiliateName,
+      customerName: conversionData.customerName,
+      productName: conversionData.productName,
+      saleAmount: conversionData.saleAmount,
+      commissionRate: conversionData.commissionRate,
+      commissionAmount: conversionData.commissionAmount,
+      dashboardUrl: conversionData.dashboardUrl,
+      // Additional standard fields
+      firstName: conversionData.affiliateName.split(' ')[0],
+      lastName: conversionData.affiliateName.split(' ').slice(1).join(' '),
+      fullName: conversionData.affiliateName,
+      emailAddress: conversionData.affiliateEmail,
     };
 
-    // Substitute variables in template content
-    const finalHtmlContent = substituteVariables(template.html_content, emailVariables);
-    const finalTextContent = substituteVariables(template.text_content || '', emailVariables);
-    const finalSubject = substituteVariables(template.subject, emailVariables);
+    console.log(`📝 Template: "${templateName}"`);
+    console.log(`📝 Variables:`, variables);
 
-    // Send the email via Postmark
-    const postmarkClient = createPostmarkClient();
-    const result = await postmarkClient.sendEmail({
-      to: { email: conversionData.affiliateEmail, name: conversionData.affiliateName },
-      subject: finalSubject,
-      htmlBody: finalHtmlContent,
-      textBody: finalTextContent,
-      tag: 'affiliate-conversion',
-      metadata: {
-        conversion_id: conversionId,
-        affiliate_email: conversionData.affiliateEmail,
-        commission_amount: conversionData.commissionAmount
-      }
-    });
+    // Send email using the centralized transactional email service
+    const result = await sendTransactionalEmail(
+      templateName,
+      conversionData.affiliateEmail,
+      variables
+    );
 
-    console.log(`✅ Email sent successfully! Message ID: ${result.MessageID}`);
-    return result;
+    console.log(`📧 Email service result:`, result);
+
+    if (result.success) {
+      console.log(`✅ Affiliate conversion email sent successfully to ${conversionData.affiliateEmail}`);
+      return true;
+    } else {
+      console.error('❌ Failed to send affiliate conversion email:', result.error);
+      return false;
+    }
 
   } catch (error) {
-    console.error('❌ Failed to send affiliate notification:', error);
-    throw error;
+    console.error('❌ Error sending affiliate conversion notification:', error);
+    return false;
   }
 }
 
@@ -189,7 +186,7 @@ export async function sendAffiliateConversionNotification(
  * Test function to send a sample affiliate notification
  * This is useful for testing the email template and service
  */
-export async function testAffiliateNotification(conversionId: string) {
+export async function testAffiliateNotification(conversionId: string): Promise<boolean> {
   console.log('🧪 Testing affiliate notification service...');
   
   try {
@@ -198,6 +195,6 @@ export async function testAffiliateNotification(conversionId: string) {
     return result;
   } catch (error) {
     console.error('💥 Test failed:', error);
-    throw error;
+    return false;
   }
 } 
