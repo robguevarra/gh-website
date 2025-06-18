@@ -350,9 +350,10 @@ class XenditPayoutService {
       amount: Math.round(payout.amount * 100) / 100, // Ensure 2 decimal places
       currency: 'PHP',
       description: payout.description || `Affiliate commission payout for ${payout.affiliate_id}`,
-      receipt_notification: payout.affiliate_email ? {
-        email_to: [payout.affiliate_email],
-      } : undefined,
+      // ❌ DISABLED: Xendit automatic emails replaced with custom branded email system
+      // receipt_notification: payout.affiliate_email ? {
+      //   email_to: [payout.affiliate_email],
+      // } : undefined,
       metadata: {
         affiliate_id: payout.affiliate_id,
         payout_id: payout.id,

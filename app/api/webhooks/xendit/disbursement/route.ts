@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { xenditPayoutService, XenditUtils } from '@/lib/services/xendit/disbursement-service';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { getAdminClient } from '@/lib/supabase/admin';
+import { 
+  sendPayoutProcessingEmail,
+  sendPayoutSuccessEmail,
+  sendPayoutFailedEmail 
+} from '@/lib/services/email/payout-notification-service';
 
 /**
  * Xendit Payouts Webhook Handler (v2 API)
@@ -211,6 +217,35 @@ export async function POST(request: NextRequest) {
         console.error('Error updating conversion statuses:', conversionError);
         // Don't fail the webhook for conversion update errors
       }
+    }
+
+    // --- Send Payout Status Email Notifications ---
+    try {
+      console.log(`[Webhook][Payout] Sending ${newStatus} email notification for payout: ${payout.id}`);
+      
+      let emailSent = false;
+      switch (newStatus) {
+        case 'processing':
+          emailSent = await sendPayoutProcessingEmail(payout.id);
+          break;
+        case 'paid':
+          emailSent = await sendPayoutSuccessEmail(payout.id);
+          break;
+        case 'failed':
+          emailSent = await sendPayoutFailedEmail(payout.id);
+          break;
+        default:
+          console.log(`[Webhook][Payout] No email template for status: ${newStatus}`);
+      }
+      
+      if (emailSent) {
+        console.log(`[Webhook][Payout] ✅ ${newStatus} email sent successfully for payout: ${payout.id}`);
+      } else {
+        console.log(`[Webhook][Payout] ⚠️ ${newStatus} email failed to send for payout: ${payout.id}`);
+      }
+    } catch (emailError) {
+      console.error(`[Webhook][Payout] ❌ Error sending ${newStatus} email for payout ${payout.id}:`, emailError);
+      // Don't fail the webhook for email errors - payment processing is more important
     }
 
     console.log('Successfully processed Xendit payout webhook (v2):', {

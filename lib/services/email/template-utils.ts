@@ -12,7 +12,7 @@ export interface EmailVariable {
   placeholder: string; // e.g., '{{first_name}}' (for copying and substitution)
   description: string; // e.g., "The recipient's first name."
   sampleValue: string; // e.g., 'Alex'
-  category: 'Recipient Details' | 'Company & Legal' | 'Utility Links' | 'Affiliate'; // Added Affiliate category
+  category: 'Recipient Details' | 'Company & Legal' | 'Utility Links' | 'Affiliate' | 'Payout'; // Added Payout category
   dataKey?: string; // How the backend will identify this data point for substitution
   notes?: string; // Internal notes on sourcing or generation
 }
@@ -111,56 +111,56 @@ export const ALL_EMAIL_VARIABLES: EmailVariable[] = [
   { 
     name: 'Affiliate Name', 
     placeholder: '{{affiliate_name}}', 
-    description: "The affiliate's full name.", 
-    sampleValue: 'Jane Smith', 
-    category: 'Affiliate', 
-    dataKey: 'affiliate_name', 
-    notes: 'Source: unified_profiles.first_name + unified_profiles.last_name (via affiliates table)' 
+    description: 'Full name of the affiliate earning the commission',
+    sampleValue: 'John Smith',
+    category: 'Affiliate',
+    dataKey: 'affiliate_name',
+    notes: 'Sourced from unified_profiles table via affiliates relationship' 
   },
   { 
     name: 'Customer Name', 
     placeholder: '{{customer_name}}', 
-    description: "The customer's full name who made the purchase.", 
-    sampleValue: 'John Doe', 
-    category: 'Affiliate', 
-    dataKey: 'customer_name', 
-    notes: 'Source: unified_profiles.first_name + unified_profiles.last_name (via transactions table)' 
+    description: 'Name of the customer who made the purchase',
+    sampleValue: 'Sarah Johnson',
+    category: 'Affiliate',
+    dataKey: 'customer_name',
+    notes: 'Sourced from unified_profiles via transaction relationship' 
   },
   { 
     name: 'Product Name', 
     placeholder: '{{product_name}}', 
-    description: 'The name of the product that was purchased.', 
-    sampleValue: 'Digital Course Bundle', 
-    category: 'Affiliate', 
-    dataKey: 'product_name', 
-    notes: 'Source: Product metadata or transaction details' 
+    description: 'Name of the product purchased',
+    sampleValue: 'Premium Course Package',
+    category: 'Affiliate',
+    dataKey: 'product_name',
+    notes: 'Currently uses generic product description' 
   },
   { 
     name: 'Sale Amount', 
     placeholder: '{{sale_amount}}', 
-    description: 'The total amount of the sale that generated the commission.', 
-    sampleValue: '₱1,000.00', 
-    category: 'Affiliate', 
-    dataKey: 'sale_amount', 
-    notes: 'Source: affiliate_conversions.gmv (formatted as currency)' 
+    description: 'Total amount of the customer purchase',
+    sampleValue: '$199.00',
+    category: 'Affiliate',
+    dataKey: 'sale_amount',
+    notes: 'Formatted currency amount from transactions table' 
   },
   { 
     name: 'Commission Rate', 
     placeholder: '{{commission_rate}}', 
-    description: 'The commission percentage rate for this affiliate.', 
-    sampleValue: '25%', 
-    category: 'Affiliate', 
-    dataKey: 'commission_rate', 
-    notes: 'Source: affiliates.commission_rate (formatted as percentage)' 
+    description: 'Percentage commission rate for the affiliate',
+    sampleValue: '15%',
+    category: 'Affiliate',
+    dataKey: 'commission_rate',
+    notes: 'Percentage from affiliates table commission_rate field' 
   },
   { 
     name: 'Commission Amount', 
     placeholder: '{{commission_amount}}', 
-    description: 'The commission amount earned by the affiliate.', 
-    sampleValue: '₱250.00', 
-    category: 'Affiliate', 
-    dataKey: 'commission_amount', 
-    notes: 'Source: affiliate_conversions.commission_amount (formatted as currency)' 
+    description: 'Dollar amount of commission earned',
+    sampleValue: '$29.85',
+    category: 'Affiliate',
+    dataKey: 'commission_amount',
+    notes: 'Calculated amount from affiliate_conversions table' 
   },
   { 
     name: 'Dashboard URL', 
@@ -170,6 +170,80 @@ export const ALL_EMAIL_VARIABLES: EmailVariable[] = [
     category: 'Affiliate', 
     dataKey: 'dashboard_url', 
     notes: 'Static URL to affiliate portal' 
+  },
+
+  // --- Payout Variables ---
+  {
+    name: 'Payout Amount',
+    placeholder: '{{payout_amount}}',
+    description: 'Total amount being paid out to the affiliate',
+    sampleValue: '$250.00',
+    category: 'Payout',
+    dataKey: 'payout_amount',
+    notes: 'Total payout amount from affiliate_payouts table'
+  },
+  {
+    name: 'Payout Method',
+    placeholder: '{{payout_method}}',
+    description: 'Method used for the payout (GCash, Bank Transfer, etc.)',
+    sampleValue: 'GCash',
+    category: 'Payout',
+    dataKey: 'payout_method',
+    notes: 'Derived from channel_code or payout_method field'
+  },
+  {
+    name: 'Processing Date',
+    placeholder: '{{processing_date}}',
+    description: 'Date when the payout processing started',
+    sampleValue: 'March 15, 2024',
+    category: 'Payout',
+    dataKey: 'processing_date',
+    notes: 'Formatted date from processed_at timestamp'
+  },
+  {
+    name: 'Completion Date',
+    placeholder: '{{completion_date}}',
+    description: 'Date when the payout was completed successfully',
+    sampleValue: 'March 16, 2024',
+    category: 'Payout',
+    dataKey: 'completion_date',
+    notes: 'Formatted date from updated processed_at for successful payouts'
+  },
+  {
+    name: 'Reference ID',
+    placeholder: '{{reference_id}}',
+    description: 'Unique reference number for the payout transaction',
+    sampleValue: 'PAY-20240315-001',
+    category: 'Payout',
+    dataKey: 'reference_id',
+    notes: 'Reference ID from affiliate_payouts table'
+  },
+  {
+    name: 'Failure Reason',
+    placeholder: '{{failure_reason}}',
+    description: 'Reason why the payout failed (for failed payout emails)',
+    sampleValue: 'Insufficient account balance',
+    category: 'Payout',
+    dataKey: 'failure_reason',
+    notes: 'Extracted from processing_notes or Xendit failure codes'
+  },
+  {
+    name: 'Support URL',
+    placeholder: '{{support_url}}',
+    description: 'Link to customer support for payout issues',
+    sampleValue: 'help@gracefulhomeschooling.com',
+    category: 'Payout',
+    dataKey: 'support_url',
+    notes: 'Static support page URL'
+  },
+  {
+    name: 'Retry Date',
+    placeholder: '{{retry_date}}',
+    description: 'Expected date for payout retry (for failed payouts)',
+    sampleValue: 'March 22, 2024',
+    category: 'Payout',
+    dataKey: 'retry_date',
+    notes: 'Calculated date for next payout attempt'
   },
 ];
 

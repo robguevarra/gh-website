@@ -16,6 +16,11 @@ import {
 import { revalidatePath } from 'next/cache';
 import { logAdminActivity } from '@/lib/actions/activity-log-actions';
 import { xenditDisbursementService, XenditUtils } from '@/lib/services/xendit/disbursement-service';  
+import { 
+  sendPayoutProcessingEmail,
+  sendPayoutSuccessEmail,
+  sendPayoutFailedEmail 
+} from '@/lib/services/email/payout-notification-service';
 
 interface GetAdminAffiliatePayoutsFilters {
   status?: PayoutStatusType;
@@ -1716,6 +1721,20 @@ export async function processPayoutsViaXendit({
           xenditId: xenditResponse.id,
           externalId: externalId,
         });
+
+        // --- Send Payout Processing Email Notification ---
+        try {
+          console.log(`[Payout] Sending processing email notification for payout: ${payout.id}`);
+          const emailSent = await sendPayoutProcessingEmail(payout.id);
+          if (emailSent) {
+            console.log(`[Payout] ✅ Processing email sent successfully for payout: ${payout.id}`);
+          } else {
+            console.log(`[Payout] ⚠️ Processing email failed to send for payout: ${payout.id}`);
+          }
+        } catch (emailError) {
+          console.error(`[Payout] ❌ Error sending processing email for payout ${payout.id}:`, emailError);
+          // Don't fail the payout for email errors - payment processing is more important
+        }
 
       } catch (error) {
         console.error(`Error processing payout ${payout.id} via Xendit:`, error);
