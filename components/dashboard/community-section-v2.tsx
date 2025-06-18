@@ -31,7 +31,7 @@ export function CommunitySection({
   isSectionExpanded,
   toggleSection,
   onJoinGroup,
-  facebookGroupUrl = 'https://www.facebook.com/groups/paperproductsgroup',
+  facebookGroupUrl = 'https://www.facebook.com/groups/1081234493223221',
   memberCount,
   isLoading = false
 }: CommunitySectionProps) {
@@ -111,7 +111,7 @@ export function CommunitySection({
                 <div className="rounded-lg overflow-hidden border border-[#1877F2]/20 shadow-sm h-32 relative bg-gray-100">
                   <div className="absolute inset-0 flex items-center justify-center">
                     <Image 
-                      src="/placeholder.svg?height=128&width=400&text=Facebook+Group+Preview" 
+                      src="gh-community.png" 
                       alt="Facebook Group Preview" 
                       width={400}
                       height={128}
@@ -121,55 +121,7 @@ export function CommunitySection({
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg border border-gray-100 p-4">
-                <h3 className="font-medium text-[#5d4037] mb-3">Community Highlights</h3>
-                <div className="space-y-3">
-                  {communityPosts.length > 0 ? (
-                    communityPosts.map((post) => (
-                      <div key={post.id} className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={post.user.avatar} alt={post.user.name} />
-                          <AvatarFallback>{post.user.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">{post.user.name}</div>
-                          <p className="text-xs text-[#6d4c41] line-clamp-1">
-                            {post.content}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src="/placeholder.svg?height=40&width=40&text=EP" alt="Emily Parker" />
-                          <AvatarFallback>EP</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">Emily Parker</div>
-                          <p className="text-xs text-[#6d4c41] line-clamp-1">
-                            Just made my first sale on Etsy! Thank you Grace for all your guidance!
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src="/placeholder.svg?height=40&width=40&text=MT" alt="Michael Thompson" />
-                          <AvatarFallback>MT</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">Michael Thompson</div>
-                          <p className="text-xs text-[#6d4c41] line-clamp-1">
-                            Anyone have tips for shipping internationally? I just got my first order from Canada!
-                          </p>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
+              
               <Button 
                 className="w-full bg-[#1877F2] hover:bg-[#1877F2]/90 shadow-sm transition-all duration-300 hover:shadow-md py-6"
                 onClick={handleJoinGroup}
