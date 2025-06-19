@@ -904,7 +904,7 @@ function HomeContent() {
             <div className="space-y-4">
               <h4 className="text-sm font-medium text-[#5d4037]">Quick Links</h4>
               <ul className="space-y-2">
-                {["Home", "Papers to Profits", "Shop", "About", "Login"].map((item, i) => (
+                {["Home", "Papers to Profits", "Shop", "Login"].map((item, i) => (
                   <li key={i}>
                     <Link
                       href="#"
