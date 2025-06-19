@@ -381,7 +381,7 @@ export default function ResourcesPage() {
               <ChevronLeft className="mr-2 h-4 w-4" />
               Back to Dashboard
             </Button>
-            <h1 className="text-2xl font-bold">Resources Library</h1>
+            <h1 className="text-2xl font-bold">Student Course Library</h1>
           </div>
           <div className="space-y-4">
             <Skeleton className="h-8 w-48" />
@@ -410,7 +410,7 @@ export default function ResourcesPage() {
               <ChevronLeft className="mr-2 h-4 w-4" />
               Back to Dashboard
             </Button>
-            <h1 className="text-2xl font-bold">Resources Library</h1>
+            <h1 className="text-2xl font-bold">Student Course Library</h1>
           </div>
           <div className="text-center py-12">
             <p className="text-red-500 mb-2">Failed to load resources</p>
@@ -474,7 +474,7 @@ export default function ResourcesPage() {
             <span className="group-hover:underline">Back to Dashboard</span>
           </Button>
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold text-[#5d4037]">Resources Library</h1>
+            <h1 className="text-3xl font-bold text-[#5d4037]">Student Course Library</h1>
             <Badge variant="outline" className="ml-2 bg-primary/10 text-primary font-normal text-xs border-primary/20">New</Badge>
           </div>
         </motion.div>
