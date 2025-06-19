@@ -556,171 +556,6 @@ All components now follow the established design context guidelines:
 
 **Next Phase**: Ready for any additional homepage enhancements or new features as needed. 
 
-### Step 21: Font & Color Consistency Between Components ✅ (COMPLETED)
-- [x] **Typography Alignment**: Ensured both YouTube and Facebook components use identical font patterns
-  - Both use `font-serif` for main headings (Playfair Display)
-  - Both use same gradient text effect: `bg-gradient-to-r from-primary via-accent/secondary to-secondary bg-clip-text text-transparent`
-  - Consistent heading hierarchy: `text-4xl md:text-5xl font-bold`
-  - Both use `font-semibold` for subscriber/follower counts
-- [x] **Color System Unification**: Replaced YouTube's `destructive` (red) colors with design context colors
-  - YouTube now uses `accent` (blue) for all branding elements instead of destructive red
-  - Consistent color mapping: Primary (purple), Secondary (pink), Accent (blue)
-  - Both components use same color patterns for interactive elements
-  - Subscriber badges, buttons, and highlights all use accent color for YouTube
-- [x] **Background Design Consistency**: Applied matching background treatments
-  - Both use `bg-gradient-to-br from-background via-background to-[color]/5`
-  - Both have floating blur orbs using design context colors
-  - YouTube: accent/primary/secondary blur orbs, Facebook: primary/secondary/accent blur orbs
-  - Both use relative positioning with proper z-index layering
-- [x] **Component Structure Alignment**: Matching layout patterns and spacing
-  - Both use Badge components with `variant="outline"` and backdrop-blur styling
-  - Both use motion animations with consistent timing (0.3s duration, easeOut)
-  - Both use proper container/padding structure with responsive design
-  - Touch targets and interactive elements follow same accessibility patterns
-
-**Result**: YouTube and Facebook components now share identical design language, typography, colors, and visual treatment while maintaining their unique content and functionality. Perfect alignment with design context specifications.
-
-## Next Steps
-- Monitor user engagement with new messaging
-- Consider A/B testing different CTA wording  
-- Plan shop section integration when ready
-- Test final mobile layout on various devices for optimal UX
-- YouTube API now ready for live deployment with real-time data 
-
-### Step 19: Filter YouTube Shorts - Show Only Long-Form Videos ✅
-- [x] **ADDED DURATION FILTERING**: Modified `getYouTubeVideos()` to filter out YouTube Shorts (videos under 60 seconds)
-- [x] **INTELLIGENT FETCHING**: Fetch 15 videos initially (5x the requested amount) to ensure enough long-form videos after filtering
-- [x] **DURATION PARSING**: Added `parseDurationToSeconds()` helper function to convert ISO 8601 duration to seconds
-- [x] **LONG-FORM FOCUS**: Only videos ≥60 seconds are displayed in social proof sections
-- [x] **BETTER CONTENT REPRESENTATION**: Social wall now showcases substantive educational/business content instead of quick clips
-- [x] **MAINTAINED API EFFICIENCY**: Filtering happens after fetching, no additional API calls required
-- [x] **DEBUG LOGGING**: Added logging to show filtering results ("Filtered X total videos to Y long-form videos")
-
-## Content Quality Improvement: Long-Form Videos Only 📚
-
-**Why This Matters:**
-- YouTube Shorts don't represent the depth of Grace's educational content
-- Long-form videos better showcase homeschooling expertise and business guidance
-- More professional presentation for potential customers
-- Better alignment with the "Papers to Profits" educational approach
-
-**Technical Implementation:**
-- Videos under 60 seconds are automatically filtered out
-- System fetches more videos initially to ensure enough long-form content
-- Graceful fallback to cached/fallback data if insufficient long-form videos found
-- Maintains all existing caching and error handling 
-
-### Step 20: FACEBOOK BUG CONFIRMED - WORKING SOLUTIONS IMPLEMENTED ✅
-- [x] **ROOT CAUSE DISCOVERED**: This is a **KNOWN FACEBOOK BUG** ongoing for 3+ years
-- [x] **Official Facebook Developer Threads**: Multiple developers reporting identical issue since 2021
-- [x] **Bug Description**: Facebook Page Plugin only works when user is logged OUT of Facebook
-- [x] **Not Our Code**: SDK loads perfectly, issue is Facebook's server returning empty content for logged-in users
-- [x] **Solution 1 Added**: `data-show-posts="true"` instead of `data-tabs="timeline"` (Test 9)
-- [x] **Solution 2 Added**: Legacy `fb-like-box` with Facebook API v2.4 (Test 10)
-- [x] **Evidence**: Console shows perfect SDK loading/parsing, but embeds still empty
-- [x] **Status**: Ready to test both working solutions
-
-## ✅ CONCLUSION: Facebook Integration Issue SOLVED
-- **Technical Implementation**: Perfect ✅ (Security headers, SDK loading, parsing all working)
-- **Facebook Bug**: Identified and documented ✅
-- **Working Solutions**: Two alternative methods implemented ✅  
-- **Next Step**: Test the new solutions (Test 9 & 10) and choose the best one for production 
-
-### Step 21: CSP FRAME-SRC VIOLATION IDENTIFIED & FIXED ✅
-- [x] **ROOT CAUSE CONFIRMED**: CSP `frame-src` directive blocking Facebook plugin domains
-- [x] **Issue**: CSP only allowed `https://www.facebook.com` but plugins load from `https://*.facebook.com` 
-- [x] **Symptoms Explained**: Elements had content but width=0, height=24 (blocked by CSP)
-- [x] **Fix Applied**: Added `https://*.facebook.com` and `https://web.facebook.com` to frame-src
-- [x] **Enhanced Logging**: Added specific Facebook CSP violation detection
-- [x] **Status**: CSP fixed, ready to test Facebook embeds again
-
-### Step 22: MIDDLEWARE NOT APPLYING FACEBOOK CSP - FIXED ✅
-- [x] **ISSUE IDENTIFIED**: `middleware.ts` was using `defaultSecurityMiddleware` instead of Facebook-friendly CSP
-- [x] **Root Cause**: CSP logged showed old policy without `https://*.facebook.com` wildcards
-- [x] **Solution**: Updated middleware to use `facebookFriendlySecurityHeaders` for homepage
-- [x] **Pages Fixed**: `/`, `/canva-ebook`, `/papers-to-profits` now get Facebook-friendly CSP
-- [x] **Enhanced Logging**: Fixed CSP violation logging to show actual violation details
-- [x] **Function Signature Fix**: Created proper async `facebookFriendlySecurityMiddleware` to match middleware pattern
-- [x] **Status**: Middleware now properly applies Facebook CSP, ready to test embeds
-
-## ✅ FACEBOOK INTEGRATION ISSUE FULLY RESOLVED
-- **Security Headers**: ✅ X-Frame-Options properly configured
-- **CSP Policy**: ✅ Facebook domains now properly whitelisted in frame-src  
-- **SDK Loading**: ✅ All Facebook SDKs loading successfully
-- **Element Detection**: ✅ All Facebook elements found and have content
-
-### Step 23: FACEBOOK API ENHANCED + AWARD-WINNING COMPONENT COMPLETE 🏆
-- [x] **API ENHANCED FOR MEDIA**: Updated to fetch 10 posts with full media support (images/videos)
-- [x] **REAL MEDIA INTEGRATION**: Added `full_picture` and `attachments` fields to API calls
-- [x] **VIDEO DETECTION**: Component now detects video content and shows play button overlays
-- [x] **COMPONENT COMPLETELY REFACTORED**: Award-winning design with sophisticated animations
-- [x] **MEDIA DISPLAY**: Beautiful media cards with video/photo badges and hover effects
-- [x] **FALLBACK ENHANCEMENT**: Enhanced fallback data includes 5 posts with media examples
-- [x] **PRODUCTION READY**: Clean, professional, no debug panels, performance optimized
-
-## 🎯 LIVE DATA CONFIRMED - REAL FACEBOOK CONTENT NOW DISPLAYING:
-- **Real Post Example**: "Long-arm Stapler ✨⚡️" (19 minutes ago)
-- **Real Media**: Full Facebook video with 405x720 resolution
-- [x] **Real Engagement**: 2 likes, 0 comments, 0 shares (actual live metrics)
-- [x] **Media Support**: Videos show play button overlay, photos show image badge
-- [x] **Feed Experience**: Real posts + enhanced fallback for consistent 5-post display
-
-### Step 24: FACEBOOK COMPONENT MASTER UPGRADE - SCROLLING + CLICKABLE + SMART FALLBACK 🚀
-- [x] **SCROLLABLE POSTS FEED**: 600px height scrollable area with custom scrollbar styling
-- [x] **BETTER ASPECT RATIOS**: Posts now use 4:3 aspect ratio for consistent, attractive layout
-- [x] **15 POSTS LOADING**: Increased from 10 to 15 posts for more content variety
-- [x] **CLICKABLE POSTS**: All posts clickable - videos open with play functionality, photos go to Facebook post
-- [x] **PERMALINK URLS**: API now fetches proper Facebook permalink URLs for direct post access
-- [x] **VIDEO DETECTION**: Smart detection of video vs photo content with appropriate actions
-- [x] **SMART FALLBACK**: If Facebook API fails, entire section disappears instead of showing fallback content
-- [x] **STICKY SIDEBAR**: Page info sidebar stays in view while scrolling through posts
-- [x] **HOVER STATES**: "View Post" button appears on hover with external link icons
-- [x] **IMPROVED PERFORMANCE**: Better error handling and loading states
-
-## FINAL STATUS: FACEBOOK INTEGRATION 100% COMPLETE & AWARD-WINNING! ✅
-- **API**: Real data with media support + 15 posts + clickable URLs ✅
-- **Component**: Award-winning design with scrolling + smart fallback ✅  
-- **User Experience**: Professional, engaging, performant, clickable ✅
-- **Content**: Real posts with videos/images + scroll feed ✅
-- **Performance**: Optimized caching, loading, and smart hiding ✅ 
-
-### Step 20: Performance & Animation Optimization ✅
-- [x] **Animation Performance**: Ensure smooth 60fps animations
-  - Used `motion-reduce:transition-none` for accessibility preferences
-  - Optimized framer-motion animations with proper easing functions
-  - Used CSS transforms instead of layout-affecting properties
-  - Staggered animations to prevent performance bottlenecks
-- [x] **Loading States**: Professional loading indicators with proper messaging
-  - Facebook: "Loading Facebook community..." with spinner
-  - YouTube: "Loading YouTube content..." with branded styling
-  - Used semantic colors (primary spinner, proper typography)
-- [x] **Error Handling**: Graceful fallbacks maintain design consistency
-  - Facebook component hides completely if API fails (no fallback data shown)
-  - YouTube shows branded error state with link to channel
-  - Maintains design system colors and typography in error states
-- [x] **Component Architecture**: Clean separation of concerns
-  - MediaDisplay component encapsulates image/video logic
-  - Proper TypeScript interfaces for all data structures
-  - Consistent error boundaries and loading states
-  - Server-side API calls with client-side rendering
-- [x] **Code Quality**: Following design context principles
-  - Semantic HTML with proper roles and ARIA attributes
-  - Consistent spacing using Tailwind utilities
-  - Design token usage (primary, secondary, accent, destructive)
-  - Mobile-first responsive design approach
-
-## ✅ **PHASE 1 COMPLETE - Design Context Compliance Achieved**
-
-All components now follow the established design context guidelines:
-- ✅ Typography: Serif fonts for headings (Playfair Display)
-- ✅ Color System: CSS variables and brand colors throughout
-- ✅ Animation: Consistent, accessible motion design
-- ✅ Layout: Mobile-first responsive grids and spacing
-- ✅ Accessibility: WCAG AA compliance with proper touch targets
-- ✅ Performance: Optimized animations and loading states
-
-**Next Phase**: Ready for any additional homepage enhancements or new features as needed. 
-
 ### Step 20: Fix Broken Profile Picture in Papers to Profits Social Proof ✅
 - [x] **IDENTIFIED ISSUE**: First profile picture URL in social proof section was returning 404 error
 - [x] **BROKEN URL**: `photo-1494790108755-2616b612b608` was no longer available on Unsplash
@@ -735,3 +570,43 @@ All components now follow the established design context guidelines:
 **Change**: Replaced broken Unsplash URL with working alternative
 **Impact**: Eliminates 404 error and ensures all 4 profile pictures display correctly
 **Verification**: All profile images now load properly in the enrollment CTA section
+
+### Step 21: Remove Blurred Circle Cursor Effect from Papers to Profits Page ✅
+- [x] **IDENTIFIED ISSUE**: Papers to Profits page still had active cursor tracking system causing blurred circle on button hover
+- [x] **ROOT CAUSE**: Custom cursor animation system was not removed from this page when homepage was cleaned up
+- [x] **REMOVED CURSOR STATE**: Deleted `cursorPosition` and `isHovering` state variables
+- [x] **REMOVED MOUSE TRACKING**: Eliminated `handleMouseMove` event listener and position tracking
+- [x] **REMOVED CURSOR RENDERING**: Deleted AnimatePresence wrapper and custom cursor visual element
+- [x] **CLEANED UP HEADER**: Removed `onHoverChange` prop from PublicHeader component
+- [x] **REMOVED ALL HOVER HANDLERS**: Used sed command to systematically remove all `onMouseEnter`/`onMouseLeave` handlers
+- [x] **PRESERVED FUNCTIONALITY**: Kept legitimate AnimatePresence usage for Success Message modal
+- [x] **MAINTAINED ANIMATIONS**: All button hover effects, motion variants, and page animations remain intact
+
+## Papers to Profits Cursor Fix Results
+**Problem Eliminated**: No more weird blurred circle appearing on button hover
+**Performance**: Reduced unnecessary mouse tracking and state updates
+**Clean Code**: Removed 50+ lines of unused cursor tracking code
+**User Experience**: Normal cursor behavior restored while maintaining button hover styles
+**Consistency**: Now matches homepage and other pages with no custom cursor effects
+
+### Step 22: Fix Facebook API Cache Logic & Investigate Token Issue ✅
+- [x] **INVESTIGATED FACEBOOK API FAILURE**: API returning cached fallback data but component hiding section
+- [x] **ROOT CAUSE IDENTIFIED**: Facebook Page Access Token invalid/expired (OAuth Error 2500)
+- [x] **FIXED COMPONENT LOGIC**: Updated `facebook-highlights.tsx` to show content when data exists, regardless of API success
+- [x] **IMPROVED ERROR HANDLING**: Only hide section when absolutely no data available (not on API failure)
+- [x] **ADDED DEBUGGING**: Enhanced logging to show data source (cache vs API) and post counts
+
+#### **Cache Behavior Documentation**:
+- **Cache TTL**: 60 minutes for Facebook data
+- **Cache Hit**: Returns immediately if valid data exists within 60 minutes  
+- **Cache Miss**: Makes fresh API call and stores result
+- **Cache Update**: Every 60 minutes or on successful API response
+- **Fallback Storage**: Failed API calls cache fallback data for consistency
+- **Location**: Supabase `api_cache` table with automatic cleanup
+
+#### **Next Steps Required**:
+- [ ] **UPDATE FACEBOOK TOKEN**: Current `FB_PAGE_ACCESS_TOKEN` needs renewal
+- [ ] **TEST API CONNECTIVITY**: Verify new token works with Graph API v18.0
+- [ ] **MONITOR CACHE**: Ensure fallback data displays properly until token fixed
+
+## Facebook Social Proof Section Enhancement ✅

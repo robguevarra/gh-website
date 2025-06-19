@@ -54,17 +54,26 @@ export function FacebookHighlights() {
       const response = await fetch('/api/facebook-data')
       const result = await response.json()
       
-      if (result.success && result.data) {
+      // Show content if we have data, regardless of API success/failure
+      // Only hide if there's absolutely no data
+      if (result.data && result.data.posts && result.data.posts.length > 0) {
         setData(result.data)
         setIsVisible(true)
+        console.log('📊 Facebook data loaded:', {
+          source: result.cached ? 'cache' : 'api',
+          success: result.success,
+          postsCount: result.data.posts.length
+        })
       } else {
-        // Hide section if Facebook API fails
-        console.log('Facebook API failed, hiding section')
+        // Only hide section if there's no data at all
+        console.log('❌ Facebook API failed with no fallback data')
         setIsVisible(false)
       }
     } catch (error) {
-      console.error('Error fetching Facebook data:', error)
-      setIsVisible(false) // Hide section on error
+      console.error('❌ Error fetching Facebook data:', error)
+      // Don't hide section immediately - API might have returned fallback data
+      // Only hide if we truly have no data to show
+      setIsVisible(false)
     } finally {
       setIsLoading(false)
     }

@@ -1054,8 +1054,6 @@ export default function PapersToProfit() {
                   <div className="flex justify-center mt-8">
                     <Button
                       className="bg-brand-purple hover:bg-[#8d6e63] text-white px-8 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-                      onMouseEnter={() => setIsHovering(true)}
-                      onMouseLeave={() => setIsHovering(false)}
                       onClick={() => {
                         const element = document.getElementById("enrollment-form")
                         if (element) {
@@ -1143,8 +1141,6 @@ export default function PapersToProfit() {
                       <div className="pt-4">
                         <Button
                           className="bg-brand-purple hover:bg-[#8d6e63] text-white"
-                          onMouseEnter={() => setIsHovering(true)}
-                          onMouseLeave={() => setIsHovering(false)}
                           onClick={() => {
                             const element = document.getElementById("enrollment-form")
                             if (element) {
@@ -1191,8 +1187,6 @@ export default function PapersToProfit() {
                     </p>
                     <Button
                       className="bg-brand-purple hover:bg-[#8d6e63] text-white"
-                      onMouseEnter={() => setIsHovering(true)}
-                      onMouseLeave={() => setIsHovering(false)}
                       onClick={() => {
                         const element = document.getElementById("enrollment-form")
                         if (element) {
@@ -1272,8 +1266,6 @@ export default function PapersToProfit() {
               <div className="flex justify-center mt-12">
                 <Button
                   className="bg-brand-purple hover:bg-[#8d6e63] text-white px-8 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-                  onMouseEnter={() => setIsHovering(true)}
-                  onMouseLeave={() => setIsHovering(false)}
                   onClick={() => {
                     const element = document.getElementById("enrollment-form")
                     if (element) {
@@ -1311,8 +1303,6 @@ export default function PapersToProfit() {
                   <Button
                     size="lg"
                     className="bg-white text-brand-purple hover:bg-white/90 px-8 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-                    onMouseEnter={() => setIsHovering(true)}
-                    onMouseLeave={() => setIsHovering(false)}
                     onClick={() => {
                       const element = document.getElementById("enrollment-form")
                       if (element) {
@@ -1330,8 +1320,6 @@ export default function PapersToProfit() {
                     size="lg"
                     variant="outline"
                     className="border-white text-brand-purple hover:bg-white/10 px-8 py-6 text-lg rounded-full"
-                    onMouseEnter={() => setIsHovering(true)}
-                    onMouseLeave={() => setIsHovering(false)}
                     onClick={() => {
                       const element = document.getElementById("course-details")
                       if (element) {
@@ -1375,8 +1363,6 @@ export default function PapersToProfit() {
                     key={i}
                     href="#"
                     className="text-brand-purple hover:text-[#8d6e63] transition-colors"
-                    onMouseEnter={() => setIsHovering(true)}
-                    onMouseLeave={() => setIsHovering(false)}
                   >
                     {social}
                   </Link>
@@ -1392,8 +1378,6 @@ export default function PapersToProfit() {
                       <Link
                         href="#"
                         className="text-sm text-[#6d4c41] hover:text-brand-purple transition-colors"
-                        onMouseEnter={() => setIsHovering(true)}
-                        onMouseLeave={() => setIsHovering(false)}
                       >
                         {item}
                       </Link>
@@ -1409,8 +1393,6 @@ export default function PapersToProfit() {
                       <Link
                         href="#"
                         className="text-sm text-[#6d4c41] hover:text-brand-purple transition-colors"
-                        onMouseEnter={() => setIsHovering(true)}
-                        onMouseLeave={() => setIsHovering(false)}
                       >
                         {item}
                       </Link>
@@ -1426,8 +1408,6 @@ export default function PapersToProfit() {
                       <Link
                         href="#"
                         className="text-sm text-[#6d4c41] hover:text-brand-purple transition-colors"
-                        onMouseEnter={() => setIsHovering(true)}
-                        onMouseLeave={() => setIsHovering(false)}
                       >
                         {item}
                       </Link>
