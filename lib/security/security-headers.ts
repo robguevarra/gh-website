@@ -23,17 +23,19 @@ export interface SecurityHeadersConfig {
   strictTransportSecurity?: boolean | string;
   // Custom headers to add
   customHeaders?: Record<string, string>;
+  // Allow Facebook embeds
+  allowFacebookEmbeds?: boolean;
 }
 
 // Default CSP directive
 const DEFAULT_CSP = `
   default-src 'self';
-  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://apis.google.com https://www.googletagmanager.com https://editor.unlayer.com https://player.vimeo.com;
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://apis.google.com https://www.googletagmanager.com https://editor.unlayer.com https://player.vimeo.com https://connect.facebook.net;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://editor.unlayer.com;
-  img-src 'self' data: https: blob: https://i.vimeocdn.com https://*.vimeocdn.com;
+  img-src 'self' data: https: blob: https://i.vimeocdn.com https://*.vimeocdn.com https://*.facebook.com https://*.fbcdn.net;
   font-src 'self' https://fonts.gstatic.com;
-  connect-src 'self' https://*.supabase.co https://api.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com https://api.vimeo.com https://*.vimeocdn.com;
-  frame-src 'self' https://js.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com https://view.officeapps.live.com https://player.vimeo.com;
+  connect-src 'self' https://*.supabase.co https://api.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com https://api.vimeo.com https://*.vimeocdn.com https://graph.facebook.com https://*.facebook.com;
+  frame-src 'self' https://js.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com https://view.officeapps.live.com https://player.vimeo.com https://www.facebook.com https://*.facebook.com https://web.facebook.com;
   media-src 'self' https://*.vimeocdn.com;
   object-src 'none';
   base-uri 'self';
@@ -41,6 +43,21 @@ const DEFAULT_CSP = `
   frame-ancestors 'self';
   block-all-mixed-content;
   upgrade-insecure-requests;
+`.replace(/\s+/g, ' ').trim();
+
+// CSP directive that allows Facebook embeds
+const FACEBOOK_FRIENDLY_CSP = `
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://apis.google.com https://www.googletagmanager.com https://editor.unlayer.com https://player.vimeo.com https://connect.facebook.net https://*.facebook.com https://staticxx.facebook.com;
+  style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://editor.unlayer.com https://*.facebook.com;
+  img-src 'self' data: https: blob: https://i.vimeocdn.com https://*.vimeocdn.com https://*.facebook.com https://*.fbcdn.net https://scontent-*.fbcdn.net;
+  font-src 'self' https://fonts.gstatic.com https://*.facebook.com;
+  connect-src 'self' https://*.supabase.co https://api.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com https://api.vimeo.com https://*.vimeocdn.com https://graph.facebook.com https://*.facebook.com;
+  frame-src 'self' https://js.stripe.com https://editor.unlayer.com https://drive.google.com https://docs.google.com https://view.officeapps.live.com https://player.vimeo.com https://www.facebook.com https://*.facebook.com https://web.facebook.com;
+  media-src 'self' https://*.vimeocdn.com https://*.facebook.com;
+  object-src 'none';
+  base-uri 'self';
+  form-action 'self';
 `.replace(/\s+/g, ' ').trim();
 
 // Default security headers configuration
@@ -57,6 +74,7 @@ const DEFAULT_CONFIG: SecurityHeadersConfig = {
     interest-cohort=()
   `.replace(/\s+/g, ' ').trim(),
   strictTransportSecurity: 'max-age=63072000; includeSubDomains; preload',
+  allowFacebookEmbeds: false,
 };
 
 /**
@@ -66,12 +84,18 @@ export function createSecurityHeaders(config: SecurityHeadersConfig = {}) {
   // Merge default config with provided config
   const mergedConfig = { ...DEFAULT_CONFIG, ...config };
   
-  return function securityHeadersMiddleware(_request: NextRequest, response: NextResponse) {
+  return function securityHeadersMiddleware(request: NextRequest, response: NextResponse) {
+    // Check if we need to allow Facebook embeds based on the request path
+    const needsFacebookEmbeds = mergedConfig.allowFacebookEmbeds || 
+      request.nextUrl.pathname === '/' || 
+      request.nextUrl.pathname === '/canva-ebook' ||
+      request.nextUrl.pathname === '/papers-to-profits';
+    
     // Content-Security-Policy
     if (mergedConfig.contentSecurityPolicy) {
       const cspValue = typeof mergedConfig.contentSecurityPolicy === 'string'
         ? mergedConfig.contentSecurityPolicy
-        : DEFAULT_CSP;
+        : (needsFacebookEmbeds ? FACEBOOK_FRIENDLY_CSP : DEFAULT_CSP);
       response.headers.set('Content-Security-Policy', cspValue);
     }
     
@@ -91,8 +115,8 @@ export function createSecurityHeaders(config: SecurityHeadersConfig = {}) {
       response.headers.set('X-Content-Type-Options', ctoValue);
     }
     
-    // X-Frame-Options
-    if (mergedConfig.frameOptions) {
+    // X-Frame-Options - Allow Facebook embeds by removing this header when needed
+    if (mergedConfig.frameOptions && !needsFacebookEmbeds) {
       const frameValue = typeof mergedConfig.frameOptions === 'string'
         ? mergedConfig.frameOptions
         : 'SAMEORIGIN';
@@ -136,3 +160,16 @@ export function createSecurityHeaders(config: SecurityHeadersConfig = {}) {
 
 // Export a default instance with standard configuration
 export const securityHeaders = createSecurityHeaders();
+
+// Export a Facebook-friendly instance for pages with social media embeds
+export const facebookFriendlySecurityHeaders = createSecurityHeaders({
+  allowFacebookEmbeds: true,
+});
+
+// Create a proper middleware function that matches the SecurityMiddleware type
+export async function facebookFriendlySecurityMiddleware(
+  request: NextRequest,
+  response: NextResponse
+): Promise<NextResponse> {
+  return facebookFriendlySecurityHeaders(request, response);
+}

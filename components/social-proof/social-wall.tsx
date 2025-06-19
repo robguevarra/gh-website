@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useRef, useState, useEffect } from "react"
 import { motion, useScroll, useTransform, useInView, AnimatePresence } from "framer-motion"
 import Image from "next/image"
 import Link from "next/link"
@@ -19,12 +19,226 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
+// Types for API data
+interface SocialData {
+  youtube: {
+    subscriberCount: number
+    latestVideo?: {
+      title: string
+      views: string
+      duration: string
+      thumbnail: string
+    }
+  }
+  facebook: {
+    followerCount: number
+  }
+}
+
+// Types for video content
+interface VideoContent {
+  id: number
+  type: "youtube" | "facebook"
+  title: string
+  image: string
+  link: string
+  stats: { views?: string; likes: string; comments: string; shares?: string }
+  date: string
+}
+
 export function SocialWall() {
   const containerRef = useRef<HTMLDivElement>(null)
   const isInView = useInView(containerRef, { once: true, margin: "-100px" })
   const [activeTab, setActiveTab] = useState<"all" | "youtube" | "facebook">("all")
   const [hoveredCard, setHoveredCard] = useState<number | null>(null)
   const [hoveredPlatform, setHoveredPlatform] = useState<string | null>(null)
+  
+  // Real social data state
+  const [socialData, setSocialData] = useState<SocialData>({
+    youtube: {
+      subscriberCount: 101000, // Fallback data
+      latestVideo: {
+        title: "Papers to Profits: Transform Your Homeschool Journey",
+        views: "35K",
+        duration: "14:22",
+        thumbnail: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/journals%20and%20planners-QAz8IyztDboLcJArffAdH4EQH4qOol.png"
+      }
+    },
+    facebook: {
+      followerCount: 154000 // Fallback data
+    }
+  })
+  const [isLoading, setIsLoading] = useState(false)
+  
+  // Real social content state - will be populated from API
+  const [socialContent, setSocialContent] = useState<VideoContent[]>([])
+
+  // Fetch real social data and populate content
+  useEffect(() => {
+    const fetchSocialData = async () => {
+      try {
+        setIsLoading(true)
+        
+        // Fetch YouTube data from our server API
+        const youtubeResponse = await fetch('/api/youtube-data')
+        if (youtubeResponse.ok) {
+          const youtubeData = await youtubeResponse.json()
+          if (youtubeData.success && youtubeData.videos && youtubeData.videos.length > 0) {
+            // Update social data with real channel info
+            const latestVideo = youtubeData.videos[0]
+            setSocialData(prev => ({
+              ...prev,
+              youtube: {
+                subscriberCount: youtubeData.channel.subscriberCount,
+                latestVideo: latestVideo ? {
+                  title: latestVideo.title,
+                  views: formatViews(latestVideo.viewCount),
+                  duration: latestVideo.duration,
+                  thumbnail: latestVideo.thumbnailUrl
+                } : prev.youtube.latestVideo
+              }
+            }))
+            
+            // Create real social content from API data
+            const realYouTubeContent: VideoContent[] = youtubeData.videos.map((video: any, index: number) => ({
+              id: index + 1,
+              type: "youtube" as const,
+              title: video.title,
+              image: video.thumbnailUrl,
+              link: "https://www.youtube.com/@gracefulhomeschooling",
+              stats: { 
+                views: formatViews(video.viewCount), 
+                likes: formatViews(video.likeCount), 
+                comments: video.commentCount.toString() 
+              },
+              date: formatPublishedDate(video.publishedAt),
+            }))
+            
+            // Add some Facebook content (keeping a few curated posts for now)
+            const facebookContent: VideoContent[] = [
+              {
+                id: 10,
+                type: "facebook",
+                title: "Success Story: From YouTube Viewer to Business Owner",
+                image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/journals%26planners2-pYMevHnwxaHaXZ3qlWUF18bMpXjxwy.png",
+                link: "https://www.facebook.com/GracefulHomeschoolingbyEmigrace/",
+                stats: { likes: "1.2K", comments: "156", shares: "89" },
+                date: "2 weeks ago",
+              },
+              {
+                id: 11,
+                type: "facebook",
+                title: "Student Success Story: EMJ ALFARO",
+                image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/testimonials1.jpg-vdiuWnYVM7nV2SaQDk81F9HXwPJVQE.jpeg",
+                link: "https://www.facebook.com/GracefulHomeschoolingbyEmigrace/",
+                stats: { likes: "347", comments: "42", shares: "15" },
+                date: "1 month ago",
+              },
+              {
+                id: 12,
+                type: "facebook",
+                title: "Homeschooling Workshop Highlights",
+                image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/testimonials2-pX2f6lNy6Aa6QnwvxHcosIfvJbB5xu.png",
+                link: "https://www.facebook.com/GracefulHomeschoolingbyEmigrace/",
+                stats: { likes: "289", comments: "34", shares: "8" },
+                date: "2 months ago",
+              },
+            ]
+            
+            // Combine YouTube (real) + Facebook (curated) content
+            setSocialContent([...realYouTubeContent, ...facebookContent])
+          }
+        }
+        
+        // Fetch Facebook data from new Facebook API
+        const facebookResponse = await fetch('/api/facebook-data')
+        if (facebookResponse.ok) {
+          const facebookData = await facebookResponse.json()
+          if (facebookData.success && facebookData.data?.page?.followers_count) {
+            setSocialData(prev => ({
+              ...prev,
+              facebook: {
+                followerCount: facebookData.data.page.followers_count
+              }
+            }))
+          }
+        }
+        
+      } catch (error) {
+        console.log("Could not fetch real social data, using fallback:", error)
+        // Create fallback content if API fails
+        const fallbackContent: VideoContent[] = [
+          {
+            id: 1,
+            type: "youtube",
+            title: "Papers to Profits: Transform Your Homeschool Journey",
+            image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/journals%20and%20planners-QAz8IyztDboLcJArffAdH4EQH4qOol.png",
+            link: "https://www.youtube.com/@gracefulhomeschooling",
+            stats: { views: "35K", likes: "2.1K", comments: "287" },
+            date: "1 week ago",
+          },
+          {
+            id: 2,
+            type: "facebook",
+            title: "Success Story: From YouTube Viewer to Business Owner",
+            image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/journals%26planners2-pYMevHnwxaHaXZ3qlWUF18bMpXjxwy.png",
+            link: "https://www.facebook.com/GracefulHomeschoolingbyEmigrace/",
+            stats: { likes: "1.2K", comments: "156", shares: "89" },
+            date: "2 weeks ago",
+          },
+          {
+            id: 3,
+            type: "youtube",
+            title: "Kumita Habang Nasa Bahay: Our Journey from YouTube to Business Platform",
+            image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/studentsprojects-VL4lVSnwi1RbenFVjYBDhe0i037AA5.png",
+            link: "https://www.youtube.com/@gracefulhomeschooling",
+            stats: { views: "42K", likes: "2.5K", comments: "312" },
+            date: "3 weeks ago",
+          }
+        ]
+        setSocialContent(fallbackContent)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchSocialData()
+  }, [])
+
+  // Helper function to format view counts
+  const formatViews = (views: number): string => {
+    if (views >= 1000000) {
+      return Math.round(views / 100000) / 10 + 'M'
+    } else if (views >= 1000) {
+      return Math.round(views / 100) / 10 + 'K'
+    }
+    return views.toString()
+  }
+
+  // Helper function to format subscriber/follower counts
+  const formatCount = (count: number): string => {
+    if (count >= 1000000) {
+      return Math.round(count / 100000) / 10 + 'M+'
+    } else if (count >= 1000) {
+      return Math.round(count / 1000) + 'K+'
+    }
+    return count.toString()
+  }
+  
+  // Helper function to format published date to relative time
+  const formatPublishedDate = (isoDate: string): string => {
+    const date = new Date(isoDate)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+    if (diffDays < 1) return "today"
+    if (diffDays === 1) return "yesterday"
+    if (diffDays < 7) return `${diffDays} days ago`
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`
+    return `${Math.floor(diffDays / 365)} years ago`
+  }
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -46,69 +260,6 @@ export function SocialWall() {
       },
     },
   }
-
-  // Social content data
-  const socialContent = [
-    {
-      id: 1,
-      type: "youtube",
-      title: "How to Create a Simple Homeschool Planner",
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/journals%20and%20planners-QAz8IyztDboLcJArffAdH4EQH4qOol.png",
-      link: "https://www.youtube.com/@gracefulhomeschooling",
-      stats: { views: "16K", likes: "982", comments: "103" },
-      date: "2 weeks ago",
-    },
-    {
-      id: 2,
-      type: "facebook",
-      title: "Papers to Profits Course Announcement",
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/journals%26planners2-pYMevHnwxaHaXZ3qlWUF18bMpXjxwy.png",
-      link: "https://www.facebook.com/GracefulHomeschoolingbyEmigrace/",
-      stats: { likes: "523", comments: "78", shares: "32" },
-      date: "3 weeks ago",
-    },
-    {
-      id: 3,
-      type: "youtube",
-      title: "5 Essential Homeschooling Tips for Beginners",
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/studentsprojects-VL4lVSnwi1RbenFVjYBDhe0i037AA5.png",
-      link: "https://www.youtube.com/@gracefulhomeschooling",
-      stats: { views: "28K", likes: "1.7K", comments: "215" },
-      date: "1 month ago",
-    },
-    {
-      id: 4,
-      type: "facebook",
-      title: "Student Success Story: EMJ ALFARO",
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/testimonials1.jpg-vdiuWnYVM7nV2SaQDk81F9HXwPJVQE.jpeg",
-      link: "https://www.facebook.com/GracefulHomeschoolingbyEmigrace/",
-      stats: { likes: "347", comments: "42", shares: "15" },
-      date: "1 month ago",
-    },
-    {
-      id: 5,
-      type: "youtube",
-      title: "DIY Journal Binding: A Step-by-Step Tutorial",
-      image:
-        "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/journals%26planners3-kXAVy71MQtO5Jq7UTmny6gJeTdEGx4.png",
-      link: "https://www.youtube.com/@gracefulhomeschooling",
-      stats: { views: "19K", likes: "1.4K", comments: "87" },
-      date: "2 months ago",
-    },
-    {
-      id: 6,
-      type: "facebook",
-      title: "Homeschooling Workshop Highlights",
-      image: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/testimonials2-pX2f6lNy6Aa6QnwvxHcosIfvJbB5xu.png",
-      link: "https://www.facebook.com/GracefulHomeschoolingbyEmigrace/",
-      stats: { likes: "289", comments: "34", shares: "8" },
-      date: "2 months ago",
-    },
-  ]
 
   // Filter content based on active tab
   const filteredContent = activeTab === "all" ? socialContent : socialContent.filter((item) => item.type === activeTab)
@@ -167,10 +318,10 @@ export function SocialWall() {
             </div>
           </div>
           <h2 className="text-4xl md:text-5xl font-serif tracking-tighter text-[#5d4037]">
-            Join Our Thriving Community
+            Connect with Our Growing Community
           </h2>
           <p className="max-w-[800px] text-[#6d4c41] md:text-xl/relaxed font-light">
-            Connect with a passionate community of homeschooling parents sharing their journeys and creative ideas
+            Join thousands of homeschooling families who have found their path to educational freedom and financial independence through our supportive community
           </p>
         </motion.div>
 
@@ -188,7 +339,7 @@ export function SocialWall() {
             onHoverEnd={() => setHoveredPlatform(null)}
             className="relative h-auto min-h-[280px] sm:h-[280px] rounded-2xl overflow-hidden"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-[#8eafd4] to-[#6d8fb3] z-0" />
+            <div className="absolute inset-0 bg-gradient-to-br from-[#9ac5d9] to-[#b08ba5] z-0" />
 
             {/* Animated background pattern */}
             <motion.div
@@ -213,13 +364,13 @@ export function SocialWall() {
               <div className="flex items-start justify-between">
                 <div className="flex items-center">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center">
-                    <Facebook className="h-5 w-5 sm:h-6 sm:w-6 text-[#6d8fb3]" />
+                    <Facebook className="h-5 w-5 sm:h-6 sm:w-6 text-[#9ac5d9]" />
                   </div>
                   <div className="ml-3 sm:ml-4">
                     <h3 className="text-white text-lg sm:text-xl font-medium">Facebook Community</h3>
                     <div className="flex items-center mt-1">
                       <Users className="h-4 w-4 text-white/80 mr-1" />
-                      <span className="text-white/80 text-xs sm:text-sm">129K+ followers</span>
+                      <span className="text-white/80 text-xs sm:text-sm">{formatCount(socialData.facebook.followerCount)} followers</span>
                     </div>
                   </div>
                 </div>
@@ -242,8 +393,7 @@ export function SocialWall() {
               <div className="space-y-3 sm:space-y-4">
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4">
                   <p className="text-white text-xs sm:text-sm italic">
-                    "I want to take a moment to thank Ms. Emigrace and her incredible team for their humility and
-                    generosity in sharing their knowledge with us..."
+                    "Thanks to Grace and the Papers to Profits course, I've transformed my homeschooling passion into a thriving business. Kumita habang nasa bahay is now my reality!"
                   </p>
                   <div className="flex items-center mt-2">
                     <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full overflow-hidden mr-2">
@@ -317,7 +467,7 @@ export function SocialWall() {
             onHoverEnd={() => setHoveredPlatform(null)}
             className="relative h-auto min-h-[280px] sm:h-[280px] rounded-2xl overflow-hidden"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-[#d4918e] to-[#b37a6d] z-0" />
+            <div className="absolute inset-0 bg-gradient-to-br from-[#f1b5bc] to-[#b08ba5] z-0" />
 
             {/* Animated background pattern */}
             <motion.div
@@ -342,13 +492,13 @@ export function SocialWall() {
               <div className="flex items-start justify-between">
                 <div className="flex items-center">
                   <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center">
-                    <Youtube className="h-5 w-5 sm:h-6 sm:w-6 text-[#b37a6d]" />
+                    <Youtube className="h-5 w-5 sm:h-6 sm:w-6 text-[#b08ba5]" />
                   </div>
                   <div className="ml-3 sm:ml-4">
                     <h3 className="text-white text-lg sm:text-xl font-medium">YouTube Channel</h3>
                     <div className="flex items-center mt-1">
                       <Users className="h-4 w-4 text-white/80 mr-1" />
-                      <span className="text-white/80 text-xs sm:text-sm">91K+ subscribers</span>
+                      <span className="text-white/80 text-xs sm:text-sm">{formatCount(socialData.youtube.subscriberCount)} subscribers</span>
                     </div>
                   </div>
                 </div>
@@ -372,26 +522,26 @@ export function SocialWall() {
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 flex items-center">
                   <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden flex-shrink-0 mr-2 sm:mr-3">
                     <Image
-                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/journals%20and%20planners-QAz8IyztDboLcJArffAdH4EQH4qOol.png"
+                      src={socialData.youtube.latestVideo?.thumbnail || "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/journals%20and%20planners-QAz8IyztDboLcJArffAdH4EQH4qOol.png"}
                       alt="Featured video"
                       fill
                       className="object-cover"
                     />
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/80 flex items-center justify-center">
-                        <Play className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-[#b37a6d] ml-0.5" />
+                                          <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/80 flex items-center justify-center">
+                          <Play className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-[#b08ba5] ml-0.5" />
+                        </div>
                       </div>
-                    </div>
                   </div>
                   <div>
                     <p className="text-white text-xs sm:text-sm font-medium line-clamp-2">
-                      How to Create a Simple Homeschool Planner
+                      {socialData.youtube.latestVideo?.title || "Papers to Profits: Transform Your Homeschool Journey"}
                     </p>
                     <div className="flex items-center mt-1">
                       <Video className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white/70 mr-1" />
-                      <span className="text-white/70 text-[10px] sm:text-xs mr-2 sm:mr-3">16K views</span>
+                      <span className="text-white/70 text-[10px] sm:text-xs mr-2 sm:mr-3">{socialData.youtube.latestVideo?.views || "35K"} views</span>
                       <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white/70 mr-1" />
-                      <span className="text-white/70 text-[10px] sm:text-xs">14:22</span>
+                      <span className="text-white/70 text-[10px] sm:text-xs">{socialData.youtube.latestVideo?.duration || "14:22"}</span>
                     </div>
                   </div>
                 </div>
@@ -513,12 +663,12 @@ export function SocialWall() {
                         <div className="absolute top-4 left-4 flex items-center bg-white/90 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-medium">
                           {item.type === "youtube" ? (
                             <>
-                              <Youtube className="h-3 w-3 text-[#b37a6d] mr-1" />
+                              <Youtube className="h-3 w-3 text-[#b08ba5] mr-1" />
                               <span className="text-[#5d4037]">YouTube</span>
                             </>
                           ) : (
                             <>
-                              <Facebook className="h-3 w-3 text-[#6d8fb3] mr-1" />
+                              <Facebook className="h-3 w-3 text-[#9ac5d9] mr-1" />
                               <span className="text-[#5d4037]">Facebook</span>
                             </>
                           )}
@@ -533,7 +683,7 @@ export function SocialWall() {
                           >
                             <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
                               <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center">
-                                <Play className="h-5 w-5 text-[#b37a6d] ml-0.5" />
+                                <Play className="h-5 w-5 text-[#b08ba5] ml-0.5" />
                               </div>
                             </div>
                           </motion.div>

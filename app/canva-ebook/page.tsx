@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Logo } from "@/components/ui/logo"
+import { PublicHeader } from "@/components/layout/public-header"
 import { useMobile } from "@/hooks/use-mobile"
 import { createPaymentIntent } from "@/app/actions/payment-actions"
 
@@ -28,7 +28,7 @@ const ebookDetails = {
   author: {
     name: "Grace",
     title: "Homeschooling Mom & Canva Expert", 
-    imageUrl: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/grace-tv60B3oEq1pzd4eXo8LEPPqGVA4WFd.png",
+    imageUrl: "/Grace Edited.png",
   },
   features: [
     "Personal experiences and learnings",
@@ -208,41 +208,7 @@ function CanvaEbookContent() {
       </Head>
 
       <div className="flex min-h-screen flex-col bg-[#f9f6f2]">
-        {/* Header */}
-        <header className="sticky top-0 z-40 w-full border-b bg-[#f9f6f2]/95 backdrop-blur supports-[backdrop-filter]:bg-[#f9f6f2]/60">
-          <div className="container flex h-16 items-center justify-between">
-            <motion.div variants={fadeIn} initial="hidden" animate="visible">
-              <Logo size={isMobile ? "small" : "medium"} />
-            </motion.div>
-            <motion.nav
-              variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.1 }}
-              className="hidden md:flex gap-6"
-            >
-              <Link href="/" className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group">
-                 Home
-                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-              </Link>
-              <Link href="/papers-to-profits" className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group">
-                 Papers to Profits
-                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-              </Link>
-              <Link href="/canva-ebook" className="text-sm font-medium text-brand-purple transition-colors hover:text-brand-purple relative group">
-                 Get Ebook
-                 <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-brand-purple"></span>
-              </Link>
-              <Link href="#" className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group">
-                Shop
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-              </Link>
-              {/* Add other relevant links */}
-            </motion.nav>
-            <motion.div variants={fadeIn} initial="hidden" animate="visible" transition={{ delay: 0.2 }}>
-               <Link href="#">
-                 <Button variant="ghost" className="text-[#5d4037] hover:text-brand-purple">Login</Button>
-               </Link>
-            </motion.div>
-          </div>
-        </header>
+        <PublicHeader />
 
         <main className="flex-grow">
           {/* Hero Section with Integrated Form*/}
@@ -451,7 +417,16 @@ function CanvaEbookContent() {
            <div className="container flex flex-col gap-8 px-4 py-10 md:px-6 lg:flex-row lg:gap-12">
              {/* Footer content adapted from P2P page - ensure consistency */}
              <div className="flex flex-col gap-4 lg:w-1/3">
-                <Logo size="small" />
+                <div className="flex items-center gap-2">
+                  <Image
+                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo-1Im7VvOInboRBkUWf9TSXbYMLYrtII.png"
+                    alt="Graceful Homeschooling Logo"
+                    width={40}
+                    height={40}
+                    className="rounded-md"
+                  />
+                  <span className="text-xl font-serif tracking-tight text-[#5d4037]">Graceful Homeschooling</span>
+                </div>
                 <p className="text-[#6d4c41] font-light text-sm">
                   Empowering homeschooling parents with tools, resources, and insights.
                 </p>

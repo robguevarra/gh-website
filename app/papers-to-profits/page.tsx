@@ -14,14 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Logo } from "@/components/ui/logo"
+import { PublicHeader } from "@/components/layout/public-header"
 import { useMobile } from "@/hooks/use-mobile"
 import { createPaymentIntent } from "@/app/actions/payment-actions"
 
 export default function PapersToProfit() {
   const [isLoaded, setIsLoaded] = useState(false)
-  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 })
-  const [isHovering, setIsHovering] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState("full")
   const [isProcessing, setIsProcessing] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -72,16 +70,6 @@ export default function PapersToProfit() {
 
   useEffect(() => {
     setIsLoaded(true)
-
-    const handleMouseMove = (e: MouseEvent) => {
-      setCursorPosition({ x: e.clientX, y: e.clientY })
-    }
-
-    window.addEventListener("mousemove", handleMouseMove)
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-    }
   }, [])
 
   // Facebook CAPI ViewContent tracking (fires on page load)
@@ -478,10 +466,11 @@ export default function PapersToProfit() {
         "Yes! Many of our students have built successful businesses selling their paper products. The course includes specific strategies for pricing, marketing, and scaling your business to maximize profitability.",
     },
     {
-      question: "What if I'm not satisfied with the course?",
+      question: "Pano kung di ako available sa class schedule?",
       answer:
-        "We offer a 30-day money-back guarantee. If you're not completely satisfied with the course, simply let us know within 30 days of enrollment for a full refund.",
+        "Recorded ang livestream classes. You can watch them anytime.",
     },
+  
   ]
 
   // Testimonial data
@@ -535,104 +524,7 @@ export default function PapersToProfit() {
         </noscript>
       </Head>
       <div className="flex min-h-screen flex-col bg-[#f9f6f2]">
-        {/* Custom cursor */}
-        <AnimatePresence>
-          {isHovering && !isMobile && (
-            <motion.div
-              className="fixed w-24 h-24 rounded-full bg-brand-purple/20 backdrop-blur-sm pointer-events-none z-50 mix-blend-difference"
-              style={{
-                left: cursorPosition.x - 48,
-                top: cursorPosition.y - 48,
-              }}
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 200, damping: 20 }}
-            />
-          )}
-        </AnimatePresence>
-
-        {/* Header */}
-        <header className="sticky top-0 z-50 w-full border-b bg-[#f9f6f2]/95 backdrop-blur supports-[backdrop-filter]:bg-[#f9f6f2]/60">
-          <div className="container flex h-16 items-center justify-between">
-            <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
-              <Logo size={isMobile ? "small" : "medium"} />
-            </motion.div>
-            <motion.nav
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="hidden md:flex gap-6"
-            >
-              <Link
-                href="/"
-                className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
-              >
-                Home
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-              </Link>
-              <Link
-                href="#"
-                className="text-sm font-medium text-brand-purple transition-colors hover:text-brand-purple relative group"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
-              >
-                Papers to Profits
-                <span className="absolute -bottom-1 left-0 w-full h-0.5 bg-brand-purple"></span>
-              </Link>
-              <Link
-                href="#"
-                className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
-              >
-                Shop
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-              </Link>
-              <Link
-                href="#"
-                className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
-              >
-                About
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-              </Link>
-            </motion.nav>
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="flex items-center gap-4"
-            >
-              <Link
-                href="#"
-                className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple hidden md:block relative group"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
-              >
-                Login
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-              </Link>
-              <Button
-                className="bg-brand-purple hover:bg-[#8d6e63] text-white transition-all duration-300 hover:shadow-md"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
-                onClick={() => {
-                  const element = document.getElementById("enrollment-form")
-                  if (element) {
-                    element.scrollIntoView({ behavior: "smooth" })
-                  }
-                }}
-              >
-                Enroll Now
-                <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
-            </motion.div>
-          </div>
-        </header>
+        <PublicHeader />
 
         <main ref={pageRef} className="relative min-h-screen overflow-x-hidden">
           {/* Success Message */}
@@ -717,7 +609,7 @@ export default function PapersToProfit() {
                 >
                   <div className="relative aspect-[4/5] rounded-2xl overflow-hidden shadow-xl w-full max-w-md mx-auto">
                     <Image
-                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/grace-tv60B3oEq1pzd4eXo8LEPPqGVA4WFd.png"
+                      src="/Grace Edited.png"
                       alt="Grace - Your Instructor"
                       width={400}
                       height={500}
@@ -784,8 +676,6 @@ export default function PapersToProfit() {
                       <Button
                         size="lg"
                         className="bg-brand-purple hover:bg-[#8d6e63] text-white px-8 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-                        onMouseEnter={() => setIsHovering(true)}
-                        onMouseLeave={() => setIsHovering(false)}
                         onClick={() => {
                           const element = document.getElementById("enrollment-form")
                           if (element) {
@@ -867,7 +757,7 @@ export default function PapersToProfit() {
                       Papers to Profits
                     </h1>
                     <p className="text-xl md:text-2xl text-brand-purple font-light">
-                      Transform Your Homeschooling Passion Into A Thriving Business
+                      Transform Your Passion for Paper Products Into A Thriving Business
                     </p>
                   </motion.div>
 
@@ -878,18 +768,26 @@ export default function PapersToProfit() {
 
                     <div className="flex flex-col sm:flex-row gap-4 items-center">
                       <div className="flex items-center">
-                        <div className="flex -space-x-2">
-                          {[1, 2, 3, 4].map((i) => (
-                            <div
-                              key={i}
-                              className="w-8 h-8 rounded-full border-2 border-white bg-brand-blue/20 flex items-center justify-center text-xs font-medium text-brand-purple"
-                            >
-                              {i}
-                            </div>
-                          ))}
-                        </div>
+                      <div className="flex -space-x-2">
+                        {[
+                          "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
+                          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
+                          "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
+                          "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face&auto=format&q=80"
+                        ].map((src, i) => (
+                          <div key={i} className="relative">
+                            <Image
+                              src={src}
+                              alt={`Student ${i + 1}`}
+                              width={32}
+                              height={32}
+                              className="w-8 h-8 rounded-full border-2 border-white object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
                         <span className="ml-2 text-sm text-[#6d4c41]">
-                          <span className="font-medium">1,000+ students</span> enrolled
+                          <span className="font-medium">3,000+ students</span> enrolled
                         </span>
                       </div>
 
@@ -920,8 +818,6 @@ export default function PapersToProfit() {
                     <Button
                       size="lg"
                       className="bg-brand-purple hover:bg-[#8d6e63] text-white px-8 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-                      onMouseEnter={() => setIsHovering(true)}
-                      onMouseLeave={() => setIsHovering(false)}
                       onClick={() => {
                         const element = document.getElementById("enrollment-form")
                         if (element) {
@@ -939,8 +835,6 @@ export default function PapersToProfit() {
                       size="lg"
                       variant="outline"
                       className="border-brand-purple text-brand-purple hover:bg-brand-purple/10 px-8 py-6 text-lg rounded-full"
-                      onMouseEnter={() => setIsHovering(true)}
-                      onMouseLeave={() => setIsHovering(false)}
                       onClick={() => {
                         const element = document.getElementById("course-details")
                         if (element) {
@@ -1188,7 +1082,7 @@ export default function PapersToProfit() {
                     >
                       <div className="relative rounded-2xl overflow-hidden aspect-[3/4] shadow-xl">
                         <Image
-                          src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/grace-tv60B3oEq1pzd4eXo8LEPPqGVA4WFd.png"
+                          src="/Grace Edited.png"
                           alt="Grace - Your Instructor"
                           width={400}
                           height={500}
@@ -1237,7 +1131,7 @@ export default function PapersToProfit() {
                           <div className="text-sm text-[#6d4c41]">Years of Experience</div>
                         </div>
                         <div className="bg-brand-purple/5 rounded-lg p-4 text-center">
-                          <div className="text-3xl font-bold text-brand-purple mb-1">1,000+</div>
+                          <div className="text-3xl font-bold text-brand-purple mb-1">3,000+</div>
                           <div className="text-sm text-[#6d4c41]">Students Taught</div>
                         </div>
                         <div className="bg-brand-purple/5 rounded-lg p-4 text-center">
@@ -1435,7 +1329,7 @@ export default function PapersToProfit() {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="border-white text-white hover:bg-white/10 px-8 py-6 text-lg rounded-full"
+                    className="border-white text-brand-purple hover:bg-white/10 px-8 py-6 text-lg rounded-full"
                     onMouseEnter={() => setIsHovering(true)}
                     onMouseLeave={() => setIsHovering(false)}
                     onClick={() => {

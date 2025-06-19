@@ -3,7 +3,7 @@ import { Inter } from "next/font/google"
 import { Playfair_Display } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
-import { CustomCursorToggle } from "@/components/custom-cursor-toggle"
+
 import Script from "next/script"
 import { SkipLink } from "@/components/ui/skip-link"
 import SupabaseProvider from "@/components/providers/supabase-provider"
@@ -36,7 +36,11 @@ export const metadata = {
   generator: 'v0.dev',
   icons: {
     icon: [
+      { url: '/logo.png', sizes: '32x32', type: 'image/png' },
       { url: '/favicon.ico' },
+    ],
+    apple: [
+      { url: '/logo.png', sizes: '180x180', type: 'image/png' },
     ],
   }
 }
@@ -55,8 +59,12 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://hebbkx1anhila5yf.public.blob.vercel-storage.com" />
 
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        {/* Facebook SDK meta tag - 2025 best practice */}
+        <meta property="fb:app_id" content="380843334043779" />
       </head>
       <body className={`${inter.variable} ${playfair.variable} font-sans`}>
+        {/* Facebook SDK root element - REQUIRED for Facebook plugins */}
+        <div id="fb-root"></div>
         <SkipLink href="#main-content">Skip to main content</SkipLink>
         <SupabaseProvider>
           <AuthProvider>
@@ -65,7 +73,7 @@ export default function RootLayout({
                 <main id="main-content" tabIndex={-1}>
                   {children}
                 </main>
-                <CustomCursorToggle />
+
                 <Toaster />
               </ThemeProvider>
             </AuthCoordinationProvider>

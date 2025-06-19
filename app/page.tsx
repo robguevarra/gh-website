@@ -4,13 +4,13 @@ import { useEffect, useState, useRef, Suspense } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { BookOpen, Heart, Calendar, PenTool, Bookmark, ChevronRight, ArrowRight, Star } from "lucide-react"
-import { motion, useScroll, AnimatePresence, useInView, useTransform, useMotionValue, useSpring } from "framer-motion"
+import { motion, useScroll, useInView, useTransform } from "framer-motion"
 import dynamic from 'next/dynamic'
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Logo } from "@/components/ui/logo"
+import { PublicHeader } from "@/components/layout/public-header"
 // Import SocialIntegration component dynamically
 const SocialIntegration = dynamic(() => import('@/components/social-proof/social-integration').then(mod => mod.SocialIntegration), {
   loading: () => <div className="w-full py-20 md:py-32 bg-brand-blue/10 flex items-center justify-center">
@@ -23,18 +23,13 @@ import { useMobile } from "@/hooks/use-mobile"
 // Component with the actual content
 function HomeContent() {
   const [isLoaded, setIsLoaded] = useState(false)
-  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 })
   const [isHovering, setIsHovering] = useState(false)
   const heroRef = useRef<HTMLDivElement>(null)
   const pageRef = useRef<HTMLDivElement>(null)
   const isHeroInView = useInView(heroRef, { once: true })
   const isMobile = useMobile()
 
-  // Mouse trail effect
-  const mouseX = useMotionValue(0)
-  const mouseY = useMotionValue(0)
-  const smoothMouseX = useSpring(mouseX, { damping: 50, stiffness: 400 })
-  const smoothMouseY = useSpring(mouseY, { damping: 50, stiffness: 400 })
+
 
   // Parallax effect
   const { scrollYProgress } = useScroll({
@@ -49,19 +44,7 @@ function HomeContent() {
 
   useEffect(() => {
     setIsLoaded(true)
-
-    const handleMouseMove = (e: MouseEvent) => {
-      setCursorPosition({ x: e.clientX, y: e.clientY })
-      mouseX.set(e.clientX)
-      mouseY.set(e.clientY)
-    }
-
-    window.addEventListener("mousemove", handleMouseMove)
-
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove)
-    }
-  }, [mouseX, mouseY])
+  }, [])
 
   const fadeIn = {
     hidden: { opacity: 0, y: 20 },
@@ -101,7 +84,7 @@ function HomeContent() {
   }
 
   // Split the hero text properly to avoid awkward line breaks
-  const heroTextLines = ["Create Your Own", "Journals & Planners"]
+  const heroTextLines = ["Kumita Habang", "Nasa Bahay"]
 
   // Animation for text reveal
   const textReveal = {
@@ -206,12 +189,12 @@ function HomeContent() {
       </div>
 
       <div className="container px-4 md:px-6 z-10 relative">
-        <div className="grid gap-6 lg:grid-cols-[1fr_600px] lg:gap-12 xl:grid-cols-[1fr_800px]">
+        <div className="grid gap-6 lg:grid-cols-[600px_1fr] lg:gap-12 xl:grid-cols-[800px_1fr] min-h-[600px] lg:min-h-[700px]">
           <motion.div
             initial="hidden"
             animate={isHeroInView ? "visible" : "hidden"}
             variants={staggerContainer}
-            className="flex flex-col justify-center space-y-8"
+            className="flex flex-col justify-center space-y-6 md:space-y-8 order-2 lg:order-2"
             style={{ y: heroTextY }}
           >
             {/* Badge */}
@@ -220,12 +203,12 @@ function HomeContent() {
               className="inline-flex items-center rounded-full bg-white/80 backdrop-blur-sm px-3 py-1.5 text-sm max-w-max shadow-sm"
             >
               <Star className="h-4 w-4 mr-2 text-brand-purple" />
-              <span className="text-[#5d4037] font-medium">Homeschooling with Grace</span>
+              <span className="text-[#5d4037] font-medium">From YouTube to Your Business Partner</span>
             </motion.div>
 
             {/* Main Headline */}
             <div className="space-y-4">
-              <h1 className="relative text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-serif tracking-tighter text-[#5d4037] overflow-hidden">
+              <h1 className="relative text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-serif tracking-tighter text-[#5d4037] overflow-hidden">
                 {heroTextLines.map((line, lineIndex) => (
                   <div key={lineIndex} className="overflow-hidden relative">
                     <motion.div custom={lineIndex} variants={textReveal} className="inline-block">
@@ -243,36 +226,37 @@ function HomeContent() {
                 className="h-1 bg-gradient-to-r from-brand-purple to-brand-pink rounded-full"
               />
 
-              <motion.p variants={fadeIn} className="max-w-[600px] text-[#6d4c41] md:text-xl font-light">
-                Empowering homeschooling parents with tools, resources, and insights to enhance their educational
-                journey.
+              <motion.p variants={fadeIn} className="max-w-[600px] text-[#6d4c41] text-base sm:text-lg md:text-xl font-light leading-relaxed">
+                From a YouTube channel empowering parents to raise leaders and learners, we've evolved into your business partner. Learn to create income-generating paper products while staying true to your homeschooling values.
               </motion.p>
             </div>
 
             {/* CTA Buttons */}
-            <motion.div variants={fadeIn} className="flex flex-col gap-3 min-[400px]:flex-row">
-              <Button
-                size="lg"
-                className="h-14 px-8 overflow-hidden relative group"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
-              >
-                <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-brand-purple to-brand-pink group-hover:scale-105 transition-transform duration-500"></span>
-                <span className="absolute inset-0 w-full h-full bg-brand-purple opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-md"></span>
-                <span className="relative flex items-center gap-2 z-10 text-white">
-                  Join Our Class
-                  <ArrowRight className="ml-1 h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
-                </span>
-              </Button>
+            <motion.div variants={fadeIn} className="flex flex-col gap-3 sm:flex-row">
+              <Link href="/papers-to-profits">
+                <Button
+                  size="lg"
+                  className="h-12 sm:h-14 px-6 sm:px-8 overflow-hidden relative group w-full sm:w-auto"
+                  onMouseEnter={() => setIsHovering(true)}
+                  onMouseLeave={() => setIsHovering(false)}
+                >
+                  <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-brand-purple to-brand-pink group-hover:scale-105 transition-transform duration-500"></span>
+                  <span className="absolute inset-0 w-full h-full bg-brand-purple opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-md"></span>
+                  <span className="relative flex items-center gap-2 z-10 text-white">
+                    Start Papers to Profits
+                    <ArrowRight className="ml-1 h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
+                  </span>
+                </Button>
+              </Link>
               <Button
                 size="lg"
                 variant="outline"
-                className="h-14 px-8 border-brand-purple text-brand-purple relative overflow-hidden group"
+                className="h-12 sm:h-14 px-6 sm:px-8 border-brand-purple text-brand-purple relative overflow-hidden group w-full sm:w-auto"
                 onMouseEnter={() => setIsHovering(true)}
                 onMouseLeave={() => setIsHovering(false)}
               >
                 <span className="absolute inset-0 w-0 bg-brand-blue/30 transition-all duration-500 ease-out group-hover:w-full"></span>
-                <span className="relative z-10">Learn More</span>
+                <span className="relative z-10">View Resources</span>
               </Button>
             </motion.div>
 
@@ -284,32 +268,40 @@ function HomeContent() {
               className="flex items-center space-x-4 mt-8"
             >
               <div className="flex -space-x-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="w-8 h-8 rounded-full border-2 border-white bg-brand-blue/20 flex items-center justify-center text-xs font-medium text-brand-purple"
-                  >
-                    {i}
+                {[
+                  "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
+                  "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
+                  "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
+                  "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face&auto=format&q=80"
+                ].map((src, i) => (
+                  <div key={i} className="relative">
+                    <Image
+                      src={src}
+                      alt={`Student ${i + 1}`}
+                      width={32}
+                      height={32}
+                      className="w-8 h-8 rounded-full border-2 border-white object-cover"
+                    />
                   </div>
                 ))}
               </div>
               <div className="text-sm text-[#6d4c41]">
-                <span className="font-medium">1,000+ students</span> already enrolled
+                <span className="font-medium">3,000+ students</span> already enrolled
               </div>
             </motion.div>
           </motion.div>
 
-          {/* Right side with Grace's portrait and workspace */}
+          {/* Left side with Grace's portrait and workspace */}
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.7, delay: 0.3 }}
             style={{ perspective: 1000 }}
-            className="mx-auto flex items-center justify-center lg:justify-end relative"
+            className="mx-auto flex items-center justify-center lg:justify-start relative order-1 lg:order-1 h-[400px] lg:h-auto"
           >
             {/* Decorative elements */}
             <motion.div
-              className="absolute -top-10 -right-10 w-40 h-40 rounded-full border-4 border-brand-pink/20 z-10"
+              className="absolute -top-10 -left-10 w-40 h-40 rounded-full border-4 border-brand-pink/20 z-10"
               animate={{
                 rotate: [0, 360],
               }}
@@ -321,7 +313,7 @@ function HomeContent() {
             />
 
             <motion.div
-              className="absolute -bottom-5 -left-5 w-24 h-24 rounded-full border-2 border-brand-purple/30 z-10"
+              className="absolute -bottom-5 -right-5 w-24 h-24 rounded-full border-2 border-brand-purple/30 z-10"
               animate={{
                 rotate: [360, 0],
               }}
@@ -334,39 +326,39 @@ function HomeContent() {
 
             {/* Grace's Portrait */}
             <motion.div
-              className="absolute -left-12 bottom-0 w-[300px] md:w-[400px] z-20"
-              initial={{ opacity: 0, x: -50 }}
+              className="relative w-[360px] sm:w-[400px] md:w-[450px] lg:w-[500px] mx-auto lg:mx-0 lg:absolute lg:-right-12 lg:bottom-0 z-20"
+              initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, delay: 0.5 }}
               style={{ y: graceImageY }}
             >
               <Image
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/grace-tv60B3oEq1pzd4eXo8LEPPqGVA4WFd.png"
+                src="/Grace Edited.png"
                 alt="Grace from Graceful Homeschooling"
-                width={400}
-                height={500}
+                width={500}
+                height={620}
                 quality={90}
                 placeholder="blur"
-                blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjUwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiLz4="
-                className="h-auto"
+                blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAwIiBoZWlnaHQ9IjYyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiLz4="
+                className="h-auto w-full"
                 priority
               />
 
-              {/* Floating badge */}
+              {/* Floating badge - positioned well away from Grace's face */}
               <motion.div
-                className="absolute top-10 right-0 bg-white/90 backdrop-blur-sm rounded-lg px-4 py-2 shadow-lg"
+                className="absolute bottom-16 left-2 sm:bottom-20 sm:left-4 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1.5 sm:px-4 sm:py-2 shadow-lg max-w-[160px] sm:max-w-[180px]"
                 initial={{ opacity: 0, y: 20, rotate: -5 }}
                 animate={{ opacity: 1, y: 0, rotate: 0 }}
                 transition={{ delay: 1.2, duration: 0.6 }}
               >
-                <div className="text-sm font-medium text-brand-purple">Meet Grace</div>
-                <div className="text-xs text-[#6d4c41]">Your Homeschooling Guide</div>
+                <div className="text-xs sm:text-sm font-medium text-brand-purple">Meet Grace</div>
+                <div className="text-[10px] sm:text-xs text-[#6d4c41] leading-tight">Your Partner in raising leaders and learners</div>
               </motion.div>
             </motion.div>
 
-            {/* Featured Content Card */}
+            {/* Featured Content Card - Hidden on mobile/tablet, shown on desktop */}
             <motion.div
-              className="relative w-full max-w-[600px] aspect-video rounded-xl overflow-hidden ml-auto"
+              className="relative w-full max-w-[600px] aspect-video rounded-xl overflow-hidden ml-auto hidden lg:block"
               whileHover={{ rotateY: 5, rotateX: -5, scale: 1.02 }}
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
               style={{
@@ -418,7 +410,7 @@ function HomeContent() {
                       transition={{ delay: 1, duration: 0.6 }}
                       className="text-sm text-[#6d4c41] mb-4"
                     >
-                      Turn your passion for homeschooling into a sustainable business
+                      Turn your passion for paper products into a sustainable business
                     </motion.p>
 
                     <motion.div
@@ -477,140 +469,11 @@ function HomeContent() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f9f6f2] overflow-hidden">
-      {/* Custom cursor */}
-      <AnimatePresence>
-        {isHovering && !isMobile && (
-          <motion.div
-            className="fixed w-24 h-24 rounded-full bg-brand-purple/20 backdrop-blur-sm pointer-events-none z-50 mix-blend-difference"
-            style={{
-              left: cursorPosition.x - 48,
-              top: cursorPosition.y - 48,
-            }}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 200, damping: 20 }}
-          />
-        )}
-      </AnimatePresence>
 
-      {/* Mouse trail effect */}
-      {!isMobile && (
-        <motion.div
-          className="fixed w-8 h-8 rounded-full bg-brand-pink/10 pointer-events-none z-40 mix-blend-screen"
-          style={{
-            left: smoothMouseX,
-            top: smoothMouseY,
-            translateX: "-50%",
-            translateY: "-50%",
-          }}
-        />
-      )}
 
-      <header className="sticky top-0 z-50 w-full backdrop-blur-md supports-[backdrop-filter]:bg-[#f9f6f2]/60">
-        <div className="container flex h-16 items-center justify-between">
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5 }}>
-            <Logo size={isMobile ? "small" : "medium"} />
-          </motion.div>
-          <motion.nav
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="hidden md:flex gap-6"
-          >
-            <Link
-              href="#"
-              className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
-              onMouseEnter={() => setIsHovering(true)}
-              onMouseLeave={() => setIsHovering(false)}
-            >
-              Home
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <Link
-              href="/papers-to-profits"
-              className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
-              onMouseEnter={() => setIsHovering(true)}
-              onMouseLeave={() => setIsHovering(false)}
-            >
-              Papers to Profits
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <Link
-              href="/canva-ebook"
-              className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
-              onMouseEnter={() => setIsHovering(true)}
-              onMouseLeave={() => setIsHovering(false)}
-            >
-              Get Ebook
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <Link
-              href="#"
-              className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
-              onMouseEnter={() => setIsHovering(true)}
-              onMouseLeave={() => setIsHovering(false)}
-            >
-              Shop
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <Link
-              href="#"
-              className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
-              onMouseEnter={() => setIsHovering(true)}
-              onMouseLeave={() => setIsHovering(false)}
-            >
-              About
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-          </motion.nav>
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="flex items-center gap-4"
-          >
-            <Link
-              href="/auth/signin"
-              className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple hidden md:block relative group"
-              onMouseEnter={() => setIsHovering(true)}
-              onMouseLeave={() => setIsHovering(false)}
-            >
-              Login
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-brand-purple transition-all duration-300 group-hover:w-full"></span>
-            </Link>
-            <Button
-              className="relative overflow-hidden bg-transparent border border-brand-purple text-brand-purple hover:text-white group"
-              onMouseEnter={() => setIsHovering(true)}
-              onMouseLeave={() => setIsHovering(false)}
-              asChild
-            >
-              <Link href="/auth/signup">
-                <span className="absolute inset-0 w-full h-full bg-brand-purple translate-y-full transition-transform duration-300 ease-out group-hover:translate-y-0"></span>
-                <span className="relative flex items-center gap-1 z-10 group-hover:text-white transition-colors duration-300">
-                  Get Started
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </span>
-              </Link>
-            </Button>
-          </motion.div>
-        </div>
-      </header>
+      <PublicHeader onHoverChange={setIsHovering} />
       <main ref={pageRef} className="relative min-h-screen overflow-x-hidden">
         {renderHeroSection()}
-        
-        {/* Use Intersection Observer to load sections only when they come into view */}
-        <motion.div
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-100px" }}
-          variants={{
-            hidden: { opacity: 0 },
-            visible: { opacity: 1, transition: { duration: 0.5 } }
-          }}
-        >
-          <SocialIntegration variant="full" />
-        </motion.div>
         
         <section className="w-full py-20 md:py-32 bg-white relative overflow-hidden">
           {/* Decorative elements */}
@@ -634,17 +497,15 @@ function HomeContent() {
               className="flex flex-col items-center justify-center space-y-4 text-center"
             >
               <div className="inline-flex items-center space-x-1 rounded-full bg-brand-blue/30 px-4 py-1.5 mb-8">
-                <span className="font-medium text-brand-purple">Our Vision</span>
+                <span className="font-medium text-brand-purple">Our Journey</span>
               </div>
               <div className="space-y-8 max-w-4xl mx-auto">
-                <h2 className="text-3xl md:text-5xl font-serif tracking-tighter text-[#5d4037]">Our Mission</h2>
+                <h2 className="text-3xl md:text-5xl font-serif tracking-tighter text-[#5d4037]">From Community to Business Empowerment</h2>
                 <p className="max-w-[800px] text-[#6d4c41] md:text-xl/relaxed font-light">
-                  Graceful Homeschooling is dedicated to empowering homeschooling parents with tools, resources, and
-                  insights to enhance their educational journey.
+                  Graceful Homeschooling began as a YouTube channel and community dedicated to empowering parents to raise leaders and learners. Today, we've grown into a comprehensive platform offering real income opportunities while staying true to our homeschooling roots.
                 </p>
                 <p className="max-w-[800px] text-[#6d4c41] md:text-xl/relaxed font-light">
-                  At its core, Graceful Homeschooling is about combining the passion for education with practical
-                  solutions that foster a nurturing learning environment at home.
+                  We believe you shouldn't have to choose between being present for your family and earning an income. That's why we offer proven business training and digital resources to help you "Kumita habang nasa bahay."
                 </p>
               </div>
             </motion.div>
@@ -657,22 +518,22 @@ function HomeContent() {
             >
               {[
                 {
-                  icon: <BookOpen className="h-6 w-6" />,
-                  title: "Educational Resources",
+                  icon: <PenTool className="h-6 w-6" />,
+                  title: "Papers to Profits Course",
                   description:
-                    "Discover curated resources to enhance your homeschooling curriculum and create a rich learning environment.",
+                    "Our flagship program teaches you to create and sell beautiful paper products, turning your homeschooling passion into sustainable income.",
                 },
                 {
-                  icon: <PenTool className="h-6 w-6" />,
-                  title: "Paper Crafting",
+                  icon: <BookOpen className="h-6 w-6" />,
+                  title: "Digital Resources",
                   description:
-                    "Learn to create beautiful journals, planners, and educational materials that inspire learning and organization.",
+                    "Access our growing library of homeschooling templates, planners, and educational materials (shop opening soon).",
                 },
                 {
                   icon: <Calendar className="h-6 w-6" />,
-                  title: "Planning Tools",
+                  title: "Business Training",
                   description:
-                    "Gain access to planning systems and tools designed specifically for the unique needs of homeschooling families.",
+                    "Learn proven strategies for building your home-based business while maintaining your focus on family and education.",
                 },
               ].map((item, i) => (
                 <motion.div key={i} variants={fadeIn} whileHover={{ y: -10, transition: { duration: 0.3 } }}>
@@ -995,6 +856,19 @@ function HomeContent() {
             </motion.div>
           </div>
         </section>
+
+        {/* Use Intersection Observer to load sections only when they come into view */}
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
+          variants={{
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { duration: 0.5 } }
+          }}
+        >
+          <SocialIntegration variant="full" />
+        </motion.div>
       </main>
       <footer className="w-full border-t border-[#e7d9ce] bg-[#f9f6f2]">
         <div className="container flex flex-col gap-8 px-4 py-10 md:px-6 lg:flex-row lg:gap-12">

@@ -28,8 +28,8 @@ export interface FacebookPost {
 const fallbackPage: FacebookPage = {
   id: "GracefulHomeschoolingbyEmigrace",
   name: "Graceful Homeschooling by Emigrace",
-  followerCount: 129000,
-  likesCount: 125000,
+  followerCount: 154000,
+  likesCount: 150000,
   category: "Education",
   profilePicture: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo-1Im7VvOInboRBkUWf9TSXbYMLYrtII.png",
 }

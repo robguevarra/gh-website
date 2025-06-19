@@ -1,6 +1,7 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { defaultSecurityMiddleware, applyRateLimiting, applyWebhookSecurityHeaders } from '@/lib/security'
+import { facebookFriendlySecurityMiddleware } from '@/lib/security/security-headers'
 import { AUTH_ERROR_CODES } from '@/lib/session/auth-error-handler'
 
 export async function middleware(request: NextRequest) {
@@ -16,8 +17,18 @@ export async function middleware(request: NextRequest) {
                            request.nextUrl.pathname.startsWith('/api/cron/')
   
   if (!isWebhookEndpoint) {
-    // Apply security middleware early to set security headers
-    response = await defaultSecurityMiddleware(request, response)
+    // Check if this page needs Facebook embeds
+    const needsFacebookEmbeds = request.nextUrl.pathname === '/' || 
+                               request.nextUrl.pathname === '/canva-ebook' ||
+                               request.nextUrl.pathname === '/papers-to-profits';
+    
+    if (needsFacebookEmbeds) {
+      // Apply Facebook-friendly security headers
+      response = await facebookFriendlySecurityMiddleware(request, response)
+    } else {
+      // Apply standard security middleware
+      response = await defaultSecurityMiddleware(request, response)
+    }
   } else {
     // For webhooks, apply minimal security headers without CSRF protection
     response = applyWebhookSecurityHeaders(request, response)

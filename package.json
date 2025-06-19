@@ -68,6 +68,7 @@
     "@types/jsonwebtoken": "^9.0.9",
     "@types/lodash": "^4.17.16",
     "@types/uuid": "^10.0.0",
+    "axios": "^1.10.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "cmdk": "1.0.4",
