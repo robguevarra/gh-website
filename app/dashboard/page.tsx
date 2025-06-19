@@ -919,7 +919,7 @@ export default function StudentDashboard() {
                           variant="outline"
                           className="bg-white/10 border-white/30 text-white hover:bg-white/20 text-sm transition-colors duration-200 backdrop-blur-sm"
                         >
-                          Join FB Group
+                          Join Facebook Group
                         </Button>
                       </>
                     ) : affiliateStatus === 'pending' ? (
