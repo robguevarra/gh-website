@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { PublicHeader } from "@/components/layout/public-header"
+import { PublicFooter } from "@/components/layout/public-footer"
 // Import SocialIntegration component dynamically
 const SocialIntegration = dynamic(() => import('@/components/social-proof/social-integration').then(mod => mod.SocialIntegration), {
   loading: () => <div className="w-full py-20 md:py-32 bg-brand-blue/10 flex items-center justify-center">
@@ -870,99 +871,7 @@ function HomeContent() {
           <SocialIntegration variant="full" />
         </motion.div>
       </main>
-      <footer className="w-full border-t border-[#e7d9ce] bg-[#f9f6f2]">
-        <div className="container flex flex-col gap-8 px-4 py-10 md:px-6 lg:flex-row lg:gap-12">
-          <div className="flex flex-col gap-4 lg:w-1/3">
-            <div className="flex items-center gap-2">
-              <Image
-                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/logo-1Im7VvOInboRBkUWf9TSXbYMLYrtII.png"
-                alt="Graceful Homeschooling Logo"
-                width={40}
-                height={40}
-                className="rounded-md"
-              />
-              <span className="text-xl font-serif tracking-tight text-[#5d4037]">Graceful Homeschooling</span>
-            </div>
-            <p className="text-[#6d4c41] font-light">
-              Empowering homeschooling parents with tools, resources, and insights to enhance their educational journey.
-            </p>
-            <div className="flex gap-4">
-              {["Instagram", "Facebook", "Pinterest", "YouTube"].map((social, i) => (
-                <Link
-                  key={i}
-                  href="#"
-                  className="text-brand-purple hover:text-[#8d6e63] transition-colors"
-                  onMouseEnter={() => setIsHovering(true)}
-                  onMouseLeave={() => setIsHovering(false)}
-                >
-                  {social}
-                </Link>
-              ))}
-            </div>
-          </div>
-          <div className="grid flex-1 grid-cols-2 gap-8 sm:grid-cols-3">
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium text-[#5d4037]">Quick Links</h4>
-              <ul className="space-y-2">
-                {["Home", "Papers to Profits", "Shop", "Login"].map((item, i) => (
-                  <li key={i}>
-                    <Link
-                      href="#"
-                      className="text-sm text-[#6d4c41] hover:text-brand-purple transition-colors"
-                      onMouseEnter={() => setIsHovering(true)}
-                      onMouseLeave={() => setIsHovering(false)}
-                    >
-                      {item}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium text-[#5d4037]">Resources</h4>
-              <ul className="space-y-2">
-                {["Free Guides", "Blog", "Tutorials", "Success Stories", "Materials Guide"].map((item, i) => (
-                  <li key={i}>
-                    <Link
-                      href="#"
-                      className="text-sm text-[#6d4c41] hover:text-brand-purple transition-colors"
-                      onMouseEnter={() => setIsHovering(true)}
-                      onMouseLeave={() => setIsHovering(false)}
-                    >
-                      {item}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="space-y-4">
-              <h4 className="text-sm font-medium text-[#5d4037]">Legal</h4>
-              <ul className="space-y-2">
-                {["Terms", "Privacy", "Cookies", "Contact"].map((item, i) => (
-                  <li key={i}>
-                    <Link
-                      href="#"
-                      className="text-sm text-[#6d4c41] hover:text-brand-purple transition-colors"
-                      onMouseEnter={() => setIsHovering(true)}
-                      onMouseLeave={() => setIsHovering(false)}
-                    >
-                      {item}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div className="border-t border-[#e7d9ce]">
-          <div className="container flex flex-col gap-2 px-4 py-6 text-center md:flex-row md:justify-between md:px-6 md:text-left">
-            <p className="text-xs text-[#6d4c41]">
-              &copy; {new Date().getFullYear()} Graceful Homeschooling by Graceful Publications. All rights reserved.
-            </p>
-            <p className="text-xs text-[#6d4c41]">Designed with grace for homeschooling families.</p>
-          </div>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   )
 }

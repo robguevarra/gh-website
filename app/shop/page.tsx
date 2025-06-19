@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { PublicHeader } from '@/components/layout/public-header'
+import { PublicFooter } from '@/components/layout/public-footer'
 
 // Animation variants following design context timing (150-300ms)
 const fadeInUp = {
@@ -84,7 +85,7 @@ export default function ShopComingSoon() {
               variants={fadeInUp}
               className="font-serif text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-primary via-primary to-secondary bg-clip-text text-transparent leading-tight"
             >
-              Graceful Shop
+              Graceful Homeschooling Resources
             </motion.h1>
 
             {/* Subtitle - Using Inter from design context */}
@@ -222,6 +223,8 @@ export default function ShopComingSoon() {
           </motion.div>
         </div>
       </main>
+      
+      <PublicFooter />
     </div>
   )
 } 
