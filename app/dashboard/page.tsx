@@ -75,6 +75,25 @@ interface ExtendedCourseProgress extends CourseProgress {
 // Define Announcement type based on Supabase schema
 type Announcement = Database['public']['Tables']['announcements']['Row'];
 
+// Storage key for permanent affiliate banner dismissal
+const AFFILIATE_CONGRATULATIONS_DISMISSED_KEY = 'gh_affiliate_congratulations_dismissed'
+
+/**
+ * Check if congratulations banner should be permanently dismissed for approved affiliates
+ */
+function isAffiliateCongratulationsDismissed(): boolean {
+  if (typeof window === 'undefined') return false
+  return localStorage.getItem(AFFILIATE_CONGRATULATIONS_DISMISSED_KEY) === 'true'
+}
+
+/**
+ * Mark congratulations banner as permanently dismissed
+ */
+function markAffiliateCongratulationsDismissed(): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(AFFILIATE_CONGRATULATIONS_DISMISSED_KEY, 'true')
+}
+
 // Dashboard Section components
 import { CourseProgressSection } from "@/components/dashboard/course-progress-section"
 import { LiveClassesSection, type LiveClass } from "@/components/dashboard/live-classes-section" // Added LiveClass import
@@ -147,6 +166,7 @@ export default function StudentDashboard() {
   const [isAffiliate, setIsAffiliate] = useState(false);
   const [affiliateStatus, setAffiliateStatus] = useState<string | null>(null);
   const [isAffiliateBannerDismissed, setIsAffiliateBannerDismissed] = useState(false);
+  const [affiliateStatusLoaded, setAffiliateStatusLoaded] = useState(false);
 
   // References for animations
   const containerRef = useRef(null)
@@ -675,13 +695,29 @@ export default function StudentDashboard() {
           const data = await response.json();
           setIsAffiliate(data.isAffiliate);
           setAffiliateStatus(data.status);
+          
+          // Auto-show wizard for approved affiliates (unless permanently dismissed)
+          // Check dismissal status BEFORE showing the wizard to prevent phantom load
+          if (data.isAffiliate && data.status === 'active') {
+            const isWizardDismissed = typeof window !== 'undefined' && 
+              localStorage.getItem('gh_affiliate_wizard_dismissed') === 'true';
+            
+            if (!isWizardDismissed) {
+              setShowAffiliateWizard(true);
+            }
+          }
         }
       } catch (error) {
         console.error('Error checking affiliate status:', error);
+      } finally {
+        // Mark that affiliate status has been checked
+        setAffiliateStatusLoaded(true);
       }
     };
 
-    checkAffiliateStatus();
+    if (user?.id) {
+      checkAffiliateStatus();
+    }
   }, [user?.id]);
 
   // Force banner to show for all users - no debug logs needed
@@ -691,13 +727,25 @@ export default function StudentDashboard() {
     setIsAffiliateBannerDismissed(false);
   }, []);
 
-  // Calculate if banner should show (simplified logic without debug logs)
+  // Calculate if banner should show (optimized to prevent phantom loads)
   const shouldShowAffiliateBanner = useMemo(() => {
-    // Show banner if:
-    // 1. Not dismissed AND
-    // 2. (Not an affiliate yet OR has pending status)
-    return !isAffiliateBannerDismissed && (!isAffiliate || affiliateStatus === 'pending');
-  }, [isAffiliateBannerDismissed, isAffiliate, affiliateStatus]);
+    // Don't show if temporarily dismissed for this session
+    if (isAffiliateBannerDismissed) return false;
+    
+    // CRITICAL: Don't show banner until affiliate status has been loaded to prevent phantom text
+    if (!affiliateStatusLoaded) return false;
+    
+    // For approved affiliates, check if permanently dismissed
+    if (isAffiliate && affiliateStatus === 'active') {
+      // Use direct localStorage check to prevent phantom loads
+      const isPermanentlyDismissed = typeof window !== 'undefined' && 
+        localStorage.getItem('gh_affiliate_congratulations_dismissed') === 'true';
+      return !isPermanentlyDismissed;
+    }
+    
+    // For non-affiliates or pending, show the banner (unless temporarily dismissed)
+    return (!isAffiliate || affiliateStatus === 'pending');
+  }, [isAffiliateBannerDismissed, isAffiliate, affiliateStatus, affiliateStatusLoaded]);
 
 
 
@@ -816,7 +864,14 @@ export default function StudentDashboard() {
               <div className="bg-gradient-to-r from-brand-purple to-brand-pink rounded-xl p-6 text-white shadow-lg relative">
                 {/* Dismiss button */}
                 <button
-                  onClick={() => setIsAffiliateBannerDismissed(true)}
+                  onClick={() => {
+                    if (isAffiliate && affiliateStatus === 'active') {
+                      // For approved affiliates, permanently dismiss
+                      markAffiliateCongratulationsDismissed();
+                    }
+                    // Always dismiss for this session
+                    setIsAffiliateBannerDismissed(true);
+                  }}
                   className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
                   aria-label="Dismiss banner"
                 >
@@ -829,49 +884,60 @@ export default function StudentDashboard() {
                   <div className="flex-1">
                     {isAffiliate && affiliateStatus === 'active' ? (
                       <>
-                        <h3 className="text-lg font-bold mb-2">Welcome to the Affiliate Program!</h3>
-                        <p className="text-purple-100 mb-0">
-                          You're earning 25% commission on referrals. Visit your affiliate portal to track performance and manage settings.
+                        <h3 className="text-lg font-bold mb-2 font-serif">🎉 Congratulations! You're an Affiliate!</h3>
+                        <p className="text-white/90 mb-0 leading-relaxed">
+                          You're earning 25% commission on referrals. Access your affiliate portal from your profile dropdown to track performance and get marketing materials.
                         </p>
                       </>
                     ) : affiliateStatus === 'pending' ? (
                       <>
-                        <h3 className="text-lg font-bold mb-2">Application Under Review</h3>
-                        <p className="text-purple-100 mb-0">
+                        <h3 className="text-lg font-bold mb-2 font-serif">Application Under Review</h3>
+                        <p className="text-white/90 mb-0 leading-relaxed">
                           Your affiliate application is being reviewed. We'll notify you once it's approved. Thank you for your patience!
                         </p>
                       </>
                     ) : (
                       <>
-                        <h3 className="text-lg font-bold mb-2">Join Our Affiliate Program!</h3>
-                        <p className="text-purple-100 mb-0">
+                        <h3 className="text-lg font-bold mb-2 font-serif">Join Our Affiliate Program!</h3>
+                        <p className="text-white/90 mb-0 leading-relaxed">
                           Earn 25% commission by sharing Graceful Homeschooling with others. As a student, you get special access to our affiliate program.
                         </p>
                       </>
                     )}
                   </div>
-                  {isAffiliate && affiliateStatus === 'active' ? (
-                    <Button
-                      onClick={() => window.open('/affiliate-portal', '_blank')}
-                      className="bg-white text-brand-purple hover:bg-gray-100 ml-4 font-semibold"
-                    >
-                      View Portal
-                    </Button>
-                  ) : affiliateStatus === 'pending' ? (
-                    <Button
-                      disabled
-                      className="bg-white/20 text-white/60 ml-4 font-semibold cursor-not-allowed"
-                    >
-                      Pending Review
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => setShowAffiliateWizard(true)}
-                      className="bg-white text-brand-purple hover:bg-gray-100 ml-4 font-semibold"
-                    >
-                      Apply Now
-                    </Button>
-                  )}
+                  <div className="flex flex-col gap-2">
+                    {isAffiliate && affiliateStatus === 'active' ? (
+                      <>
+                        <Button
+                          onClick={() => window.open('/affiliate-portal', '_blank')}
+                          className="bg-white text-brand-purple hover:bg-gray-100 font-semibold transition-colors duration-200 shadow-sm"
+                        >
+                          View Portal
+                        </Button>
+                        <Button
+                          onClick={() => window.open('https://facebook.com/groups/gracefulhomeschooling-affiliates', '_blank')}
+                          variant="outline"
+                          className="bg-white/10 border-white/30 text-white hover:bg-white/20 text-sm transition-colors duration-200 backdrop-blur-sm"
+                        >
+                          Join FB Group
+                        </Button>
+                      </>
+                    ) : affiliateStatus === 'pending' ? (
+                      <Button
+                        disabled
+                        className="bg-white/20 text-white/60 font-semibold cursor-not-allowed border border-white/20"
+                      >
+                        Pending Review
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => setShowAffiliateWizard(true)}
+                        className="bg-white text-brand-purple hover:bg-gray-100 font-semibold transition-colors duration-200 shadow-sm"
+                      >
+                        Apply Now
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1070,10 +1136,12 @@ export default function StudentDashboard() {
   </main>
 
       {/* Affiliate Application Wizard */}
-      <AffiliateApplicationWizard
-        isOpen={showAffiliateWizard}
-        onClose={() => setShowAffiliateWizard(false)}
-      />
+      {showAffiliateWizard && affiliateStatusLoaded && (
+        <AffiliateApplicationWizard
+          isOpen={showAffiliateWizard}
+          onClose={() => setShowAffiliateWizard(false)}
+        />
+      )}
 </div>
   )
 }

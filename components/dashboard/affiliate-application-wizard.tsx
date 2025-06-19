@@ -14,10 +14,14 @@ import {
   Shield,
   ArrowRight,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Star,
+  ExternalLink,
+  Sparkles
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useAuth } from "@/context/auth-context"
 import { useStudentDashboardStore } from "@/lib/stores/student-dashboard"
 
@@ -34,6 +38,9 @@ interface AffiliateApplicationWizardProps {
   onClose: () => void
   onComplete?: () => void
 }
+
+// Storage key for permanent dismissal
+const AFFILIATE_WIZARD_DISMISSED_KEY = 'gh_affiliate_wizard_dismissed'
 
 // Define the wizard steps configuration
 const WIZARD_STEPS = [
@@ -101,6 +108,227 @@ interface AffiliateStatus {
   }
 }
 
+/**
+ * Check if wizard should be permanently dismissed for approved affiliates
+ */
+function isWizardPermanentlyDismissed(): boolean {
+  if (typeof window === 'undefined') return false
+  return localStorage.getItem(AFFILIATE_WIZARD_DISMISSED_KEY) === 'true'
+}
+
+/**
+ * Mark wizard as permanently dismissed
+ */
+function markWizardPermanentlyDismissed(): void {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(AFFILIATE_WIZARD_DISMISSED_KEY, 'true')
+}
+
+/**
+ * Congratulations Modal for Approved Affiliates
+ */
+function CongratulationsModal({ 
+  onClose, 
+  onNeverShowAgain 
+}: { 
+  onClose: () => void
+  onNeverShowAgain: () => void 
+}) {
+  const [neverShowAgain, setNeverShowAgain] = useState(false)
+
+  // Early exit if already dismissed to prevent phantom loads
+  if (isWizardPermanentlyDismissed()) {
+    return null
+  }
+
+  const handleClose = () => {
+    if (neverShowAgain) {
+      onNeverShowAgain()
+    }
+    onClose()
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 md:p-6"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <motion.div
+          className="bg-white rounded-2xl shadow-xl w-full max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl max-h-[90vh] overflow-y-auto overflow-hidden"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.9, opacity: 0 }}
+        >
+          {/* Celebration Header - Brand Aligned */}
+          <div className="relative bg-gradient-to-r from-brand-purple via-brand-pink to-brand-purple p-4 sm:p-6 md:p-8 overflow-hidden">
+            {/* Decorative Background Elements */}
+            <div className="absolute top-0 right-0 w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 bg-white/10 rounded-full -translate-y-6 sm:-translate-y-8 md:-translate-y-10 translate-x-6 sm:translate-x-8 md:translate-x-10" />
+            <div className="absolute bottom-0 left-0 w-10 h-10 sm:w-12 sm:h-12 md:w-16 md:h-16 bg-white/5 rounded-full translate-y-4 sm:translate-y-6 md:translate-y-8 -translate-x-4 sm:-translate-x-6 md:-translate-x-8" />
+            
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 z-10 bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white transition-colors duration-200"
+              onClick={handleClose}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            
+            {/* Celebration Animation */}
+            <div className="text-center text-white relative z-10">
+              <motion.div
+                className="mx-auto mb-4"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring", stiffness: 200, duration: 0.3 }}
+              >
+                <div className="relative">
+                  <div className="bg-white/20 rounded-full p-4 backdrop-blur-sm">
+                    <CheckCircle className="h-12 w-12 mx-auto" />
+                  </div>
+                  <motion.div
+                    className="absolute -top-2 -right-2"
+                    animate={{ rotate: [0, 10, -10, 0] }}
+                    transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                  >
+                    <Sparkles className="h-6 w-6 text-yellow-300" />
+                  </motion.div>
+                </div>
+              </motion.div>
+              
+              <motion.h2 
+                className="text-xl sm:text-2xl md:text-3xl font-bold mb-2 font-serif"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.3, duration: 0.25 }}
+              >
+                🎉 Congratulations!
+              </motion.h2>
+              
+              <motion.p 
+                className="text-white/90 text-base sm:text-lg font-medium"
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ delay: 0.4, duration: 0.25 }}
+              >
+                You're now an approved affiliate!
+              </motion.p>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-4 sm:p-5 md:p-6 space-y-4 sm:space-y-5 md:space-y-6">
+            <div className="text-center">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 font-serif">
+                Welcome to the Graceful Homeschooling Affiliate Program!
+              </h3>
+              <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+                You're now earning 25% commission on every successful referral. Here's how to get started:
+              </p>
+            </div>
+
+            {/* Action Steps */}
+            <div className="space-y-3 sm:space-y-4">
+              <div className="bg-brand-purple/10 rounded-xl p-3 sm:p-4 border border-brand-purple/20 shadow-sm">
+                <div className="flex items-start space-x-2 sm:space-x-3">
+                  <div className="bg-brand-purple rounded-full p-1.5 sm:p-2 mt-1 shadow-sm flex-shrink-0">
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base">
+                      Access Your Affiliate Portal
+                    </h4>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3 leading-relaxed">
+                      Click on your profile name in the top right corner, then select "Affiliate Portal" 
+                      from the dropdown menu to manage your account and track performance.
+                    </p>
+                    <Button
+                      onClick={() => window.open('/affiliate-portal', '_blank')}
+                      className="bg-brand-purple hover:bg-brand-purple/90 text-white text-xs sm:text-sm h-8 sm:h-9 px-3 sm:px-4 transition-colors duration-200 w-full sm:w-auto"
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1 sm:mr-2" />
+                      Open Affiliate Portal
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-brand-blue/10 rounded-xl p-3 sm:p-4 border border-brand-blue/20 shadow-sm">
+                <div className="flex items-start space-x-2 sm:space-x-3">
+                  <div className="bg-brand-blue rounded-full p-1.5 sm:p-2 mt-1 shadow-sm flex-shrink-0">
+                    <Users className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-gray-900 mb-1 text-sm sm:text-base">
+                      Join Our Affiliate Facebook Group
+                    </h4>
+                    <p className="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3 leading-relaxed">
+                      Connect with other affiliates, get marketing tips, and stay updated on new resources 
+                      in our exclusive affiliate community.
+                    </p>
+                    <Button
+                      onClick={() => window.open('https://facebook.com/groups/gracefulhomeschooling-affiliates', '_blank')}
+                      variant="outline"
+                      className="border-brand-blue text-brand-blue hover:bg-brand-blue/10 text-xs sm:text-sm h-8 sm:h-9 px-3 sm:px-4 transition-colors duration-200 w-full sm:w-auto"
+                    >
+                      <ExternalLink className="h-3 w-3 mr-1 sm:mr-2" />
+                      Join Facebook Group
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Commission Highlight */}
+            <div className="bg-gradient-to-r from-brand-pink/20 to-brand-purple/20 rounded-xl p-3 sm:p-4 text-center border border-brand-pink/30 shadow-sm">
+              <div className="flex justify-center mb-2">
+                <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-brand-purple" />
+              </div>
+              <p className="text-xs sm:text-sm font-medium text-gray-900">
+                You're earning <span className="text-base sm:text-lg font-bold text-brand-purple">25%</span> commission on all sales
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                That's ₱250 for every Papers to Profits course sold!
+              </p>
+            </div>
+
+            {/* Never Show Again Option */}
+            <div className="border-t border-gray-200 pt-3 sm:pt-4">
+              <div className="flex items-start space-x-2">
+                <Checkbox
+                  id="never-show-again"
+                  checked={neverShowAgain}
+                  onCheckedChange={(checked) => setNeverShowAgain(checked === true)}
+                  className="data-[state=checked]:bg-brand-purple data-[state=checked]:border-brand-purple mt-0.5 flex-shrink-0"
+                />
+                <label
+                  htmlFor="never-show-again"
+                  className="text-xs sm:text-sm text-gray-600 cursor-pointer leading-relaxed"
+                >
+                  Don't show this congratulations message again
+                </label>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <Button
+                onClick={handleClose}
+                className="flex-1 bg-gradient-to-r from-brand-purple to-brand-pink hover:from-brand-purple/90 hover:to-brand-pink/90 text-white font-medium transition-all duration-200 h-10 sm:h-11 text-sm sm:text-base"
+              >
+                Get Started!
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
+
 export function AffiliateApplicationWizard({ 
   isOpen, 
   onClose, 
@@ -112,6 +340,7 @@ export function AffiliateApplicationWizard({
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [isLoadingStatus, setIsLoadingStatus] = useState(true)
   const [affiliateStatus, setAffiliateStatus] = useState<AffiliateStatus | null>(null)
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false)
   
   // Application data state
   const [applicationData, setApplicationData] = useState<ApplicationData>({
@@ -126,12 +355,25 @@ export function AffiliateApplicationWizard({
   const { user } = useAuth()
   const userContext = useStudentDashboardStore((state) => state.userContext)
 
-  // Check affiliate status when component opens
+  // Immediate dismissal check - run BEFORE status check to prevent phantom loads
   useEffect(() => {
-    if (isOpen && user?.id) {
-      checkAffiliateStatus()
+    if (isOpen) {
+      // Check dismissal status immediately when opening
+      if (isWizardPermanentlyDismissed()) {
+        setInitialCheckComplete(true)
+        onClose()
+        return
+      }
+      
+      // Mark that initial check is complete
+      setInitialCheckComplete(true)
+      
+      // Only check affiliate status if not dismissed
+      if (user?.id) {
+        checkAffiliateStatus()
+      }
     }
-  }, [isOpen, user?.id])
+  }, [isOpen, user?.id, onClose])
 
   // Reset state when modal opens
   useEffect(() => {
@@ -179,6 +421,12 @@ export function AffiliateApplicationWizard({
     } finally {
       setIsLoadingStatus(false)
     }
+  }
+
+  // Handle permanent dismissal for approved affiliates
+  const handleNeverShowAgain = () => {
+    markWizardPermanentlyDismissed()
+    onClose()
   }
 
   // Check if current step is valid
@@ -280,6 +528,16 @@ export function AffiliateApplicationWizard({
 
   if (!isOpen) return null
 
+  // Don't render anything until initial dismissal check is complete
+  if (!initialCheckComplete) {
+    return null
+  }
+
+  // Early check: If wizard is permanently dismissed for approved affiliates, don't render anything
+  if (affiliateStatus?.status === 'active' && isWizardPermanentlyDismissed()) {
+    return null
+  }
+
   // Show loading state while checking affiliate status
   if (isLoadingStatus) {
     return (
@@ -306,51 +564,13 @@ export function AffiliateApplicationWizard({
     )
   }
 
-  // Show different content based on affiliate status
-  if (affiliateStatus?.status === 'active') {
+  // Show congratulations modal for approved affiliates (unless permanently dismissed)
+  if (affiliateStatus?.status === 'active' && !isWizardPermanentlyDismissed()) {
     return (
-      <AnimatePresence>
-        <motion.div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-        >
-          <motion.div
-            className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-          >
-            <div className="relative bg-gradient-to-r from-green-500 to-green-600 p-6">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-2 right-2 z-10 bg-white/80 backdrop-blur-sm hover:bg-white text-gray-700"
-                onClick={onClose}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-              <div className="text-center text-white">
-                <CheckCircle className="h-12 w-12 mx-auto mb-3" />
-                <h2 className="text-xl font-medium">You're Already an Affiliate!</h2>
-                <p className="text-white/80 text-sm">Your application has been approved</p>
-              </div>
-            </div>
-            <div className="p-6 text-center">
-              <p className="text-gray-600 mb-4">
-                Congratulations! You're already an approved affiliate. Visit your affiliate portal to manage your account and track your performance.
-              </p>
-              <Button 
-                onClick={() => window.open('/affiliate-portal', '_blank')}
-                className="bg-brand-purple hover:bg-brand-purple/90"
-              >
-                Go to Affiliate Portal
-              </Button>
-            </div>
-          </motion.div>
-        </motion.div>
-      </AnimatePresence>
+      <CongratulationsModal 
+        onClose={onClose}
+        onNeverShowAgain={handleNeverShowAgain}
+      />
     )
   }
 
