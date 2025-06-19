@@ -158,7 +158,7 @@ Polish the main homepage to create consistency across public pages and improve m
 - **UX Clean-up**: Removed CustomCursorToggle component that was causing unwanted white box with cursor
 
 ### Step 15: YouTube API Fix and Verification ✅
-- [x] **Updated YOUTUBE_API_KEY in .env.local** (Master Rob updated API key)
+- [x] **UPDATED YOUTUBE_API_KEY in .env.local** (Master Rob updated API key)
 - [x] **CORRECTED Channel ID**: UC-yMXCe2DoWPSFRb0L02_fw (Master Rob confirmed correct ID)
 - [x] **Fixed API implementation**: Changed default parameter from handle to actual channel ID
 - [x] **Updated API priority**: Channel ID lookup first (most reliable), then handle fallback
@@ -672,3 +672,27 @@ All components now follow the established design context guidelines:
 - **Resources**: External gracefulhomeschooling.com links (blog, tutorials, etc.)
 - [x] **Legal**: Placeholder routes ready for future legal page implementations
 - [x] **Social**: External social media platform links with security attributes
+
+### Step 25: Fix Footer Social Media Links & Create Legal Pages ✅
+- [x] **UPDATED SOCIAL MEDIA LINKS**: Fixed footer links with correct URLs per Master Rob's specifications
+  - Instagram: `https://www.instagram.com/gracefulhomeschooling/`
+  - Facebook: `https://www.facebook.com/GracefulHomeschoolingbyEmigrace/`
+  - YouTube: `https://www.youtube.com/@gracefulhomeschooling`
+  - **REMOVED PINTEREST**: No account exists, eliminated from footer
+- [x] **SIMPLIFIED RESOURCES SECTION**: Now points only to YouTube Channel and Facebook Community per requirements
+- [x] **REMOVED CONTACT LINK**: Eliminated from Legal section as requested
+
+#### **Legal Pages Created** (`/legal/` directory):
+- [x] **TERMS PAGE** (`/legal/terms`): Comprehensive terms of service for educational platform
+- [x] **PRIVACY PAGE** (`/legal/privacy`): GDPR-compliant privacy policy with children's privacy section
+- [x] **COOKIES PAGE** (`/legal/cookies`): Detailed cookie policy with browser management instructions
+- [x] **BRAND ALIGNMENT**: All legal pages follow design context (Playfair Display headers, brand colors, consistent layout)
+
+#### **Footer Standardization Complete**:
+- [x] **CANVA EBOOK FOOTER**: Replaced inline footer with standardized `PublicFooter` component
+- [x] **CONSISTENT ACROSS ALL PAGES**: Homepage, Papers to Profits, Shop, and Canva Ebook now use same footer
+- [x] **WORKING LINKS**: All footer navigation tested and functional
+- [x] **ACCESSIBILITY**: Proper external link attributes (target="_blank", rel="noopener noreferrer")
+
+## All Footer Issues Resolved ✅
+**Status**: All pages now have standardized footers with working social media links pointing to actual accounts.

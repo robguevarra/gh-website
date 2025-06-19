@@ -29,10 +29,9 @@ export function PublicFooter({ className = "" }: PublicFooterProps) {
           </p>
           <div className="flex gap-4">
             {[
-              { name: "Instagram", href: "https://instagram.com" },
-              { name: "Facebook", href: "https://facebook.com" },
-              { name: "Pinterest", href: "https://pinterest.com" },
-              { name: "YouTube", href: "https://youtube.com" }
+              { name: "Instagram", href: "https://www.instagram.com/gracefulhomeschooling/" },
+              { name: "Facebook", href: "https://www.facebook.com/GracefulHomeschoolingbyEmigrace/" },
+              { name: "YouTube", href: "https://www.youtube.com/@gracefulhomeschooling" }
             ].map((social) => (
               <Link
                 key={social.name}
@@ -71,17 +70,14 @@ export function PublicFooter({ className = "" }: PublicFooterProps) {
             <h4 className="text-sm font-medium text-[#5d4037]">Resources</h4>
             <ul className="space-y-2">
               {[
-                { name: "Free Guides", href: "/canva-ebook" },
-                { name: "Blog", href: "https://gracefulhomeschooling.com/blog" },
-                { name: "Tutorials", href: "https://gracefulhomeschooling.com/tutorials" },
-                { name: "Success Stories", href: "https://gracefulhomeschooling.com/success-stories" },
-                { name: "Materials Guide", href: "https://gracefulhomeschooling.com/materials" }
+                { name: "YouTube Channel", href: "https://www.youtube.com/@gracefulhomeschooling" },
+                { name: "Facebook Community", href: "https://www.facebook.com/GracefulHomeschoolingbyEmigrace/" }
               ].map((link) => (
                 <li key={link.name}>
                   <Link
                     href={link.href}
-                    target={link.href.startsWith('http') ? "_blank" : undefined}
-                    rel={link.href.startsWith('http') ? "noopener noreferrer" : undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="text-sm text-[#6d4c41] hover:text-brand-purple transition-colors duration-200"
                   >
                     {link.name}
@@ -96,8 +92,7 @@ export function PublicFooter({ className = "" }: PublicFooterProps) {
               {[
                 { name: "Terms", href: "/legal/terms" },
                 { name: "Privacy", href: "/legal/privacy" },
-                { name: "Cookies", href: "/legal/cookies" },
-                { name: "Contact", href: "/legal/contact" }
+                { name: "Cookies", href: "/legal/cookies" }
               ].map((link) => (
                 <li key={link.name}>
                   <Link
