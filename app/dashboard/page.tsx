@@ -670,7 +670,7 @@ export default function StudentDashboard() {
       if (!user?.id) return;
       
       try {
-        const response = await fetch('/api/student/affiliate-status');
+        const response = await fetch(`/api/student/affiliate-status?userId=${user.id}`);
         if (response.ok) {
           const data = await response.json();
           setIsAffiliate(data.isAffiliate);
