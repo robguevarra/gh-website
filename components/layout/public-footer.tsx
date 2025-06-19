@@ -92,7 +92,8 @@ export function PublicFooter({ className = "" }: PublicFooterProps) {
               {[
                 { name: "Terms", href: "/legal/terms" },
                 { name: "Privacy", href: "/legal/privacy" },
-                { name: "Cookies", href: "/legal/cookies" }
+                { name: "Cookies", href: "/legal/cookies" },
+                { name: "Contact", href: "/legal/contact" }
               ].map((link) => (
                 <li key={link.name}>
                   <Link
