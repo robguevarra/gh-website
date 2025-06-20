@@ -239,7 +239,6 @@ export default function CoursePreview() {
                       <Button className="w-full" onClick={handleEnroll}>
                         Enroll Now
                       </Button>
-                      <p className="text-xs text-center text-muted-foreground">30-Day Money-Back Guarantee</p>
                     </div>
                     <Separator />
                     <div className="space-y-2">

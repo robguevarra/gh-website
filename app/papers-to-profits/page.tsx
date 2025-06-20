@@ -846,11 +846,6 @@ export default function PapersToProfit() {
                       Learn More
                     </Button>
                   </motion.div>
-
-                  <motion.div variants={fadeIn} className="flex items-center gap-2 pt-2">
-                    <Shield className="h-4 w-4 text-brand-purple" />
-                    <span className="text-sm text-[#6d4c41]">30-day money-back guarantee</span>
-                  </motion.div>
                 </motion.div>
 
                 {/* Right side - Enrollment Form */}
@@ -1330,11 +1325,6 @@ export default function PapersToProfit() {
                   >
                     Learn More
                   </Button>
-                </div>
-
-                <div className="flex items-center justify-center gap-2 pt-4">
-                  <Shield className="h-5 w-5 text-white/80" />
-                  <span className="text-white/80">30-day money-back guarantee</span>
                 </div>
               </motion.div>
             </div>
