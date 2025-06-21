@@ -549,31 +549,6 @@ npx supabase gen types typescript --project-id <project-id> > database.types.ts
 - ✅ **Variable Substitution**: 100% reliable snake_case format processing
 - ✅ **Customer Differentiation**: Smart routing based on existing account status
 - ✅ **Production Ready**: Comprehensive error handling and logging
-- ✅ **Password Status Detection**: Prevents users who already set passwords from accessing setup screens again
-
-### 7. Enhanced Security for Password-Protected Accounts
-
-#### 7.1 Problem: Account Setup Page Bypass
-We identified a security vulnerability where users who had already set up their passwords could access the account setup page again by clicking on old magic links in their email. This could potentially create confusion and security risks.
-
-#### 7.2 Industry Best Practice Solution
-Implemented a comprehensive solution following Auth0 and Okta's security patterns:
-
-- **Server-Side Check**: API verifies if the user has already set a password by:
-  - Looking up the user ID in the token metadata
-  - Checking the `unified_profiles` table to associate email with user ID
-  - Examining `user_metadata.password_set_at` in Supabase Auth
-
-- **Client-Side Fallback**: Additional verification in the client component to ensure users with passwords are always redirected to sign-in:
-  - Primary check using `profileStatus.isComplete` from server response
-  - Secondary check for login-purpose tokens with userId in metadata
-
-- **Authentication Flow Override**:
-  - Users with passwords are automatically redirected to the sign-in page
-  - Clear message explaining why they were redirected
-  - Password status check applies to both account_setup and login tokens
-
-This enhancement ensures a secure user experience where users who have completed their account setup will never be shown the setup screens again, regardless of which magic links they click.
 
 ### 🎓 **Key Learnings for Future Email System Work:**
 
