@@ -20,10 +20,7 @@ const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'Courses', href: '/admin/courses', icon: BookOpen },
-  { name: 'Membership Tiers', href: '/admin/membership-tiers', icon: Tag },
-  { name: 'Affiliates', href: '/admin/affiliates', icon: UserCog }, // Corrected icon name
-  { name: 'Reports', href: '/admin/reports', icon: BarChart4 },
-  { name: 'Email Campaigns', href: '/admin/email', icon: Mail },
+  { name: 'Affiliates', href: '/admin/affiliates', icon: UserCog }, // Corrected icon name  { name: 'Email Campaigns', href: '/admin/email', icon: Mail },
   { name: 'Shop Integration', href: '/admin/shop', icon: ShoppingBag },
   { name: 'Security', href: '/admin/security', icon: Shield },
   { name: 'Settings', href: '/admin/settings', icon: Settings },

@@ -51,7 +51,7 @@ export function PublicFooter({ className = "" }: PublicFooterProps) {
             <ul className="space-y-2">
               {[
                 { name: "Home", href: "/" },
-                { name: "Papers to Profits", href: "/papers-to-profits" },
+                { name: "Papers to Profits", href: "/p2p-order-form" },
                 { name: "Shop", href: "/shop" },
                 { name: "Login", href: "/auth/signin" }
               ].map((link) => (

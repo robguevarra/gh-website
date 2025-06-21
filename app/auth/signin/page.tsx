@@ -205,7 +205,7 @@ function SignInContent() {
             
             <motion.div variants={fadeIn} className="text-center text-sm text-[#6d4c41]">
               Don't have an account?{' '}
-              <Link href="/papers-to-profits" className="text-brand-purple font-medium hover:underline">
+              <Link href="/p2p-order-form" className="text-brand-purple font-medium hover:underline">
                 Sign up
               </Link>
             </motion.div>

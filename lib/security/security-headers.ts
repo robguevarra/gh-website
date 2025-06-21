@@ -88,8 +88,8 @@ export function createSecurityHeaders(config: SecurityHeadersConfig = {}) {
     // Check if we need to allow Facebook embeds based on the request path
     const needsFacebookEmbeds = mergedConfig.allowFacebookEmbeds || 
       request.nextUrl.pathname === '/' || 
-      request.nextUrl.pathname === '/canva-ebook' ||
-      request.nextUrl.pathname === '/papers-to-profits';
+      request.nextUrl.pathname === '/canva-order' ||
+      request.nextUrl.pathname === '/p2p-order-form';
     
     // Content-Security-Policy
     if (mergedConfig.contentSecurityPolicy) {

@@ -203,7 +203,7 @@ export default function ShopComingSoon() {
                   className="border-primary text-primary hover:bg-primary/10 group"
                   asChild
                 >
-                  <a href="/papers-to-profits">
+                  <a href="/p2p-order-form">
                     Papers to Profits Course
                     <ChevronRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
                   </a>
@@ -213,7 +213,7 @@ export default function ShopComingSoon() {
                   className="border-secondary text-secondary hover:bg-secondary/10 group"
                   asChild
                 >
-                  <a href="/canva-ebook">
+                  <a href="/canva-order">
                     Free Canva Ebook
                     <ChevronRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
                   </a>

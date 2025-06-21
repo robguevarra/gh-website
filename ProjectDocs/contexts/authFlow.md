@@ -9,13 +9,6 @@ This document outlines the authentication flows implemented in the Graceful Home
 
 ## Authentication Flows
 
-### Standard Sign Up Flow
-1. User navigates to `/auth/signup`
-2. User fills out the sign-up form with email, password, and other required information
-3. Form validation ensures all required fields are properly filled
-4. On submission, a new account is created and a confirmation email is sent
-5. User clicks the verification link in the email
-6. User is redirected to the dashboard
 
 ### Standard Sign In Flow
 1. User navigates to `/auth/signin`
@@ -54,13 +47,11 @@ This document outlines the authentication flows implemented in the Graceful Home
 ## Technical Implementation
 
 ### Authentication Components
-- `SignUpForm`: Handles new user registration
 - `SignInForm`: Handles user login
 - `UpdatePasswordForm`: Handles password reset and account setup
 - `ResetPasswordForm`: Handles requesting password reset emails
 
 ### Authentication Pages
-- `/auth/signup`: New user registration
 - `/auth/signin`: User login
 - `/auth/reset-password`: Request password reset
 - `/auth/setup-account`: Complete account setup after payment

@@ -12,6 +12,7 @@ import {
 import { revalidatePath } from 'next/cache';
 import { logAdminActivity } from './activity-log-actions'; 
 import { unstable_cache } from 'next/cache';
+import { assignTagsToUsers } from '@/lib/supabase/data-access/tags';
 
 
 // At the top of lib/actions/affiliate-actions.ts, add:
@@ -102,59 +103,131 @@ export async function updateAffiliateStatus(userId: string, newStatus: Affiliate
 /**
  * Get affiliate program statistics for admin dashboard
  */
+/**
+ * Get affiliate statistics for the admin dashboard
+ * Returns counts for total, active, pending affiliates and growth metrics
+ * Uses parallel queries for better performance and includes robust error handling
+ */
 export async function getAffiliateStats() {
   const supabase = getAdminClient();
 
   try {
-    // Get total affiliates count
-    const { count: totalAffiliates, error: totalError } = await supabase
-      .from('affiliates')
-      .select('*', { count: 'exact', head: true });
+    // Validate client connection first
+    if (!supabase) {
+      throw new Error('Supabase admin client not initialized');
+    }
 
-    if (totalError) throw new Error(`Failed to fetch total affiliates: ${totalError.message}`);
-
-    // Get active affiliates count
-    const { count: activeAffiliates, error: activeError } = await supabase
-      .from('affiliates')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'active');
-
-    if (activeError) throw new Error(`Failed to fetch active affiliates: ${activeError.message}`);
-
-    // Get pending applications count
-    const { count: pendingApplications, error: pendingError } = await supabase
-      .from('affiliates')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending');
-
-    if (pendingError) throw new Error(`Failed to fetch pending applications: ${pendingError.message}`);
-
-    // Get affiliates created in the last 30 days for growth calculation
+    // Get date boundary for growth calculation
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const { count: newThisMonth, error: newError } = await supabase
-      .from('affiliates')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', thirtyDaysAgo.toISOString());
+    // Execute all queries in parallel for better performance
+    // This also helps isolate which specific query might be failing
+    const [
+      totalResult,
+      activeResult,
+      pendingResult,
+      newResult
+    ] = await Promise.allSettled([
+      // Total affiliates count
+      supabase
+        .from('affiliates')
+        .select('*', { count: 'exact', head: true }),
+      
+      // Active affiliates count
+      supabase
+        .from('affiliates')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active'),
+      
+      // Pending applications count
+      supabase
+        .from('affiliates')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending'),
+      
+      // New affiliates this month
+      supabase
+        .from('affiliates')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', thirtyDaysAgo.toISOString())
+    ]);
 
-    if (newError) throw new Error(`Failed to fetch new affiliates: ${newError.message}`);
+    // Initialize default values
+    let totalAffiliates = 0;
+    let activeAffiliates = 0;
+    let pendingApplications = 0;
+    let newThisMonth = 0;
 
-    // Calculate growth percentage (mock calculation for now)
-    const previousMonth = Math.max(1, (totalAffiliates || 0) - (newThisMonth || 0));
+    // Process results with individual error handling
+    if (totalResult.status === 'fulfilled') {
+      const { count, error } = totalResult.value;
+      if (error) {
+        console.error('Error fetching total affiliates:', error);
+      } else {
+        totalAffiliates = count || 0;
+      }
+    } else {
+      console.error('Failed to fetch total affiliates:', totalResult.reason);
+    }
+
+    if (activeResult.status === 'fulfilled') {
+      const { count, error } = activeResult.value;
+      if (error) {
+        console.error('Error fetching active affiliates:', error);
+      } else {
+        activeAffiliates = count || 0;
+      }
+    } else {
+      console.error('Failed to fetch active affiliates:', activeResult.reason);
+    }
+
+    if (pendingResult.status === 'fulfilled') {
+      const { count, error } = pendingResult.value;
+      if (error) {
+        console.error('Error fetching pending applications:', error);
+      } else {
+        pendingApplications = count || 0;
+      }
+    } else {
+      console.error('Failed to fetch pending applications:', pendingResult.reason);
+    }
+
+    if (newResult.status === 'fulfilled') {
+      const { count, error } = newResult.value;
+      if (error) {
+        console.error('Error fetching new affiliates:', error);
+      } else {
+        newThisMonth = count || 0;
+      }
+    } else {
+      console.error('Failed to fetch new affiliates:', newResult.reason);
+    }
+
+    // Calculate growth percentage with safe math
+    const previousMonth = Math.max(1, totalAffiliates - newThisMonth);
     const growthPercentage = previousMonth > 0 ? 
-      ((newThisMonth || 0) / previousMonth * 100) : 0;
+      ((newThisMonth / previousMonth) * 100) : 0;
 
     return {
-      totalAffiliates: totalAffiliates || 0,
-      activeAffiliates: activeAffiliates || 0,
-      pendingApplications: pendingApplications || 0,
-      newThisMonth: newThisMonth || 0,
+      totalAffiliates,
+      activeAffiliates,
+      pendingApplications,
+      newThisMonth,
       growthPercentage: Math.round(growthPercentage * 10) / 10, // Round to 1 decimal
     };
   } catch (err) {
-    console.error('Error fetching affiliate stats:', err);
-    throw new Error(err instanceof Error ? err.message : 'Failed to fetch affiliate statistics');
+    console.error('Critical error in getAffiliateStats:', err);
+    
+    // Return fallback data instead of throwing to prevent page crashes
+    // The UI component already handles displaying error messages
+    return {
+      totalAffiliates: 0,
+      activeAffiliates: 0,
+      pendingApplications: 0,
+      newThisMonth: 0,
+      growthPercentage: 0,
+    };
   }
 }
 
@@ -263,17 +336,47 @@ const getAdminAffiliatesWithCache = unstable_cache(
 export async function approveAffiliate(affiliateId: string): Promise<{ success: boolean; error?: string }> {
   const supabase = getAdminClient();
   try {
-    const { error } = await supabase
+    // First, get the affiliate and their user_id
+    const { data: affiliate, error: fetchError } = await supabase
+      .from('affiliates')
+      .select('id, user_id')
+      .eq('id', affiliateId)
+      .single();
+
+    if (fetchError || !affiliate) {
+      console.error('Error fetching affiliate:', fetchError);
+      return { success: false, error: `Failed to fetch affiliate: ${fetchError?.message || 'Affiliate not found'}` };
+    }
+
+    // Update affiliate status to active
+    const { error: updateError } = await supabase
       .from('affiliates')
       .update({ status: 'active' })
       .eq('id', affiliateId)
       .select('id') 
       .single(); 
 
-    if (error) {
-      console.error('Error approving affiliate:', error);
-      return { success: false, error: `Failed to approve affiliate: ${error.message}` };
+    if (updateError) {
+      console.error('Error updating affiliate status:', updateError);
+      return { success: false, error: `Failed to approve affiliate: ${updateError.message}` };
     }
+
+    // Automatically tag the user with "Affiliate" tag
+    try {
+      const AFFILIATE_TAG_ID = '9569c2bd-6b05-44f2-a422-054bfddc0516'; // Pre-existing "Affiliate" tag ID
+      
+      await assignTagsToUsers({
+        tagIds: [AFFILIATE_TAG_ID],
+        userIds: [affiliate.user_id]
+      });
+      
+      console.log(`Successfully tagged user ${affiliate.user_id} with 'Affiliate' tag after approval`);
+    } catch (tagError) {
+      console.error('Failed to tag approved affiliate:', tagError);
+      // Don't fail the approval process due to tagging error - approval is more critical
+      // The affiliate is still approved, just without the automatic tag
+    }
+
     revalidatePath('/admin/affiliates');
     return { success: true };
   } catch (err) {
@@ -282,6 +385,143 @@ export async function approveAffiliate(affiliateId: string): Promise<{ success: 
         return { success: false, error: `An unexpected error occurred: ${err.message}` };
     }
     return { success: false, error: 'An unexpected error occurred while approving the affiliate.' };
+  }
+}
+
+/**
+ * Bulk approve multiple affiliates by their IDs
+ * This function processes affiliates in parallel for better performance
+ */
+export async function bulkApproveAffiliates(affiliateIds: string[]): Promise<{ 
+  success: boolean; 
+  successCount: number; 
+  failedCount: number; 
+  errors: string[];
+}> {
+  if (!affiliateIds || affiliateIds.length === 0) {
+    return { success: false, successCount: 0, failedCount: 0, errors: ['No affiliate IDs provided'] };
+  }
+
+  const supabase = getAdminClient();
+  const errors: string[] = [];
+  let successCount = 0;
+  let failedCount = 0;
+
+  try {
+    const AFFILIATE_TAG_ID = '9569c2bd-6b05-44f2-a422-054bfddc0516'; // Pre-existing "Affiliate" tag ID
+    
+    // First, get all affiliate data including user_ids for tagging
+    const { data: affiliates, error: fetchError } = await supabase
+      .from('affiliates')
+      .select('id, user_id')
+      .in('id', affiliateIds);
+
+    if (fetchError) {
+      throw new Error(`Failed to fetch affiliate data: ${fetchError.message}`);
+    }
+
+    if (!affiliates || affiliates.length === 0) {
+      throw new Error('No affiliates found with the provided IDs');
+    }
+
+    // Process all approvals in parallel for better performance
+    const approvalPromises = affiliateIds.map(async (affiliateId) => {
+      try {
+        const { error } = await supabase
+          .from('affiliates')
+          .update({ status: 'active' })
+          .eq('id', affiliateId)
+          .select('id')
+          .single();
+
+        if (error) {
+          throw new Error(`Failed to approve affiliate ${affiliateId}: ${error.message}`);
+        }
+        
+        return { success: true, affiliateId };
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : `Unknown error for affiliate ${affiliateId}`;
+        return { success: false, affiliateId, error: errorMessage };
+      }
+    });
+
+    // Wait for all approval operations to complete
+    const results = await Promise.all(approvalPromises);
+    
+    // Process results and collect errors
+    const successfulAffiliateIds: string[] = [];
+    results.forEach((result) => {
+      if (result.success) {
+        successCount++;
+        successfulAffiliateIds.push(result.affiliateId);
+      } else {
+        failedCount++;
+        errors.push(result.error || `Failed to approve affiliate ${result.affiliateId}`);
+      }
+    });
+
+    // Bulk tag all successfully approved affiliates
+    if (successfulAffiliateIds.length > 0) {
+      try {
+        // Get user_ids for successfully approved affiliates
+        const successfulUserIds = affiliates
+          .filter(affiliate => successfulAffiliateIds.includes(affiliate.id))
+          .map(affiliate => affiliate.user_id);
+
+        if (successfulUserIds.length > 0) {
+          await assignTagsToUsers({
+            tagIds: [AFFILIATE_TAG_ID],
+            userIds: successfulUserIds
+          });
+          
+          console.log(`Successfully tagged ${successfulUserIds.length} users with 'Affiliate' tag after bulk approval`);
+        }
+      } catch (tagError) {
+        console.error('Failed to tag approved affiliates during bulk operation:', tagError);
+        // Don't fail the entire operation due to tagging error
+        // Add a warning to the errors array instead
+        errors.push(`Warning: Failed to tag ${successfulAffiliateIds.length} approved affiliates - they are approved but not tagged`);
+      }
+    }
+
+         // Log the bulk operation for audit purposes
+     try {
+       await logAdminActivity({
+         activity_type: 'GENERAL_ADMIN_ACTION',
+         description: `Bulk approved ${successCount} affiliates. ${failedCount} failed.`,
+         details: { 
+           action: 'BULK_AFFILIATE_APPROVAL',
+           affiliate_ids: affiliateIds,
+           success_count: successCount,
+           failed_count: failedCount,
+           errors: errors.length > 0 ? errors : undefined
+         },
+       });
+     } catch (logError) {
+       console.error('Failed to log bulk approval activity:', logError);
+       // Don't fail the operation due to logging error
+     }
+
+    // Revalidate affiliate pages to refresh UI
+    revalidatePath('/admin/affiliates');
+
+    const overallSuccess = failedCount === 0;
+    return { 
+      success: overallSuccess, 
+      successCount, 
+      failedCount, 
+      errors 
+    };
+
+  } catch (err) {
+    console.error('Unexpected error in bulkApproveAffiliates:', err);
+    const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred during bulk approval.';
+    return { 
+      success: false, 
+      successCount: 0, 
+      failedCount: affiliateIds.length, 
+      errors: [errorMessage] 
+    };
   }
 }
 

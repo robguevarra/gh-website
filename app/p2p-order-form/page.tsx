@@ -186,7 +186,7 @@ export default function PapersToProfit() {
             productType: 'P2P',
             amount: planPrice,
             currency: process.env.PAYMENT_CURRENCY || 'PHP',
-            sourcePage: '/papers-to-profits',
+            sourcePage: '/p2p-order-form',
             utmSource: new URLSearchParams(window.location.search).get('utm_source') || undefined,
             utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
             utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,

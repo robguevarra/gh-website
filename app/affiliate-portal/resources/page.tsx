@@ -78,10 +78,10 @@ const tutorialSteps = [
     title: "Finding Your Target Audience for Papers to Profits",
     icon: <Target className="h-6 w-6" />,
     content: [
-      "Focus on homeschooling moms who are looking for ways to contribute financially to their families",
+      "Focus on parents or individuals who are looking for ways to contribute financially to their families",
       "Target parents interested in DIY projects, crafting, or creating educational materials",
       "Join Facebook groups like 'Homeschooling Philippines', 'Homeschool Moms Support Group', and crafting communities",
-      "Look for moms who share about wanting to start a side business or feeling creative but stuck",
+      "Look for moms and dads who share about wanting to start a side business or feeling creative but stuck",
       "Connect with parents who post about organizing their homeschool materials or wanting custom planners"
     ]
   },
@@ -90,7 +90,7 @@ const tutorialSteps = [
     title: "Building Trust & Sharing Your Papers to Profits Story",
     icon: <Users className="h-6 w-6" />,
     content: [
-      "Share your own homeschooling journey and why you believe in Grace's teaching approach",
+      "Share your own kumikitang kabuhayan journey and why you believe in Grace's teaching approach",
       "Post photos of paper products you've created or would love to create using the course methods",
       "Be authentic about how Papers to Profits could help other moms balance family and financial goals",
       "Share Grace's story - homeschooling mom of 3 who built a ₱100k+ business from paper crafting",
@@ -119,8 +119,7 @@ const tutorialSteps = [
       title: "Maximizing Your Papers to Profits Affiliate Earnings",
       icon: <TrendingUp className="h-6 w-6" />,
       content: [
-        "Highlight the course's lifetime access and ₱5,000+ bonus templates in your promotions",
-        "Emphasize the 30-day money-back guarantee to reduce purchase hesitation",
+        "Highlight the course's lifetime access, helpful community and ₱5,000+ bonus templates in your promotions",
         "Share specific modules that would appeal to your audience (design, binding, business fundamentals)",
         "Create content around 'homeschool mom entrepreneur' themes and paper organization tips",
         "Track which social media posts and messages generate the most clicks in your Performance tab",

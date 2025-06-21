@@ -33,8 +33,8 @@ export function PublicHeader({ onHoverChange }: PublicHeaderProps) {
 
   const navItems = [
     { href: '/', label: 'Home' },
-    { href: '/papers-to-profits', label: 'Papers to Profits' },
-    { href: '/canva-ebook', label: 'Get Ebook' },
+    { href: '/p2p-order-form', label: 'Papers to Profits' },
+    { href: '/canva-order', label: 'Get Ebook' },
     { href: '/shop', label: 'Shop' }
   ]
 
@@ -98,7 +98,7 @@ export function PublicHeader({ onHoverChange }: PublicHeaderProps) {
             onMouseLeave={() => handleHover(false)}
             asChild
           >
-            <Link href="/papers-to-profits">
+            <Link href="/p2p-order-form">
               <span className="absolute inset-0 w-full h-full bg-brand-purple translate-y-full transition-transform duration-300 ease-out group-hover:translate-y-0"></span>
               <span className="relative flex items-center gap-1 z-10 group-hover:text-white transition-colors duration-300">
                 Get Started

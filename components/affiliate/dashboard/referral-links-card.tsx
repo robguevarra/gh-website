@@ -14,7 +14,7 @@ export function ReferralLinksCard() {
   const { affiliateProfile, isLoadingProfile } = useAffiliateProfileData();
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "";
-  const affiliateLink = affiliateProfile?.slug ? `${baseUrl}/papers-to-profits?a=${affiliateProfile.slug}` : null;
+  const affiliateLink = affiliateProfile?.slug ? `${baseUrl}/p2p-order-form?a=${affiliateProfile.slug}` : null;
 
   const handleCopyLink = (link: string) => {
     navigator.clipboard.writeText(link)

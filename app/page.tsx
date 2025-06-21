@@ -234,7 +234,7 @@ function HomeContent() {
 
             {/* CTA Buttons */}
             <motion.div variants={fadeIn} className="flex flex-col gap-3 sm:flex-row">
-              <Link href="/papers-to-profits">
+              <Link href="/p2p-order-form">
                 <Button
                   size="lg"
                   className="h-12 sm:h-14 px-6 sm:px-8 overflow-hidden relative group w-full sm:w-auto"
@@ -419,7 +419,7 @@ function HomeContent() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 1.1, duration: 0.6 }}
                     >
-                      <Link href="/papers-to-profits">
+                      <Link href="/p2p-order-form">
                         <Button className="bg-brand-purple/90 hover:bg-brand-purple text-white" size="sm">
                           Learn More
                           <ChevronRight className="ml-1 h-4 w-4" />
@@ -609,7 +609,7 @@ function HomeContent() {
                   ))}
                 </ul>
                 <div className="pt-4">
-                  <Link href="/papers-to-profits">
+                  <Link href="/p2p-order-form">
                     <Button
                       className="relative overflow-hidden group"
                       onMouseEnter={() => setIsHovering(true)}

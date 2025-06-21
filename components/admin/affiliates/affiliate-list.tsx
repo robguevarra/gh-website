@@ -32,7 +32,8 @@ import {
   approveAffiliate,
   rejectAffiliate,
   flagAffiliate,
-  updateAffiliateStatus
+  updateAffiliateStatus,
+  bulkApproveAffiliates
 } from '@/lib/actions/affiliate-actions';
 import { CreateFraudFlagDialog } from '@/components/admin/flags/create-fraud-flag-dialog';
 import { toast } from "sonner";
@@ -172,9 +173,44 @@ export default function AffiliateList() {
     
     setBulkActionLoading(true);
     try {
-      // TODO: Implement bulkUpdateAffiliateStatus function
-      // const result = await bulkUpdateAffiliateStatus(selectedAffiliates, 'active');
-      toast.error("Bulk approve functionality not yet implemented");
+      // Call the bulk approve function
+      const result = await bulkApproveAffiliates(selectedAffiliates);
+      
+      if (result.success) {
+        // All operations successful
+        toast.success("Bulk approval completed", {
+          description: `Successfully approved ${result.successCount} affiliate${result.successCount > 1 ? 's' : ''}`
+        });
+        setSelectedAffiliates([]); // Clear selection
+      } else if (result.successCount > 0) {
+        // Partial success
+        toast.warning("Bulk approval partially completed", {
+          description: `Successfully approved ${result.successCount} affiliate${result.successCount > 1 ? 's' : ''}. ${result.failedCount} failed.`
+        });
+        
+        // Show detailed errors if any
+        if (result.errors.length > 0) {
+          console.error('Bulk approval errors:', result.errors);
+          result.errors.forEach((error, index) => {
+            if (index < 3) { // Limit to first 3 error toasts to avoid spam
+              toast.error(`Approval error`, {
+                description: error,
+                duration: 10000,
+              });
+            }
+          });
+        }
+        setSelectedAffiliates([]); // Clear selection even on partial success
+      } else {
+        // Complete failure
+        toast.error("Bulk approval failed", {
+          description: result.errors[0] || "All affiliate approvals failed"
+        });
+      }
+
+      // Refresh the data to reflect changes
+      await fetchData();
+
     } catch (err) {
       console.error('Error in bulk approve action:', err);
       toast.error(`Failed to approve affiliates: ${err instanceof Error ? err.message : 'Unknown error'}`);

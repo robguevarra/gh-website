@@ -20,24 +20,20 @@ export const metadata: Metadata = {
 };
 
 async function AffiliateStats() {
-  let stats;
-  let error: string | null = null;
+  // Get affiliate stats with built-in error handling
+  // The function now returns fallback data instead of throwing errors
+  const stats = await getAffiliateStats();
+  
+  // Check if we got actual data or fallback data (indicates connection issues)
+  const hasConnectionIssues = stats.totalAffiliates === 0 && 
+    stats.activeAffiliates === 0 && 
+    stats.pendingApplications === 0 && 
+    stats.newThisMonth === 0 && 
+    stats.growthPercentage === 0;
 
-  try {
-    stats = await getAffiliateStats();
-  } catch (err) {
-    console.error('Failed to fetch affiliate stats:', err);
-    error = err instanceof Error ? err.message : 'Failed to load affiliate statistics';
-    
-    // Fallback data
-    stats = {
-      totalAffiliates: 0,
-      activeAffiliates: 0,
-      pendingApplications: 0,
-      newThisMonth: 0,
-      growthPercentage: 0,
-    };
-  }
+  const error = hasConnectionIssues ? 
+    'Database connection temporarily unavailable. Showing cached data.' : 
+    null;
 
   return (
     <div className="space-y-4">

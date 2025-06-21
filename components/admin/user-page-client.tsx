@@ -14,7 +14,8 @@ interface UserPageClientProps {
 }
 
 export function UserPageClient({ children, searchParams }: UserPageClientProps) {
-  const [showFilters, setShowFilters] = useState(false);
+  // Show filters by default for better user experience
+  const [showFilters, setShowFilters] = useState(true);
   const router = useRouter();
   
   return (

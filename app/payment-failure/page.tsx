@@ -69,7 +69,7 @@ async function PaymentFailureContent({ searchParams }: PaymentFailurePageProps) 
 
           <div className="pt-4 flex flex-col sm:flex-row gap-4 justify-center">
             {errorType !== 'cancelled' && (
-              <Link href="/papers-to-profits"> 
+              <Link href="/p2p-order-form"> 
                 <Button className="bg-[#ad8174] hover:bg-[#8d6e63] text-white">
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Try Again

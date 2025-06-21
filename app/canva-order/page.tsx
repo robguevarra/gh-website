@@ -121,7 +121,7 @@ function CanvaEbookContent() {
             productType: 'Canva',
             amount: ebookDetails.price,
             currency: ebookDetails.currency,
-            sourcePage: '/canva-ebook',
+            sourcePage: '/canva-order',
             utmSource: new URLSearchParams(window.location.search).get('utm_source') || undefined,
             utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || undefined,
             utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || undefined,

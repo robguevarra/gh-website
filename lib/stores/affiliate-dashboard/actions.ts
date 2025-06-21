@@ -453,7 +453,7 @@ export const createActions = (
           id: profile.id, // Use affiliate ID as the link ID
           slug: profile.slug,
           productName: 'Papers to Profits',
-          fullUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/papers-to-profits?a=${profile.slug}`,
+          fullUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/p2p-order-form?a=${profile.slug}`,
           createdAt: profile.createdAt,
           // We don't have these metrics at this time, but keeping the structure
           clicks: 0,

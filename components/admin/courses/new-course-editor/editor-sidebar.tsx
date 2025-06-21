@@ -245,7 +245,12 @@ export default function EditorSidebar() {
     }, 100);
   };
 
-  const handleAddModule = () => {
+  /**
+   * Handle adding a new module to the course
+   * Makes API call to persist module to database and refreshes UI
+   */
+  const handleAddModule = async () => {
+    // Validate required inputs
     if (!newModuleTitle.trim() || !courseId) {
       toast.error("Module title required", {
         description: "Please enter a title for the new module"
@@ -253,20 +258,57 @@ export default function EditorSidebar() {
       return;
     }
 
-    const newModule: ExtendedModule = {
-      id: `module-${Date.now()}`,
-      title: newModuleTitle,
-      description: "New module description",
-      position: modules.length,
-      metadata: { courseId },
-      lessons: []
-    };
-
-    setSavedState("unsaved");
-
-    toast.success("Module added", {
-      description: `"${newModuleTitle}" has been added to your course`
+    // Show loading state with long duration for API operations
+    const loadingToastId = toast.loading("Creating module...", {
+      duration: 60000, // Keep visible for up to 1 minute
     });
+
+    try {
+      // Make API call to create the module in the database
+      // Uses the same endpoint as other working module creation components
+      const response = await fetch(`/api/admin/courses/${courseId}/modules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newModuleTitle.trim(),
+          description: "New module description",
+          position: modules.length, // Add to the end by default
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create module');
+      }
+
+      const newModule = await response.json();
+
+      // Refresh the course data to get the updated modules list
+      // Force refresh to ensure we have the latest data including the new module
+      // @ts-expect-error TODO: Investigate AbortSignal lint error
+      await fetchCourse(courseId, true);
+
+      // Clean up UI state after successful creation
+      setNewModuleTitle("");
+      setNewModuleDialogOpen(false);
+
+      // Provide user feedback for successful operation
+      toast.dismiss(loadingToastId);
+      toast.success("Module added", {
+        description: `"${newModule.title}" has been added to your course`
+      });
+
+      // Improve UX by automatically selecting the newly created module
+      selectModule(newModule.id);
+    } catch (error) {
+      console.error('Failed to create module:', error);
+      
+      // Handle errors gracefully with user-friendly messages
+      toast.dismiss(loadingToastId);
+      toast.error("Error", {
+        description: error instanceof Error ? error.message : "Failed to create module. Please try again."
+      });
+    }
   };
 
   const handleSelectItem = (moduleId: string, itemId: string) => {

@@ -20,7 +20,7 @@ export async function middleware(request: NextRequest) {
     // Check if this page needs Facebook embeds
     const needsFacebookEmbeds = request.nextUrl.pathname === '/' || 
                                request.nextUrl.pathname === '/canva-ebook' ||
-                               request.nextUrl.pathname === '/papers-to-profits';
+                               request.nextUrl.pathname === '/p2p-order-form';
     
     if (needsFacebookEmbeds) {
       // Apply Facebook-friendly security headers
