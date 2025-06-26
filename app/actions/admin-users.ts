@@ -55,18 +55,37 @@ export async function validateAdmin() {
   const { data: { user }, error } = await supabase.auth.getUser();
   
   if (error || !user) {
-    return { isAdmin: false };
+    return null;
   }
   
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
+  // Check unified_profiles table first (modern approach)
+  const { data: unifiedProfile } = await supabase
+    .from('unified_profiles')
+    .select('is_admin, status, tags')
     .eq('id', user.id)
     .single();
   
-  const isAdmin = profile?.role === 'admin';
+  // Check if user is admin via unified_profiles
+  if (unifiedProfile) {
+    const isAdminByFlag = unifiedProfile.is_admin === true;
+    const isAdminByTag = unifiedProfile.tags && Array.isArray(unifiedProfile.tags) && unifiedProfile.tags.includes('admin');
+    const isActive = unifiedProfile.status === 'active';
+    
+    if ((isAdminByFlag || isAdminByTag) && isActive) {
+      return user.id;
+    }
+  }
   
-  return { isAdmin };
+  // Fallback to profiles table for legacy compatibility
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, is_admin')
+    .eq('id', user.id)
+    .single();
+  
+  const isAdmin = profile?.role === 'admin' || profile?.is_admin === true;
+  
+  return isAdmin ? user.id : null;
 }
 
 // Helper to get request metadata
@@ -84,6 +103,9 @@ async function getRequestMetadata() {
 export async function searchUsers(params: UserSearchParams = {}) {
   try {
     const adminId = await validateAdmin();
+    if (!adminId) {
+      return { success: false, error: 'Unauthorized access. Admin privileges required.' };
+    }
     const { data, error } = await adminUsersDb.searchUsers(params);
     
     if (error) {
@@ -118,6 +140,9 @@ export async function searchUsers(params: UserSearchParams = {}) {
 export async function getUserDetail(userId: string) {
   try {
     const adminId = await validateAdmin();
+    if (!adminId) {
+      return { success: false, error: 'Unauthorized access. Admin privileges required.' };
+    }
     const { data, error } = await adminUsersDb.getUserDetail(userId);
     
     if (error) {

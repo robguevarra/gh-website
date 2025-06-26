@@ -3,7 +3,7 @@ import { getAdminClient } from '@/lib/supabase/admin';
 import { validateAdminAccess } from '@/lib/supabase/route-handler';
 
 // GET all enrollments for a course
-export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, props: { params: Promise<{ courseId: string }> }) {
   const params = await props.params;
   try {
     // Validate admin access
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     const { data: course, error: courseError } = await adminClient
       .from('courses')
       .select('id, title')
-      .eq('id', params.id)
+      .eq('id', params.courseId)
       .single();
     
     if (courseError || !course) {
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
           last_sign_in_at
         ))
       `, { count: 'exact' })
-      .eq('course_id', params.id)
+      .eq('course_id', params.courseId)
       .order('enrolled_at', { ascending: false });
     
     // Apply filters
@@ -106,7 +106,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 }
 
 // POST to add a new enrollment to the course
-export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, props: { params: Promise<{ courseId: string }> }) {
   const params = await props.params;
   try {
     // Validate admin access
@@ -135,7 +135,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const { data: course, error: courseError } = await adminClient
       .from('courses')
       .select('id')
-      .eq('id', params.id)
+      .eq('id', params.courseId)
       .single();
     
     if (courseError || !course) {
@@ -145,14 +145,21 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       );
     }
     
-    // Verify user exists
-    const { data: user, error: userError } = await adminClient
+    // Verify user exists - check both profiles and unified_profiles tables
+    const { data: profileUser } = await adminClient
       .from('profiles')
       .select('id')
       .eq('id', user_id)
       .single();
     
-    if (userError || !user) {
+    const { data: unifiedUser } = await adminClient
+      .from('unified_profiles')
+      .select('id')
+      .eq('id', user_id)
+      .single();
+    
+    // User must exist in at least one of the profile tables
+    if (!profileUser && !unifiedUser) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
@@ -164,7 +171,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       .from('enrollments')
       .select('id')
       .eq('user_id', user_id)
-      .eq('course_id', params.id)
+      .eq('course_id', params.courseId)
       .maybeSingle();
     
     if (existingEnrollment) {
@@ -179,22 +186,21 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       .from('enrollments')
       .insert({
         user_id,
-        course_id: params.id,
+        course_id: params.courseId,
         status: body.status || 'active',
-        enrolled_at: new Date().toISOString(),
-        expires_at: body.expires_at || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        expires_at: body.expires_at || null
       })
       .select(`
         *,
-        profiles!user_id(
+        unified_profiles!user_id(
           id,
           first_name,
           last_name,
           email,
-          role,
-          status
+          status,
+          is_admin,
+          is_student,
+          is_affiliate
         )
       `)
       .single();

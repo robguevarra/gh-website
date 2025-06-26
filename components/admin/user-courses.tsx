@@ -115,7 +115,7 @@ export function UserCourses({
     return new Date(dateString).toLocaleDateString();
   };
 
-  // Handle enrollment in a new course
+  // Handle enrollment in a new course using the existing enrollment API
   const handleEnroll = async () => {
     if (!selectedCourseId) {
       toast.error('Please select a course');
@@ -124,16 +124,17 @@ export function UserCourses({
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/admin/users/${userId}/courses`, {
+      // Use the existing course enrollment API endpoint
+      const response = await fetch(`/api/admin/courses/${selectedCourseId}/enrollments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          course_id: selectedCourseId,
+          user_id: userId,
         }),
       });
-
+      
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to enroll user in course');
@@ -141,6 +142,7 @@ export function UserCourses({
 
       toast.success('User enrolled in course successfully');
       setIsAddDialogOpen(false);
+      setSelectedCourseId('');
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'An error occurred');
@@ -150,13 +152,14 @@ export function UserCourses({
     }
   };
 
-  // Handle removal from a course
+  // Handle removal from a course using the existing enrollment API
   const handleRemove = async () => {
     if (!courseToRemove) return;
 
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/admin/users/${userId}/courses/${courseToRemove.id}`, {
+      // Use the existing enrollment deletion API endpoint
+      const response = await fetch(`/api/admin/courses/${courseToRemove.course_id}/enrollments/${courseToRemove.id}`, {
         method: 'DELETE',
       });
 
@@ -177,11 +180,15 @@ export function UserCourses({
     }
   };
 
-  // Handle resetting course progress
+  // Handle resetting course progress - This functionality may need a new API endpoint
   const handleResetProgress = async (userCourseId: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/admin/users/${userId}/courses/${userCourseId}/reset`, {
+      // For now, show a message that this feature needs implementation
+      toast.info('Reset progress feature is not yet implemented. Please contact development team.');
+      
+      /* TODO: Implement reset progress API endpoint
+      const response = await fetch(`/api/admin/enrollments/${userCourseId}/reset-progress`, {
         method: 'POST',
       });
 
@@ -192,6 +199,7 @@ export function UserCourses({
 
       toast.success('Course progress reset successfully');
       router.refresh();
+      */
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'An error occurred');
       console.error('Reset progress error:', error);
@@ -200,11 +208,15 @@ export function UserCourses({
     }
   };
 
-  // Handle marking a course as complete
+  // Handle marking a course as complete - This functionality may need a new API endpoint  
   const handleMarkComplete = async (userCourseId: string) => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/admin/users/${userId}/courses/${userCourseId}/complete`, {
+      // For now, show a message that this feature needs implementation
+      toast.info('Mark complete feature is not yet implemented. Please contact development team.');
+      
+      /* TODO: Implement mark complete API endpoint
+      const response = await fetch(`/api/admin/enrollments/${userCourseId}/mark-complete`, {
         method: 'POST',
       });
 
@@ -215,6 +227,7 @@ export function UserCourses({
 
       toast.success('Course marked as complete');
       router.refresh();
+      */
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'An error occurred');
       console.error('Mark complete error:', error);
@@ -347,7 +360,7 @@ export function UserCourses({
                             disabled={!!userCourse.completed_at}
                           >
                             <Flag className="h-4 w-4 mr-2" />
-                            Mark as Completess
+                            Mark as Complete
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleResetProgress(userCourse.id)}

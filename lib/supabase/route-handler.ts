@@ -60,21 +60,39 @@ export const validateAdminAccess = async () => {
     };
   }
   
-  // Check if user has admin role
+  // Check if user has admin role in unified_profiles (modern approach)
+  const { data: unifiedProfile, error: unifiedError } = await serviceClient
+    .from('unified_profiles')
+    .select('is_admin, status, tags')
+    .eq('id', user.id)
+    .single();
+  
+  // If unified profile exists, use it for admin validation
+  if (!unifiedError && unifiedProfile) {
+    const isAdminByFlag = unifiedProfile.is_admin === true;
+    const isAdminByTag = unifiedProfile.tags && Array.isArray(unifiedProfile.tags) && unifiedProfile.tags.includes('admin');
+    const isActive = unifiedProfile.status === 'active';
+    
+    if ((isAdminByFlag || isAdminByTag) && isActive) {
+      return { user, profile: unifiedProfile };
+    }
+  }
+  
+  // Fallback to profiles table for legacy compatibility
   const { data: profile, error: profileError } = await serviceClient
     .from('profiles')
     .select('role, is_admin')
     .eq('id', user.id)
     .single();
   
-  if (profileError || (profile?.role !== 'admin' && !profile?.is_admin)) {
-    return {
-      error: 'Forbidden: Admin access required',
-      status: 403
-    };
+  if (!profileError && profile && (profile.role === 'admin' || profile.is_admin === true)) {
+    return { user, profile };
   }
   
-  return { user, profile };
+  return {
+    error: 'Forbidden: Admin access required',
+    status: 403
+  };
 };
 
 // Helper function to handle unauthorized access
