@@ -49,8 +49,8 @@ export async function validateAdminStatus(userId: string) {
   
   try {
     const { data: profile, error } = await admin
-      .from('profiles')
-      .select('role, is_admin')
+      .from('unified_profiles')
+      .select('is_admin, status')
       .eq('id', userId)
       .single();
       
@@ -59,7 +59,8 @@ export async function validateAdminStatus(userId: string) {
       return false;
     }
     
-    return profile?.role === 'admin' || profile?.is_admin === true;
+    // User must be admin and have active status
+    return profile?.is_admin === true && profile?.status === 'active';
   } catch (err) {
     console.error('Admin validation exception:', err);
     return false;

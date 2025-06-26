@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   X, 
@@ -41,6 +41,10 @@ interface AffiliateApplicationWizardProps {
 
 // Storage key for permanent dismissal
 const AFFILIATE_WIZARD_DISMISSED_KEY = 'gh_affiliate_wizard_dismissed'
+
+// Cache configuration for affiliate status
+const STATUS_CACHE_KEY = 'affiliate_status_cache'
+const STATUS_CACHE_DURATION = 5 * 60 * 1000 // 5 minutes in milliseconds
 
 // Define the wizard steps configuration
 const WIZARD_STEPS = [
@@ -108,6 +112,12 @@ interface AffiliateStatus {
   }
 }
 
+// Cached status interface
+interface CachedStatus {
+  data: AffiliateStatus
+  timestamp: number
+}
+
 /**
  * Check if wizard should be permanently dismissed for approved affiliates
  */
@@ -122,6 +132,51 @@ function isWizardPermanentlyDismissed(): boolean {
 function markWizardPermanentlyDismissed(): void {
   if (typeof window === 'undefined') return
   localStorage.setItem(AFFILIATE_WIZARD_DISMISSED_KEY, 'true')
+}
+
+/**
+ * Get cached affiliate status if still valid
+ */
+function getCachedAffiliateStatus(): AffiliateStatus | null {
+  if (typeof window === 'undefined') return null
+  
+  try {
+    const cached = localStorage.getItem(STATUS_CACHE_KEY)
+    if (!cached) return null
+    
+    const cachedData: CachedStatus = JSON.parse(cached)
+    const now = Date.now()
+    
+    // Check if cache is still valid
+    if (now - cachedData.timestamp < STATUS_CACHE_DURATION) {
+      return cachedData.data
+    }
+    
+    // Cache expired, remove it
+    localStorage.removeItem(STATUS_CACHE_KEY)
+    return null
+  } catch (error) {
+    console.error('Error reading cached affiliate status:', error)
+    localStorage.removeItem(STATUS_CACHE_KEY)
+    return null
+  }
+}
+
+/**
+ * Cache affiliate status
+ */
+function setCachedAffiliateStatus(data: AffiliateStatus): void {
+  if (typeof window === 'undefined') return
+  
+  try {
+    const cachedData: CachedStatus = {
+      data,
+      timestamp: Date.now()
+    }
+    localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify(cachedData))
+  } catch (error) {
+    console.error('Error caching affiliate status:', error)
+  }
 }
 
 /**
@@ -141,12 +196,12 @@ function CongratulationsModal({
     return null
   }
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (neverShowAgain) {
       onNeverShowAgain()
     }
     onClose()
-  }
+  }, [neverShowAgain, onClose, onNeverShowAgain])
 
   return (
     <AnimatePresence>
@@ -338,7 +393,7 @@ export function AffiliateApplicationWizard({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
-  const [isLoadingStatus, setIsLoadingStatus] = useState(true)
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false)
   const [affiliateStatus, setAffiliateStatus] = useState<AffiliateStatus | null>(null)
   const [initialCheckComplete, setInitialCheckComplete] = useState(false)
   
@@ -355,57 +410,67 @@ export function AffiliateApplicationWizard({
   const { user } = useAuth()
   const userContext = useStudentDashboardStore((state) => state.userContext)
 
-  // Immediate dismissal check - run BEFORE status check to prevent phantom loads
-  useEffect(() => {
-    if (isOpen) {
-      // Check dismissal status immediately when opening
-      if (isWizardPermanentlyDismissed()) {
+  // Use ref to track if we've already checked status to prevent multiple calls
+  const hasCheckedStatusRef = useRef(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Memoized functions to prevent unnecessary re-renders
+  const handleNeverShowAgain = useCallback(() => {
+    markWizardPermanentlyDismissed()
+    onClose()
+  }, [onClose])
+
+  // Debounced status check function with caching
+  const checkAffiliateStatus = useCallback(async (force = false) => {
+    if (!user?.id || (!force && hasCheckedStatusRef.current)) return
+
+    // Check cache first
+    if (!force) {
+      const cachedStatus = getCachedAffiliateStatus()
+      if (cachedStatus) {
+        setAffiliateStatus(cachedStatus)
         setInitialCheckComplete(true)
-        onClose()
+        hasCheckedStatusRef.current = true
+        
+        // Pre-populate form with cached data
+        if (cachedStatus.existingData) {
+          setApplicationData(prev => ({
+            ...prev,
+            gcashNumber: cachedStatus.existingData?.gcashNumber || '',
+            gcashName: cachedStatus.existingData?.gcashName || ''
+          }))
+        }
         return
       }
-      
-      // Mark that initial check is complete
-      setInitialCheckComplete(true)
-      
-      // Only check affiliate status if not dismissed
-      if (user?.id) {
-        checkAffiliateStatus()
-      }
     }
-  }, [isOpen, user?.id, onClose])
 
-  // Reset state when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setCurrentStep(0)
-      setIsSubmitting(false)
-      setSubmitError(null)
-      setSubmitSuccess(false)
-      setApplicationData({
-        agreestoTerms: false,
-        confirmAgreement: false,
-        gcashNumber: '',
-        gcashName: '',
-        acceptsLiability: false,
-        understandsPayout: false
-      })
+    // Cancel any existing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
     }
-  }, [isOpen])
 
-  // Function to check existing affiliate status and data
-  const checkAffiliateStatus = async () => {
-    if (!user?.id) return
+    // Create new abort controller
+    abortControllerRef.current = new AbortController()
 
     setIsLoadingStatus(true)
     try {
-      const response = await fetch(`/api/student/affiliate-status?userId=${user.id}`)
+      const response = await fetch(`/api/student/affiliate-status?userId=${user.id}`, {
+        signal: abortControllerRef.current.signal
+      })
+      
+      // Check if request was aborted
+      if (abortControllerRef.current.signal.aborted) {
+        return
+      }
+
       const data = await response.json()
       
       if (response.ok) {
         setAffiliateStatus(data)
+        setCachedAffiliateStatus(data) // Cache the result
+        hasCheckedStatusRef.current = true
         
-        // If user has existing data, pre-populate the form
+        // Pre-populate form with existing data
         if (data.existingData) {
           setApplicationData(prev => ({
             ...prev,
@@ -417,20 +482,76 @@ export function AffiliateApplicationWizard({
         console.error('Error checking affiliate status:', data.error)
       }
     } catch (error) {
-      console.error('Error checking affiliate status:', error)
+      // Don't log abort errors
+      if (error instanceof Error && error.name !== 'AbortError') {
+        console.error('Error checking affiliate status:', error)
+      }
     } finally {
       setIsLoadingStatus(false)
+      setInitialCheckComplete(true)
     }
-  }
+  }, [user?.id])
 
-  // Handle permanent dismissal for approved affiliates
-  const handleNeverShowAgain = () => {
-    markWizardPermanentlyDismissed()
-    onClose()
-  }
+  // Initial check when modal opens - run only once per modal session
+  useEffect(() => {
+    if (isOpen && !initialCheckComplete) {
+      // Check dismissal status immediately
+      if (isWizardPermanentlyDismissed()) {
+        setInitialCheckComplete(true)
+        onClose()
+        return
+      }
+      
+      // Only check affiliate status if we haven't already
+      if (user?.id && !hasCheckedStatusRef.current) {
+        checkAffiliateStatus()
+      } else {
+        setInitialCheckComplete(true)
+      }
+    }
+  }, [isOpen, user?.id, checkAffiliateStatus, onClose, initialCheckComplete])
 
-  // Check if current step is valid
-  const isCurrentStepValid = () => {
+  // Reset state when modal opens - separate from status check
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(0)
+      setIsSubmitting(false)
+      setSubmitError(null)
+      setSubmitSuccess(false)
+      
+      // Only reset application data if no cached data
+      const cachedStatus = getCachedAffiliateStatus()
+      if (!cachedStatus?.existingData) {
+        setApplicationData({
+          agreestoTerms: false,
+          confirmAgreement: false,
+          gcashNumber: '',
+          gcashName: '',
+          acceptsLiability: false,
+          understandsPayout: false
+        })
+      }
+    }
+  }, [isOpen])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
+
+  // Reset status check flag when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      hasCheckedStatusRef.current = false
+    }
+  }, [isOpen])
+
+  // Memoized step validation
+  const isCurrentStepValid = useCallback(() => {
     const step = WIZARD_STEPS[currentStep]
     switch (step.id) {
       case 'overview':
@@ -450,26 +571,26 @@ export function AffiliateApplicationWizard({
       default:
         return false
     }
-  }
+  }, [currentStep, applicationData])
 
-  // Navigation functions
-  const nextStep = () => {
+  // Memoized navigation functions
+  const nextStep = useCallback(() => {
     if (currentStep < WIZARD_STEPS.length - 1 && isCurrentStepValid()) {
       setCurrentStep(currentStep + 1)
     } else if (currentStep === WIZARD_STEPS.length - 1 && isCurrentStepValid()) {
       // Last step - submit application
       submitApplication()
     }
-  }
+  }, [currentStep, isCurrentStepValid])
 
-  const prevStep = () => {
+  const prevStep = useCallback(() => {
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1)
     }
-  }
+  }, [currentStep])
 
-  // Submit application
-  const submitApplication = async () => {
+  // Submit application with proper error handling
+  const submitApplication = useCallback(async () => {
     if (!user?.id) {
       setSubmitError('User not authenticated')
       return
@@ -498,17 +619,22 @@ export function AffiliateApplicationWizard({
 
       setSubmitSuccess(true)
       
-      // Update user context to reflect new affiliate status
-      // Note: The user context will be refreshed when they navigate or reload
+      // Clear cache to force fresh data on next check
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(STATUS_CACHE_KEY)
+      }
+      
+      // Reset status check flag to allow fresh check
+      hasCheckedStatusRef.current = false
       
       if (onComplete) {
         onComplete()
       }
       
-      // Refresh the page to update affiliate status
-      window.location.reload()
+      // Update affiliate status optimistically
+      setAffiliateStatus(prev => prev ? { ...prev, status: 'pending' } : null)
       
-      // Close the modal after a short delay to show success
+      // Close the modal after showing success
       setTimeout(() => {
         onClose()
       }, 2000)
@@ -519,12 +645,12 @@ export function AffiliateApplicationWizard({
     } finally {
       setIsSubmitting(false)
     }
-  }
+  }, [user?.id, applicationData, onComplete, onClose])
 
-  // Update application data
-  const updateApplicationData = (updates: Partial<ApplicationData>) => {
+  // Memoized application data update
+  const updateApplicationData = useCallback((updates: Partial<ApplicationData>) => {
     setApplicationData(prev => ({ ...prev, ...updates }))
-  }
+  }, [])
 
   if (!isOpen) return null
 
@@ -621,6 +747,11 @@ export function AffiliateApplicationWizard({
                   onClick={() => {
                     // Allow user to update their application
                     setAffiliateStatus({ ...affiliateStatus, status: null })
+                    // Clear cache to force fresh data
+                    if (typeof window !== 'undefined') {
+                      localStorage.removeItem(STATUS_CACHE_KEY)
+                    }
+                    hasCheckedStatusRef.current = false
                   }}
                   variant="ghost"
                   className="w-full text-sm text-gray-500 hover:text-gray-700"

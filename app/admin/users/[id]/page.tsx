@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { getAdminClient } from '@/lib/supabase/admin';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Metadata } from 'next';
 import { ArrowLeft, UserCog, AlertCircle, Pencil, Shield, CreditCard, Activity, BookOpen, Receipt, GraduationCap, Link2, MailOpen } from 'lucide-react';
@@ -88,6 +89,23 @@ export default async function UserDetailPage(
       { id: '2', name: 'admin', description: 'Administrator' },
       { id: '3', name: 'moderator', description: 'Content moderator' },
     ];
+
+    // Fetch real Supabase Auth data for email verification status
+    let emailConfirmedAt: string | null = null;
+    let lastLoginAt: string | null = userDetail.last_login_at;
+    try {
+      const adminClient = getAdminClient();
+      const { data: authUser, error: authError } = await adminClient.auth.admin.getUserById(id);
+      
+      if (!authError && authUser?.user) {
+        emailConfirmedAt = authUser.user.email_confirmed_at || null;
+        // Use auth data for last_sign_in_at if available, otherwise fall back to profile data
+        lastLoginAt = authUser.user.last_sign_in_at || userDetail.last_login_at || null;
+      }
+    } catch (authFetchError) {
+      console.error('Error fetching auth data for user:', authFetchError);
+      // Continue with null values if auth fetch fails
+    }
 
     return (
       <div className="container py-8 space-y-6">
@@ -186,14 +204,14 @@ export default async function UserDetailPage(
               user={{
                 id: id,
                 email: userDetail.email,
-                email_confirmed_at: null,
-                last_login_at: userDetail.last_login_at,
+                email_confirmed_at: emailConfirmedAt,
+                last_login_at: lastLoginAt,
                 created_at: userDetail.created_at,
                 updated_at: userDetail.updated_at,
                 profile: {
-                  is_admin: userDetail.status === 'admin',
+                  is_admin: (userDetail as any).is_admin || false,
                   is_blocked: userDetail.status === 'blocked' || userDetail.status === 'banned',
-                  require_password_change: false,
+                  require_password_change: (userDetail.admin_metadata as any)?.requirePasswordChange || false,
                 }
               }}
             />

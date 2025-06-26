@@ -95,6 +95,13 @@ export function DashboardOverview() {
         <div className="flex gap-2">
           <Button
             variant="outline"
+            onClick={() => router.push("/admin/user-diagnostic")}
+            disabled={isLoading}
+          >
+            User Diagnostic Tool
+          </Button>
+          <Button
+            variant="outline"
             onClick={async () => {
               try {
                 const response = await fetch("/api/admin/dashboard/sync", { method: "POST" });
@@ -107,23 +114,7 @@ export function DashboardOverview() {
             }}
             disabled={isLoading}
           >
-            Syncing...
-          </Button>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              try {
-                const response = await fetch("/api/admin/dashboard/conflict", { method: "POST" });
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.message || "Conflict check failed");
-                toast.success(result.message || "Checked for email conflicts");
-              } catch (err: any) {
-                toast.error(err.message || "Conflict check failed");
-              }
-            }}
-            disabled={isLoading}
-          >
-            Checking...
+            Data Sync
           </Button>
         </div>
         <Button onClick={() => router.push("/admin/courses/new")} disabled={isLoading}>New Course</Button>

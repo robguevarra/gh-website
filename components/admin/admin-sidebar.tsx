@@ -13,16 +13,19 @@ import {
   Mail,
   ShoppingBag,
   Shield,
-  UserCog // Corrected icon name for Affiliates
+  UserCog, // Corrected icon name for Affiliates
+  Search
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'User Diagnostic', href: '/admin/user-diagnostic', icon: Search },
   { name: 'Courses', href: '/admin/courses', icon: BookOpen },
   { name: 'Affiliates', href: '/admin/affiliates', icon: UserCog }, // Corrected icon name  { name: 'Email Campaigns', href: '/admin/email', icon: Mail },
   { name: 'Shop Integration', href: '/admin/shop', icon: ShoppingBag },
   { name: 'Security', href: '/admin/security', icon: Shield },
+  { name: 'Email', href: '/admin/email', icon: Mail },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 

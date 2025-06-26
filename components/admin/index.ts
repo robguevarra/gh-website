@@ -21,3 +21,4 @@ export { UserPurchaseHistory } from './user-purchase-history';
 export { UserEnrollments } from './user-enrollments';
 export { UserEmailAnalytics } from './user-email-analytics';
 export { UserTagsSegments } from './user-tags-segments';
+export { UserDiagnosticInterface } from './user-diagnostic-interface';

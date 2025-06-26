@@ -9,7 +9,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
     
     // Validate admin access
@@ -66,9 +66,9 @@ export async function PATCH(
         );
       }
       
-      // Update email in profiles table
+      // Update email in unified_profiles table
       const { error: profileError } = await adminClient
-        .from('profiles')
+        .from('unified_profiles')
         .update({ 
           email: body.email,
           updated_at: new Date().toISOString()
@@ -82,40 +82,91 @@ export async function PATCH(
         );
       }
     }
+
+    // Handle email verification status change
+    if (body.email_confirmed !== undefined) {
+      const { error: confirmError } = await adminClient.auth.admin.updateUserById(
+        id,
+        { 
+          email_confirm: body.email_confirmed
+        }
+      );
+      
+      if (confirmError) {
+        return NextResponse.json(
+          { error: 'Failed to update email verification status' },
+          { status: 500 }
+        );
+      }
+    }
     
-    // Handle account status update if provided
-    if (body.disabled !== undefined) {
+    // Handle admin role update, blocking status, and password requirements
+    const profileUpdates: any = {};
+    let shouldUpdateProfile = false;
+
+    // Handle admin role toggle
+    if (body.admin_role !== undefined) {
+      profileUpdates.is_admin = body.admin_role;
+      shouldUpdateProfile = true;
+    }
+
+    // Handle blocking status (map is_blocked to status field)
+    if (body.is_blocked !== undefined) {
+      profileUpdates.status = body.is_blocked ? 'blocked' : 'active';
+      shouldUpdateProfile = true;
+      
+      // Also update Supabase Auth user metadata
       const { error: statusError } = await adminClient.auth.admin.updateUserById(
         id,
         { 
-          ban_duration: body.disabled ? 'infinite' : undefined,
+          ban_duration: body.is_blocked ? 'infinite' : undefined,
           user_metadata: {
             ...user.user.user_metadata,
-            disabled_at: body.disabled ? new Date().toISOString() : null,
-            disabled_reason: body.disabled ? (body.reason || 'Account disabled by admin') : null
+            blocked_at: body.is_blocked ? new Date().toISOString() : null,
+            blocked_reason: body.is_blocked ? 'Account blocked by admin' : null
           }
         }
       );
       
       if (statusError) {
         return NextResponse.json(
-          { error: 'Failed to update account status' },
+          { error: 'Failed to update account status in auth' },
           { status: 500 }
         );
       }
+    }
+
+    // Handle password change requirement (store in admin_metadata)
+    if (body.require_password_change !== undefined) {
+      // Get current admin_metadata and update it
+      const { data: currentProfile } = await adminClient
+        .from('unified_profiles')
+        .select('admin_metadata')
+        .eq('id', id)
+        .single();
+        
+      const currentMetadata = (currentProfile?.admin_metadata as Record<string, any>) || {};
+      profileUpdates.admin_metadata = {
+        ...currentMetadata,
+        requirePasswordChange: body.require_password_change,
+        passwordChangeRequestedAt: body.require_password_change ? new Date().toISOString() : null
+      };
+      shouldUpdateProfile = true;
+    }
+
+    // Update unified_profiles table if needed
+    if (shouldUpdateProfile) {
+      profileUpdates.updated_at = new Date().toISOString();
       
-      // Update status in profiles table
       const { error: profileError } = await adminClient
-        .from('profiles')
-        .update({ 
-          status: body.disabled ? 'disabled' : 'active',
-          updated_at: new Date().toISOString()
-        })
+        .from('unified_profiles')
+        .update(profileUpdates)
         .eq('id', id);
       
       if (profileError) {
+        console.error('Profile update error:', profileError);
         return NextResponse.json(
-          { error: 'Failed to update profile status' },
+          { error: 'Failed to update profile settings' },
           { status: 500 }
         );
       }
