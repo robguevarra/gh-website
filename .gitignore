@@ -58,4 +58,4 @@ node_modules/
 
 # Added by Claude Task Master
 tasks.json
-tasks/ 
+tasks/ *.sql
