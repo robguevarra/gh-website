@@ -82,6 +82,19 @@ E. Possible server lag when relying on triggers
 
 These gaps will be addressed alongside the video-time tracking work in Phase 2.
 
+## Additional Findings – Inconsistent Lesson Duration Display
+
+- **Hardcoded Fallback**: The `CourseModuleAccordion` component uses a hardcoded fallback of `"15 min"` when `lesson.duration` is not available. This is the primary source of inaccurate duration displays.
+- **Inconsistent Data Model**: The `CourseLesson` type in `app/dashboard/course/page.tsx` defines `duration` as both an optional `string` and an optional `number` within its `metadata` property. This lack of a single source of truth for lesson duration leads to display inconsistencies.
+- **Missing Data Fetching**: The investigation suggests that lesson duration is not being consistently fetched from the database, forcing the UI to rely on fallbacks or omit the information entirely.
+
+### Root-Cause Summary
+A. Hardcoded fallback values masking missing data.  
+B. Inconsistent data model for lesson duration.  
+C. Lack of reliable data fetching for lesson duration.
+
+These issues will be addressed in Phase 2 by standardizing the lesson duration data model and ensuring it is reliably fetched and displayed.
+
 ## Completion Status
 Phase 1 focused on investigation and planning. No code changes committed for tracking yet.
 
