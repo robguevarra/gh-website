@@ -59,3 +59,9 @@ node_modules/
 # Added by Claude Task Master
 tasks.json
 tasks/ *.sql
+
+data.sql
+full_dump.sql
+roles.sql
+schema.sql
+

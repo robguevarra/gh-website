@@ -1,0 +1,61 @@
+# Task ID: 11
+# Title: Implement Email Notification System
+# Status: pending
+# Dependencies: 2, 10
+# Priority: medium
+# Description: Set up Postmark email templates and integrate them with the affiliate system for various notifications.
+# Details:
+1. Create Postmark templates for:
+   - signup_confirmation
+   - signup_approved
+   - payout_sent
+   - flag_notice
+2. Design templates using MJML for responsive emails
+3. Implement email sending logic for each trigger point:
+   - After signup
+   - When admin approves affiliate
+   - When payout is sent
+   - When fraud is flagged
+4. Set up proper variable substitution in templates
+5. Implement email sending queue with retry logic
+6. Add logging for email delivery status
+
+# Test Strategy:
+1. Test email template rendering in various email clients
+2. Verify variable substitution works correctly
+3. Test email triggers for each notification type
+4. Validate email delivery and tracking
+5. Test error handling and retry logic
+6. End-to-end testing of complete notification flows
+
+# Subtasks:
+## 1. Create Postmark email templates using MJML [pending]
+### Dependencies: None
+### Description: Design and implement responsive email templates using MJML framework and set them up in Postmark
+### Details:
+Create base template structure with header/footer components. Design specific templates for: welcome emails, password reset, notification alerts, and system updates. Ensure templates are mobile-responsive. Export MJML to HTML and upload to Postmark. Set up template IDs for programmatic access.
+
+## 2. Implement email sending logic for different trigger points [pending]
+### Dependencies: 11.1
+### Description: Develop the core functionality to send emails at various application trigger points
+### Details:
+Create an EmailService class with methods for different email types. Implement trigger points for: user registration, password reset requests, notification preferences, important alerts. Add configuration for email sender addresses and reply-to settings. Include email validation and sanitization of recipient addresses.
+
+## 3. Build variable substitution and personalization system [pending]
+### Dependencies: 11.1, 11.2
+### Description: Create a system to dynamically populate email templates with personalized user data
+### Details:
+Implement a template variable system compatible with Postmark. Create helper functions to format data for template variables (dates, currency, etc). Add support for user-specific content like name, preferences, and account details. Implement fallback values for missing data. Add support for localization/internationalization of email content.
+
+## 4. Develop email delivery queue with retry logic [pending]
+### Dependencies: 11.2
+### Description: Create a robust queuing system for email delivery with retry capabilities
+### Details:
+Implement a queue system for email delivery using a job queue. Add configurable retry logic for failed email attempts with exponential backoff. Set up maximum retry attempts and failure handling. Implement priority levels for different types of emails. Create interfaces for queue monitoring and management.
+
+## 5. Implement comprehensive email logging and analytics [pending]
+### Dependencies: 11.2, 11.4
+### Description: Add logging and analytics capabilities to track email delivery and engagement
+### Details:
+Set up webhook endpoints to receive delivery status updates from Postmark. Implement logging for all email events (sent, delivered, opened, clicked, bounced). Create a database schema to store email activity history. Add reporting functionality for email performance metrics. Implement alert system for delivery problems or unusual bounce rates.
+

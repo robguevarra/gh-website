@@ -1,0 +1,55 @@
+# Task ID: 6
+# Title: Extend Xendit Webhook for Conversion Tracking
+# Status: done
+# Dependencies: 5
+# Priority: high
+# Description: Modify the existing Xendit webhook to track conversions and attribute them to affiliates based on the stored cookies.
+# Details:
+1. Extend the existing /api/webhooks/xendit endpoint
+2. Extract affiliate information from cookies or UTM parameters
+3. Implement logic to upsert conversion rows in affiliate_conversions table
+4. Calculate commission based on rules (Level 1: 25% members/20% non-members, Level 2: 10%)
+5. Handle multi-level attribution (up to 2 levels)
+6. Set initial conversion status to 'pending'
+7. Implement webhook signature verification for security
+8. Add error handling and logging for debugging
+
+# Test Strategy:
+1. Test webhook with various Xendit payload scenarios
+2. Verify commission calculations for different affiliate levels and member statuses
+3. Test multi-level attribution
+4. Validate conversion data is correctly stored in the database
+5. Test security measures including signature verification
+6. Simulate edge cases like missing cookies or invalid affiliate IDs
+
+# Subtasks:
+## 1. Implement Xendit Webhook Endpoint [done]
+### Dependencies: None
+### Description: Modify the existing webhook endpoint to receive and validate Xendit payment notifications
+### Details:
+Create or update the webhook endpoint to handle Xendit payment notifications. Implement initial request validation, parse the payload, and set up the basic structure to process different event types. Ensure the endpoint is properly registered in the Xendit dashboard.
+
+## 2. Develop Affiliate Attribution Logic [done]
+### Dependencies: 6.1
+### Description: Implement logic to identify and attribute payments to the correct affiliate structure
+### Details:
+Create a system to map incoming payments to the appropriate affiliate hierarchy. This includes identifying the direct affiliate and all upstream affiliates that should receive commissions. Store the attribution data for use in commission calculations.
+
+## 3. Implement Multi-level Commission Calculation [done]
+### Dependencies: 6.2
+### Description: Build the logic to calculate commissions for different affiliate levels based on payment amounts
+### Details:
+Develop algorithms to calculate commission amounts for each level in the affiliate structure. Handle different commission rates for different affiliate levels, product types, or other business rules. Ensure calculations are accurate and properly rounded according to financial best practices.
+
+## 4. Implement Conversion Status Management [done]
+### Dependencies: 6.3
+### Description: Create a system to track and update the status of conversions based on payment events
+### Details:
+Build functionality to manage the lifecycle of conversions, including handling different payment statuses (pending, completed, failed, refunded). Update commission statuses accordingly and implement any necessary reversal logic for refunds or chargebacks.
+
+## 5. Implement Security and Error Handling [done]
+### Dependencies: 6.1, 6.2, 6.3, 6.4
+### Description: Add security verification for webhooks and comprehensive error handling with logging
+### Details:
+Implement signature verification for Xendit webhooks to prevent unauthorized requests. Add comprehensive error handling throughout the webhook processing flow. Set up detailed logging for both successful operations and errors to facilitate debugging and auditing of financial transactions.
+

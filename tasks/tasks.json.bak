@@ -1,0 +1,820 @@
+{
+  "tasks": [
+    {
+      "id": 1,
+      "title": "Extend Supabase Schema for Affiliate Program",
+      "description": "Create and configure the necessary database tables in Supabase to support the affiliate program, including extending the unified_profiles schema and implementing RLS policies.",
+      "details": "1. Create the following tables in Supabase:\n   - affiliates\n   - affiliate_clicks\n   - affiliate_conversions\n   - payouts\n   - fraud_flags\n2. Implement the schema as defined in section 6 of the PRD\n3. Set up foreign key relationships between tables\n4. Configure Row Level Security (RLS) policies for each table\n   - For affiliates table: owner_or_admin policy\n   - For clicks/conversions: restrict SELECT to authenticated users who own the affiliate ID\n5. Add necessary indexes for performance optimization\n6. Extend the unified_profiles table to link with affiliate accounts\n7. Test queries with different user roles to verify RLS is working correctly",
+      "testStrategy": "1. Unit tests for database schema integrity\n2. Test RLS policies with different user roles (affiliate, admin, non-affiliate)\n3. Verify foreign key constraints are enforced\n4. Performance testing on indexed queries\n5. Validate that the schema can handle the expected data volume (10k clicks/day, 100k rows/table)",
+      "priority": "high",
+      "dependencies": [],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Design and create affiliate system tables",
+          "description": "Design and implement the core tables for the affiliate system with proper relationships and constraints.",
+          "dependencies": [],
+          "details": "Create tables for affiliates, referrals, commissions, payouts, and tracking. Define primary keys, foreign keys, and establish proper relationships between tables. Include appropriate constraints and default values. Document the schema design with an ERD (Entity Relationship Diagram).",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Implement Row Level Security (RLS) policies",
+          "description": "Define and implement RLS policies to secure the affiliate system data.",
+          "dependencies": [
+            1
+          ],
+          "details": "Create RLS policies for each table to ensure users can only access their own affiliate data. Implement policies for different user roles (admin, affiliate, regular user). Test policy effectiveness with different user contexts. Document all security policies and their intended access patterns.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Develop indexing strategy",
+          "description": "Design and implement an effective indexing strategy for the affiliate system tables.",
+          "dependencies": [
+            1
+          ],
+          "details": "Analyze query patterns and identify columns that need indexing. Create indexes on frequently queried columns and foreign keys. Consider composite indexes for multi-column queries. Document performance implications and trade-offs for each index created.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Integrate with unified_profiles extension",
+          "description": "Extend the schema to integrate with the unified_profiles extension.",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Establish relationships between affiliate tables and the unified_profiles extension. Ensure profile data can be properly linked to affiliate accounts. Update RLS policies to work with the unified profiles context. Document the integration points and data flow between systems.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Create database functions and triggers",
+          "description": "Implement necessary database functions and triggers for the affiliate system.",
+          "dependencies": [
+            1,
+            4
+          ],
+          "details": "Create functions for commission calculations, referral tracking, and status updates. Implement triggers for automatic updates to related tables when events occur. Document each function and trigger with its purpose, inputs, outputs, and side effects.",
+          "status": "pending"
+        },
+        {
+          "id": 6,
+          "title": "Perform comprehensive schema testing",
+          "description": "Test the complete schema implementation to ensure it meets all requirements.",
+          "dependencies": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "details": "Create test cases for all schema components. Verify data integrity constraints and relationships. Test RLS policies with different user contexts. Perform load testing to validate indexing strategy. Document test results and any schema adjustments made based on testing.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Integrate Affiliate Authentication with Existing Supabase Auth",
+      "description": "Extend the existing authentication system to support affiliate signup, login, and role-based access control using Supabase Auth.",
+      "details": "1. Implement the /affiliate/signup endpoint that integrates with Supabase Auth\n2. Create flow: email → OTP verification → pending status\n3. Update user_metadata to include affiliate status\n4. Extend the existing checkAdminAccess pattern to include affiliate role checks\n5. Implement logic to detect user types (student, affiliate, admin, or combinations)\n6. Store affiliate status in the user's profile\n7. Ensure proper error handling for authentication failures\n8. Set up security headers and CSRF protection",
+      "testStrategy": "1. Test signup flow with valid and invalid inputs\n2. Verify OTP verification process\n3. Test authentication with different user roles\n4. Validate that user_metadata correctly stores affiliate status\n5. Test error scenarios and edge cases\n6. Security testing for authentication endpoints",
+      "priority": "high",
+      "dependencies": [
+        1
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement Affiliate Signup Endpoint",
+          "description": "Create a dedicated API endpoint for affiliate user registration with appropriate validation and error handling",
+          "dependencies": [],
+          "details": "Develop a RESTful endpoint that accepts affiliate registration data, validates input fields, handles duplicate checks, and returns appropriate status codes. Include documentation for the endpoint structure and required parameters.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Develop OTP Verification Flow",
+          "description": "Build a complete one-time password verification system for user authentication",
+          "dependencies": [
+            1
+          ],
+          "details": "Implement OTP generation, delivery (email/SMS), verification logic, expiration handling, and retry limitations. Include fallback mechanisms and security measures to prevent brute force attacks.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Extend User Metadata Schema",
+          "description": "Enhance the user data model to support additional metadata fields required for different user types",
+          "dependencies": [
+            1
+          ],
+          "details": "Modify database schema to include fields for user preferences, profile completeness, verification status, and user-specific settings. Ensure backward compatibility and create migration scripts for existing users.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Implement Role-Based Access Control",
+          "description": "Create a comprehensive RBAC system to manage permissions across different user types",
+          "dependencies": [
+            3
+          ],
+          "details": "Define role hierarchies, permission sets, and access control lists. Implement middleware for route protection, role verification, and permission checking. Include admin interfaces for role management.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Develop User Type Detection Logic",
+          "description": "Create mechanisms to identify and differentiate between various user types in the system",
+          "dependencies": [
+            3,
+            4
+          ],
+          "details": "Implement algorithms to detect user types based on behavior patterns, registration source, and profile data. Create type-specific workflows and user experiences based on detected types.",
+          "status": "pending"
+        },
+        {
+          "id": 6,
+          "title": "Implement Security Hardening Measures",
+          "description": "Enhance authentication security through additional protective measures",
+          "dependencies": [
+            2,
+            4,
+            5
+          ],
+          "details": "Add rate limiting, implement JWT with appropriate expiration, add CSRF protection, enable secure cookie handling, implement IP-based suspicious activity detection, and conduct security testing against common vulnerabilities.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Implement Context-Sensitive Login Router",
+      "description": "Create a login router that detects user roles and redirects to the appropriate dashboard after authentication.",
+      "details": "1. Implement the /api/auth/redirect endpoint\n2. After authentication, detect user type from Supabase Auth and unified_profiles\n3. Logic for redirects:\n   - student-only → /dashboard\n   - affiliate-only → /affiliate\n   - both → selection screen\n   - admin → /admin\n4. Create the /affiliate/dashboard-type endpoint to return available dashboard types\n5. Implement session management to maintain authentication state\n6. Handle edge cases like expired sessions or missing roles",
+      "testStrategy": "1. Test redirects for each user type combination\n2. Verify the selection screen appears for users with multiple roles\n3. Test session persistence across page reloads\n4. Validate proper error handling for edge cases\n5. Test with various browsers to ensure compatibility",
+      "priority": "high",
+      "dependencies": [
+        2
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Create redirect endpoint",
+          "description": "Implement the base login redirect endpoint that will handle user authentication and initial routing",
+          "dependencies": [],
+          "details": "Create a new route handler for '/login/redirect' that will process authentication tokens, verify user identity, and prepare for role-based redirection. Include middleware for authentication verification and error catching.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Implement user type detection logic",
+          "description": "Develop logic to identify user roles and permissions from authenticated user data",
+          "dependencies": [
+            1
+          ],
+          "details": "Query the user database to retrieve all roles associated with the authenticated user. Create helper functions to categorize users as single-role or multi-role. Implement role hierarchy logic if certain roles take precedence over others.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Create dashboard selection screen for multi-role users",
+          "description": "Design and implement an interface for users with multiple roles to select which dashboard to access",
+          "dependencies": [
+            2
+          ],
+          "details": "Create a route handler for '/dashboard-select' that displays available role options. Implement UI components showing each role with descriptions and access buttons. Include logic to remember the last selected role for improved user experience.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Implement role-based redirection logic",
+          "description": "Create the routing logic that directs users to appropriate dashboards based on their role(s)",
+          "dependencies": [
+            2,
+            3
+          ],
+          "details": "Implement conditional logic that automatically redirects single-role users to their specific dashboard. For multi-role users who have made a selection, redirect to the appropriate dashboard. Map each role to its corresponding dashboard URL.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Implement session management and error handling",
+          "description": "Add robust session management and comprehensive error handling throughout the login flow",
+          "dependencies": [
+            1,
+            4
+          ],
+          "details": "Store user role information in the session. Implement session timeout and refresh mechanisms. Create error handlers for authentication failures, database connection issues, and permission problems. Add logging for security events and failed login attempts.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Develop Dashboard Switcher Component",
+      "description": "Create a UI component that allows users with multiple roles to switch between dashboards without re-login.",
+      "details": "1. Design and implement a persistent UI element for dashboard switching\n2. Component should appear only for users with multiple roles\n3. Implement client-side navigation between dashboards\n4. Maintain authentication state during dashboard switches\n5. Add visual indicators for current dashboard\n6. Ensure the component is accessible and responsive\n7. Implement with React components following the existing design system",
+      "testStrategy": "1. Test UI rendering for users with different role combinations\n2. Verify navigation between dashboards works without session loss\n3. Test accessibility compliance with WCAG 2.1 AA standards\n4. Responsive design testing on various screen sizes\n5. User acceptance testing for intuitive navigation",
+      "priority": "medium",
+      "dependencies": [
+        3
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 5,
+      "title": "Implement Affiliate Click Tracking",
+      "description": "Create the click tracking system with a JavaScript pixel that sets cookies and handles UTM parameters for affiliate attribution.",
+      "details": "1. Implement the /api/affiliate/click endpoint\n2. Create a JavaScript pixel that can be embedded on pages\n3. Set 30-day cookies for affiliate attribution\n4. Handle UTM parameters (?a=<slug>)\n5. Implement last-click-wins attribution logic\n6. Store click data in the affiliate_clicks table\n7. Implement visitor_id generation and tracking\n8. Add IP address logging with appropriate privacy considerations\n9. Ensure the pixel loads asynchronously and doesn't block page rendering",
+      "testStrategy": "1. Test cookie setting and persistence for 30 days\n2. Verify UTM parameter handling\n3. Test last-click-wins attribution with multiple affiliate clicks\n4. Performance testing to ensure pixel loads quickly (p95 ≤ 200ms)\n5. Test in various browsers and devices\n6. Validate data is correctly stored in the database",
+      "priority": "high",
+      "dependencies": [
+        1
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Create Tracking Endpoint API",
+          "description": "Develop a server-side endpoint to receive and process click tracking data",
+          "dependencies": [],
+          "details": "Build a RESTful API endpoint that can handle high volumes of tracking requests. Implement proper request validation, data sanitization, and error handling. Ensure the endpoint logs IP address, timestamp, user agent, and referrer information. Design a database schema to efficiently store tracking events.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Develop JavaScript Tracking Pixel",
+          "description": "Create a lightweight JavaScript snippet that can be embedded in web pages to send tracking data",
+          "dependencies": [
+            1
+          ],
+          "details": "Develop a non-blocking JavaScript pixel that loads asynchronously. Implement event listeners for clicks, page views, and other relevant user interactions. Ensure the pixel can send data to the tracking endpoint via both image requests (for compatibility) and fetch API (for modern browsers). Minimize the code size to reduce page load impact.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Implement Cookie Management and UTM Parameter Handling",
+          "description": "Create functionality to manage cookies and capture UTM parameters from URLs",
+          "dependencies": [
+            2
+          ],
+          "details": "Develop cookie management system that respects privacy settings and regulations (GDPR, CCPA). Implement logic to capture and store UTM parameters (utm_source, utm_medium, utm_campaign, etc.) from URLs. Create functions to read, write, and update cookies with appropriate expiration settings. Include fallback mechanisms for environments where cookies are blocked.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Develop Visitor ID Generation and Session Tracking",
+          "description": "Create a system to generate unique visitor IDs and track user sessions across page views",
+          "dependencies": [
+            3
+          ],
+          "details": "Implement a reliable visitor ID generation algorithm that creates unique identifiers. Develop session tracking logic to group user activities within time-based sessions. Create mechanisms to persist visitor IDs across sessions while respecting privacy settings. Implement first-party cookie storage with appropriate fallbacks for cross-domain tracking.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Optimize Performance and Conduct Testing",
+          "description": "Optimize the tracking system for performance and thoroughly test across browsers and devices",
+          "dependencies": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "details": "Implement request batching to reduce network overhead. Add retry logic for failed tracking requests. Conduct load testing on the tracking endpoint. Test the tracking pixel across different browsers, devices, and network conditions. Implement automated tests to verify data accuracy and reliability. Document performance metrics and optimize bottlenecks.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Extend Xendit Webhook for Conversion Tracking",
+      "description": "Modify the existing Xendit webhook to track conversions and attribute them to affiliates based on the stored cookies.",
+      "details": "1. Extend the existing /api/webhooks/xendit endpoint\n2. Extract affiliate information from cookies or UTM parameters\n3. Implement logic to upsert conversion rows in affiliate_conversions table\n4. Calculate commission based on rules (Level 1: 25% members/20% non-members, Level 2: 10%)\n5. Handle multi-level attribution (up to 2 levels)\n6. Set initial conversion status to 'pending'\n7. Implement webhook signature verification for security\n8. Add error handling and logging for debugging",
+      "testStrategy": "1. Test webhook with various Xendit payload scenarios\n2. Verify commission calculations for different affiliate levels and member statuses\n3. Test multi-level attribution\n4. Validate conversion data is correctly stored in the database\n5. Test security measures including signature verification\n6. Simulate edge cases like missing cookies or invalid affiliate IDs",
+      "priority": "high",
+      "dependencies": [
+        5
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement Xendit Webhook Endpoint",
+          "description": "Modify the existing webhook endpoint to receive and validate Xendit payment notifications",
+          "dependencies": [],
+          "details": "Create or update the webhook endpoint to handle Xendit payment notifications. Implement initial request validation, parse the payload, and set up the basic structure to process different event types. Ensure the endpoint is properly registered in the Xendit dashboard.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Develop Affiliate Attribution Logic",
+          "description": "Implement logic to identify and attribute payments to the correct affiliate structure",
+          "dependencies": [
+            1
+          ],
+          "details": "Create a system to map incoming payments to the appropriate affiliate hierarchy. This includes identifying the direct affiliate and all upstream affiliates that should receive commissions. Store the attribution data for use in commission calculations.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Implement Multi-level Commission Calculation",
+          "description": "Build the logic to calculate commissions for different affiliate levels based on payment amounts",
+          "dependencies": [
+            2
+          ],
+          "details": "Develop algorithms to calculate commission amounts for each level in the affiliate structure. Handle different commission rates for different affiliate levels, product types, or other business rules. Ensure calculations are accurate and properly rounded according to financial best practices.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Implement Conversion Status Management",
+          "description": "Create a system to track and update the status of conversions based on payment events",
+          "dependencies": [
+            3
+          ],
+          "details": "Build functionality to manage the lifecycle of conversions, including handling different payment statuses (pending, completed, failed, refunded). Update commission statuses accordingly and implement any necessary reversal logic for refunds or chargebacks.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Implement Security and Error Handling",
+          "description": "Add security verification for webhooks and comprehensive error handling with logging",
+          "dependencies": [
+            1,
+            2,
+            3,
+            4
+          ],
+          "details": "Implement signature verification for Xendit webhooks to prevent unauthorized requests. Add comprehensive error handling throughout the webhook processing flow. Set up detailed logging for both successful operations and errors to facilitate debugging and auditing of financial transactions.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Implement Fraud Detection Engine",
+      "description": "Create a fraud detection system that automatically flags suspicious affiliate activity based on defined thresholds.",
+      "details": "1. Implement a CRON job that runs every 30 minutes\n2. Check for fraud patterns:\n   - CVR > 50% on ≥50 clicks in any 24-hour window\n   - ≥3 self-purchases in any 24-hour window\n3. Insert detected issues into the fraud_flags table\n4. Update affiliate status to 'flagged' when fraud is detected\n5. Implement the notification system for fraud flags\n6. Create detailed logging for audit purposes\n7. Ensure the system can handle the expected data volume",
+      "testStrategy": "1. Test with simulated fraud patterns to verify detection\n2. Validate flagging thresholds are correctly applied\n3. Test notification system for fraud flags\n4. Performance testing with large datasets\n5. Verify audit logging is comprehensive\n6. Test edge cases and boundary conditions",
+      "priority": "medium",
+      "dependencies": [
+        6
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "CRON Job Setup for Fraud Detection",
+          "description": "Implement a scheduled CRON job to periodically run the fraud detection engine",
+          "dependencies": [],
+          "details": "Create a configurable CRON job that runs at appropriate intervals (hourly/daily). Ensure proper error handling, logging, and retry mechanisms. Include monitoring to verify job execution and completion. Design the job to handle large datasets efficiently with pagination or batching.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Fraud Pattern Detection Algorithms",
+          "description": "Develop algorithms to identify suspicious patterns in affiliate activities",
+          "dependencies": [
+            1
+          ],
+          "details": "Implement algorithms for detecting common fraud patterns: click fraud, conversion manipulation, IP spoofing, and unusual traffic spikes. Create statistical models for anomaly detection based on historical data. Include configurable thresholds for different fraud types. Design the system to adapt to new patterns over time.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Flagging System Implementation",
+          "description": "Create a system to flag suspicious activities and affiliates based on detection results",
+          "dependencies": [
+            2
+          ],
+          "details": "Develop a multi-level flagging system (warning, suspicious, confirmed fraud). Implement a review queue for manual verification of flagged activities. Create an API for updating affiliate status based on fraud findings. Include mechanisms to prevent false positives through confidence scoring.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Notification System and Audit Logging",
+          "description": "Implement notification mechanisms and comprehensive audit logging",
+          "dependencies": [
+            3
+          ],
+          "details": "Integrate with email/SMS notification systems to alert about fraud detection. Create a detailed audit log of all fraud detection activities and status changes. Implement performance monitoring and optimization for the entire fraud detection pipeline. Design a dashboard for visualizing fraud patterns and detection effectiveness.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Develop Affiliate Dashboard UI",
+      "description": "Create the affiliate dashboard with metrics, referral link generation, and payout history.",
+      "details": "1. Implement the /affiliate route with protected access\n2. Create UI for generating referral links with vanity slugs and QR codes\n3. Develop dashboard widgets:\n   - Payout history\n   - Clicks\n   - Conversion rate\n   - Pending/Cleared PHP amounts\n   - Top performing links\n   - Unique visitors\n   - Geographic distribution\n4. Implement the /affiliate/stats endpoint to fetch metrics\n5. Ensure dashboard loads within performance requirements (p95 ≤ 1s on 3G)\n6. Make the UI responsive and accessible\n7. Implement real-time or periodic data refresh",
+      "testStrategy": "1. Test dashboard rendering with various data scenarios\n2. Verify referral link generation works correctly\n3. Test all widgets display accurate data\n4. Performance testing to ensure fast load times\n5. Accessibility testing against WCAG 2.1 AA standards\n6. Responsive design testing on various devices\n7. User acceptance testing for usability",
+      "priority": "medium",
+      "dependencies": [
+        2,
+        5,
+        6
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement Protected Route Authentication",
+          "description": "Create a protected route system for the affiliate dashboard that verifies user authentication and authorization before allowing access.",
+          "dependencies": [],
+          "details": "Develop authentication middleware, implement JWT validation, create redirect logic for unauthenticated users, and set up role-based access control for affiliate users. Include session timeout handling and secure cookie management.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Develop Referral Link Generation System",
+          "description": "Build functionality for generating unique referral links with customizable vanity slugs and downloadable QR codes.",
+          "dependencies": [
+            1
+          ],
+          "details": "Create a form for customizing vanity slugs, implement validation to prevent duplicates, develop QR code generation with the affiliate's unique link, add copy-to-clipboard functionality, and implement link preview. Include analytics tracking parameters in generated links.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Create Metrics Visualization Widgets",
+          "description": "Develop interactive dashboard widgets to display key affiliate performance metrics with data visualization components.",
+          "dependencies": [
+            1
+          ],
+          "details": "Implement charts for conversion rates, earnings over time, click-through rates, and referral counts. Create filterable date ranges, implement tooltips for detailed information, and ensure all visualizations are accessible. Include export functionality for reports.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Develop Stats API Endpoints",
+          "description": "Create backend API endpoints that aggregate and serve affiliate performance statistics to the dashboard.",
+          "dependencies": [
+            1
+          ],
+          "details": "Design RESTful endpoints for retrieving time-series data, implement caching for performance, create data aggregation queries, add pagination for large datasets, implement proper error handling, and ensure secure access to sensitive financial data.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Implement Responsive Design and Performance Optimization",
+          "description": "Ensure the affiliate dashboard is fully responsive across devices and optimized for performance.",
+          "dependencies": [
+            2,
+            3,
+            4
+          ],
+          "details": "Create responsive layouts using CSS Grid/Flexbox, implement lazy loading for dashboard components, optimize bundle size with code splitting, add skeleton loaders for improved perceived performance, implement virtualization for long lists, and ensure accessibility compliance.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Extend Admin Console for Affiliate Management",
+      "description": "Add affiliate management capabilities to the existing admin dashboard, including fraud review and program analytics.",
+      "details": "1. Extend the existing /admin route with new affiliate management tabs\n2. Implement /admin/flags interface for reviewing flagged accounts\n   - Display reason, metrics, and resolve button\n   - Log all admin actions for audit\n3. Create /admin/analytics with 7-day and 30-day KPI charts\n4. Implement program settings editor for super admins\n   - Commission percentage adjustment\n   - Cookie TTL configuration\n   - Flag thresholds modification\n5. Add user impersonation functionality with audit logging\n6. Ensure all admin actions require proper authorization",
+      "testStrategy": "1. Test admin interface with various user roles\n2. Verify flag review process works correctly\n3. Test analytics charts with different date ranges\n4. Validate program settings can be modified and take effect\n5. Test user impersonation and audit logging\n6. Security testing to ensure proper access controls\n7. Usability testing with admin users",
+      "priority": "medium",
+      "dependencies": [
+        7,
+        8
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement Affiliate Management Interface",
+          "description": "Create a comprehensive interface for managing affiliates, including registration approval, commission structure setup, and affiliate status management.",
+          "dependencies": [],
+          "details": "Develop UI components for affiliate listing with filtering and sorting, detail view with performance metrics, approval workflow, commission configuration panel, and status toggle controls. Implement proper authorization checks for admin actions and ensure audit logging of all changes.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Develop Fraud Review System",
+          "description": "Build a system for reviewing and managing potential fraudulent activities, including flagging mechanisms, case management, and resolution workflows.",
+          "dependencies": [
+            1
+          ],
+          "details": "Create interfaces for viewing flagged transactions with risk scores, implementing case assignment to reviewers, adding evidence collection tools, designing resolution action buttons, and generating audit trails. Include integration with existing notification systems for alerts on high-risk cases.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Create Analytics Dashboard with KPI Charts",
+          "description": "Develop a comprehensive analytics dashboard displaying key performance indicators through interactive charts and data visualizations.",
+          "dependencies": [
+            1
+          ],
+          "details": "Implement data visualization components for revenue trends, conversion rates, affiliate performance comparisons, and geographic distribution. Add filtering capabilities by date range, program, and affiliate tiers. Ensure charts are interactive with drill-down capabilities and exportable reports.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Build Program Settings Editor with User Impersonation",
+          "description": "Create an interface for editing program settings and implementing secure user impersonation functionality for troubleshooting.",
+          "dependencies": [
+            1,
+            3
+          ],
+          "details": "Develop a settings editor with validation for program parameters, commission structures, and eligibility rules. Implement user impersonation feature with proper security controls, session marking, and audit logging. Add a clear visual indicator when admin is in impersonation mode and ensure all actions are properly attributed.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Implement Payout Processing System",
+      "description": "Create the payout system that processes affiliate commissions and integrates with Xendit for disbursements.",
+      "details": "1. Implement the /api/affiliate/payout/batch endpoint\n2. Create a CRON job to automatically trigger payouts on the last calendar day of the month at 23:00 (Asia/Manila)\n3. Implement logic to transition conversions from 'pending' to 'cleared' after 3 days\n4. Integrate with Xendit Disbursement API for batch payouts\n5. Calculate and deduct Xendit disbursement fees from affiliate amounts\n6. Update payout and conversion statuses based on Xendit responses\n7. Implement error handling and retry logic for failed payouts\n8. Create detailed logging for all payout operations",
+      "testStrategy": "1. Test automatic clearing of pending conversions after 3 days\n2. Verify batch payout creation with test Xendit credentials\n3. Test fee calculation and deduction\n4. Validate status updates for payouts and conversions\n5. Test error handling and retry mechanisms\n6. End-to-end testing of the complete payout flow\n7. Test with various edge cases (zero amount, failed transfers, etc.)",
+      "priority": "high",
+      "dependencies": [
+        6
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Create Payout Endpoint",
+          "description": "Develop the API endpoint for manual payout initiation",
+          "dependencies": [],
+          "details": "Implement a RESTful endpoint that accepts payout requests, validates input data, authenticates users, checks permissions, and queues the payout for processing. Include request validation, response formatting, and initial database schema for payout records.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Implement CRON Job for Automated Payouts",
+          "description": "Develop a scheduled task system for automated payout processing",
+          "dependencies": [
+            1
+          ],
+          "details": "Create a CRON job that runs at specified intervals to identify pending payouts, process them in batches, and handle retry logic. Implement configuration for scheduling, batch size limits, and maximum retry attempts. Include monitoring for job execution status.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Implement Conversion Status Management",
+          "description": "Develop the state machine for payout status transitions",
+          "dependencies": [
+            1
+          ],
+          "details": "Create a robust status management system that tracks payout states (pending, processing, completed, failed). Implement validation rules for state transitions, status update methods, and database schema for status history. Include notification triggers for status changes.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Integrate Xendit Disbursement API",
+          "description": "Connect the system with Xendit's API for executing payouts",
+          "dependencies": [
+            1,
+            3
+          ],
+          "details": "Implement the integration with Xendit Disbursement API, including authentication, request formatting, response handling, and webhook processing. Create a service layer that abstracts the API details, handles retries, and processes callbacks. Include test mode support.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Implement Fee Calculation and Error Handling",
+          "description": "Develop fee calculation logic and comprehensive error handling",
+          "dependencies": [
+            3,
+            4
+          ],
+          "details": "Create the fee calculation module based on transaction type, amount, and recipient details. Implement comprehensive error handling for API failures, timeout scenarios, and validation errors. Develop a structured logging system that captures all transaction details, errors, and system events for auditing and debugging.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Implement Email Notification System",
+      "description": "Set up Postmark email templates and integrate them with the affiliate system for various notifications.",
+      "details": "1. Create Postmark templates for:\n   - signup_confirmation\n   - signup_approved\n   - payout_sent\n   - flag_notice\n2. Design templates using MJML for responsive emails\n3. Implement email sending logic for each trigger point:\n   - After signup\n   - When admin approves affiliate\n   - When payout is sent\n   - When fraud is flagged\n4. Set up proper variable substitution in templates\n5. Implement email sending queue with retry logic\n6. Add logging for email delivery status",
+      "testStrategy": "1. Test email template rendering in various email clients\n2. Verify variable substitution works correctly\n3. Test email triggers for each notification type\n4. Validate email delivery and tracking\n5. Test error handling and retry logic\n6. End-to-end testing of complete notification flows",
+      "priority": "medium",
+      "dependencies": [
+        2,
+        10
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Create Postmark email templates using MJML",
+          "description": "Design and implement responsive email templates using MJML framework and set them up in Postmark",
+          "dependencies": [],
+          "details": "Create base template structure with header/footer components. Design specific templates for: welcome emails, password reset, notification alerts, and system updates. Ensure templates are mobile-responsive. Export MJML to HTML and upload to Postmark. Set up template IDs for programmatic access.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Implement email sending logic for different trigger points",
+          "description": "Develop the core functionality to send emails at various application trigger points",
+          "dependencies": [
+            1
+          ],
+          "details": "Create an EmailService class with methods for different email types. Implement trigger points for: user registration, password reset requests, notification preferences, important alerts. Add configuration for email sender addresses and reply-to settings. Include email validation and sanitization of recipient addresses.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Build variable substitution and personalization system",
+          "description": "Create a system to dynamically populate email templates with personalized user data",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Implement a template variable system compatible with Postmark. Create helper functions to format data for template variables (dates, currency, etc). Add support for user-specific content like name, preferences, and account details. Implement fallback values for missing data. Add support for localization/internationalization of email content.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Develop email delivery queue with retry logic",
+          "description": "Create a robust queuing system for email delivery with retry capabilities",
+          "dependencies": [
+            2
+          ],
+          "details": "Implement a queue system for email delivery using a job queue. Add configurable retry logic for failed email attempts with exponential backoff. Set up maximum retry attempts and failure handling. Implement priority levels for different types of emails. Create interfaces for queue monitoring and management.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Implement comprehensive email logging and analytics",
+          "description": "Add logging and analytics capabilities to track email delivery and engagement",
+          "dependencies": [
+            2,
+            4
+          ],
+          "details": "Set up webhook endpoints to receive delivery status updates from Postmark. Implement logging for all email events (sent, delivered, opened, clicked, bounced). Create a database schema to store email activity history. Add reporting functionality for email performance metrics. Implement alert system for delivery problems or unusual bounce rates.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Implement Creative Library for Affiliates",
+      "description": "Create a creative library with Google Drive viewer integration for affiliates to access marketing materials.",
+      "details": "1. Implement Google Drive viewer embed in the affiliate dashboard\n2. Set up a dedicated Google Drive folder for marketing assets\n3. Configure proper permissions for view-only access\n4. Create a UI component to browse and preview available creatives\n5. Add download functionality for assets\n6. Implement search and filtering capabilities\n7. Ensure the viewer is responsive and accessible",
+      "testStrategy": "1. Test Google Drive integration with various file types\n2. Verify permissions are correctly applied\n3. Test browsing and preview functionality\n4. Validate download capabilities\n5. Test search and filtering\n6. Accessibility testing against WCAG 2.1 AA standards\n7. Performance testing with large asset libraries",
+      "priority": "low",
+      "dependencies": [
+        8
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 13,
+      "title": "Implement Data Retention and Privacy Controls",
+      "description": "Create mechanisms for handling affiliate data according to the retention policy, including soft-deletion of PII.",
+      "details": "1. Implement a CRON job to identify inactive affiliates\n2. Create soft-delete functionality for PII after 6 months of inactivity\n3. Maintain aggregate data while anonymizing personal information\n4. Implement database triggers or functions to handle the soft-delete process\n5. Create audit logs for all data retention actions\n6. Ensure compliance with relevant privacy regulations\n7. Add admin controls to manually trigger data anonymization when needed",
+      "testStrategy": "1. Test automatic identification of inactive affiliates\n2. Verify soft-delete functionality works correctly\n3. Validate that aggregate data remains intact while PII is removed\n4. Test manual anonymization controls\n5. Verify audit logging for all data retention actions\n6. Test with various edge cases and data scenarios",
+      "priority": "medium",
+      "dependencies": [
+        1
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "Implement Inactive Affiliate Identification System",
+          "description": "Create a system to identify affiliates who have been inactive for the specified retention period",
+          "dependencies": [],
+          "details": "Develop a query mechanism to identify affiliates who haven't logged in or performed any transactions within the defined retention period (e.g., 24 months). Create a scheduled job that flags these accounts for data retention processing. Include configurable parameters for retention periods based on jurisdiction and account type. Implement notification system to alert affiliates before their data is processed for anonymization.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Develop PII Soft-Deletion Functionality",
+          "description": "Create functionality to soft-delete personally identifiable information while maintaining necessary records",
+          "dependencies": [
+            1
+          ],
+          "details": "Design database schema modifications to support soft-deletion of PII. Implement functions to replace PII fields with anonymized values while preserving non-sensitive data. Create a data dictionary defining which fields contain PII and their anonymization methods. Develop rollback capability for accidental deletion. Ensure functionality works across all relevant database tables containing affiliate information.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Implement Database Triggers for Anonymization",
+          "description": "Create database triggers that automatically anonymize sensitive data when specific conditions are met",
+          "dependencies": [
+            2
+          ],
+          "details": "Design and implement database triggers that activate when an affiliate is marked for data retention processing. Create cascading anonymization processes that handle related tables and foreign key relationships. Implement transaction safety mechanisms to ensure data integrity during anonymization. Test triggers thoroughly with various data scenarios to verify proper anonymization without data corruption.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Develop Audit Logging and Admin Controls",
+          "description": "Create comprehensive audit logging and administrative controls for the data retention process",
+          "dependencies": [
+            2,
+            3
+          ],
+          "details": "Implement detailed audit logging for all data retention activities, including who initiated actions, what data was anonymized, and when actions occurred. Create an admin dashboard for authorized personnel to review and manage data retention processes. Develop override capabilities for legal holds or compliance requirements. Implement reporting functionality for regulatory compliance. Create documentation for administrators on using these controls properly.",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Implement System Monitoring and Analytics",
+      "description": "Set up monitoring for the affiliate system to track KPIs and system performance.",
+      "details": "1. Implement tracking for primary KPIs:\n   - Monthly registrations attributed to affiliates\n   - Monthly paid conversions attributed to affiliates\n2. Track secondary KPIs:\n   - Affiliate activation rate\n   - ROI (payout ÷ GMV)\n   - Fraud rate\n3. Set up performance monitoring for API endpoints (p95 ≤ 200ms)\n4. Monitor dashboard loading performance (FCP ≤ 1s on 3G)\n5. Create alerting for system issues or anomalies\n6. Implement logging for debugging and auditing\n7. Set up dashboards for real-time monitoring",
+      "testStrategy": "1. Verify KPI calculations are accurate\n2. Test performance monitoring under various load conditions\n3. Validate alerting mechanisms work correctly\n4. Test logging and ensure it captures necessary information\n5. Verify dashboard data is accurate and updates appropriately\n6. Load testing to ensure system handles expected traffic (10k clicks/day)",
+      "priority": "medium",
+      "dependencies": [
+        5,
+        6,
+        10
+      ],
+      "status": "pending",
+      "subtasks": []
+    },
+    {
+      "id": 15,
+      "title": "System Integration Testing and Deployment",
+      "description": "Perform comprehensive testing of the entire affiliate system and prepare for deployment.",
+      "details": "1. Conduct end-to-end testing of all affiliate flows:\n   - Signup and authentication\n   - Click tracking and attribution\n   - Conversion tracking\n   - Payout processing\n   - Dashboard functionality\n   - Admin controls\n2. Perform security testing including penetration testing\n3. Load test the system with 10k clicks/day\n4. Verify all acceptance criteria from section 10 of the PRD\n5. Create deployment scripts and rollback procedures\n6. Prepare documentation for the system\n7. Set up monitoring for the production environment",
+      "testStrategy": "1. Comprehensive end-to-end testing of all user flows\n2. Security testing including authentication, authorization, and data protection\n3. Performance testing under expected and peak loads\n4. Verify all 10 acceptance test criteria from the PRD\n5. Test deployment and rollback procedures\n6. Conduct user acceptance testing with stakeholders\n7. Verify monitoring and alerting in the production environment",
+      "priority": "high",
+      "dependencies": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14
+      ],
+      "status": "pending",
+      "subtasks": [
+        {
+          "id": 1,
+          "title": "End-to-End Testing of All Flows",
+          "description": "Conduct comprehensive testing of all user flows and system interactions to ensure proper functionality across the entire application.",
+          "dependencies": [],
+          "details": "Create test scenarios covering all user journeys, test data preparation, execution of test cases, documentation of results, and bug reporting. Ensure all components interact correctly and data flows properly through the entire system.",
+          "status": "pending"
+        },
+        {
+          "id": 2,
+          "title": "Security and Performance Testing",
+          "description": "Perform security vulnerability assessment and load/stress testing to ensure the system is secure and performs well under expected conditions.",
+          "dependencies": [
+            1
+          ],
+          "details": "Conduct penetration testing, vulnerability scanning, authentication/authorization testing, data encryption verification, load testing under various user loads, response time measurement, and resource utilization monitoring.",
+          "status": "pending"
+        },
+        {
+          "id": 3,
+          "title": "Acceptance Criteria Verification",
+          "description": "Validate that all features meet the defined acceptance criteria and business requirements.",
+          "dependencies": [
+            1,
+            2
+          ],
+          "details": "Review all user stories and requirements, create a traceability matrix, verify each acceptance criterion against the implemented features, document compliance status, and get stakeholder sign-off on completed features.",
+          "status": "pending"
+        },
+        {
+          "id": 4,
+          "title": "Deployment Script Creation and Documentation",
+          "description": "Develop automated deployment scripts and comprehensive documentation for the deployment process.",
+          "dependencies": [
+            3
+          ],
+          "details": "Create infrastructure-as-code scripts, CI/CD pipeline configurations, rollback procedures, environment configuration documentation, deployment checklists, and system architecture diagrams.",
+          "status": "pending"
+        },
+        {
+          "id": 5,
+          "title": "Production Monitoring Setup",
+          "description": "Implement monitoring tools and alerts to track system health and performance in the production environment.",
+          "dependencies": [
+            4
+          ],
+          "details": "Configure application performance monitoring, set up log aggregation, create dashboards for key metrics, implement automated alerts for critical issues, establish error tracking, and document incident response procedures.",
+          "status": "pending"
+        }
+      ]
+    }
+  ]
+}

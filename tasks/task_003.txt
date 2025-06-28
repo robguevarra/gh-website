@@ -1,0 +1,64 @@
+# Task ID: 3
+# Title: Implement Context-Sensitive Login Router
+# Status: done
+# Dependencies: 2
+# Priority: high
+# Description: Create a login router that detects user roles and redirects to the appropriate dashboard after authentication.
+# Details:
+1. Implement the /api/auth/redirect endpoint
+2. After authentication, detect user type from Supabase Auth and unified_profiles
+3. Logic for redirects:
+   - student-only → /dashboard
+   - affiliate-only → /affiliate
+   - both → selection screen
+   - admin → /admin
+4. Create the /affiliate/dashboard-type endpoint to return available dashboard types
+5. Implement session management to maintain authentication state
+6. Handle edge cases like expired sessions or missing roles
+
+# Test Strategy:
+1. Test redirects for each user type combination
+2. Verify the selection screen appears for users with multiple roles
+3. Test session persistence across page reloads
+4. Validate proper error handling for edge cases
+5. Test with various browsers to ensure compatibility
+
+# Subtasks:
+## 1. Create redirect endpoint [done]
+### Dependencies: None
+### Description: Implement the base login redirect endpoint that will handle user authentication and initial routing
+### Details:
+Create a new route handler for '/login/redirect' that will process authentication tokens, verify user identity, and prepare for role-based redirection. Include middleware for authentication verification and error catching.
+
+## 2. Implement user type detection logic [done]
+### Dependencies: 3.1
+### Description: Develop logic to identify user roles and permissions from authenticated user data
+### Details:
+Query the user database to retrieve all roles associated with the authenticated user. Create helper functions to categorize users as single-role or multi-role. Implement role hierarchy logic if certain roles take precedence over others.
+
+## 3. Create dashboard selection screen for multi-role users [done]
+### Dependencies: 3.2
+### Description: Design and implement an interface for users with multiple roles to select which dashboard to access
+### Details:
+Create a route handler for '/dashboard-select' that displays available role options. Implement UI components showing each role with descriptions and access buttons. Include logic to remember the last selected role for improved user experience.
+
+## 4. Implement role-based redirection logic [done]
+### Dependencies: 3.2, 3.3
+### Description: Create the routing logic that directs users to appropriate dashboards based on their role(s)
+### Details:
+Implement conditional logic that automatically redirects single-role users to their specific dashboard. For multi-role users who have made a selection, redirect to the appropriate dashboard. Map each role to its corresponding dashboard URL.
+
+## 5. Implement session management and error handling [done]
+### Dependencies: 3.1, 3.4
+### Description: Add robust session management and comprehensive error handling throughout the login flow
+### Details:
+Store user role information in the session. Implement session timeout and refresh mechanisms. Create error handlers for authentication failures, database connection issues, and permission problems. Add logging for security events and failed login attempts.
+<info added on 2025-05-31T11:09:16.140Z>
+Session activity logging has been successfully implemented in auth-context.tsx, covering login, logout, and session refresh events with proper error handling. The AuthCoordinationProvider now correctly uses the main auth context, and the EnhancedAuthProvider is restricted to the session management example page only.
+
+Remaining work includes:
+- Implementing role changes logging
+- Developing suspicious activity detection mechanisms
+- Creating admin dashboard views for session log analysis and monitoring
+</info added on 2025-05-31T11:09:16.140Z>
+

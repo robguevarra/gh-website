@@ -1,0 +1,62 @@
+# Task ID: 8
+# Title: Develop Affiliate Dashboard UI
+# Status: done
+# Dependencies: 2, 5, 6
+# Priority: medium
+# Description: Create the affiliate dashboard with metrics, referral link generation, and payout history.
+# Details:
+1. Implement the /affiliate route with protected access
+2. Create UI for generating referral links with vanity slugs and QR codes
+3. Develop dashboard widgets:
+   - Payout history
+   - Clicks
+   - Conversion rate
+   - Pending/Cleared PHP amounts
+   - Top performing links
+   - Unique visitors
+   - Geographic distribution
+4. Implement the /affiliate/stats endpoint to fetch metrics
+5. Ensure dashboard loads within performance requirements (p95 ≤ 1s on 3G)
+6. Make the UI responsive and accessible
+7. Implement real-time or periodic data refresh
+
+# Test Strategy:
+1. Test dashboard rendering with various data scenarios
+2. Verify referral link generation works correctly
+3. Test all widgets display accurate data
+4. Performance testing to ensure fast load times
+5. Accessibility testing against WCAG 2.1 AA standards
+6. Responsive design testing on various devices
+7. User acceptance testing for usability
+
+# Subtasks:
+## 1. Implement Protected Route Authentication [done]
+### Dependencies: None
+### Description: Create a protected route system for the affiliate dashboard that verifies user authentication and authorization before allowing access.
+### Details:
+Develop authentication middleware, implement JWT validation, create redirect logic for unauthenticated users, and set up role-based access control for affiliate users. Include session timeout handling and secure cookie management.
+
+## 2. Develop Referral Link Generation System [done]
+### Dependencies: 8.1
+### Description: Build functionality for generating unique referral links with customizable vanity slugs and downloadable QR codes.
+### Details:
+Create a form for customizing vanity slugs, implement validation to prevent duplicates, develop QR code generation with the affiliate's unique link, add copy-to-clipboard functionality, and implement link preview. Include analytics tracking parameters in generated links.
+
+## 3. Create Metrics Visualization Widgets [done]
+### Dependencies: 8.1
+### Description: Develop interactive dashboard widgets to display key affiliate performance metrics with data visualization components.
+### Details:
+Implement charts for conversion rates, earnings over time, click-through rates, and referral counts. Create filterable date ranges, implement tooltips for detailed information, and ensure all visualizations are accessible. Include export functionality for reports.
+
+## 4. Develop Stats API Endpoints [done]
+### Dependencies: 8.1
+### Description: Create backend API endpoints that aggregate and serve affiliate performance statistics to the dashboard.
+### Details:
+Design RESTful endpoints for retrieving time-series data, implement caching for performance, create data aggregation queries, add pagination for large datasets, implement proper error handling, and ensure secure access to sensitive financial data.
+
+## 5. Implement Responsive Design and Performance Optimization [done]
+### Dependencies: 8.2, 8.3, 8.4
+### Description: Ensure the affiliate dashboard is fully responsive across devices and optimized for performance.
+### Details:
+Create responsive layouts using CSS Grid/Flexbox, implement lazy loading for dashboard components, optimize bundle size with code splitting, add skeleton loaders for improved perceived performance, implement virtualization for long lists, and ensure accessibility compliance.
+

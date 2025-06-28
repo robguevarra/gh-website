@@ -1,0 +1,66 @@
+# Task ID: 1
+# Title: Extend Supabase Schema for Affiliate Program
+# Status: done
+# Dependencies: None
+# Priority: high
+# Description: Create and configure the necessary database tables in Supabase to support the affiliate program, including extending the unified_profiles schema and implementing RLS policies.
+# Details:
+1. Create the following tables in Supabase:
+   - affiliates
+   - affiliate_clicks
+   - affiliate_conversions
+   - payouts
+   - fraud_flags
+2. Implement the schema as defined in section 6 of the PRD
+3. Set up foreign key relationships between tables
+4. Configure Row Level Security (RLS) policies for each table
+   - For affiliates table: owner_or_admin policy
+   - For clicks/conversions: restrict SELECT to authenticated users who own the affiliate ID
+5. Add necessary indexes for performance optimization
+6. Extend the unified_profiles table to link with affiliate accounts
+7. Test queries with different user roles to verify RLS is working correctly
+
+# Test Strategy:
+1. Unit tests for database schema integrity
+2. Test RLS policies with different user roles (affiliate, admin, non-affiliate)
+3. Verify foreign key constraints are enforced
+4. Performance testing on indexed queries
+5. Validate that the schema can handle the expected data volume (10k clicks/day, 100k rows/table)
+
+# Subtasks:
+## 1. Design and create affiliate system tables [done]
+### Dependencies: None
+### Description: Design and implement the core tables for the affiliate system with proper relationships and constraints.
+### Details:
+Create tables for affiliates, referrals, commissions, payouts, and tracking. Define primary keys, foreign keys, and establish proper relationships between tables. Include appropriate constraints and default values. Document the schema design with an ERD (Entity Relationship Diagram).
+
+## 2. Implement Row Level Security (RLS) policies [done]
+### Dependencies: 1.1
+### Description: Define and implement RLS policies to secure the affiliate system data.
+### Details:
+Create RLS policies for each table to ensure users can only access their own affiliate data. Implement policies for different user roles (admin, affiliate, regular user). Test policy effectiveness with different user contexts. Document all security policies and their intended access patterns.
+
+## 3. Develop indexing strategy [done]
+### Dependencies: 1.1
+### Description: Design and implement an effective indexing strategy for the affiliate system tables.
+### Details:
+Analyze query patterns and identify columns that need indexing. Create indexes on frequently queried columns and foreign keys. Consider composite indexes for multi-column queries. Document performance implications and trade-offs for each index created.
+
+## 4. Integrate with unified_profiles extension [done]
+### Dependencies: 1.1, 1.2
+### Description: Extend the schema to integrate with the unified_profiles extension.
+### Details:
+Establish relationships between affiliate tables and the unified_profiles extension. Ensure profile data can be properly linked to affiliate accounts. Update RLS policies to work with the unified profiles context. Document the integration points and data flow between systems.
+
+## 5. Create database functions and triggers [done]
+### Dependencies: 1.1, 1.4
+### Description: Implement necessary database functions and triggers for the affiliate system.
+### Details:
+Create functions for commission calculations, referral tracking, and status updates. Implement triggers for automatic updates to related tables when events occur. Document each function and trigger with its purpose, inputs, outputs, and side effects.
+
+## 6. Perform comprehensive schema testing [done]
+### Dependencies: 1.1, 1.2, 1.3, 1.4, 1.5
+### Description: Test the complete schema implementation to ensure it meets all requirements.
+### Details:
+Create test cases for all schema components. Verify data integrity constraints and relationships. Test RLS policies with different user contexts. Perform load testing to validate indexing strategy. Document test results and any schema adjustments made based on testing.
+

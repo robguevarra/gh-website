@@ -1,0 +1,56 @@
+# Task ID: 5
+# Title: Implement Affiliate Click Tracking
+# Status: done
+# Dependencies: 1
+# Priority: high
+# Description: Create the click tracking system with a JavaScript pixel that sets cookies and handles UTM parameters for affiliate attribution.
+# Details:
+1. Implement the /api/affiliate/click endpoint
+2. Create a JavaScript pixel that can be embedded on pages
+3. Set 30-day cookies for affiliate attribution
+4. Handle UTM parameters (?a=<slug>)
+5. Implement last-click-wins attribution logic
+6. Store click data in the affiliate_clicks table
+7. Implement visitor_id generation and tracking
+8. Add IP address logging with appropriate privacy considerations
+9. Ensure the pixel loads asynchronously and doesn't block page rendering
+
+# Test Strategy:
+1. Test cookie setting and persistence for 30 days
+2. Verify UTM parameter handling
+3. Test last-click-wins attribution with multiple affiliate clicks
+4. Performance testing to ensure pixel loads quickly (p95 ≤ 200ms)
+5. Test in various browsers and devices
+6. Validate data is correctly stored in the database
+
+# Subtasks:
+## 1. Create Tracking Endpoint API [done]
+### Dependencies: None
+### Description: Develop a server-side endpoint to receive and process click tracking data
+### Details:
+Build a RESTful API endpoint that can handle high volumes of tracking requests. Implement proper request validation, data sanitization, and error handling. Ensure the endpoint logs IP address, timestamp, user agent, and referrer information. Design a database schema to efficiently store tracking events.
+
+## 2. Develop JavaScript Tracking Pixel [done]
+### Dependencies: 5.1
+### Description: Create a lightweight JavaScript snippet that can be embedded in web pages to send tracking data
+### Details:
+Develop a non-blocking JavaScript pixel that loads asynchronously. Implement event listeners for clicks, page views, and other relevant user interactions. Ensure the pixel can send data to the tracking endpoint via both image requests (for compatibility) and fetch API (for modern browsers). Minimize the code size to reduce page load impact.
+
+## 3. Implement Cookie Management and UTM Parameter Handling [done]
+### Dependencies: 5.2
+### Description: Create functionality to manage cookies and capture UTM parameters from URLs
+### Details:
+Develop cookie management system that respects privacy settings and regulations (GDPR, CCPA). Implement logic to capture and store UTM parameters (utm_source, utm_medium, utm_campaign, etc.) from URLs. Create functions to read, write, and update cookies with appropriate expiration settings. Include fallback mechanisms for environments where cookies are blocked.
+
+## 4. Develop Visitor ID Generation and Session Tracking [done]
+### Dependencies: 5.3
+### Description: Create a system to generate unique visitor IDs and track user sessions across page views
+### Details:
+Implement a reliable visitor ID generation algorithm that creates unique identifiers. Develop session tracking logic to group user activities within time-based sessions. Create mechanisms to persist visitor IDs across sessions while respecting privacy settings. Implement first-party cookie storage with appropriate fallbacks for cross-domain tracking.
+
+## 5. Optimize Performance and Conduct Testing [done]
+### Dependencies: 5.1, 5.2, 5.3, 5.4
+### Description: Optimize the tracking system for performance and thoroughly test across browsers and devices
+### Details:
+Implement request batching to reduce network overhead. Add retry logic for failed tracking requests. Conduct load testing on the tracking endpoint. Test the tracking pixel across different browsers, devices, and network conditions. Implement automated tests to verify data accuracy and reliability. Document performance metrics and optimize bottlenecks.
+

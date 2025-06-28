@@ -1,0 +1,53 @@
+# Task ID: 9
+# Title: Extend Admin Console for Affiliate Management
+# Status: done
+# Dependencies: 7, 8
+# Priority: medium
+# Description: Add affiliate management capabilities to the existing admin dashboard, including fraud review and program analytics.
+# Details:
+1. Extend the existing /admin route with new affiliate management tabs
+2. Implement /admin/flags interface for reviewing flagged accounts
+   - Display reason, metrics, and resolve button
+   - Log all admin actions for audit
+3. Create /admin/analytics with 7-day and 30-day KPI charts
+4. Implement program settings editor for super admins
+   - Commission percentage adjustment
+   - Cookie TTL configuration
+   - Flag thresholds modification
+5. Add user impersonation functionality with audit logging
+6. Ensure all admin actions require proper authorization
+
+# Test Strategy:
+1. Test admin interface with various user roles
+2. Verify flag review process works correctly
+3. Test analytics charts with different date ranges
+4. Validate program settings can be modified and take effect
+5. Test user impersonation and audit logging
+6. Security testing to ensure proper access controls
+7. Usability testing with admin users
+
+# Subtasks:
+## 1. Implement Affiliate Management Interface [done]
+### Dependencies: None
+### Description: Create a comprehensive interface for managing affiliates, including registration approval, commission structure setup, and affiliate status management.
+### Details:
+Develop UI components for affiliate listing with filtering and sorting, detail view with performance metrics, approval workflow, commission configuration panel, and status toggle controls. Implement proper authorization checks for admin actions and ensure audit logging of all changes.
+
+## 2. Develop Fraud Review System [done]
+### Dependencies: 9.1
+### Description: Build a system for reviewing and managing potential fraudulent activities, including flagging mechanisms, case management, and resolution workflows.
+### Details:
+Create interfaces for viewing flagged transactions with risk scores, implementing case assignment to reviewers, adding evidence collection tools, designing resolution action buttons, and generating audit trails. Include integration with existing notification systems for alerts on high-risk cases.
+
+## 3. Create Analytics Dashboard with KPI Charts [done]
+### Dependencies: 9.1
+### Description: Develop a comprehensive analytics dashboard displaying key performance indicators through interactive charts and data visualizations.
+### Details:
+Implement data visualization components for revenue trends, conversion rates, affiliate performance comparisons, and geographic distribution. Add filtering capabilities by date range, program, and affiliate tiers. Ensure charts are interactive with drill-down capabilities and exportable reports.
+
+## 4. Build Program Settings Editor with User Impersonation [done]
+### Dependencies: 9.1, 9.3
+### Description: Create an interface for editing program settings and implementing secure user impersonation functionality for troubleshooting.
+### Details:
+Develop a settings editor with validation for program parameters, commission structures, and eligibility rules. Implement user impersonation feature with proper security controls, session marking, and audit logging. Add a clear visual indicator when admin is in impersonation mode and ensure all actions are properly attributed.
+

@@ -1,0 +1,56 @@
+# Task ID: 10
+# Title: Implement Payout Processing System
+# Status: pending
+# Dependencies: 6
+# Priority: high
+# Description: Create the payout system that processes affiliate commissions and integrates with Xendit for disbursements.
+# Details:
+1. Implement the /api/affiliate/payout/batch endpoint
+2. Create a CRON job to automatically trigger payouts on the last calendar day of the month at 23:00 (Asia/Manila)
+3. Implement logic to transition conversions from 'pending' to 'cleared' after 3 days
+4. Integrate with Xendit Disbursement API for batch payouts
+5. Calculate and deduct Xendit disbursement fees from affiliate amounts
+6. Update payout and conversion statuses based on Xendit responses
+7. Implement error handling and retry logic for failed payouts
+8. Create detailed logging for all payout operations
+
+# Test Strategy:
+1. Test automatic clearing of pending conversions after 3 days
+2. Verify batch payout creation with test Xendit credentials
+3. Test fee calculation and deduction
+4. Validate status updates for payouts and conversions
+5. Test error handling and retry mechanisms
+6. End-to-end testing of the complete payout flow
+7. Test with various edge cases (zero amount, failed transfers, etc.)
+
+# Subtasks:
+## 1. Create Payout Endpoint [pending]
+### Dependencies: None
+### Description: Develop the API endpoint for manual payout initiation
+### Details:
+Implement a RESTful endpoint that accepts payout requests, validates input data, authenticates users, checks permissions, and queues the payout for processing. Include request validation, response formatting, and initial database schema for payout records.
+
+## 2. Implement CRON Job for Automated Payouts [pending]
+### Dependencies: 10.1
+### Description: Develop a scheduled task system for automated payout processing
+### Details:
+Create a CRON job that runs at specified intervals to identify pending payouts, process them in batches, and handle retry logic. Implement configuration for scheduling, batch size limits, and maximum retry attempts. Include monitoring for job execution status.
+
+## 3. Implement Conversion Status Management [pending]
+### Dependencies: 10.1
+### Description: Develop the state machine for payout status transitions
+### Details:
+Create a robust status management system that tracks payout states (pending, processing, completed, failed). Implement validation rules for state transitions, status update methods, and database schema for status history. Include notification triggers for status changes.
+
+## 4. Integrate Xendit Disbursement API [pending]
+### Dependencies: 10.1, 10.3
+### Description: Connect the system with Xendit's API for executing payouts
+### Details:
+Implement the integration with Xendit Disbursement API, including authentication, request formatting, response handling, and webhook processing. Create a service layer that abstracts the API details, handles retries, and processes callbacks. Include test mode support.
+
+## 5. Implement Fee Calculation and Error Handling [pending]
+### Dependencies: 10.3, 10.4
+### Description: Develop fee calculation logic and comprehensive error handling
+### Details:
+Create the fee calculation module based on transaction type, amount, and recipient details. Implement comprehensive error handling for API failures, timeout scenarios, and validation errors. Develop a structured logging system that captures all transaction details, errors, and system events for auditing and debugging.
+

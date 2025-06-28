@@ -1,0 +1,23 @@
+# Task ID: 12
+# Title: Implement Creative Library for Affiliates
+# Status: pending
+# Dependencies: 8
+# Priority: low
+# Description: Create a creative library with Google Drive viewer integration for affiliates to access marketing materials.
+# Details:
+1. Implement Google Drive viewer embed in the affiliate dashboard
+2. Set up a dedicated Google Drive folder for marketing assets
+3. Configure proper permissions for view-only access
+4. Create a UI component to browse and preview available creatives
+5. Add download functionality for assets
+6. Implement search and filtering capabilities
+7. Ensure the viewer is responsive and accessible
+
+# Test Strategy:
+1. Test Google Drive integration with various file types
+2. Verify permissions are correctly applied
+3. Test browsing and preview functionality
+4. Validate download capabilities
+5. Test search and filtering
+6. Accessibility testing against WCAG 2.1 AA standards
+7. Performance testing with large asset libraries

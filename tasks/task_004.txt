@@ -1,0 +1,21 @@
+# Task ID: 4
+# Title: Develop Dashboard Switcher Component
+# Status: in-progress
+# Dependencies: 3
+# Priority: medium
+# Description: Create a UI component that allows users with multiple roles to switch between dashboards without re-login.
+# Details:
+1. Design and implement a persistent UI element for dashboard switching
+2. Component should appear only for users with multiple roles
+3. Implement client-side navigation between dashboards
+4. Maintain authentication state during dashboard switches
+5. Add visual indicators for current dashboard
+6. Ensure the component is accessible and responsive
+7. Implement with React components following the existing design system
+
+# Test Strategy:
+1. Test UI rendering for users with different role combinations
+2. Verify navigation between dashboards works without session loss
+3. Test accessibility compliance with WCAG 2.1 AA standards
+4. Responsive design testing on various screen sizes
+5. User acceptance testing for intuitive navigation

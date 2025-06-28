@@ -1,0 +1,61 @@
+# Task ID: 2
+# Title: Integrate Affiliate Authentication with Existing Supabase Auth
+# Status: done
+# Dependencies: 1
+# Priority: high
+# Description: Extend the existing authentication system to support affiliate signup, login, and role-based access control using Supabase Auth.
+# Details:
+1. Implement the /affiliate/signup endpoint that integrates with Supabase Auth
+2. Create flow: email → OTP verification → pending status
+3. Update user_metadata to include affiliate status
+4. Extend the existing checkAdminAccess pattern to include affiliate role checks
+5. Implement logic to detect user types (student, affiliate, admin, or combinations)
+6. Store affiliate status in the user's profile
+7. Ensure proper error handling for authentication failures
+8. Set up security headers and CSRF protection
+
+# Test Strategy:
+1. Test signup flow with valid and invalid inputs
+2. Verify OTP verification process
+3. Test authentication with different user roles
+4. Validate that user_metadata correctly stores affiliate status
+5. Test error scenarios and edge cases
+6. Security testing for authentication endpoints
+
+# Subtasks:
+## 1. Implement Affiliate Signup Endpoint [done]
+### Dependencies: None
+### Description: Create a dedicated API endpoint for affiliate user registration with appropriate validation and error handling
+### Details:
+Develop a RESTful endpoint that accepts affiliate registration data, validates input fields, handles duplicate checks, and returns appropriate status codes. Include documentation for the endpoint structure and required parameters.
+
+## 2. Develop OTP Verification Flow [done]
+### Dependencies: 2.1
+### Description: Build a complete one-time password verification system for user authentication
+### Details:
+Implement OTP generation, delivery (email/SMS), verification logic, expiration handling, and retry limitations. Include fallback mechanisms and security measures to prevent brute force attacks.
+
+## 3. Extend User Metadata Schema [done]
+### Dependencies: 2.1
+### Description: Enhance the user data model to support additional metadata fields required for different user types
+### Details:
+Modify database schema to include fields for user preferences, profile completeness, verification status, and user-specific settings. Ensure backward compatibility and create migration scripts for existing users.
+
+## 4. Implement Role-Based Access Control [done]
+### Dependencies: 2.3
+### Description: Create a comprehensive RBAC system to manage permissions across different user types
+### Details:
+Define role hierarchies, permission sets, and access control lists. Implement middleware for route protection, role verification, and permission checking. Include admin interfaces for role management.
+
+## 5. Develop User Type Detection Logic [done]
+### Dependencies: 2.3, 2.4
+### Description: Create mechanisms to identify and differentiate between various user types in the system
+### Details:
+Implement algorithms to detect user types based on behavior patterns, registration source, and profile data. Create type-specific workflows and user experiences based on detected types.
+
+## 6. Implement Security Hardening Measures [done]
+### Dependencies: 2.2, 2.4, 2.5
+### Description: Enhance authentication security through additional protective measures
+### Details:
+Add rate limiting, implement JWT with appropriate expiration, add CSRF protection, enable secure cookie handling, implement IP-based suspicious activity detection, and conduct security testing against common vulnerabilities.
+
