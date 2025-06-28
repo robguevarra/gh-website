@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Check, X, Info } from 'lucide-react';
 import {
   HoverCard,
@@ -26,6 +26,7 @@ interface LicenseTermsProps {
   minimal?: boolean;
   variant?: 'hover' | 'popover' | 'inline';
   licenseType?: LicenseType;
+  className?: string;
 }
 
 // Determine license type from product title
@@ -42,7 +43,8 @@ export const getLicenseTypeFromTitle = (title: string | null): LicenseType => {
 const LicenseTerms: React.FC<LicenseTermsProps> = ({ 
   minimal = false,
   variant = 'hover',
-  licenseType = 'BUNDLE'
+  licenseType = 'BUNDLE',
+  className = ''
 }) => {
   // CUR License Content
   const curLicenseContent = (
@@ -220,26 +222,62 @@ const LicenseTerms: React.FC<LicenseTermsProps> = ({
     );
   }
 
-  // Default hover card display
-  return (
-    <HoverCard>
-      <HoverCardTrigger asChild>
-        <Button variant="link" size="sm" className="gap-1.5 px-0 text-muted-foreground">
-          <Info className="h-3.5 w-3.5" />
-          <span>
-            {licenseType === 'BUNDLE' 
-              ? 'Bundle License Info' 
-              : licenseType === 'PLR' 
-                ? 'PLR License Info' 
-                : 'CUR License Info'}
-          </span>
-        </Button>
-      </HoverCardTrigger>
-      <HoverCardContent className="w-80">
-        {getLicenseContent()}
-      </HoverCardContent>
-    </HoverCard>
-  );
+  // Check if we're on a touch device
+  const [isTouch, setIsTouch] = useState(false);
+  
+  useEffect(() => {
+    // Simple detection for touch devices
+    const touchDevice = ('ontouchstart' in window) || 
+                        (navigator.maxTouchPoints > 0) || 
+                        // Modern browsers use maxTouchPoints
+                        (typeof window !== 'undefined' && 'matchMedia' in window && 
+                         window.matchMedia('(hover: none), (pointer: coarse)').matches);
+    setIsTouch(touchDevice);
+  }, []);
+
+  // Use Popover for touch devices (better mobile UX) and HoverCard for desktop
+  if (isTouch) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="link" size="sm" className={`gap-1.5 px-0 text-muted-foreground ${className}`}>
+            <Info className="h-3.5 w-3.5" />
+            <span>
+              {licenseType === 'BUNDLE' 
+                ? 'Bundle License Info' 
+                : licenseType === 'PLR' 
+                  ? 'PLR License Info' 
+                  : 'CUR License Info'}
+            </span>
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" align="center" sideOffset={5}>
+          {getLicenseContent()}
+        </PopoverContent>
+      </Popover>
+    );
+  } else {
+    // Default hover card display for non-touch devices
+    return (
+      <HoverCard>
+        <HoverCardTrigger asChild>
+          <Button variant="link" size="sm" className={`gap-1.5 px-0 text-muted-foreground ${className}`}>
+            <Info className="h-3.5 w-3.5" />
+            <span>
+              {licenseType === 'BUNDLE' 
+                ? 'Bundle License Info' 
+                : licenseType === 'PLR' 
+                  ? 'PLR License Info' 
+                  : 'CUR License Info'}
+            </span>
+          </Button>
+        </HoverCardTrigger>
+        <HoverCardContent className="w-80">
+          {getLicenseContent()}
+        </HoverCardContent>
+      </HoverCard>
+    );
+  }
 };
 
 export default LicenseTerms; 

@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { Loader2, Eye, Info, Heart } from 'lucide-react';
+import { Loader2, Eye, Heart } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -184,7 +184,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 />
                 {/* Quick preview overlay - trigger callback */}
                 <div 
-                  className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all duration-300 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer"
+                  className="absolute inset-0 bg-black/0 transition-colors duration-300 flex items-center justify-center opacity-0 cursor-pointer hover:bg-black/30 hover:opacity-100 md:group-hover:bg-black/30 md:group-hover:opacity-100 touch:bg-black/20 touch:opacity-100"
                   // TEMPORARILY REMOVED onClick to test navigation
                   /*
                   onClick={(e) => {
@@ -199,7 +199,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                   <Button 
                     variant="secondary" 
                     size="sm" 
-                    className="gap-1.5 pointer-events-none" // Prevent button intercepting click
+                    className="gap-1.5 pointer-events-none opacity-90 group-hover:opacity-100 touch:opacity-100" // Prevent button intercepting click
                   >
                     <Eye className="h-3.5 w-3.5" />
                     <span>Preview</span>
@@ -236,20 +236,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
               className={`h-5 w-5 transition-all ${isWishlisted ? 'text-red-500 fill-red-500' : 'text-muted-foreground group-hover:text-red-500'}`}
             />
           </Button>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 ml-1 shrink-0 text-muted-foreground" 
-                  aria-label="View license information">
-                  <Info className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{getLicenseBadgeText(licenseType)}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
         </div>
         
         {/* License type badge */}
