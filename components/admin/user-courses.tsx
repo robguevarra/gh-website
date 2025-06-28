@@ -360,7 +360,7 @@ export function UserCourses({
                             disabled={!!userCourse.completed_at}
                           >
                             <Flag className="h-4 w-4 mr-2" />
-                            Mark as Complete
+                            Mark as Completess
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => handleResetProgress(userCourse.id)}

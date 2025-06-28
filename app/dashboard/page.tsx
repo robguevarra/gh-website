@@ -65,11 +65,33 @@ import type { Purchase as StorePurchase, PurchaseItem as StorePurchaseItem } fro
 import type { Purchase, PurchaseItem } from "@/components/dashboard/purchases-section";
 import type { Database } from '@/types/supabase'; // Added for Announcement type
 
+// Define interface for lesson progress tracking
+interface LessonProgress {
+  [lessonId: string]: string | { status: string; progress: number; lastPosition: number };
+}
+
 // Define extended CourseProgress interface to include the properties we need
 interface ExtendedCourseProgress extends CourseProgress {
   progress: number;
   completedLessonsCount: number;
   totalLessonsCount: number;
+  totalDurationSeconds?: number; // Total duration of all completed lessons in seconds
+  lessonProgress?: LessonProgress; // Track progress for individual lessons
+}
+
+// Define proper lesson type to match the actual structure
+interface CourseLesson {
+  id: string;
+  title: string;
+  module_id: string;
+  videoDuration?: number;
+  duration?: number;
+  metadata?: {
+    duration?: number;
+    durationUnit?: string;
+    videoType?: string;
+  };
+  [key: string]: any; // For other properties that might be present
 }
 
 // Define Announcement type based on Supabase schema
@@ -366,14 +388,36 @@ export default function StudentDashboard() {
   }, [])
 
   // Helper function to calculate time spent - memoized
-  const calculateTimeSpent = useCallback((progress: ExtendedCourseProgress | null): string => {
-    if (!progress) return "0h 0m";
-    // Calculate based on completed lessons (15 min per lesson)
-    const minutes = (progress.completedLessonsCount || 0) * 15;
+  // Helper function to format time spent - directly used now
+  const formatTimeSpent = useCallback((totalSeconds: number): string => {
+    // Convert seconds to hours and minutes
+    const minutes = Math.floor(totalSeconds / 60);
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
+    
     return `${hours}h ${remainingMinutes}m`;
-  }, [])
+  }, []);
+  
+  // Original function - kept for compatibility but not used now
+  const calculateTimeSpent = useCallback((progress: ExtendedCourseProgress | null): string => {
+    if (!progress) return "0h 0m";
+    
+    // Use the actual duration from lesson metadata if available
+    // Fall back to an estimate based on completed lessons if totalDurationSeconds isn't available yet
+    let totalSeconds = 0;
+    
+    if (typeof progress.totalDurationSeconds === 'number') {
+      totalSeconds = progress.totalDurationSeconds;
+      console.log('[Dashboard] Using actual duration data:', totalSeconds, 'seconds');
+    } else {
+      // Fall back to an estimate based on average lesson duration (still better than fixed 15min)
+      // We could improve this by getting actual durations from the course data
+      totalSeconds = (progress.completedLessonsCount || 0) * (60 * 15); // 15 minutes per lesson in seconds
+      console.log('[Dashboard] Using estimated duration:', totalSeconds, 'seconds');
+    }
+    
+    return formatTimeSpent(totalSeconds);
+  }, [formatTimeSpent])
 
   // Animation variants
   const fadeInUp = {
@@ -420,13 +464,88 @@ export default function StudentDashboard() {
 
     // Calculate total lessons from the course data if available
     let totalLessonsCount = 0;
+    let totalDurationSeconds = 0;
+    
+    // Map to store all completed lessons by ID for quick lookup
+    const completedLessonIds = new Set();
+    
+    // Get completed lesson IDs from the progress data
+    const lessonProgress = (rawCourseProgress as any)?.lessonProgress;
+    
+    // Add detailed debug logging
+    console.log('[Dashboard] Raw course progress structure:', rawCourseProgress);
+    console.log('[Dashboard] Lesson progress data structure:', lessonProgress);
+    
+    if (lessonProgress) {
+      console.log('[Dashboard] Lesson progress entries:', Object.entries(lessonProgress).length);
+      
+      Object.entries(lessonProgress).forEach(([lessonId, statusData]) => {
+        // Log each lesson progress entry for debugging
+        console.log(`[Dashboard] Lesson ID: ${lessonId}, Status data:`, statusData, 'Type:', typeof statusData);
+        
+        // Handle both string status and object with status property
+        let status: string | undefined;
+        if (typeof statusData === 'string') {
+          status = statusData;
+          console.log(`[Dashboard] String status: ${status}`);
+        } else if (statusData && typeof statusData === 'object') {
+          status = (statusData as {status?: string}).status;
+          console.log(`[Dashboard] Object status: ${status}`);
+        }
+        
+        if (status === 'completed') {
+          completedLessonIds.add(lessonId);
+          console.log(`[Dashboard] Added completed lesson: ${lessonId}`);
+        }
+      });
+    } else {
+      console.log('[Dashboard] No lesson progress data found!');
+    }
+    
+    // Process course structure to count lessons and sum durations
+    console.log('[Dashboard] Course structure:', course);
+    
     if (course?.modules) {
+      console.log(`[Dashboard] Processing ${course.modules.length} modules`);
       course.modules.forEach(module => {
         if (module.lessons) {
+          console.log(`[Dashboard] Module ${module.id} has ${module.lessons.length} lessons`);
           totalLessonsCount += module.lessons.length;
+          
+          // Sum up durations for completed lessons
+          module.lessons.forEach((lesson: CourseLesson) => {
+            // Only count completed lessons
+            if (completedLessonIds.has(lesson.id)) {
+              // Get duration from different sources with proper priority
+              let lessonDuration = 0;
+              
+              if (typeof lesson.videoDuration === 'number') {
+                // Video duration from Vimeo is in seconds
+                lessonDuration = lesson.videoDuration;
+              } else if (lesson.metadata?.duration) {
+                // Check if metadata duration needs conversion from minutes to seconds
+                if (lesson.metadata.duration < 60 && !lesson.metadata.durationUnit) {
+                  // Small numbers likely represent minutes, convert to seconds
+                  lessonDuration = lesson.metadata.duration * 60;
+                } else {
+                  // Otherwise assume it's already in seconds
+                  lessonDuration = lesson.metadata.duration;
+                }
+              } else if (typeof lesson.duration === 'number') {
+                // Fallback to basic duration property
+                lessonDuration = lesson.duration;
+              }
+              
+              // Add to total
+              totalDurationSeconds += lessonDuration;
+            }
+          });
         }
       });
     }
+    
+    console.log('[Dashboard] Calculated total duration:', totalDurationSeconds, 'seconds for', completedLessonIds.size, 'completed lessons');
+    console.log('[Dashboard] Completed lesson IDs:', Array.from(completedLessonIds));
 
     if (!rawCourseProgress) {
       // If no progress data from store, return a default object
@@ -434,6 +553,7 @@ export default function StudentDashboard() {
         progress: 0,
         completedLessonsCount: 0,
         totalLessonsCount: totalLessonsCount || 0, // Use calculated total if available
+        totalDurationSeconds: 0, // No completed lessons, so duration is 0
       } as ExtendedCourseProgress;
     }
 
@@ -445,13 +565,74 @@ export default function StudentDashboard() {
       completedLessonsCount: rawCourseProgress.completedLessonsCount || 0,
       // Use the calculated total if available, otherwise fall back to the stored value
       totalLessonsCount: totalLessonsCount || rawCourseProgress.totalLessonsCount || 0,
+      // Add the total duration in seconds
+      totalDurationSeconds, 
     } as ExtendedCourseProgress;
   }, [courseProgress, courseId, enrollments]);
 
+  // Directly access the lesson progress data from store for accurate calculations
+  const lessonProgressData = useStudentDashboardStore(state => state.lessonProgress || {});
+  
   // Create a formatted version for the UI components - memoized
   const formattedCourseProgress = useMemo(() => {
+    // Calculate both total course duration and completed lesson duration
+    let totalCourseDurationSeconds = 0; // Total duration of ALL lessons
+    let completedDurationSeconds = 0;   // Duration of only completed lessons
+    const completedLessonIds = new Set<string>();
+    
+    // First identify completed lessons from the progress data
+    Object.entries(lessonProgressData).forEach(([lessonId, progressData]) => {
+      // Check if the lesson is marked as completed
+      if (progressData && typeof progressData === 'object' && progressData.status === 'completed') {
+        completedLessonIds.add(lessonId);
+      }
+    });
+    
+    console.log(`[Dashboard] Found ${completedLessonIds.size} completed lessons in direct progress data`);
+    
+    // Now calculate duration for both total course and completed lessons
+    if (enrollments?.[0]?.course?.modules) {
+      enrollments[0].course.modules.forEach(module => {
+        if (module.lessons) {
+          module.lessons.forEach((lesson: any) => {
+            let lessonDuration = 0;
+            
+            // Extract lesson duration from different sources with proper priority
+            if (typeof lesson.videoDuration === 'number') {
+              // Video duration from Vimeo is in seconds
+              lessonDuration = lesson.videoDuration;
+            } else if (lesson.metadata?.duration) {
+              // Check if metadata duration needs conversion from minutes to seconds
+              if (lesson.metadata.duration < 60 && !lesson.metadata.durationUnit) {
+                // Small numbers likely represent minutes, convert to seconds
+                lessonDuration = lesson.metadata.duration * 60;
+              } else {
+                // Otherwise assume it's already in seconds
+                lessonDuration = lesson.metadata.duration;
+              }
+            } else if (typeof lesson.duration === 'number') {
+              // Fallback to basic duration property
+              lessonDuration = lesson.duration;
+            }
+            
+            // Add to total course duration (all lessons)
+            totalCourseDurationSeconds += lessonDuration;
+            
+            // Only add to completed duration if the lesson is completed
+            if (completedLessonIds.has(lesson.id)) {
+              completedDurationSeconds += lessonDuration;
+            }
+          });
+        }
+      });
+    }
+    
+    console.log('[Dashboard] Direct calculation found:', 
+                'Total course duration:', totalCourseDurationSeconds, 'seconds',
+                'Completed lessons duration:', completedDurationSeconds, 'seconds for', 
+                completedLessonIds.size, 'completed lessons');
+    
     // Format course progress data for UI components
-
     return {
       title: enrollments?.[0]?.course?.title || "Papers to Profits",
       courseId: courseId,
@@ -459,14 +640,17 @@ export default function StudentDashboard() {
       completedLessons: currentCourseProgress?.completedLessonsCount || 0,
       totalLessons: currentCourseProgress?.totalLessonsCount || 0,
       nextLesson: "Continue Learning",
-      timeSpent: calculateTimeSpent(currentCourseProgress),
+      // Use our directly calculated duration instead of the helper function
+      timeSpent: formatTimeSpent(completedDurationSeconds),
+      // Store both duration values for use in course progress section
+      totalCourseDuration: totalCourseDurationSeconds,
       nextLiveClass: upcomingLiveClasses?.[0] ? `${upcomingLiveClasses[0].date} - ${upcomingLiveClasses[0].time}` : "No upcoming classes",
       instructor: {
         name: "Grace Guevarra",
         avatar: "/placeholder.svg?height=40&width=40&text=GG",
       },
     };
-  }, [enrollments, courseId, currentCourseProgress, upcomingLiveClasses])
+  }, [enrollments, courseId, currentCourseProgress, upcomingLiveClasses, lessonProgressData])
 
   // Get the continue learning lesson from the store using a selector to subscribe to updates
   const continueLearningLesson = useStudentDashboardStore(state => state.continueLearningLesson);

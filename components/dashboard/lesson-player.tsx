@@ -11,6 +11,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
 import { useUserProfile } from '@/lib/hooks/state/use-user-profile'
 import { useCourseProgress } from '@/lib/hooks/state/use-course-progress'
 import { EnrollmentStatus } from './enrollment-status'
+import { VimeoLessonPlayer } from './vimeo-lesson-player'
 
 type VideoPlayerProps = {
   videoUrl: string
@@ -139,42 +140,42 @@ function VideoPlayer({
  * Main lesson player component that integrates with the dashboard store
  */
 export function LessonPlayer() {
-  const { courseId, moduleId, lessonId } = useParams<{
-    courseId: string,
-    moduleId: string,
-    lessonId: string
-  }>()
+  const params = useParams()
+  const { courseId, moduleId, lessonId } = params
+  
   const { userId } = useUserProfile()
-  const {
-    lessonProgress,
-    updateLessonProgress
-  } = useCourseProgress()
-
-  const [lesson, setLesson] = useState<any>(null)
+  const { lessonProgress, updateLessonProgress } = useCourseProgress()
+  
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // Fetch lesson data and check enrollment
+  const [lesson, setLesson] = useState<any>(null)
+  
+  // Get lesson data when component mounts
   useEffect(() => {
-    async function fetchLessonData() {
-      if (!userId || !courseId || !moduleId || !lessonId) return
+    const fetchLessonData = async () => {
+      if (!userId || !courseId || !moduleId || !lessonId) {
+        setError('Missing required parameters')
+        setIsLoading(false)
+        return
+      }
 
       try {
-        setIsLoading(true)
-        setError(null)
-
-        // We would normally fetch this from the API
-        // For now, let's simulate it with a timeout
+        // TODO: Replace with actual data fetching
+        // This is a placeholder
         setTimeout(() => {
-          // Simulate lesson data (in real app, this would come from the API)
           setLesson({
-            id: lessonId,
-            moduleId,
-            title: "Understanding Financial Markets",
-            description: "Learn the fundamentals of how financial markets work and key strategies for investing.",
-            videoUrl: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4", // Sample video
+            id: Array.isArray(lessonId) ? lessonId[0] : lessonId,
+            title: "Introduction to the Course",
+            description: "An overview of what you'll learn in this course.",
+            videoUrl: "https://player.vimeo.com/video/76979871", // Sample Vimeo video
+            videoId: "76979871", // Extracted Vimeo ID
+            videoType: "vimeo", // Explicitly mark as Vimeo
             order: 1,
-            duration: 1200, // 20 minutes
+            duration: "20 min", // Duration as string format
+            metadata: {
+              duration: 1200, // Duration as seconds
+              videoType: "vimeo"
+            }
           })
           setIsLoading(false)
         }, 1000)
@@ -254,13 +255,23 @@ export function LessonPlayer() {
         <h1 className="text-2xl font-bold mb-2">{lesson.title}</h1>
         <p className="text-muted-foreground mb-6">{lesson.description}</p>
 
-        {/* Video player */}
-        <VideoPlayer
-          videoUrl={lesson.videoUrl}
-          initialPosition={currentProgress?.lastPosition || 0}
-          onProgressUpdate={handleProgressUpdate}
-          onComplete={handleLessonComplete}
-        />
+        {/* Video player - Use specialized player based on video type */}
+        {lesson.videoType === 'vimeo' && lesson.videoId ? (
+          <VimeoLessonPlayer
+            videoId={lesson.videoId}
+            lessonId={lesson.id}
+            initialPosition={currentProgress?.lastPosition || 0}
+            initialPercentage={currentProgress?.progress || 0}
+            onComplete={handleLessonComplete}
+          />
+        ) : (
+          <VideoPlayer
+            videoUrl={lesson.videoUrl || ''}
+            initialPosition={currentProgress?.lastPosition || 0}
+            onProgressUpdate={handleProgressUpdate}
+            onComplete={handleLessonComplete}
+          />
+        )}
 
         {/* Lesson navigation */}
         <div className="flex justify-between mt-6">
@@ -283,7 +294,7 @@ export function LessonPlayer() {
           </Button>
 
           <Link
-            href={`/courses/${courseId}/modules/${moduleId}/lessons/${parseInt(Array.isArray(lessonId) ? lessonId[0] : lessonId) + 1}`}
+            href={`/courses/${courseId}/modules/${moduleId}/lessons/${parseInt(Array.isArray(lessonId) ? lessonId[0] : lessonId || '0') + 1}`}
             passHref
           >
             <Button>

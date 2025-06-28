@@ -2,7 +2,7 @@ import type React from "react"
 import { Inter } from "next/font/google"
 import { Playfair_Display } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/sonner"
+import { ToasterProvider } from "@/components/providers/toaster-provider"
 
 import Script from "next/script"
 import { SkipLink } from "@/components/ui/skip-link"
@@ -74,7 +74,7 @@ export default function RootLayout({
                   {children}
                 </main>
 
-                <Toaster />
+                <ToasterProvider />
               </ThemeProvider>
             </AuthCoordinationProvider>
           </AuthProvider>

@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
 import { getBrowserClient } from "@/lib/supabase/client"
 import { useAuth } from "@/context/auth-context"
+import { formatLessonDuration } from "@/lib/utils/progress-helpers"
 
 interface CourseModuleAccordionProps {
   course: any
@@ -89,7 +90,7 @@ export function CourseModuleAccordion({
         const missingLessonIds = lessonsMissingProgress.map((lesson: any) => lesson.id)
 
         // Mark these lessons as attempted to load
-        missingLessonIds.forEach(id => {
+        missingLessonIds.forEach((id: string) => {
           attemptedLoadLessonsRef.current[id] = true
         })
 
@@ -271,8 +272,24 @@ export function CourseModuleAccordion({
                                 )}>
                                   {lesson.title}
                                 </h4>
-                                <span className="text-xs text-[#6d4c41]">
-                                  {lesson.duration || "15 min"}
+                                <span className="text-xs text-[#6d4c41] group">
+                                  {(() => {
+                                    // Check if metadata duration is in minutes and needs special handling
+                                    let durationToShow = lesson.videoDuration || lesson.metadata?.duration || lesson.duration;
+                                    
+                                    // If metadata duration is a small number (< 60) and not from Vimeo (videoDuration),
+                                    // it's likely in minutes, so make sure formatLessonDuration knows it's minutes
+                                    if (!lesson.videoDuration && 
+                                        lesson.metadata?.duration && 
+                                        lesson.metadata.duration < 60 && 
+                                        !lesson.metadata?.durationUnit) {
+                                      // Pass as string with 'min' suffix to ensure formatLessonDuration treats it as minutes
+                                      return formatLessonDuration(`${lesson.metadata.duration} min`); 
+                                    }
+                                    
+                                    // Format the duration with priority order
+                                    return formatLessonDuration(durationToShow);
+                                  })()}
                                 </span>
                               </div>
 

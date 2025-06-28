@@ -1,13 +1,15 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { motion } from "framer-motion"
 
 // UI Components
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from "sonner"
+// Toast is now handled by the ToasterProvider in the root layout
 import { Skeleton } from "@/components/ui/skeleton"
 
 // Dashboard components
@@ -17,9 +19,10 @@ import { LessonNotes } from "@/components/dashboard/lesson-notes"
 import { LessonResources } from "@/components/dashboard/lesson-resources"
 import { LessonComments } from "@/components/dashboard/lesson-comments"
 
-// Store and hooks
+// Auth and store
 import { useStudentDashboardStore } from "@/lib/stores/student-dashboard"
 import { useAuth } from "@/context/auth-context"
+import { formatLessonDuration } from "@/lib/utils/progress-helpers"
 
 // Icons
 import {
@@ -34,6 +37,10 @@ import {
   Paperclip,
   Play
 } from "lucide-react"
+
+// Utilities
+import { getBrowserClient } from "@/lib/supabase/client"
+import { getLessonVideoId, getLessonVideoUrl } from "@/lib/stores/course/types/lesson"
 
 // Define types for our course data structure
 type CourseResource = {
@@ -53,6 +60,7 @@ type CourseLesson = {
   videoType?: 'vimeo' | 'youtube' | 'other'
   description?: string
   content_json?: any
+  videoDuration?: number // Real duration from Vimeo player in seconds
   metadata?: {
     type?: string
     videoUrl?: string
@@ -95,9 +103,6 @@ type CourseViewerState = {
   prevLesson: CourseLesson | null
 }
 
-import { getBrowserClient } from "@/lib/supabase/client";
-import { getLessonVideoId, getLessonVideoUrl } from "@/lib/stores/course/types/lesson";
-
 export default function CourseViewer() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -111,13 +116,32 @@ export default function CourseViewer() {
   // Get the targeted enrollment loader function
   const loadSpecificEnrollment = useStudentDashboardStore(state => state.loadSpecificEnrollment)
 
-  // Get only the specific data needed from the store to prevent unnecessary re-renders
+  // Progress related hooks - use Zustand store with memoized selectors
   const courseProgress = useStudentDashboardStore(state => state.courseProgress)
   const lessonProgress = useStudentDashboardStore(state => state.lessonProgress)
   const updateLessonProgress = useStudentDashboardStore(state => state.updateLessonProgress)
-
-  // Load user data if needed
   const loadUserProgress = useStudentDashboardStore(state => state.loadUserProgress)
+  
+  // Function to handle navigation back to dashboard with revalidation
+  const navigateToDashboard = useCallback(() => {
+    // Force course progress revalidation if user?.id is available
+    if (user?.id && loadUserProgress) {
+      loadUserProgress(user.id)
+        .then(() => {
+          console.log('Progress data reloaded before navigation');
+          // Navigate back to dashboard
+          router.push('/dashboard');
+        })
+        .catch(err => {
+          console.error('Failed to reload progress before navigation:', err);
+          // Navigate anyway
+          router.push('/dashboard');
+        });
+    } else {
+      // Fallback navigation if no user ID
+      router.push('/dashboard');
+    }
+  }, [user, loadUserProgress, router]);
 
   // Initial state
   const initialState: CourseViewerState = {
@@ -155,11 +179,12 @@ export default function CourseViewer() {
           }));
           return;
         }
+        const processedCourse = enrollment.course as ExtendedCourse; // Explicit type cast to fix TypeScript error
         setCourseViewerState(prev => ({
           ...prev,
           isLoading: false,
           error: null,
-          currentCourse: enrollment.course
+          currentCourse: processedCourse,
         }));
         if (loadUserProgress) {
           loadUserProgress(user.id);
@@ -298,9 +323,29 @@ export default function CourseViewer() {
   useEffect(() => {
     // Only update state if we have valid data
     if (courseViewerState.currentCourse && targetModule && targetLesson) {
-      // Debug: inspect raw metadata to verify stored video URL and ID
-      console.log('Lesson metadata raw:', targetLesson.metadata);
-      console.log('Lesson metadata.videoUrl:', targetLesson.metadata?.videoUrl);
+      // Debug: inspect raw metadata and duration values at different stages
+      console.log('[CourseViewer] Lesson metadata raw:', targetLesson.metadata);
+      
+      // Convert metadata duration from minutes to seconds if needed
+      let convertedMetadataDuration = targetLesson.metadata?.duration;
+      
+      // If duration is a small number (< 60) and not explicitly marked as seconds,
+      // it's likely in minutes, so convert to seconds for consistency
+      if (convertedMetadataDuration && 
+          convertedMetadataDuration < 60 && 
+          !targetLesson.metadata?.durationUnit && 
+          !targetLesson.metadata?.videoDuration) {
+        // Convert from minutes to seconds (e.g., 42 minutes → 2520 seconds)
+        convertedMetadataDuration = convertedMetadataDuration * 60;
+        console.log(`[CourseViewer] Converting metadata duration from minutes to seconds: ${targetLesson.metadata?.duration} min → ${convertedMetadataDuration} sec`);
+      }
+      
+      console.log('[CourseViewer] Lesson duration sources:', {
+        videoDuration: targetLesson.videoDuration,
+        rawMetadataDuration: targetLesson.metadata?.duration,
+        convertedMetadataDuration,
+        staticDuration: targetLesson.duration
+      });
       // Use helper to parse Vimeo ID or metadata videoId
       const videoId = getLessonVideoId(targetLesson as any) || undefined
 
@@ -312,8 +357,29 @@ export default function CourseViewer() {
         ...targetLesson,
         videoId: videoId || undefined,
         videoUrl: videoUrl || undefined,
-        videoType: targetLesson.metadata?.videoType || 'vimeo'
-      } as CourseViewerState['currentLesson']
+        videoType: targetLesson.metadata?.videoType || 'vimeo',
+        // Explicitly preserve duration values, with metadata duration converted if needed
+        videoDuration: targetLesson.videoDuration,
+        metadata: {
+          ...targetLesson.metadata,
+          // Use converted duration if available, otherwise keep the original
+          duration: convertedMetadataDuration || targetLesson.metadata?.duration
+        }
+      } as CourseViewerState['currentLesson'];
+      
+      // Debug: Check enhanced lesson's duration values
+      if (enhancedLesson) {
+        console.log('[CourseViewer] Enhanced lesson duration sources:', {
+          videoDuration: enhancedLesson.videoDuration,
+          metadataDuration: enhancedLesson.metadata?.duration,
+          staticDuration: enhancedLesson.duration,
+          formattedDuration: formatLessonDuration(
+            enhancedLesson.videoDuration || 
+            enhancedLesson.metadata?.duration || 
+            enhancedLesson.duration
+          )
+        });
+      }
 
       setCourseViewerState(prevState => ({
         ...prevState,
@@ -443,50 +509,50 @@ export default function CourseViewer() {
   const completedLessonsRef = useRef<Record<string, boolean>>({})
 
   const markLessonComplete = useCallback(() => {
-    // Safely get current lesson even if the variables aren't declared yet
-    if (user?.id && courseViewerState.currentLesson?.id) {
-      const lessonId = courseViewerState.currentLesson.id
+    const currentLesson = courseViewerState.currentLesson
+    if (!currentLesson || !user?.id || !updateLessonProgress) return
 
-      // Check if we've already marked this lesson as complete in this session
-      if (completedLessonsRef.current[lessonId]) return
-
-      // Mark this lesson as completed in our ref
-      completedLessonsRef.current[lessonId] = true
-
-      // Add debug logging
-      console.log('Marking lesson as complete:', {
-        userId: user.id,
-        lessonId,
-        currentStatus: lessonProgress[lessonId]?.status || 'unknown'
+    // Check if this lesson was already marked as complete in this session
+    if (completedLessonsRef.current[currentLesson.id]) {
+      toast.info("Already Completed", {
+        description: "This lesson is already marked as complete."
       })
+      return
+    }
 
-      // Update the lesson progress in the store
-      updateLessonProgress(user.id, lessonId, {
-        status: "completed",
-        progress: 100,
-        lastPosition: 0
-      })
+    // Mark lesson as complete in Supabase
+    updateLessonProgress(user.id, currentLesson.id, {
+      status: "completed",
+      progress: 100,
+      lastPosition: 0 // Position isn't really relevant when marking as complete
+    })
       .then(() => {
-        console.log('Lesson marked as complete successfully');
-
-        // Find course ID for this lesson to ensure we get the right progress
-        const currentCourseId = courseId || courseViewerState.currentCourse?.id;
-        if (currentCourseId) {
-          console.log('Current course progress:', {
-            courseId: currentCourseId,
-            progress: courseProgress[currentCourseId]
-          });
+        // Set our local tracking to prevent duplicate marks
+        completedLessonsRef.current[currentLesson.id] = true
+        
+        // Show success message with toast instead of alert
+        toast.success("Lesson Completed", {
+          description: "Your progress has been updated!"
+        })
+        
+        // Force course progress revalidation to update the progress bar
+        if (loadUserProgress) {
+          loadUserProgress(user.id)
+            .then(() => {
+              console.log('Progress data reloaded after marking lesson complete');
+            })
+            .catch(err => {
+              console.error('Failed to reload progress after completion:', err);
+            });
         }
-
-        // Show success message
-        alert('Lesson marked as complete!');
       })
       .catch(error => {
-        console.error('Failed to mark lesson as complete:', error);
-        alert('Failed to mark lesson as complete. Please try again.');
-      });
-    }
-  }, [courseViewerState.currentLesson, user?.id, updateLessonProgress, lessonProgress, courseId, courseProgress, courseViewerState.currentCourse?.id])
+        console.error("Error marking lesson complete:", error)
+        toast.error("Error", {
+          description: "Failed to mark lesson complete. Please try again."
+        })
+      })
+  }, [courseViewerState.currentLesson, user?.id, courseId, updateLessonProgress, loadUserProgress])
 
   // Handle tab change - this function is used by the Tabs component
   // We're keeping it here for future reference, but it's not currently used
@@ -657,7 +723,7 @@ export default function CourseViewer() {
               </span>
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Button onClick={() => router.push('/dashboard')}>
+              <Button onClick={navigateToDashboard}>
                 Return to Dashboard
               </Button>
             </div>
@@ -699,7 +765,7 @@ export default function CourseViewer() {
               <Button onClick={() => router.push(`/dashboard/course?courseId=${courseViewerState.currentCourse.id}`)}>
                 View Course
               </Button>
-              <Button variant="outline" onClick={() => router.push('/dashboard')}>
+              <Button variant="outline" onClick={navigateToDashboard}>
                 Return to Dashboard
               </Button>
             </div>
@@ -725,14 +791,13 @@ export default function CourseViewer() {
   // Main course viewer UI
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
-
       <main className="flex-1 container py-6">
         <div className="flex items-center gap-2 mb-6">
           <Button
             variant="ghost"
             size="sm"
             className="gap-1"
-            onClick={() => router.push('/dashboard')}
+            onClick={navigateToDashboard}
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Dashboard
@@ -762,11 +827,54 @@ export default function CourseViewer() {
           <div className="order-1 md:order-2 md:col-span-2 space-y-6">
             <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
               {/* Video player */}
-              <div className="aspect-video bg-black relative">
+              <div className="aspect-video bg-black relative overflow-hidden rounded-sm"
+                   ref={(el) => {
+                     // Add event listener for duration updates from Vimeo player
+                     if (el) {
+                       const handleDurationLoaded = (e: Event) => {
+                         // Type assertion for custom event
+                         const event = e as CustomEvent<{lessonId: string, duration: number}>;
+                         console.log(`[CourseViewer] Received duration update event:`, event.detail);
+                         
+                         // Only update if this is for our current lesson
+                         if (event.detail.lessonId === currentLesson.id) {
+                           // Update our current lesson with the new duration
+                           setCourseViewerState(prevState => ({
+                             ...prevState,
+                             currentLesson: {
+                               ...prevState.currentLesson!,
+                               videoDuration: event.detail.duration,
+                               // Also update in metadata for consistency
+                               metadata: {
+                                 ...prevState.currentLesson?.metadata,
+                                 duration: event.detail.duration
+                               }
+                             }
+                           }));
+                           console.log(`[CourseViewer] Updated lesson ${currentLesson.id} duration to ${event.detail.duration}s`);
+                         }
+                       };
+                       
+                       // Add event listener
+                       el.addEventListener('vimeo-duration-loaded', handleDurationLoaded);
+                       
+                       // Return cleanup function
+                       return () => {
+                         el.removeEventListener('vimeo-duration-loaded', handleDurationLoaded);
+                       };
+                     }
+                   }}
+              >
                 {currentLesson.metadata?.videoUrl ? (
                   // Render private embed snippet as-is
                   <div
                     className="absolute inset-0 w-full h-full"
+                    data-lesson-id={currentLesson.id}
+                    data-debug-duration={formatLessonDuration(
+                      currentLesson.videoDuration || 
+                      currentLesson.metadata?.duration || 
+                      currentLesson.duration
+                    )}
                     dangerouslySetInnerHTML={{ __html: currentLesson.metadata.videoUrl as string }}
                   />
                 ) : (
@@ -787,21 +895,48 @@ export default function CourseViewer() {
                   </h1>
                   <div className="flex items-center gap-2">
                     <Button
-                      variant="outline"
+                      variant={lessonProgress[courseViewerState.currentLesson?.id || '']?.status === 'completed' ? "outline" : "default"}
                       size="sm"
                       onClick={markLessonComplete}
                       className="flex items-center gap-1"
+                      disabled={lessonProgress[courseViewerState.currentLesson?.id || '']?.status === 'completed'}
                     >
-                      <CheckCircle className="h-4 w-4" />
-                      Mark Complete
+                      <CheckCircle className={`h-4 w-4 ${lessonProgress[courseViewerState.currentLesson?.id || '']?.status === 'completed' ? "text-green-500" : ""}`} />
+                      {lessonProgress[courseViewerState.currentLesson?.id || '']?.status === 'completed' ? "Completed" : "Mark as Complete"}
                     </Button>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 group">
                     <Clock className="h-4 w-4" />
-                    {currentLesson.duration || "10 mins"}
+                    {/* Debug when rendering duration */}
+                    {(() => {
+                      // Log duration values at render time
+                      console.log('[CourseViewer] Rendering duration values:', {
+                        videoDuration: currentLesson.videoDuration,
+                        metadataDuration: currentLesson.metadata?.duration,
+                        staticDuration: currentLesson.duration
+                      });
+                      
+                      // Check if metadata duration is in minutes and needs conversion
+                      let durationToShow = currentLesson.videoDuration || currentLesson.metadata?.duration || currentLesson.duration;
+                      
+                      // If metadata duration is a small number (< 60) and not from Vimeo (videoDuration),
+                      // it's likely in minutes, so make sure formatLessonDuration knows it's minutes
+                      if (!currentLesson.videoDuration && 
+                          currentLesson.metadata?.duration && 
+                          currentLesson.metadata.duration < 60 && 
+                          !currentLesson.metadata?.durationUnit) {
+                        console.log(`[CourseViewer] Explicitly formatting ${currentLesson.metadata.duration} as minutes`);
+                        
+                        // Pass as string with 'min' suffix to ensure formatLessonDuration treats it as minutes
+                        return formatLessonDuration(`${currentLesson.metadata.duration} min`);
+                      }
+                      
+                      // Format the duration with priority order
+                      return formatLessonDuration(durationToShow);
+                    })()}
                   </div>
 
                   <div className="flex items-center gap-1">

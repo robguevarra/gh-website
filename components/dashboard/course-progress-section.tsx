@@ -58,6 +58,7 @@ export interface CourseProgressProps {
     nextLesson: string
     timeSpent: string
     nextLiveClass: string
+    totalCourseDuration?: number // Total duration of all lessons in seconds
     instructor: {
       name: string
       avatar: string
@@ -178,13 +179,59 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
   const safeRecentLessons = useMemo(() => {
     // If we have a continue learning lesson, add it to the top of the list
     if (continueLearningLesson && continueLearningLesson.courseId === courseProgress.courseId) {
+      // Find the actual lesson data to get accurate duration
+      let actualDuration = "--:--";
+      
+      // Look for the lesson in enrollments to get its actual duration
+      if (enrollments && continueLearningLesson.lessonId) {
+        const currentCourse = enrollments.find(
+          (e) => e.course?.id === continueLearningLesson.courseId
+        )?.course;
+        
+        if (currentCourse?.modules) {
+          // Find the lesson in the modules
+          for (const module of currentCourse.modules) {
+            if (module.lessons) {
+              // We need to cast to any to access all possible properties
+              const lesson = module.lessons.find(l => l.id === continueLearningLesson.lessonId) as any;
+              if (lesson) {
+                // Get accurate duration based on available data
+                if (typeof lesson.videoDuration === 'number') {
+                  // Format video duration (seconds) to minutes
+                  const minutes = Math.ceil(lesson.videoDuration / 60);
+                  actualDuration = `${minutes} min${minutes !== 1 ? 's' : ''}`;
+                } else if (lesson.metadata?.duration) {
+                  // Use metadata duration with proper formatting
+                  const durationValue = lesson.metadata.duration;
+                  if (lesson.metadata.durationUnit) {
+                    actualDuration = `${durationValue} ${lesson.metadata.durationUnit}`;
+                  } else if (durationValue < 60) { // Assumed to be minutes if small number
+                    actualDuration = `${durationValue} min${durationValue !== 1 ? 's' : ''}`;
+                  } else { // Seconds
+                    const minutes = Math.ceil(durationValue / 60);
+                    actualDuration = `${minutes} min${minutes !== 1 ? 's' : ''}`;
+                  }
+                } else if (typeof lesson.duration === 'string') {
+                  actualDuration = lesson.duration; // Use existing string format
+                } else if (typeof lesson.duration === 'number') {
+                  // Format number to minutes
+                  const minutes = Math.ceil(lesson.duration / 60);
+                  actualDuration = `${minutes} min${minutes !== 1 ? 's' : ''}`;
+                }
+                break;
+              }
+            }
+          }
+        }
+      }
+      
       // Convert the continue learning lesson to the CourseLesson format
       const continueLessonFormatted: CourseLesson = {
         id: continueLearningLesson.lessonId,
         title: continueLearningLesson.lessonTitle,
         module: continueLearningLesson.moduleTitle,
         moduleId: continueLearningLesson.moduleId,
-        duration: '15 mins', // Default duration
+        duration: actualDuration,
         thumbnail: '/placeholder.svg?height=80&width=120&text=Lesson',
         progress: continueLearningLesson.progress,
         current: true
@@ -262,10 +309,63 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                   <span className="text-xs text-[#6d4c41]">
                     {courseProgress.completedLessons} of {courseProgress.totalLessons} lessons •
                     <span className="ml-1">
-                      {calculateTimeRemaining({
-                        currentProgress: courseProgress.progress,
-                        totalDurationMinutes: courseProgress.totalLessons * 15 // Estimate based on lesson count (15 min per lesson)
-                      })} mins remaining
+                      {/* Get total course duration from store */}
+                      {(() => {
+                        // Use pre-calculated duration from dashboard if available
+                        let totalCourseSeconds = courseProgress.totalCourseDuration || 0;
+                        
+                        // If not available, calculate it (legacy fallback)
+                        if (!totalCourseSeconds && enrollments && storeProgress?.courseId) {
+                          // Get current course data from enrollments
+                          const currentCourse = enrollments.find(
+                            (e) => e.course?.id === storeProgress.courseId
+                          )?.course;
+                          
+                          if (currentCourse?.modules) {
+                            currentCourse.modules.forEach((module) => {
+                              if (module.lessons) {
+                                module.lessons.forEach((lesson: any) => {
+                                  let lessonDuration = 0;
+                                  
+                                  if (typeof lesson.videoDuration === 'number') {
+                                    // Video duration is in seconds
+                                    lessonDuration = lesson.videoDuration;
+                                  } else if (lesson.metadata?.duration) {
+                                    // Check if duration needs conversion from minutes
+                                    if (lesson.metadata.duration < 60 && !lesson.metadata.durationUnit) {
+                                      lessonDuration = lesson.metadata.duration * 60;
+                                    } else {
+                                      lessonDuration = lesson.metadata.duration;
+                                    }
+                                  } else if (typeof lesson.duration === 'number') {
+                                    lessonDuration = lesson.duration;
+                                  }
+                                  
+                                  totalCourseSeconds += lessonDuration;
+                                });
+                              }
+                            });
+                          }
+                        }
+                        
+                        // Convert to minutes for display and remaining calculation
+                        const totalCourseMinutes = Math.ceil(totalCourseSeconds / 60);
+                        
+                        // Calculate remaining time based on actual course duration
+                        const remainingMinutes = calculateTimeRemaining({
+                          currentProgress: courseProgress.progress,
+                          totalDurationMinutes: totalCourseMinutes || 0 // Use actual calculated duration, no fallback
+                        });
+                        
+                        console.log('[CourseProgressSection] Using actual course duration for calculation:', {
+                          totalCourseSeconds,
+                          totalCourseMinutes,
+                          progress: courseProgress.progress,
+                          remainingMinutes
+                        });
+                        
+                        return `${remainingMinutes} mins remaining`;
+                      })()} 
                     </span>
                   </span>
                 </div>
