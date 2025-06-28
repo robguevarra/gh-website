@@ -250,7 +250,7 @@ export function FacebookHighlights() {
                 
                 <Button 
                   className="w-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-all duration-200 min-h-[44px]"
-                  onClick={() => window.open('https://facebook.com/gracefulhomeschooling', '_blank')}
+                  onClick={() => window.open('https://facebook.com/gracefulhomeschoolingbyemigrace', '_blank')}
                   aria-label="Follow Graceful Homeschooling on Facebook"
                 >
                   <ExternalLink className="h-4 w-4 mr-2" aria-hidden="true" />

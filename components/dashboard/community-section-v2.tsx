@@ -84,13 +84,6 @@ export function CommunitySection({
                 </div>
                 <h2 className="text-xl font-medium text-[#5d4037]">Community</h2>
               </div>
-              <Link
-                href="/dashboard/community"
-                className="text-[#1877F2] hover:underline text-sm flex items-center"
-              >
-                View All
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Link>
             </div>
 
             <div className="space-y-4">
@@ -131,16 +124,6 @@ export function CommunitySection({
                 <span className="font-medium">Join Our Facebook Community</span>
                 <ExternalLink className="h-4 w-4 ml-2 opacity-70" />
               </Button>
-            </div>
-
-            <div className="mt-4 pt-4 border-t text-center md:hidden">
-              <Link
-                href="/dashboard/community"
-                className="text-[#1877F2] hover:underline text-sm flex items-center justify-center"
-              >
-                View All
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Link>
             </div>
           </div>
         </div>

@@ -56,11 +56,11 @@ const LicenseTerms: React.FC<LicenseTermsProps> = ({
         <ul className="space-y-2 text-sm">
           <li className="flex items-start">
             <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-            <span>Sell physical products using these designs</span>
+            <span>Right to resell as physical and/or digital products</span>
           </li>
           <li className="flex items-start">
             <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-            <span>Modify designs to suit your brand identity</span>
+            <span>End-users can create physical end-products for sale</span>
           </li>
           <li className="flex items-start">
             <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
@@ -90,11 +90,11 @@ const LicenseTerms: React.FC<LicenseTermsProps> = ({
               </li>
               <li className="flex items-start">
                 <X className="h-4 w-4 text-destructive mt-0.5 mr-2 flex-shrink-0" />
-                <span>Reselling modified versions of the designs as design products</span>
+                <span>Removing the owner's name and copyright</span>
               </li>
               <li className="flex items-start">
                 <X className="h-4 w-4 text-destructive mt-0.5 mr-2 flex-shrink-0" />
-                <span>Using in products that compete with Papers to Profits</span>
+                <span>Granting end-users rights to resell digital products</span>
               </li>
             </ul>
           </>
@@ -115,15 +115,15 @@ const LicenseTerms: React.FC<LicenseTermsProps> = ({
         <ul className="space-y-2 text-sm">
           <li className="flex items-start">
             <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-            <span>All CUR permissions plus:</span>
+            <span>Right to resell as physical and/or digital products</span>
           </li>
           <li className="flex items-start">
             <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-            <span>Rebrand designs as your own</span>
+            <span>Modify and rebrand the product as your own</span>
           </li>
           <li className="flex items-start">
             <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-            <span>Use in your client projects</span>
+            <span>Remove owner&apos;s name and copyright</span>
           </li>
           {!minimal && (
             <>

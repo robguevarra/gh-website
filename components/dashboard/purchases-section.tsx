@@ -180,7 +180,7 @@ export function PurchasesSection({
                 // Calculate total with proper formatting - using pure function instead of hook
                 const formattedTotal = (() => {
                   const amount = purchase.total_amount || 0;
-                  return `₱${(amount / 100).toFixed(2)}`;
+                  return `₱${(amount).toFixed(2)}`;
                 })();
                 
                 return (
@@ -200,7 +200,7 @@ export function PurchasesSection({
                           // Use price_at_purchase as the primary source of price
                           // Fall back to the UI-specific price property if it exists
                           const price = item.price_at_purchase || (item as any).price || 0;
-                          return `₱${(price / 100).toFixed(2)}`;
+                          return `₱${(price).toFixed(2)}`;
                         })();
                         
                         return (

@@ -249,16 +249,18 @@ function HomeContent() {
                   </span>
                 </Button>
               </Link>
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 sm:h-14 px-6 sm:px-8 border-brand-purple text-brand-purple relative overflow-hidden group w-full sm:w-auto"
-                onMouseEnter={() => setIsHovering(true)}
-                onMouseLeave={() => setIsHovering(false)}
-              >
-                <span className="absolute inset-0 w-0 bg-brand-blue/30 transition-all duration-500 ease-out group-hover:w-full"></span>
-                <span className="relative z-10">View Resources</span>
-              </Button>
+              <Link href="#youtube-feature">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 sm:h-14 px-6 sm:px-8 border-brand-purple text-brand-purple relative overflow-hidden group w-full sm:w-auto"
+                  onMouseEnter={() => setIsHovering(true)}
+                  onMouseLeave={() => setIsHovering(false)}
+                >
+                  <span className="absolute inset-0 w-0 bg-brand-blue/30 transition-all duration-500 ease-out group-hover:w-full"></span>
+                  <span className="relative z-10">Watch our Videos</span>
+                </Button>
+              </Link>
             </motion.div>
 
             {/* Social proof */}

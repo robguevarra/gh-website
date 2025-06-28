@@ -69,13 +69,7 @@ export function LiveClassesSection({
                 </div>
                 <h2 className="text-xl font-medium text-[#5d4037]">Live Classes</h2>
               </div>
-              <Link
-                href="/dashboard/live-classes"
-                className="text-brand-pink hover:underline text-sm flex items-center"
-              >
-                View Schedule
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Link>
+             
             </div>
 
             <div className="space-y-4">
@@ -106,7 +100,7 @@ export function LiveClassesSection({
                         // Default to the Facebook community page if no specific link is provided
                         const communityUrl = liveClass.zoomLink && liveClass.zoomLink !== '#' 
                           ? liveClass.zoomLink 
-                          : 'https://www.facebook.com/groups/gracefulhomeschooling';
+                          : 'https://www.facebook.com/groups/gracefulhomeschoolingplus';
                         window.open(communityUrl, '_blank');
                       }}
                     >
@@ -122,15 +116,6 @@ export function LiveClassesSection({
               )}
             </div>
 
-            <div className="mt-4 pt-4 border-t text-center md:hidden">
-              <Link
-                href="/dashboard/live-classes"
-                className="text-brand-pink hover:underline text-sm flex items-center justify-center"
-              >
-                View Schedule
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Link>
-            </div>
           </div>
         </div>
       </div>

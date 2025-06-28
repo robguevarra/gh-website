@@ -30,7 +30,7 @@ export function SocialIntegration({ variant = "full" }: SocialIntegrationProps) 
   const renderFacebookHighlights = variant === "full" || variant === "facebook-focus"
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="relative">
+    <motion.div id="youtube-feature" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }} className="relative">
       {/* Decorative floating elements that persist across sections */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <motion.div

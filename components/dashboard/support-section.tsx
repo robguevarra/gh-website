@@ -122,14 +122,6 @@ export function SupportSection({
                     <Mail className="h-4 w-4" />
                     Email Support
                   </Button>
-                  <Button
-                    variant="outline"
-                    className="border-amber-600 text-amber-600 hover:bg-amber-50 flex items-center justify-center gap-2"
-                    onClick={handleLiveChat}
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                    Live Chat
-                  </Button>
                 </div>
               </div>
 

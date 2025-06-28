@@ -87,7 +87,7 @@ const WelcomeStoreModal: React.FC<WelcomeStoreModalProps> = ({
         <div className="relative h-40 my-2 overflow-hidden rounded-md">
           <div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-primary/5 z-10"></div>
           <Image 
-            src="/images/store/welcome-banner.jpg" 
+            src="/store-banner.png" 
             alt="Welcome to the store"
             fill
             style={{ objectFit: 'cover' }}
@@ -117,9 +117,6 @@ const WelcomeStoreModal: React.FC<WelcomeStoreModalProps> = ({
         </div>
         
         <DialogFooter className="sm:justify-between gap-2 flex-col sm:flex-row">
-          <Button asChild variant="outline">
-            <Link href="/dashboard/store?filter=newest">Explore Latest Designs</Link>
-          </Button>
           <Button onClick={handleDialogClose}>Get Started</Button>
         </DialogFooter>
       </DialogContent>

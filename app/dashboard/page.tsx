@@ -820,9 +820,7 @@ export default function StudentDashboard() {
                                 {format(new Date(liveAnnouncements[currentAnnouncementIndex].publish_date), 'MMMM d, yyyy')}
                               </span>
                             )}
-                            <Link href="/dashboard/announcements" className="text-xs text-brand-purple hover:underline">
-                              View all
-                            </Link>
+                            
                           </div>
                           {liveAnnouncements.length > 1 && (
                             <div className="flex items-center gap-1">
