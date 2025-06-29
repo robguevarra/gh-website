@@ -53,7 +53,7 @@ export function TemplatesLibrarySection({
             <div className="bg-brand-blue/10 rounded-full p-2">
               <Download className="h-5 w-5 text-brand-blue" />
             </div>
-            <h2 className="text-lg font-medium text-[#5d4037]">Resources</h2>
+            <h2 className="text-lg font-medium text-[#5d4037]">Student Course Library</h2>
           </div>
           {isSectionExpanded("templates") ? (
             <ChevronUp className="h-5 w-5 text-[#6d4c41]" />
@@ -70,7 +70,7 @@ export function TemplatesLibrarySection({
                 <div className="bg-brand-blue/10 rounded-full p-2">
                   <Download className="h-5 w-5 text-brand-blue" />
                 </div>
-                <h2 className="text-xl font-medium text-[#5d4037]">Resources</h2>
+                <h2 className="text-xl font-medium text-[#5d4037]">Student Course Library</h2>
               </div>
               <Link
                 href="https://drive.google.com/drive/folders/1Hrp7tJneYZ2Ba5nTlP4Nt36KVhCNKf2n?usp=sharing"

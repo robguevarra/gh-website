@@ -251,7 +251,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
                     prefetch={true}
                   >
                     <Download className="h-5 w-5" />
-                    Resources
+                    Student Course Library
                   </Link>
                   <Link
                     href="/dashboard/store"
@@ -341,7 +341,7 @@ export const StudentHeader = memo(function StudentHeader({}: StudentHeaderProps)
               className={`text-sm font-medium ${pathname === "/dashboard/resources" ? "text-brand-purple" : "text-muted-foreground hover:text-foreground"}`}
               prefetch={true}
             >
-              Resources
+              Student Course Library
             </Link>
             <Link
               href="/dashboard/store"
