@@ -54,8 +54,8 @@ export default function PapersToProfit() {
     name: "Papers to Profits",
     description:
       "Learn to create and sell beautiful paper products that transform your homeschooling passion into a sustainable business",
-    fullPrice: 100000, // in cents (199.99)
-    discountedPrice: 100000, // in cents (149.99)
+    fullPrice: 130000, // in cents (199.99)
+    discountedPrice: 130000, // in cents (149.99)
     monthlyPrice: 4999, // in cents (49.99)
     duration: "8 weeks",
     startDate: "Immediate Access",

@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
       affiliate_name: 'Robbbb Geeee',
       customer_name: 'flkjaf1 fjflajfa',
       product_name: 'Digital Course Bundle',
-      sale_amount: '₱1,000.00',
+      sale_amount: '₱1,300.00',
       commission_rate: '25%',
-      commission_amount: '₱250.00',
+      commission_amount: '₱325.00',
       dashboard_url: 'https://new.gracefulhomeschooling.com/affiliate-portal',
       first_name: 'Robbbb',
       last_name: 'Geeee',
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     const finalSubject = substituteVariables(template.subject, testData);
 
     console.log('📧 Sending email to: robneil+0000@gmail.com');
-    console.log('💰 Commission: ₱250.00 from ₱1,000.00 sale');
+    console.log('💰 Commission: ₱325.00 from ₱1,300.00 sale');
 
     // Send the email via Postmark
     const postmarkClient = createPostmarkClient();
@@ -98,7 +98,7 @@ export async function GET() {
     testData: {
       affiliate: 'Robbbb Geeee (robneil+0000@gmail.com)',
       customer: 'flkjaf1 fjflajfa',
-      commission: '₱250.00 from ₱1,000.00 sale'
+      commission: '₱325.00 from ₱1,300.00 sale'
     }
   });
 } 

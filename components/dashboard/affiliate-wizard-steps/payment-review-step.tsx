@@ -171,8 +171,8 @@ export function PaymentReviewStep({
               <p className="text-xs text-gray-500">Course Enrollee Tier</p>
             </div>
             <div className="bg-white/50 rounded-lg p-4">
-              <p className="text-2xl font-bold text-green-600">₱250</p>
-              <p className="text-sm text-gray-600">Per ₱1,000.00 Papers to Profits Course</p>
+              <p className="text-2xl font-bold text-green-600">₱325</p>
+              <p className="text-sm text-gray-600">Per ₱1,300.00 Papers to Profits Course</p>
               <p className="text-xs text-gray-500">Your 25% commission</p>
             </div>
             <div className="bg-white/50 rounded-lg p-4">

@@ -508,7 +508,9 @@ COMMIT;
 - [x] Modify function to account for existing auth.users (preserve valid IDs) ✅ **COMPLETED**
 - [x] Handle manual payments (PAIDP2P without Xendit records) with correct pricing (₱800) ✅ **COMPLETED**
 - [x] Implement incremental update capability for staging tables ✅ **COMPLETED**
-- [ ] Test data insertion in proper FK dependency order
+- [x] Align transaction_type values with production format ("P2P", "Canva", "Other") ✅ **COMPLETED**
+- [x] Implement business rules: P2P users get profiles+enrollments, Canva users get transactions only ✅ **COMPLETED**
+- [x] Test data insertion in proper FK dependency order ✅ **COMPLETED**
 
 ### Phase 3: Production Cutover (Week 3)
 - [ ] Implement `launch_clean_production()` function (with FK-aware deletion/insertion order)

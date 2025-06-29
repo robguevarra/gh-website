@@ -84,7 +84,7 @@ export function ProgramOverviewStep({
           Transform Your Learning into Earning
         </h3>
         <p className="text-gray-600 text-lg">
-          Join thousands of homeschooling families earning income by sharing products they love
+          Join thousands of parents, mompreneurs, dadpreneurs and individuals earning income by sharing Papers to Profits!
         </p>
         <Badge variant="secondary" className="mt-3 bg-green-100 text-green-800">
           Course Enrollee Tier - 25% Commission Rate
@@ -150,8 +150,8 @@ export function ProgramOverviewStep({
           </h4>
           <div className="text-sm text-green-800 space-y-1">
             <p>• <strong>Course Enrollee Tier:</strong> 25% commission on all sales</p>
-            <p>• <strong>Main Product:</strong> Papers to Profits Course (₱1,000.00)</p>
-            <p>• <strong>Your Earnings:</strong> ₱250.00 per sale</p>
+            <p>• <strong>Main Product:</strong> Papers to Profits Course (₱1,300.00)</p>
+            <p>• <strong>Your Earnings:</strong> ₱325.00 per sale</p>
             <p>• <strong>Minimum Payout:</strong> ₱1,000.00 threshold</p>
             <p>• <strong>Payment Cycle:</strong> Monthly (cutoff: 25th of each month)</p>
           </div>
