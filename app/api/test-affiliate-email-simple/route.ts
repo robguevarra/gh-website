@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       sale_amount: '₱1,300.00',
       commission_rate: '25%',
       commission_amount: '₱325.00',
-      dashboard_url: 'https://new.gracefulhomeschooling.com/affiliate-portal',
+      dashboard_url: 'https://www.gracefulhomeschooling.com/affiliate-portal',
       first_name: 'Robbbb',
       last_name: 'Geeee',
       full_name: 'Robbbb Geeee',

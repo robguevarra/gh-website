@@ -102,7 +102,7 @@ export async function fetchAffiliateConversionData(conversionId: string): Promis
       saleAmount: `₱${Number(conversion.gmv).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
       commissionRate: `${Math.round(Number(affiliate.commission_rate) * 100)}%`,
       commissionAmount: `₱${Number(conversion.commission_amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`,
-      dashboardUrl: 'https://new.gracefulhomeschooling.com/affiliate-portal'
+      dashboardUrl: 'https://www.gracefulhomeschooling.com/affiliate-portal'
     };
   } catch (error) {
     console.error('Unexpected error fetching conversion data:', error);

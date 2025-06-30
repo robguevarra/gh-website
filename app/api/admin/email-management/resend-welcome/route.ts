@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
           first_name: firstName,
           course_name: 'Papers to Profits',
           enrollment_date: new Date().toLocaleDateString(),
-          access_link: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://new.gracefulhomeschooling.com'}/dashboard/course`,
+          access_link: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.gracefulhomeschooling.com'}/dashboard/course`,
           magic_link: magicLink,
           expiration_hours: expirationHours,
           setup_required: setupRequired

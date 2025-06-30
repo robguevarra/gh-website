@@ -93,10 +93,19 @@ export const ALL_EMAIL_VARIABLES: EmailVariable[] = [
     name: 'Login URL', 
     placeholder: '{{login_url}}', 
     description: 'A link to your website\'s login page.', 
-    sampleValue: 'https://new.gracefulhomeschooling.com/auth/signin', 
+    sampleValue: 'https://www.gracefulhomeschooling.com/auth/signin', 
     category: 'Utility Links', 
     dataKey: 'login_url', 
     notes: "Static URL" 
+  },
+  { 
+    name: 'Magic Link', 
+    placeholder: '{{magic_link}}', 
+    description: 'A secure magic link for passwordless authentication and account setup.', 
+    sampleValue: 'https://www.gracefulhomeschooling.com/auth/magic-link/verify/example-token', 
+    category: 'Utility Links', 
+    dataKey: 'magic_link', 
+    notes: "Generated dynamically per recipient during email processing" 
   },
   { 
     name: 'Unsubscribe Link (Postmark Tag)', 
@@ -166,7 +175,7 @@ export const ALL_EMAIL_VARIABLES: EmailVariable[] = [
     name: 'Dashboard URL', 
     placeholder: '{{dashboard_url}}', 
     description: 'Link to the affiliate\'s dashboard.', 
-    sampleValue: 'https://new.gracefulhomeschooling.com/affiliate-portal', 
+    sampleValue: 'https://www.gracefulhomeschooling.com/affiliate-portal', 
     category: 'Affiliate', 
     dataKey: 'dashboard_url', 
     notes: 'Static URL to affiliate portal' 

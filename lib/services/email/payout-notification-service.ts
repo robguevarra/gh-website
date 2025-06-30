@@ -165,7 +165,7 @@ export async function fetchPayoutNotificationData(payoutId: string): Promise<Pay
       failureReason: payout.status === 'failed' ? extractFailureReason(payout.processing_notes) : undefined,
       supportUrl: 'help@gracefulhomeschooling.com',
       retryDate: payout.status === 'failed' ? getRetryDate() : undefined,
-      dashboardUrl: 'https://new.gracefulhomeschooling.com/affiliate-portal',
+      dashboardUrl: 'https://www.gracefulhomeschooling.com/affiliate-portal',
     };
 
   } catch (error) {

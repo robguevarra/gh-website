@@ -142,11 +142,58 @@ export async function processQueue(options: ProcessQueueOptions = {}): Promise<{
             nameData.full_name = nameData.first_name;
           }
 
+          // Generate magic link for this recipient
+          let magicLinkForRecipient = '';
+          try {
+            // Import magic link service
+            const { generateMagicLink } = await import('@/lib/auth/magic-link-service');
+            const { classifyCustomer, getAuthenticationFlow } = await import('@/lib/auth/customer-classification-service');
+            
+            // Classify customer to determine appropriate magic link purpose
+            const classificationResult = await classifyCustomer(email.recipient_email);
+            
+            if (classificationResult.success && classificationResult.classification) {
+              const classification = classificationResult.classification;
+              const authFlow = getAuthenticationFlow(classification);
+              
+              // Generate magic link with appropriate purpose
+              const magicLinkResult = await generateMagicLink({
+                email: email.recipient_email,
+                purpose: authFlow.magicLinkPurpose,
+                redirectTo: authFlow.redirectPath,
+                expiresIn: '48h',
+                metadata: {
+                  customerType: classification.type,
+                  isExistingUser: classification.isExistingUser,
+                  userId: classification.userId,
+                  generatedAt: new Date().toISOString(),
+                  requestSource: 'campaign_email',
+                  campaignId: email.campaign_id
+                }
+              });
+              
+              if (magicLinkResult.success && magicLinkResult.magicLink) {
+                magicLinkForRecipient = magicLinkResult.magicLink;
+                console.log(`Generated magic link for ${email.recipient_email} in campaign ${email.campaign_id}`);
+              } else {
+                console.error(`Failed to generate magic link for ${email.recipient_email}:`, magicLinkResult.error);
+                magicLinkForRecipient = '[MAGIC_LINK_GENERATION_FAILED]';
+              }
+            } else {
+              console.error(`Failed to classify customer ${email.recipient_email}:`, classificationResult.error);
+              magicLinkForRecipient = '[CUSTOMER_CLASSIFICATION_FAILED]';
+            }
+          } catch (magicLinkError) {
+            console.error(`Error generating magic link for ${email.recipient_email}:`, magicLinkError);
+            magicLinkForRecipient = '[MAGIC_LINK_ERROR]';
+          }
+
           const mergedVariables = {
             ...standardDefaults,
             ...recipientDataObject,
             ...nameData,
             email_address: email.recipient_email,
+            magic_link: magicLinkForRecipient, // Add the generated magic link
           };
 
           // Ensure campaignData.subject and campaignData.campaign_html_body are treated as strings or empty strings
@@ -156,26 +203,36 @@ export async function processQueue(options: ProcessQueueOptions = {}): Promise<{
           const processedSubject = substituteVariables(subjectString, mergedVariables);
           const processedHtml = substituteVariables(htmlBodyString, mergedVariables);
 
-          // TODO: Implement actual email sending logic using Postmark (or other service)
-          // This function would take recipient_email, processedSubject, processedHtml, sender_email, sender_name
-          // Example conceptual call:
-          // const sendResult = await emailService.sendTemplatedEmail(
-          //   {
-          //     From: campaign.sender_email || process.env.POSTMARK_SENDER_EMAIL_DEFAULT,
-          //     To: email.recipient_email,
-          //     Subject: processedSubject,
-          //     HtmlBody: processedHtml,
-          //     MessageStream: 'broadcast', // Or your relevant stream
-          //     Tag: `campaign-${email.campaign_id}`
-          //   }
-          // ); 
-          // if (!sendResult.success || sendResult.messageId) { /* store messageId, handle error */ }
-
-          console.log(`Simulating send for email ${email.id} to ${email.recipient_email} with subject: ${processedSubject}`);
-          // For now, simulate a successful send. Replace with actual Postmark call.
-          // await new Promise(resolve => setTimeout(resolve, 1000 / (rateLimit / 60))); // Rate limiting not needed here if Postmark API handles it
-          await new Promise(resolve => setTimeout(resolve, 50)); // Simulate a quick send operation
-          const simulatedMessageId = `simulated_${Date.now()}_${email.id}`;
+          // Send email via Postmark
+          console.log(`Sending campaign email ${email.id} to ${email.recipient_email} with subject: ${processedSubject}`);
+          
+          let messageId: string;
+          try {
+            // Import Postmark client
+            const { createPostmarkClient } = await import('@/lib/services/email/postmark-client');
+            const postmark = createPostmarkClient();
+            
+            // Send the email using Postmark
+            const emailResponse = await postmark.sendEmail({
+              to: { email: email.recipient_email },
+              subject: processedSubject,
+              htmlBody: processedHtml,
+              from: { 
+                email: campaignData.sender_email || process.env.POSTMARK_SENDER_EMAIL_DEFAULT || 'no-reply@gracefulhomeschooling.com',
+                name: campaignData.sender_name || 'Graceful Homeschooling'
+              },
+              messageStream: 'broadcast',
+              trackOpens: true,
+              trackLinks: 'HtmlAndText',
+              tag: `campaign-${email.campaign_id}`
+            });
+            
+            messageId = emailResponse.MessageID;
+            console.log(`Successfully sent campaign email ${email.id} via Postmark, MessageID: ${messageId}`);
+          } catch (sendError) {
+            console.error(`Failed to send campaign email ${email.id} via Postmark:`, sendError);
+            throw new Error(`Email send failed: ${sendError instanceof Error ? sendError.message : String(sendError)}`);
+          }
 
           // Mark as sent
           await supabaseAdmin
@@ -184,7 +241,7 @@ export async function processQueue(options: ProcessQueueOptions = {}): Promise<{
               status: 'sent',
               sent_at: new Date().toISOString(), // Use sent_at
               completed_at: new Date().toISOString(), // Keep completed_at for consistency if used elsewhere
-              provider_message_id: simulatedMessageId, // Store the (simulated) Postmark MessageID
+              provider_message_id: messageId, // Store the actual Postmark MessageID
               subject: processedSubject, // Store the processed subject
               html_content: processedHtml, // Store the processed HTML (optional, for logging/auditing)
               updated_at: new Date().toISOString()
