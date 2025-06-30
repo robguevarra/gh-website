@@ -6,6 +6,9 @@ import { classifyCustomer } from '@/lib/auth/customer-classification-service'
 import { sendTransactionalEmail } from '@/lib/email/transactional-email-service'
 import { getStandardVariableDefaults, substituteVariables } from '@/lib/services/email/template-utils'
 
+// Add logging to confirm the BASE_URL being used
+const MAGIC_LINK_BASE_URL = process.env.MAGIC_LINK_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL || 'https://gracefulhomeschooling.com'
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -23,6 +26,7 @@ export async function POST(request: NextRequest) {
     console.log(`📊 Batch size: ${batchSize}, Starting from: ${startFrom}`)
     console.log(`🧪 Test mode: ${testEmails ? 'YES' : 'NO'}`)
     console.log(`🔧 Environment check:`, {
+      magicLinkBaseUrl: MAGIC_LINK_BASE_URL,
       hasJwtSecret: !!(process.env.MAGIC_LINK_JWT_SECRET || process.env.JWT_SECRET),
       hasBaseUrl: !!(process.env.MAGIC_LINK_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL),
       hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,

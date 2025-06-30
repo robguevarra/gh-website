@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
         diagnostics.refreshAttempt.started = true
         
         try {
-          const refreshResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/auth/magic-link/refresh`, {
+          const refreshResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://gracefulhomeschooling.com'}/api/auth/magic-link/refresh`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
