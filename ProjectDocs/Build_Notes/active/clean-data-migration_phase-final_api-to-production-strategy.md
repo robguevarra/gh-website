@@ -294,6 +294,161 @@ CREATE TABLE systemeio_raw (
 
 **Critical FK Constraint Implementation**:
 **MANDATORY EXECUTION ORDER** (respecting FK dependencies):
+
+1. **auth.users_staging** (foundational - no dependencies)
+2. **unified_profiles_staging** (depends on auth.users via id FK)
+3. **transactions_staging** (depends on auth.users via user_id FK)
+4. **enrollments_staging** (depends on unified_profiles + transactions via FKs)
+5. **affiliates_staging** (depends on unified_profiles via user_id FK)
+
+### Function 3: `launch_clean_production()`
+**Purpose**: Perform atomic cutover from staging to production while preserving admin access
+
+**Implementation**:
+```sql
+-- SECURITY DEFINER to bypass RLS and other constraints during migration
+CREATE OR REPLACE FUNCTION public.launch_clean_production()
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+    result_msg TEXT := '';
+    backup_timestamp TEXT;
+    profiles_count INT;
+    transactions_count INT;
+    enrollments_count INT;
+    users_count INT;
+BEGIN
+    -- Check for minimum data in staging tables to prevent accidental data loss
+    SELECT COUNT(*) INTO profiles_count FROM public.unified_profiles_staging;
+    SELECT COUNT(*) INTO transactions_count FROM public.transactions_staging;
+    SELECT COUNT(*) INTO enrollments_count FROM public.enrollments_staging;
+    SELECT COUNT(*) INTO users_count FROM auth.users;
+    
+    -- Safety check - ensure we have sufficient data
+    IF profiles_count < 10 OR transactions_count < 10 OR enrollments_count < 10 THEN
+        RETURN 'ERROR: Insufficient data in staging tables. Migration aborted for safety.';
+    END IF;
+
+    -- Generate timestamp for backup table names
+    backup_timestamp := to_char(now(), 'YYYY_MM_DD_HH24_MI_SS');
+    
+    -- ATOMIC TABLE SWAP TRANSACTION
+    BEGIN
+        -- Step 1: Rename current tables to _backup (PRESERVES auth.users)
+        EXECUTE format('ALTER TABLE IF EXISTS public.unified_profiles RENAME TO unified_profiles_backup_%s', backup_timestamp);
+        EXECUTE format('ALTER TABLE IF EXISTS public.transactions RENAME TO transactions_backup_%s', backup_timestamp);
+        EXECUTE format('ALTER TABLE IF EXISTS public.enrollments RENAME TO enrollments_backup_%s', backup_timestamp);
+        
+        -- Step 2: Rename staging tables to production names
+        ALTER TABLE public.unified_profiles_staging RENAME TO unified_profiles;
+        ALTER TABLE public.transactions_staging RENAME TO transactions;
+        ALTER TABLE public.enrollments_staging RENAME TO enrollments;
+        
+        -- Step 3: Add FK constraints to new production tables
+        ALTER TABLE public.unified_profiles ADD CONSTRAINT unified_profiles_id_fkey 
+            FOREIGN KEY (id) REFERENCES auth.users(id);
+            
+        ALTER TABLE public.transactions ADD CONSTRAINT transactions_user_id_fkey 
+            FOREIGN KEY (user_id) REFERENCES auth.users(id);
+            
+        ALTER TABLE public.enrollments ADD CONSTRAINT enrollments_user_id_fkey 
+            FOREIGN KEY (user_id) REFERENCES public.unified_profiles(id);
+            
+        ALTER TABLE public.enrollments ADD CONSTRAINT enrollments_transaction_id_fkey 
+            FOREIGN KEY (transaction_id) REFERENCES public.transactions(id);
+            
+        ALTER TABLE public.enrollments ADD CONSTRAINT enrollments_course_id_fkey 
+            FOREIGN KEY (course_id) REFERENCES public.courses(id);
+        
+        result_msg := format('SUCCESS: Migration completed! Backup tables created with timestamp: %s. Record counts - Users: %s, Profiles: %s, Transactions: %s, Enrollments: %s', 
+                            backup_timestamp, users_count, profiles_count, transactions_count, enrollments_count);
+        
+    EXCEPTION WHEN OTHERS THEN
+        -- Rollback happens automatically due to transaction
+        RAISE EXCEPTION 'Table swap failed: %', SQLERRM;
+    END;
+    
+    RETURN result_msg;
+END;
+$function$;
+```
+
+**Key Features**:
+1. **Preserves auth.users table** - Maintains admin access during migration
+2. **Timestamped backups** - Creates backup tables with timestamp for auditability and rollback
+3. **Atomic table swap** - Single transaction ensures all-or-nothing migration
+4. **Safety checks** - Verifies minimum record counts before proceeding
+5. **FK constraints** - Properly adds all necessary constraints after rename
+6. **Security** - Runs as SECURITY DEFINER to bypass RLS during migration
+
+### Function 4: `rollback_migration(backup_timestamp)`
+**Purpose**: Safely restore from backup tables while preserving staging tables
+
+**Implementation**:
+```sql
+-- Create improved rollback function that preserves staging tables
+CREATE OR REPLACE FUNCTION public.rollback_migration(backup_timestamp TEXT)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $function$
+DECLARE
+    result_msg TEXT := '';
+    original_profiles_count INT;
+    original_transactions_count INT;
+    original_enrollments_count INT;
+BEGIN
+    -- Verify backup tables exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.tables 
+                   WHERE table_schema = 'public' 
+                   AND table_name = 'unified_profiles_backup_' || backup_timestamp) THEN
+        RETURN 'ERROR: Backup tables with timestamp ' || backup_timestamp || ' not found.';
+    END IF;
+
+    -- Count records in backup tables
+    EXECUTE format('SELECT COUNT(*) FROM public.unified_profiles_backup_%s', backup_timestamp) INTO original_profiles_count;
+    EXECUTE format('SELECT COUNT(*) FROM public.transactions_backup_%s', backup_timestamp) INTO original_transactions_count;
+    EXECUTE format('SELECT COUNT(*) FROM public.enrollments_backup_%s', backup_timestamp) INTO original_enrollments_count;
+    
+    -- ATOMIC ROLLBACK TRANSACTION
+    BEGIN
+        -- Step 1: Rename current production tables back to staging (preserving them)
+        ALTER TABLE public.unified_profiles RENAME TO unified_profiles_staging;
+        ALTER TABLE public.transactions RENAME TO transactions_staging;
+        ALTER TABLE public.enrollments RENAME TO enrollments_staging;
+        
+        -- Step 2: Rename backup tables to restore them to production
+        EXECUTE format('ALTER TABLE public.unified_profiles_backup_%s RENAME TO unified_profiles', backup_timestamp);
+        EXECUTE format('ALTER TABLE public.transactions_backup_%s RENAME TO transactions', backup_timestamp);
+        EXECUTE format('ALTER TABLE public.enrollments_backup_%s RENAME TO enrollments', backup_timestamp);
+        
+        -- FK constraints are automatically preserved during table renaming
+        
+        result_msg := format('SUCCESS: Rollback completed using backup tables with timestamp: %s. Records restored - Profiles: %s, Transactions: %s, Enrollments: %s. Staging tables preserved.', 
+                            backup_timestamp, 
+                            original_profiles_count, 
+                            original_transactions_count, 
+                            original_enrollments_count);
+        
+    EXCEPTION WHEN OTHERS THEN
+        -- Rollback happens automatically due to transaction
+        RAISE EXCEPTION 'Rollback failed: %', SQLERRM;
+    END;
+    
+    RETURN result_msg;
+END;
+$function$;
+```
+
+**Key Benefits of Improved Rollback**:
+1. **Preserves Staging Tables** - Renames current production tables back to staging
+2. **No Data Loss** - Avoids dropping tables and losing prepared data
+3. **Quick Recovery** - After rollback, staging tables are still available for retry
+4. **FK Integrity** - Automatically maintains all FK constraints
+5. **Validation** - Counts and reports records restored
+6. **Safety** - Verifies backup tables exist before attempting rollback
 1. **auth.users_staging** (foundational - no dependencies)
 2. **unified_profiles_staging** (depends on auth.users via id FK)
 3. **transactions_staging** (depends on auth.users via user_id FK)
@@ -351,160 +506,6 @@ CREATE TABLE transactions_staging (
   contact_email TEXT,
   transaction_type TEXT NOT NULL DEFAULT 'unknown',
   created_at TIMESTAMPTZ DEFAULT now(),
-  paid_at TIMESTAMPTZ,
-  settled_at TIMESTAMPTZ,
-  expires_at TIMESTAMPTZ,
-  metadata JSONB,
-  
-  -- FK CONSTRAINT: transactions.user_id references auth.users.id
-  CONSTRAINT fk_staging_transactions_user_id 
-    FOREIGN KEY (user_id) REFERENCES auth.users_staging(id) ON DELETE SET NULL
-);
-
--- STEP 4: Create enrollments staging (depends on unified_profiles + transactions)
-CREATE TABLE enrollments_staging (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL, -- References unified_profiles_staging.id
-  course_id UUID, -- References courses.id (existing table)
-  transaction_id UUID, -- References transactions_staging.id
-  product_type TEXT NOT NULL, -- 'p2p_course', 'canva_ebook'
-  status TEXT NOT NULL DEFAULT 'active',
-  enrolled_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  expires_at TIMESTAMPTZ,
-  last_accessed_at TIMESTAMPTZ,
-  metadata JSONB DEFAULT '{}',
-  
-  -- FK CONSTRAINTS: Multiple dependencies
-  CONSTRAINT fk_staging_enrollments_user_id 
-    FOREIGN KEY (user_id) REFERENCES unified_profiles_staging(id) ON DELETE CASCADE,
-  CONSTRAINT fk_staging_enrollments_transaction_id 
-    FOREIGN KEY (transaction_id) REFERENCES transactions_staging(id) ON DELETE SET NULL,
-  CONSTRAINT fk_staging_enrollments_course_id 
-    FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE SET NULL
-);
-
--- STEP 5: Create affiliates staging (depends on unified_profiles)
-CREATE TABLE affiliates_staging (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL, -- References unified_profiles_staging.id
-  status TEXT NOT NULL DEFAULT 'pending',
-  commission_rate DECIMAL(5,4) DEFAULT 0.3000,
-  total_earned DECIMAL(10,2) DEFAULT 0.00,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  
-  -- FK CONSTRAINT: affiliates.user_id references unified_profiles.id
-  CONSTRAINT fk_staging_affiliates_user_id 
-    FOREIGN KEY (user_id) REFERENCES unified_profiles_staging(id) ON DELETE CASCADE
-);
-```
-
-**Function Logic (Respecting FK Order)**:
-1. **Step 1**: Transform `systemeio_raw` → `auth.users_staging` (create auth records first)
-2. **Step 2**: Transform `systemeio_raw` → `unified_profiles_staging` (using auth.users IDs)
-3. **Step 3**: Transform `xendit_raw` → `transactions_staging` (linking to auth.users IDs)
-4. **Step 4**: Generate `enrollments_staging` based on product rules (linking to unified_profiles + transactions)
-5. **Step 5**: Generate `affiliates_staging` for users with affiliate tags (linking to unified_profiles)
-6. **Step 6**: Run comprehensive validation checks for all FK constraints
-7. **Step 7**: Return validation results and any FK constraint violations
-
-### Function 3: `launch_clean_production()` - ATOMIC TABLE SWAP
-**Purpose**: Instant atomic cutover using PostgreSQL table renaming (GitHub/Shopify pattern)
-
-**🔥 REVOLUTIONARY APPROACH**: Instead of DELETE/INSERT, we **rename tables atomically**
-
-**Why This is Brilliant**:
-- ✅ **Instant cutover** (milliseconds vs minutes)
-- ✅ **Zero data movement** (just metadata changes)
-- ✅ **FK constraints automatically preserved** by PostgreSQL
-- ✅ **Easy rollback** (swap names back)
-- ✅ **Industry standard** (used by GitHub, Shopify, Stripe)
-
-**Function Logic**:
-```sql
--- ATOMIC TABLE SWAP STRATEGY
-BEGIN TRANSACTION;
-  
-  -- 1. Backup existing data by renaming to _backup tables
-  ALTER TABLE enrollments RENAME TO enrollments_backup_[timestamp];
-  ALTER TABLE affiliates RENAME TO affiliates_backup_[timestamp]; 
-  ALTER TABLE transactions RENAME TO transactions_backup_[timestamp];
-  ALTER TABLE unified_profiles RENAME TO unified_profiles_backup_[timestamp];
-  -- Note: auth.users stays - we update existing records
-  
-  -- 2. INSTANT ATOMIC CUTOVER - Rename staging tables to production names
-  -- PostgreSQL automatically updates all FK constraint references!
-  ALTER TABLE unified_profiles_staging RENAME TO unified_profiles;
-  ALTER TABLE transactions_staging RENAME TO transactions;
-  ALTER TABLE enrollments_staging RENAME TO enrollments;
-  ALTER TABLE affiliates_staging RENAME TO affiliates;
-  
-  -- 3. Update auth.users with clean data (merge strategy)
-  INSERT INTO auth.users (id, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
-  SELECT id, email, email_confirmed_at, encrypted_password, created_at, updated_at, raw_app_meta_data, raw_user_meta_data
-  FROM auth.users_staging
-  ON CONFLICT (id) DO UPDATE SET
-    email = EXCLUDED.email,
-    updated_at = EXCLUDED.updated_at,
-    raw_user_meta_data = EXCLUDED.raw_user_meta_data;
-  
-  -- 4. Verify all FK constraints are intact (should be automatic)
-  SELECT 'FK Violations Found' as error WHERE EXISTS (
-    SELECT 1 FROM unified_profiles u LEFT JOIN auth.users a ON u.id = a.id WHERE a.id IS NULL
-    UNION ALL
-    SELECT 1 FROM transactions t LEFT JOIN auth.users a ON t.user_id = a.id WHERE t.user_id IS NOT NULL AND a.id IS NULL
-    UNION ALL  
-    SELECT 1 FROM enrollments e LEFT JOIN unified_profiles u ON e.user_id = u.id WHERE u.id IS NULL
-    UNION ALL
-    SELECT 1 FROM enrollments e LEFT JOIN transactions t ON e.transaction_id = t.id WHERE e.transaction_id IS NOT NULL AND t.id IS NULL
-    UNION ALL
-    SELECT 1 FROM affiliates af LEFT JOIN unified_profiles u ON af.user_id = u.id WHERE u.id IS NULL
-  );
-  
-  -- 5. Verify data counts match expectations  
-  SELECT 'Data Count Mismatch' as error WHERE 
-    (SELECT COUNT(*) FROM unified_profiles) < 6000 OR -- Should have ~6000+ clean profiles
-    (SELECT COUNT(*) FROM transactions) < 6000 OR     -- Should have ~6000+ clean transactions
-    (SELECT COUNT(*) FROM enrollments) < 6000;        -- Should have ~6000+ clean enrollments
-  
-COMMIT;
-
--- ROLLBACK STRATEGY (if anything goes wrong):
--- BEGIN;
---   ALTER TABLE unified_profiles RENAME TO unified_profiles_failed;
---   ALTER TABLE transactions RENAME TO transactions_failed;
---   ALTER TABLE enrollments RENAME TO enrollments_failed;
---   ALTER TABLE affiliates RENAME TO affiliates_failed;
---   
---   ALTER TABLE unified_profiles_backup_[timestamp] RENAME TO unified_profiles;
---   ALTER TABLE transactions_backup_[timestamp] RENAME TO transactions;
---   ALTER TABLE enrollments_backup_[timestamp] RENAME TO enrollments;
---   ALTER TABLE affiliates_backup_[timestamp] RENAME TO affiliates;
--- COMMIT;
-```
-
-**Performance Comparison**:
-- ❌ **DELETE/INSERT approach**: 5-10 minutes, locks tables, complex FK ordering
-- ✅ **ATOMIC RENAME approach**: **<1 second**, no locks, automatic FK preservation
-
-## Implementation Plan
-
-### Phase 1: Raw API Integration (Week 1)
-- [x] Create `extract_api_data_to_staging()` function ✅ **COMPLETED**
-- [x] Create `xendit_raw_staging` and `systemeio_raw_staging` tables ✅ **COMPLETED**
-- [x] Create `validate_and_prepare_clean_data()` function ✅ **COMPLETED**
-- [x] Create `launch_clean_production()` function ✅ **COMPLETED**
-- [x] Create all staging tables with proper structure ✅ **COMPLETED**
-- [ ] Set up API credentials and error handling
-- [ ] Test API pagination and rate limiting
-
-### Phase 2: Data Transformation (Week 2)  
-- [x] Create staging tables with proper FK constraints (in dependency order) ✅ **COMPLETED**
-- [x] Test FK constraint creation and validation ✅ **COMPLETED**
-- [x] Implement `validate_and_prepare_clean_data()` function (respecting FK order) ✅ **COMPLETED**
-- [x] Build product categorization logic (P2P vs Canva) ✅ **COMPLETED**
-- [x] Create comprehensive validation rule set including FK constraint checks ✅ **COMPLETED**
-- [x] Optimize data processing for 1000+ records with batch operations ✅ **COMPLETED**
 - [x] Modify function to account for existing auth.users (preserve valid IDs) ✅ **COMPLETED**
 - [x] Handle manual payments (PAIDP2P without Xendit records) with correct pricing (₱800) ✅ **COMPLETED**
 - [x] Implement incremental update capability for staging tables ✅ **COMPLETED**
@@ -513,10 +514,14 @@ COMMIT;
 - [x] Test data insertion in proper FK dependency order ✅ **COMPLETED**
 
 ### Phase 3: Production Cutover (Week 3)
-- [ ] Implement `launch_clean_production()` function (with FK-aware deletion/insertion order)
-- [ ] Create rollback procedures and safety checks (respecting FK constraints)
-- [ ] Test full pipeline in development environment (validate all FK constraints)
-- [ ] Test atomic transaction rollback on FK constraint violations
+- [x] Implement `launch_clean_production()` function (with FK-aware deletion/insertion order) ✅ **COMPLETED**
+- [x] Create rollback procedures and safety checks (respecting FK constraints) ✅ **COMPLETED**
+- [x] Test full pipeline in development environment (validate all FK constraints) ✅ **COMPLETED**
+- [x] Test atomic transaction rollback on FK constraint violations ✅ **COMPLETED**
+- [x] Add safety checks to prevent migration with insufficient data ✅ **COMPLETED**
+- [x] Test edge cases (empty staging tables, FK violations) ✅ **COMPLETED**
+- [x] Improve rollback function to preserve staging tables ✅ **COMPLETED** (2025-06-29)
+- [x] Successfully test rollback with staging preservation ✅ **COMPLETED** (2025-06-29)
 - [ ] Document launch day runbook with FK constraint verification steps
 
 ### Phase 4: Launch Execution (Week 4)
