@@ -357,12 +357,7 @@ export const CourseProgressSection = React.memo(function CourseProgressSection({
                           totalDurationMinutes: totalCourseMinutes || 0 // Use actual calculated duration, no fallback
                         });
                         
-                        console.log('[CourseProgressSection] Using actual course duration for calculation:', {
-                          totalCourseSeconds,
-                          totalCourseMinutes,
-                          progress: courseProgress.progress,
-                          remainingMinutes
-                        });
+                       
                         
                         return `${remainingMinutes} mins remaining`;
                       })()} 

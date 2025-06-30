@@ -484,7 +484,7 @@ export const createActions = (
         .from('enrollments')
         .select(`
           *,
-          courses (
+          courses!enrollments_course_id_fkey (
             id,
             title,
             description,
@@ -589,9 +589,6 @@ export const createActions = (
             enrolledAt: enrollment.enrolled_at ?? '',
             expiresAt: enrollment.expires_at,
             status: enrollment.status as UserEnrollment['status'],
-            paymentId: enrollment.payment_id,
-            createdAt: enrollment.created_at ?? '',
-            updatedAt: enrollment.updated_at ?? '',
             course: courseData,
           };
         });
@@ -652,7 +649,7 @@ export const createActions = (
         .from('enrollments')
         .select(`
           status,
-          course: courses (
+          course: courses!enrollments_course_id_fkey (
             id, title, description, slug,
             modules (
               id, title, course_id, 

@@ -408,12 +408,9 @@ export default function StudentDashboard() {
     
     if (typeof progress.totalDurationSeconds === 'number') {
       totalSeconds = progress.totalDurationSeconds;
-      console.log('[Dashboard] Using actual duration data:', totalSeconds, 'seconds');
     } else {
       // Fall back to an estimate based on average lesson duration (still better than fixed 15min)
-      // We could improve this by getting actual durations from the course data
       totalSeconds = (progress.completedLessonsCount || 0) * (60 * 15); // 15 minutes per lesson in seconds
-      console.log('[Dashboard] Using estimated duration:', totalSeconds, 'seconds');
     }
     
     return formatTimeSpent(totalSeconds);
@@ -472,44 +469,27 @@ export default function StudentDashboard() {
     // Get completed lesson IDs from the progress data
     const lessonProgress = (rawCourseProgress as any)?.lessonProgress;
     
-    // Add detailed debug logging
-    console.log('[Dashboard] Raw course progress structure:', rawCourseProgress);
-    console.log('[Dashboard] Lesson progress data structure:', lessonProgress);
-    
     if (lessonProgress) {
-      console.log('[Dashboard] Lesson progress entries:', Object.entries(lessonProgress).length);
-      
       Object.entries(lessonProgress).forEach(([lessonId, statusData]) => {
-        // Log each lesson progress entry for debugging
-        console.log(`[Dashboard] Lesson ID: ${lessonId}, Status data:`, statusData, 'Type:', typeof statusData);
-        
         // Handle both string status and object with status property
         let status: string | undefined;
         if (typeof statusData === 'string') {
           status = statusData;
-          console.log(`[Dashboard] String status: ${status}`);
         } else if (statusData && typeof statusData === 'object') {
           status = (statusData as {status?: string}).status;
-          console.log(`[Dashboard] Object status: ${status}`);
         }
         
         if (status === 'completed') {
           completedLessonIds.add(lessonId);
-          console.log(`[Dashboard] Added completed lesson: ${lessonId}`);
         }
       });
-    } else {
-      console.log('[Dashboard] No lesson progress data found!');
     }
     
     // Process course structure to count lessons and sum durations
-    console.log('[Dashboard] Course structure:', course);
     
     if (course?.modules) {
-      console.log(`[Dashboard] Processing ${course.modules.length} modules`);
       course.modules.forEach(module => {
         if (module.lessons) {
-          console.log(`[Dashboard] Module ${module.id} has ${module.lessons.length} lessons`);
           totalLessonsCount += module.lessons.length;
           
           // Sum up durations for completed lessons
@@ -544,8 +524,6 @@ export default function StudentDashboard() {
       });
     }
     
-    console.log('[Dashboard] Calculated total duration:', totalDurationSeconds, 'seconds for', completedLessonIds.size, 'completed lessons');
-    console.log('[Dashboard] Completed lesson IDs:', Array.from(completedLessonIds));
 
     if (!rawCourseProgress) {
       // If no progress data from store, return a default object
@@ -588,7 +566,6 @@ export default function StudentDashboard() {
       }
     });
     
-    console.log(`[Dashboard] Found ${completedLessonIds.size} completed lessons in direct progress data`);
     
     // Now calculate duration for both total course and completed lessons
     if (enrollments?.[0]?.course?.modules) {
@@ -626,11 +603,6 @@ export default function StudentDashboard() {
         }
       });
     }
-    
-    console.log('[Dashboard] Direct calculation found:', 
-                'Total course duration:', totalCourseDurationSeconds, 'seconds',
-                'Completed lessons duration:', completedDurationSeconds, 'seconds for', 
-                completedLessonIds.size, 'completed lessons');
     
     // Format course progress data for UI components
     return {
