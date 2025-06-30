@@ -1,8 +1,12 @@
-import { CheckCircle, ArrowLeft, Loader, XCircle } from "lucide-react"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
+import { Loader } from "lucide-react"
 import { getTransactionByExternalId, TransactionDetails } from "@/app/actions/payment-actions"
 import { Suspense } from "react"
+import { PublicHeader } from "@/components/layout/public-header"
+import { PublicFooter } from "@/components/layout/public-footer"
+
+// Import client components
+import { SuccessContent } from "./success-content"
+import { ErrorContent } from "./error-content"
 
 // Define props for the page (in Next.js 15, searchParams is a Promise)
 interface PaymentSuccessPageProps {
@@ -12,12 +16,15 @@ interface PaymentSuccessPageProps {
 // Loading component (can be reused)
 function LoadingState() {
   return (
-    <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-        <Loader className="h-12 w-12 animate-spin text-[#ad8174] mx-auto mb-4" />
-        <h2 className="text-xl font-serif text-[#5d4037]">Loading Payment Confirmation...</h2>
-        <p className="text-[#6d4c41] mt-2">Please wait a moment.</p>
-      </div>
+    <div className="min-h-screen flex flex-col">
+      <PublicHeader />
+      <main className="flex-1 bg-[#f8f5f1] flex items-center justify-center">
+        <div className="text-center p-8 bg-white rounded-xl shadow-md">
+          <Loader className="h-8 w-8 animate-spin text-[#ad8174] mx-auto" />
+          <p className="mt-4 text-[#6d4c41] font-medium">Loading your purchase details...</p>
+        </div>
+      </main>
+      <PublicFooter />
     </div>
   );
 }
@@ -45,23 +52,7 @@ async function PaymentSuccessContent({ searchParams }: PaymentSuccessPageProps) 
 
   // Handle errors or missing transaction
   if (errorMessage) {
-    return (
-      <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
-          <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-serif text-[#5d4037]">Confirmation Error</h1>
-          <p className="text-[#6d4c41] mt-2">{errorMessage}</p>
-          <div className="pt-6">
-            <Link href="/">
-              <Button className="bg-[#ad8174] hover:bg-[#8d6e63] text-white">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Return to Home
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
+    return <ErrorContent errorMessage={errorMessage} />;
   }
 
   // Successful state - transaction details are available
@@ -93,48 +84,18 @@ async function PaymentSuccessContent({ searchParams }: PaymentSuccessPageProps) 
      ? new Intl.NumberFormat('en-PH', { style: 'currency', currency: currency }).format(amountPaid)
      : 'N/A';
 
+  // Pass all the relevant data to the client component
   return (
-    <div className="min-h-screen bg-[#f9f6f2] flex items-center justify-center p-4">
-      {/* Motion can be added back with a Client Component wrapper if desired */}
-      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8">
-        <div className="text-center space-y-6">
-          <div className="w-20 h-20 rounded-full bg-[#f0e6dd] flex items-center justify-center mx-auto">
-            <CheckCircle className="h-10 w-10 text-[#ad8174]" />
-          </div>
-
-          <div className="space-y-2">
-            <h1 className="text-2xl font-serif text-[#5d4037]">Payment Successful!</h1>
-            <p className="text-[#6d4c41]">
-              {/* Dynamic confirmation line 1 */}
-              {confirmationLine1}
-            </p>
-          </div>
-
-          <div className="bg-[#f0e6dd] rounded-lg p-4 text-sm text-[#6d4c41]">
-            <p className="font-medium mb-2">Confirmation Details:</p>
-            <p>Product: {productName}</p> {/* Added Product Name */}
-            <p>Order Reference: {transaction?.external_id || 'N/A'}</p>
-            {amountPaid !== null && amountPaid !== undefined && (
-              <p>Amount Paid: {formattedAmount}</p> // Use formatted amount
-            )}
-            <p className="mt-2">
-              {/* Dynamic confirmation line 2 */}
-              {confirmationLine2}
-            </p>
-          </div>
-
-          <div className="pt-4">
-            {/* TODO: Add relevant links, e.g., to a student dashboard or course page */}
-            <Link href="/"> 
-              <Button className="bg-[#ad8174] hover:bg-[#8d6e63] text-white">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Return to Home
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
+    <SuccessContent 
+      firstName={firstName}
+      confirmationLine1={confirmationLine1}
+      confirmationLine2={confirmationLine2}
+      productName={productName}
+      externalId={transaction?.external_id}
+      amountPaid={amountPaid}
+      formattedAmount={formattedAmount}
+      productType={productType}
+    />
   );
 }
 
