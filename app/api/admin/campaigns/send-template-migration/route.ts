@@ -22,6 +22,12 @@ export async function POST(request: NextRequest) {
     console.log(`🚀 Starting template migration for template: ${templateId}`)
     console.log(`📊 Batch size: ${batchSize}, Starting from: ${startFrom}`)
     console.log(`🧪 Test mode: ${testEmails ? 'YES' : 'NO'}`)
+    console.log(`🔧 Environment check:`, {
+      hasJwtSecret: !!(process.env.MAGIC_LINK_JWT_SECRET || process.env.JWT_SECRET),
+      hasBaseUrl: !!(process.env.MAGIC_LINK_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL),
+      hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY
+    })
     if (testEmails) {
       console.log(`📧 Test emails: ${testEmails.join(', ')}`)
     }
@@ -102,8 +108,8 @@ export async function POST(request: NextRequest) {
         })
 
         if (!magicLinkResult.success || !magicLinkResult.magicLink) {
-          console.warn(`⚠️ Failed to generate magic link for ${profile.email}`)
-          errors.push(`Magic link generation failed for ${profile.email}`)
+          console.warn(`⚠️ Failed to generate magic link for ${profile.email}:`, magicLinkResult.error)
+          errors.push(`Magic link generation failed for ${profile.email}: ${magicLinkResult.error || 'Unknown error'}`)
           errorCount++
           continue
         }
