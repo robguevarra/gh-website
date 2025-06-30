@@ -76,7 +76,7 @@ Create and execute a clean data migration strategy that pulls accurate customer 
 
 ### Phase 4: Go Live
 1. Backup production tables
-2. Run function with production parameters
+2. Run function with production parameters!
 3. Verify results
 4. Migrate staging tables to production when ready
 
