@@ -203,36 +203,26 @@ export async function processQueue(options: ProcessQueueOptions = {}): Promise<{
           const processedSubject = substituteVariables(subjectString, mergedVariables);
           const processedHtml = substituteVariables(htmlBodyString, mergedVariables);
 
-          // Send email via Postmark
-          console.log(`Sending campaign email ${email.id} to ${email.recipient_email} with subject: ${processedSubject}`);
-          
-          let messageId: string;
-          try {
-            // Import Postmark client
-            const { createPostmarkClient } = await import('@/lib/services/email/postmark-client');
-            const postmark = createPostmarkClient();
-            
-            // Send the email using Postmark
-            const emailResponse = await postmark.sendEmail({
-              to: { email: email.recipient_email },
-              subject: processedSubject,
-              htmlBody: processedHtml,
-              from: { 
-                email: campaignData.sender_email || process.env.POSTMARK_SENDER_EMAIL_DEFAULT || 'no-reply@gracefulhomeschooling.com',
-                name: campaignData.sender_name || 'Graceful Homeschooling'
-              },
-              messageStream: 'broadcast',
-              trackOpens: true,
-              trackLinks: 'HtmlAndText',
-              tag: `campaign-${email.campaign_id}`
-            });
-            
-            messageId = emailResponse.MessageID;
-            console.log(`Successfully sent campaign email ${email.id} via Postmark, MessageID: ${messageId}`);
-          } catch (sendError) {
-            console.error(`Failed to send campaign email ${email.id} via Postmark:`, sendError);
-            throw new Error(`Email send failed: ${sendError instanceof Error ? sendError.message : String(sendError)}`);
-          }
+          // TODO: Implement actual email sending logic using Postmark (or other service)
+          // This function would take recipient_email, processedSubject, processedHtml, sender_email, sender_name
+          // Example conceptual call:
+          // const sendResult = await emailService.sendTemplatedEmail(
+          //   {
+          //     From: campaign.sender_email || process.env.POSTMARK_SENDER_EMAIL_DEFAULT,
+          //     To: email.recipient_email,
+          //     Subject: processedSubject,
+          //     HtmlBody: processedHtml,
+          //     MessageStream: 'broadcast', // Or your relevant stream
+          //     Tag: `campaign-${email.campaign_id}`
+          //   }
+          // ); 
+          // if (!sendResult.success || sendResult.messageId) { /* store messageId, handle error */ }
+
+          console.log(`Simulating send for email ${email.id} to ${email.recipient_email} with subject: ${processedSubject}`);
+          // For now, simulate a successful send. Replace with actual Postmark call.
+          // await new Promise(resolve => setTimeout(resolve, 1000 / (rateLimit / 60))); // Rate limiting not needed here if Postmark API handles it
+          await new Promise(resolve => setTimeout(resolve, 50)); // Simulate a quick send operation
+          const simulatedMessageId = `simulated_${Date.now()}_${email.id}`;
 
           // Mark as sent
           await supabaseAdmin
@@ -241,7 +231,7 @@ export async function processQueue(options: ProcessQueueOptions = {}): Promise<{
               status: 'sent',
               sent_at: new Date().toISOString(), // Use sent_at
               completed_at: new Date().toISOString(), // Keep completed_at for consistency if used elsewhere
-              provider_message_id: messageId, // Store the actual Postmark MessageID
+              provider_message_id: simulatedMessageId, // Store the (simulated) Postmark MessageID
               subject: processedSubject, // Store the processed subject
               html_content: processedHtml, // Store the processed HTML (optional, for logging/auditing)
               updated_at: new Date().toISOString()

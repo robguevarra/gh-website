@@ -25,6 +25,7 @@ import { EnrollmentAnalytics } from '@/components/admin/enrollment-analytics';
 import RevenueAnalyticsPage from '@/app/admin/revenue-analytics/page';
 import MarketingAnalyticsContent from '@/app/admin/marketing/MarketingAnalyticsContent';
 import EmailAnalyticsDashboard from '@/components/admin/email-analytics-dashboard';
+import { TemplateMigration } from '@/components/admin/template-migration';
 //import { RevenueAnalysis } from '@/components/admin/revenue-analysis';
 //import { MarketingInsights } from '@/components/admin/marketing-insights';
 
@@ -46,7 +47,7 @@ export default async function AdminDashboardPage() {
       </div>
       {/* Tab navigation for dashboard sections. Add new sections as needed. */}
       <Tabs defaultValue="overview" className="space-y-8">
-        <TabsList className="grid w-full grid-cols-6 md:w-auto"> 
+        <TabsList className="grid w-full grid-cols-7 md:w-auto"> 
           {/* Tab triggers for each dashboard section */}
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <BarChart2 className="h-4 w-4" />
@@ -67,6 +68,10 @@ export default async function AdminDashboardPage() {
           <TabsTrigger value="email" className="flex items-center gap-2">
             <BarChart2 className="h-4 w-4" />
             <span className="hidden sm:inline">Email Analytics</span>
+          </TabsTrigger>
+          <TabsTrigger value="migration" className="flex items-center gap-2">
+            <Megaphone className="h-4 w-4" />
+            <span className="hidden sm:inline">Migration</span>
           </TabsTrigger>
           <TabsTrigger value="tag-management" className="flex items-center gap-2">
             <TagsIcon className="h-4 w-4" />
@@ -101,6 +106,13 @@ export default async function AdminDashboardPage() {
         <TabsContent value="email">
           <Suspense fallback={<DashboardSkeleton />}>
             <EmailAnalyticsDashboard />
+          </Suspense>
+        </TabsContent>
+
+        {/* Add Template Migration TabsContent */}
+        <TabsContent value="migration">
+          <Suspense fallback={<DashboardSkeleton />}>
+            <TemplateMigration />
           </Suspense>
         </TabsContent>
 
