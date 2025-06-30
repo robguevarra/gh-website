@@ -5,7 +5,6 @@ To implement a robust, modern, and user-friendly email system for Graceful Homes
 
 ## 2. Reason for Restructuring
 Following strategic decisions to adopt Unlayer for email template editing and to streamline the overall email architecture, the existing task list has been reorganized. This phased structure provides a clearer roadmap for the remaining development work, ensuring clarity and focus for all team members, including AI developers. Original task IDs are referenced for historical context.
-
 ## 3. Phase Breakdown
 
 ### Phase 1: Solidify Core Email Infrastructure (Postmark & Unlayer) - (Task 34)

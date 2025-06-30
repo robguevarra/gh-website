@@ -93,9 +93,12 @@ export async function POST(request: NextRequest) {
     for (const profile of profiles) {
       try {
         // Classify customer to determine auth flow
+        console.log(`🔍 Classifying customer: ${profile.email}`)
         const customerClassification = await classifyCustomer(profile.email)
+        console.log(`✅ Customer classified:`, customerClassification.classification?.type)
         
         // Generate magic link
+        console.log(`🔗 Generating magic link for: ${profile.email}`)
         const magicLinkResult = await generateMagicLink({
           email: profile.email,
           purpose: 'account_setup',
@@ -106,6 +109,7 @@ export async function POST(request: NextRequest) {
             customer_type: customerClassification.classification?.type
           }
         })
+        console.log(`🔗 Magic link result:`, { success: magicLinkResult.success, hasLink: !!magicLinkResult.magicLink, error: magicLinkResult.error })
 
         if (!magicLinkResult.success || !magicLinkResult.magicLink) {
           console.warn(`⚠️ Failed to generate magic link for ${profile.email}:`, magicLinkResult.error)
