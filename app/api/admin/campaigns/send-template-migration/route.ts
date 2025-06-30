@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { templateId = '3b292bfd-bec2-42ac-aa2c-97d3edd3501d', batchSize = 50, startFrom = 0, testEmails = null } = body
+    const { templateId = '3b292bfd-bec2-42ac-aa2c-97d3edd3501d', batchSize = 5, startFrom = 0, testEmails = null } = body
 
     console.log(`🚀 Starting template migration for template: ${templateId}`)
     console.log(`📊 Batch size: ${batchSize}, Starting from: ${startFrom}`)
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     let errorCount = 0
     const errors: string[] = []
 
-    // Process each user
+    // Process each user  
     for (const profile of profiles) {
       try {
         // Classify customer to determine auth flow
