@@ -41,11 +41,12 @@ export async function getPermittedProfileIds(
   logger.info(`[FrequencyCapping] Starting frequency check for ${profileIds.length} profile IDs.`);
 
   // 1. Fetch unified_profiles for the given IDs to get their email addresses
+  // Note: email_bounced can be NULL (not bounced), false (not bounced), or true (bounced)
   const { data: profiles, error: profilesError } = await supabaseClient
     .from('unified_profiles')
     .select('id, email')
     .in('id', profileIds)
-    .eq('email_bounced', false) // Only consider non-bounced emails
+    .or('email_bounced.is.null,email_bounced.eq.false') // Only consider non-bounced emails (NULL or false)
     .returns<Pick<UnifiedProfile, 'id' | 'email'>[]>(); // Ensure return type
 
   if (profilesError) {

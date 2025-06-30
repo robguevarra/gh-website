@@ -94,11 +94,12 @@ export async function POST(request: NextRequest) {
 
     // 3. Fetch UnifiedProfiles (non-bounced)
     // TODO: Batching for large audiences
+    // Note: email_bounced can be NULL (not bounced), false (not bounced), or true (bounced)
     const { data: profiles, error: profilesError } = await adminClient
       .from('unified_profiles')
       .select<string, UnifiedProfile>('id, email, first_name, last_name, tags, email_bounced')
       .in('id', finalProfileIds)
-      .eq('email_bounced', false)
+      .or('email_bounced.is.null,email_bounced.eq.false')
       .returns<UnifiedProfile[]>();
 
     if (profilesError) {

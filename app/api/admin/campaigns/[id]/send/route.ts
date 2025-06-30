@@ -98,11 +98,12 @@ export async function POST(
     // 3. Fetch unified_profiles for these finalProfileIds (batching and filtering bounced)
     // Simplified: Assuming not too many for a single API call context for now. Batching should be added for robustness.
     // TODO: Implement batching for fetching profiles if finalProfileIds can be very large.
+    // Note: email_bounced can be NULL (not bounced), false (not bounced), or true (bounced)
     const { data: profiles, error: profilesError } = await adminClient
       .from('unified_profiles')
       .select<string, UnifiedProfile>('id, email, first_name, last_name, tags, email_bounced')
       .in('id', finalProfileIds)
-      .eq('email_bounced', false)
+      .or('email_bounced.is.null,email_bounced.eq.false')
       .returns<UnifiedProfile[]>();
 
     if (profilesError) {
