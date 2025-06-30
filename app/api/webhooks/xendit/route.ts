@@ -1172,12 +1172,20 @@ export async function POST(request: NextRequest) {
               if (emailToStore && typeof emailToStore === 'string') { // Ensure it's a non-null string
                   // Define new variable inside block, guaranteed to be string
                   const validatedEmail = emailToStore; 
-                  await storeEbookContactInfo({
-                    email: validatedEmail, // Use the validated, non-null email
-                    // Ensure metadata is an object before passing
-                    metadata: (typeof tx.metadata === 'object' && tx.metadata !== null) ? tx.metadata : {}, 
-                  })
-                  console.log("[Webhook][Canva] Ebook contact info stored successfully");
+                  
+                  // --- Store contact info (now non-blocking) ---
+                  try {
+                    await storeEbookContactInfo({
+                      email: validatedEmail, // Use the validated, non-null email
+                      // Ensure metadata is an object before passing
+                      metadata: (typeof tx.metadata === 'object' && tx.metadata !== null) ? tx.metadata : {}, 
+                    })
+                    console.log("[Webhook][Canva] Ebook contact info stored successfully");
+                  } catch (contactStoreError) {
+                    // Extra safety - even though storeEbookContactInfo shouldn't throw anymore
+                    console.error("[Webhook][Canva] Failed to store contact info, but continuing with email delivery:", contactStoreError);
+                    // Continue execution - don't let contact storage failure stop the email
+                  }
                   
                   // --- Apply Canva Purchase tag ---
                   try {

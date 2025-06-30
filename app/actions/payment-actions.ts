@@ -140,8 +140,23 @@ export async function createPaymentIntent(params: PaymentIntentParams): Promise<
       // Determine transaction type (assuming 'course' if description includes it)
       const transactionType = params.description?.includes("Course") ? 'course' : 'ebook';
       
-      // Prepare metadata for logging
-      const loggedMetadata = {
+      // Define a more complete interface for metadata to avoid type errors
+      interface TransactionMetadata {
+        firstName: string;
+        lastName?: string | null;
+        courseId?: string;
+        promo_code?: string;
+        source?: string;
+        plan?: string;
+        affiliate_slug?: string;
+        visitor_id?: string;
+        affiliate_capture_time?: string;
+        // Add any other properties that might be in params.metadata
+        [key: string]: any;
+      }
+
+      // Prepare metadata for logging with proper typing
+      const loggedMetadata: TransactionMetadata = {
         ...(params.metadata || {}),
         firstName: params.firstName,
         lastName: params.lastName,
@@ -151,13 +166,19 @@ export async function createPaymentIntent(params: PaymentIntentParams): Promise<
         promo_code: params.metadata?.promo_code,
         source: params.metadata?.source || 'website',
         plan: params.metadata?.plan,
-        // Add affiliate tracking data for conversion attribution
-        affiliateTracking: {
-          affiliateSlug,
-          visitorId,
-          capturedAt: new Date().toISOString()
-        }
       };
+      
+      // Flatten affiliate tracking data to avoid potential JSON parsing issues
+      if (affiliateSlug) loggedMetadata.affiliate_slug = affiliateSlug;
+      if (visitorId) loggedMetadata.visitor_id = visitorId;
+      if (affiliateSlug || visitorId) loggedMetadata.affiliate_capture_time = new Date().toISOString();
+
+      // Debug log to check metadata structure before cleanup
+      console.log('[PaymentAction] Metadata before cleanup:', {
+        hasAffiliateData: !!affiliateSlug,
+        metadataKeys: Object.keys(loggedMetadata),
+        transactionType,
+      });
 
       // Remove null/undefined values from metadata before logging
       // Cast to any to allow dynamic key access for cleanup
@@ -165,22 +186,62 @@ export async function createPaymentIntent(params: PaymentIntentParams): Promise<
       Object.keys(metadataToClean).forEach(key => 
         (metadataToClean[key] === undefined || metadataToClean[key] === null) && delete metadataToClean[key]
       );
-
-      await logTransaction({
-        transactionType: transactionType,
-        userId: null, // No user ID at this stage
-        email: params.email,
-        amount: params.amount / 100, // Convert to base unit before logging
-        metadata: metadataToClean, // Use cleaned metadata
-        externalId: externalId, // MUST use the locally generated externalId
-        paymentMethod: null, // Payment method not confirmed yet
-        phone: params.phone // Pass phone number
+      
+      // Attempt to log transaction
+      try {
+        const transaction = await logTransaction({
+          transactionType: transactionType,
+          userId: null, // No user ID at this stage
+          email: params.email,
+          amount: params.amount / 100, // Convert to base unit before logging
+          metadata: metadataToClean, // Use cleaned metadata
+          externalId: externalId, // MUST use the locally generated externalId
+          paymentMethod: 'XENDIT', // Add specific payment method
+          phone: params.phone // Pass phone number
+        });
+        
+        console.log(`[PaymentAction] Successfully logged initial transaction for externalId: ${externalId}`);
+        
+      } catch (txError: any) {
+        // Detailed error logging for transaction issues
+        console.error(`[PaymentAction] CRITICAL: Failed to log transaction:`, {
+          error: txError?.message || 'Unknown error',
+          externalId,
+          errorDetails: txError?.toString?.() || 'No details',
+        });
+        
+        // Try a simpler version with minimal metadata as fallback
+        try {
+          console.log('[PaymentAction] Attempting simplified transaction logging fallback...');
+          await logTransaction({
+            transactionType: transactionType,
+            userId: null,
+            email: params.email,
+            amount: params.amount / 100,
+            metadata: { 
+              firstName: params.firstName,
+              affiliate_slug: affiliateSlug
+            },
+            externalId: externalId,
+            paymentMethod: 'XENDIT',
+            phone: null
+          });
+          console.log(`[PaymentAction] Fallback transaction logging succeeded for externalId: ${externalId}`);
+        } catch (fallbackError: any) {
+          console.error(`[PaymentAction] Even simplified transaction logging failed:`, {
+            error: fallbackError?.message || 'Unknown error',
+            externalId
+          });
+          // We still continue as this shouldn't block the payment flow
+        }
+      }
+    } catch (logError: any) {
+      console.error(`[PaymentAction] CRITICAL: Failed in transaction logging flow:`, {
+        error: logError?.message || 'Unknown error',
+        externalId,
+        stack: logError?.stack
       });
-      console.log(`[PaymentAction] Successfully logged initial transaction for externalId: ${externalId}`);
-    } catch (logError) {
-      console.error(`[PaymentAction] CRITICAL: Failed to log initial transaction for externalId ${externalId} after successful Xendit call.`);
-      // Decide how to handle this - maybe still return success to frontend but log error prominently?
-      // For now, we proceed but the webhook might fail later if it can't find the transaction.
+      // We still continue as this shouldn't block the payment flow
     }
     // --- End Log Transaction Locally ---
 
