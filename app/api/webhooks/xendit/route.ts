@@ -55,6 +55,11 @@ interface XenditInvoicePaidPayload {
   description: string
   metadata: { [key: string]: any } | null
   paid_at: string
+  merchant_name?: string  // Added for trial webhook detection
+  bank_code?: string
+  currency?: string
+  payment_channel?: string
+  payment_destination?: string
   // Add other relevant Xendit fields here...
 }
 
@@ -93,6 +98,27 @@ export async function POST(request: NextRequest) {
     // Handle different event types
     switch (event) {
       case "invoice.paid": {
+        // Check if this is a trial/test webhook from Xendit
+        const isTrialWebhook = 
+          // Common trial webhook indicators
+          data.external_id === 'invoice_123124123' || // Known test ID
+          data.merchant_name === 'Xendit' || // Merchant name is Xendit itself
+          data.id.startsWith('579c8d') || // Common test ID pattern
+          // External ID patterns that suggest test/demo webhooks
+          /^(test|demo|trial|sample|example)/.test(data.external_id) ||
+          // Description indicates test webhook
+          data.description?.toLowerCase().includes('test') ||
+          data.description?.toLowerCase().includes('trial') ||
+          // Payer email indicates test webhook
+          data.payer_email?.includes('@xendit.co') ||
+          // Check if metadata has test flag
+          data.metadata?.isTest === true;
+
+        if (isTrialWebhook) {
+          console.log('[Webhook] Trial/test webhook detected from Xendit. Responding with success.');
+          return NextResponse.json({ success: true, message: 'Trial webhook received successfully' });
+        }
+
         // Declare variables needed in broader scope
         let firstName: string | undefined;
         let lastName: string | null | undefined;
