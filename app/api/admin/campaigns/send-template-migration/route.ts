@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { templateId = '3b292bfd-bec2-42ac-aa2c-97d3edd3501d', batchSize = 5, startFrom = 0, testEmails = null } = body
+    const { templateId = '3b292bfd-bec2-42ac-aa2c-97d3edd3501d', batchSize = 1, startFrom = 0, testEmails = null } = body
 
     console.log(`🚀 Starting template migration for template: ${templateId}`)
     console.log(`📊 Batch size: ${batchSize}, Starting from: ${startFrom}`)
@@ -92,12 +92,10 @@ export async function POST(request: NextRequest) {
     // Process each user  
     for (const profile of profiles) {
       try {
-        // Classify customer to determine auth flow
-        console.log(`🔍 Classifying customer: ${profile.email}`)
-        const customerClassification = await classifyCustomer(profile.email)
-        console.log(`✅ Customer classified:`, customerClassification.classification?.type)
+        // Skip customer classification for migration - use simple account_setup flow
+        // const customerClassification = await classifyCustomer(profile.email)
         
-        // Generate magic link
+        // Generate magic link with minimal metadata to reduce processing time
         console.log(`🔗 Generating magic link for: ${profile.email}`)
         const magicLinkResult = await generateMagicLink({
           email: profile.email,
@@ -105,8 +103,7 @@ export async function POST(request: NextRequest) {
           redirectTo: '/dashboard',
           metadata: {
             source: 'template_migration',
-            template_id: templateId,
-            customer_type: customerClassification.classification?.type
+            template_id: templateId
           }
         })
         console.log(`🔗 Magic link result:`, { success: magicLinkResult.success, hasLink: !!magicLinkResult.magicLink, error: magicLinkResult.error })
@@ -133,9 +130,8 @@ export async function POST(request: NextRequest) {
         const processedSubject = substituteVariables(template.subject, mergedVariables)
         const processedHtmlContent = substituteVariables(template.html_content, mergedVariables)
 
-        // Send email - Using transactional service with better logging
-        console.log(`🔍 Attempting to send email to ${profile.email} using template: "${template.name}"`)
-        console.log(`🔍 Merged variables:`, Object.keys(mergedVariables))
+        // Send email
+        console.log(`📧 Sending to ${profile.email}`)
         
         const emailResult = await sendTransactionalEmail(
           template.name,
@@ -144,11 +140,9 @@ export async function POST(request: NextRequest) {
           undefined // Don't link to purchase_leads for migration emails
         )
         
-        console.log(`📧 Email result for ${profile.email}:`, emailResult)
-
         if (emailResult.success) {
           successCount++
-          console.log(`✅ Sent template to ${profile.email}`)
+          console.log(`✅ Sent to ${profile.email}`)
         } else {
           errorCount++
           errors.push(`Email send failed for ${profile.email}: ${emailResult.error}`)
