@@ -78,15 +78,22 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
       
       if (isAccountSetup) {
         // Use POST method to create session for account setup
+        // Create body object dynamically to avoid sending null values that would fail schema validation
+        const requestBody: any = {
+          createSession: true
+        }
+        
+        // Only add redirectTo if it exists to prevent Zod validation errors
+        if (redirectTo) {
+          requestBody.redirectTo = redirectTo
+        }
+        
         const response = await fetch(`/api/auth/magic-link/verify/${encodeURIComponent(token)}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            createSession: true,
-            redirectTo: redirectTo
-          })
+          body: JSON.stringify(requestBody)
         })
 
         const result = await response.json()
