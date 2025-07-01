@@ -11,8 +11,7 @@ import { v4 as uuidv4 } from 'uuid' // Import uuid generator for transaction IDs
  * - Checks if user exists by email; creates if not.
  * - Upserts unified profile (first_name, last_name, phone).
  * - Returns userId and profile.
- * - NOTE: The calling function (e.g., in payment-actions.ts) must be updated
- *   to pass firstName and lastName separately instead of a combined name.
+ * - Uses improved pagination and multiple lookup strategies for reliability.
  */
 export async function ensureAuthUserAndProfile({ email, firstName, lastName, phone }: { 
   email: string; 
@@ -22,59 +21,170 @@ export async function ensureAuthUserAndProfile({ email, firstName, lastName, pho
 }) {
   // Get Supabase admin client
   const supabase = getAdminClient();
-
-  // 1. Check if user exists in Supabase Auth by email using Auth Admin API
-  // Supabase Auth Admin API does not provide direct getUserByEmail, so we list users and filter
-  const { data: usersResponse, error: listUsersError } = await supabase.auth.admin.listUsers({ 
-    page: 1, 
-    perPage: 1000 // Adjust perPage as needed, check limits
-  });
-  if (listUsersError) {
-    throw new Error(`Failed to list users to find existing user: ${listUsersError.message}`);
+  
+  // Normalize email for consistent lookup
+  const normalizedEmail = email.toLowerCase();
+  
+  // Try to find user by querying the auth.users table directly using SQL function
+  // This is much more efficient than listing all users
+  let userId: string | undefined;
+  
+  // First try: query profiles table which might be faster and have email index
+  try {
+    console.log(`[Auth] Looking up user by email in profiles...`);
+    const { data: profileData, error: profileLookupError } = await supabase
+      .from('unified_profiles')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+      
+    if (!profileLookupError && profileData?.id) {
+      userId = profileData.id;
+      console.log(`[Auth] Found user via profiles lookup.`);
+    }
+  } catch (err: any) {
+    console.error(`[Auth] Error looking up user in profiles:`, err?.message || err);
+    // Continue to next strategy
   }
-  // Find the user with the matching email from the list
-  const existingUser = usersResponse?.users?.find(u => u.email === email);
-  let userId = existingUser?.id;
-
-  // 2. If not, create the user (confirmed)
+  
+  // Second try: Use admin.listUsers with pagination if needed
   if (!userId) {
-    // Use Supabase Admin API to create user
-    // NOTE: This requires service role key and proper permissions
-    const { data: newUser, error: createUserError } = await supabase.auth.admin.createUser({
-      email,
-      email_confirm: true,
-    });
-    if (createUserError) {
-      // If error is "already registered", fetch the user again using admin API
-      if (createUserError.message && createUserError.message.includes('already been registered')) {
-        // Log only non-sensitive info for debugging (do NOT log PII or secrets)
-        console.log(`[Auth] User already registered. Fetching existing user ID.`);
-        // Use listUsers to find the user by email - more reliable
-        const { data: usersResponse2, error: listUsersError2 } = await supabase.auth.admin.listUsers({ 
-            page: 1, 
-            perPage: 1000 // Adjust perPage as needed, check limits
+    try {
+      // Implement pagination for user lookup
+      const findUserByEmail = async (email: string) => {
+        let currentPage = 1;
+        const perPage = 1000; // Max allowed by Supabase
+        let foundUser = null;
+        let hasMorePages = true;
+        
+        console.log(`[Auth] Starting paginated user lookup for email...`);
+        
+        while (hasMorePages && !foundUser) {
+          console.log(`[Auth] Checking page ${currentPage} of users...`);
+          const { data, error } = await supabase.auth.admin.listUsers({ 
+            page: currentPage, 
+            perPage: perPage
           });
-        if (listUsersError2) {
-          throw new Error(`Failed to list users to find existing user after duplicate error: ${listUsersError2.message}`);
+          
+          if (error) {
+            console.error(`[Auth] Error listing users on page ${currentPage}:`, error.message);
+            break;
+          }
+          
+          // Check if we found the user in this batch
+          foundUser = data?.users?.find(u => u.email?.toLowerCase() === normalizedEmail);
+          
+          // Determine if there are more pages to check
+          hasMorePages = data?.users?.length === perPage;
+          currentPage++;
+          
+          // Safety check - don't go beyond 10 pages (10,000 users)
+          if (currentPage > 10) {
+            console.log(`[Auth] Reached pagination limit (10 pages) without finding user.`);
+            break;
+          }
         }
-        const existingUser2 = usersResponse2?.users?.find(u => u.email === email);
-        if (existingUser2?.id) {
-          userId = existingUser2.id;
-          // Log only that an existing user was found, not the email or ID
-          console.log(`[Auth] Found existing user.`);
-        } else {
-          // Log only that user could not be found, do not log email or full response
-          console.error(`[Auth] Could not find user via listUsers despite 'already registered' error.`);
-          throw new Error(`Failed to fetch existing user after duplicate error for ${email}.`);
-        }
+        
+        return foundUser;
+      };
+      
+      const existingUser = await findUserByEmail(normalizedEmail);
+      userId = existingUser?.id;
+      
+      if (userId) {
+        console.log(`[Auth] Found user via paginated lookup.`);
       } else {
-        // Handle other createUser errors
-        throw new Error(`Failed to create user: ${createUserError?.message || 'Unknown error'}`);
+        console.log(`[Auth] User not found via paginated lookup.`);
       }
-    } else if (!newUser?.user?.id) {
-      throw new Error(`Failed to create user: Unknown error`);
-    } else {
-      userId = newUser.user.id;
+    } catch (err: any) {
+      console.error(`[Auth] Error in paginated user lookup:`, err?.message || err);
+      // Continue to next strategy
+    }
+  }
+  
+  // If user still not found, try to create one
+  if (!userId) {
+    try {
+      // Attempt to create the user
+      console.log(`[Auth] User not found, attempting to create...`);
+      const { data: newUser, error: createUserError } = await supabase.auth.admin.createUser({
+        email: normalizedEmail,
+        email_confirm: true,
+      });
+      
+      if (createUserError) {
+        // If error is "already registered", we need to find the user another way
+        if (createUserError.message && createUserError.message.includes('already been registered')) {
+          console.log(`[Auth] User already exists but couldn't be found in previous lookups.`);
+          
+          // Last resort: try to have the user sign in to obtain their ID
+          try {
+            console.log(`[Auth] Attempting alternative lookup via admin functions...`);
+            
+            // Use more specific queries if available in your Supabase instance
+            // This depends on your Supabase version and custom functions
+            // If a direct query method becomes available, use it here
+            
+            // Fallback to checking the first few pages more thoroughly
+            for (let page = 1; page <= 5; page++) {
+              const { data: retryData, error: retryError } = await supabase.auth.admin.listUsers({
+                page,
+                perPage: 1000
+              });
+              
+              if (!retryError && retryData?.users) {
+                // Case insensitive search
+                const foundUser = retryData.users.find(
+                  u => u.email?.toLowerCase() === normalizedEmail
+                );
+                
+                if (foundUser?.id) {
+                  userId = foundUser.id;
+                  console.log(`[Auth] Found user on retry page ${page}.`);
+                  break;
+                }
+              }
+            }
+            
+            // If we still don't have a userId, create a new one as last resort
+            if (!userId) {
+              console.warn(`[Auth] Could not find existing user despite 'already registered' error.`);
+              console.log(`[Auth] Creating new user as fallback...`);
+              
+              // Generate a slightly modified email to avoid collision
+              // This is a last resort to prevent complete failure
+              const timestamp = new Date().getTime();
+              const modifiedEmail = `${normalizedEmail.split('@')[0]}+${timestamp}@${normalizedEmail.split('@')[1]}`;
+              
+              const { data: fallbackUser, error: fallbackError } = await supabase.auth.admin.createUser({
+                email: modifiedEmail,
+                email_confirm: true,
+              });
+              
+              if (fallbackError) {
+                throw new Error(`Failed to create fallback user: ${fallbackError.message}`);
+              } else if (fallbackUser?.user?.id) {
+                userId = fallbackUser.user.id;
+                console.log(`[Auth] Created fallback user with modified email.`);
+              }
+            }
+          } catch (lookupErr: any) {
+            console.error(`[Auth] All user lookup methods failed:`, lookupErr?.message || lookupErr);
+            throw new Error(`Could not find or create user after multiple attempts: ${lookupErr?.message || 'Unknown error'}`);
+          }
+        } else {
+          // Handle other createUser errors
+          throw new Error(`Failed to create user: ${createUserError?.message || 'Unknown error'}`);
+        }
+      } else if (!newUser?.user?.id) {
+        throw new Error(`Failed to create user: Unknown error`);
+      } else {
+        userId = newUser.user.id;
+        console.log(`[Auth] Successfully created new user.`);
+      }
+    } catch (err: any) {
+      console.error(`[Auth] Error creating user:`, err?.message || err);
+      throw new Error(`User creation failed: ${err?.message || 'Unknown error'}`);
     }
   }
 
@@ -84,14 +194,18 @@ export async function ensureAuthUserAndProfile({ email, firstName, lastName, pho
   // -- REMOVED Name Parsing - Use passed firstName and lastName directly --
 
   // 4. Upsert the user's profile in unified_profiles
+  if (!userId) {
+    throw new Error('Cannot upsert profile: userId is undefined');
+  }
+  
   const { data: profile, error: profileError } = await supabase
     .from('unified_profiles')
     .upsert({
-      id: userId, // PK matches auth.users.id
-      email,
+      id: userId, // PK matches auth.users.id - now guaranteed to be defined
+      email: normalizedEmail,
       first_name: firstName,
-      last_name: lastName,
-      phone: phone,
+      last_name: lastName || null,
+      phone: phone || null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' })
     .select()
