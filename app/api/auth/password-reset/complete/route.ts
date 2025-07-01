@@ -82,27 +82,87 @@ export async function POST(request: Request) {
     
     // Get the Supabase admin client (direct version to avoid auth session issues)
     const supabase = getDirectAdminClient();
+    const normalizedEmail = userEmail.toLowerCase();
     
-    console.log(`[PasswordReset] Looking up user ID for email: ${userEmail}`);
+    console.log(`[PasswordReset] Looking up user ID for email: ${normalizedEmail}`);
     
-    // First, try to get the user ID
-    // Using listUsers and filtering manually since the typing for filter param is incorrect
-    const { data: users, error: getUserError } = await supabase.auth.admin.listUsers();
+    // Multi-strategy approach to find user ID
+    let userId = null;
+    let user = null;
     
-    // Find the user with matching email
-    const user = getUserError ? null : {
-      users: users?.users?.filter(u => u.email === userEmail) || []
-    };
+    // Strategy 1: Look up the user in unified_profiles table first (most efficient)
+    try {
+      console.log('[PasswordReset] Looking up user in unified_profiles table...');
+      const { data: profileData, error: profileError } = await supabase
+        .from('unified_profiles')
+        .select('id')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error('[PasswordReset] Error looking up user in profiles:', profileError);
+      } else if (profileData?.id) {
+        userId = profileData.id;
+        console.log('[PasswordReset] Found user ID in profiles:', userId);
+      }
+    } catch (profileLookupError) {
+      console.error('[PasswordReset] Exception during profile lookup:', profileLookupError);
+      // Continue to next strategy
+    }
     
-    if (getUserError || !user?.users || user.users.length === 0) {
-      console.error('[PasswordReset] User not found:', getUserError || 'No user with this email');
+    // Strategy 2: If we have the userId, fetch the user details directly
+    if (userId) {
+      try {
+        const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+        
+        if (userError) {
+          console.error('[PasswordReset] Error fetching user by ID:', userError);
+        } else if (userData?.user) {
+          user = userData.user;
+          console.log('[PasswordReset] Successfully retrieved user details by ID');
+        }
+      } catch (userLookupError) {
+        console.error('[PasswordReset] Exception fetching user by ID:', userLookupError);
+        // Will continue to next strategy if needed
+      }
+    }
+    
+    // Strategy 3: Last resort - Try to use a limited listUsers with pagination
+    if (!userId && !user) {
+      try {
+        console.log('[PasswordReset] Attempting paginated user lookup as last resort...');
+        // We'll only check the first page to avoid timeouts
+        const { data: usersPage, error: getUserError } = await supabase.auth.admin.listUsers({
+          page: 0,
+          perPage: 1000, // Try to get as many as possible in one request
+        });
+        
+        if (getUserError) {
+          console.error('[PasswordReset] Error during paginated user lookup:', getUserError);
+        } else if (usersPage?.users) {
+          // Find the user with matching email
+          const matchingUser = usersPage.users.find(u => 
+            u.email?.toLowerCase() === normalizedEmail
+          );
+          
+          if (matchingUser) {
+            user = matchingUser;
+            userId = matchingUser.id;
+            console.log('[PasswordReset] Found user through paginated lookup:', userId);
+          }
+        }
+      } catch (paginatedLookupError) {
+        console.error('[PasswordReset] Exception during paginated lookup:', paginatedLookupError);
+      }
+    }
+    
+    if (!userId || !user) {
+      console.error('[PasswordReset] User not found after all lookup attempts');
       return Response.json({ 
         success: false, 
         error: 'User not found' 
       }, { status: 404 });
     }
-    
-    const userId = user.users[0].id;
     
     console.log(`[PasswordReset] Updating password for user ID: ${userId}`);
     
