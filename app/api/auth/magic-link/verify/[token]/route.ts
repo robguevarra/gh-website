@@ -276,14 +276,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         }
         
         // APPROACH 2: Fallback to email lookup via unified profiles
+        // Also check for migrated users
+        let isMigratedUser = false
         if (!hasPassword) {
           const { data: profile } = await supabase
             .from('unified_profiles')
-            .select('id')
+            .select('id, admin_metadata')
             .eq('email', email)
             .maybeSingle()
             
           if (profile?.id) {
+            // Check if this is a migrated user
+            const metadata = profile.admin_metadata as { source?: string } | null
+            if (metadata?.source === 'clean_migration') {
+              isMigratedUser = true
+              console.log(`[MagicLinkVerifyAPI] User identified as migrated user from clean migration`)
+            }
+            
             const { data } = await supabase.auth.admin.getUserById(profile.id)
             if (data?.user?.user_metadata?.password_set_at) {
               hasPassword = true
@@ -317,6 +326,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             profileStatus,
             session: null
           })
+        }
+        
+        // Migrated users who don't have a password set should go to setup-account
+        // This should happen only if they don't have a password and this is not a password reset
+        if (isMigratedUser && !hasPassword && validation.purpose !== 'password_reset') {
+          console.log('[MagicLinkVerifyAPI] Migrated user without password, redirecting to setup-account')
+          redirectPath = '/auth/setup-account?flow=migration'
         }
         
         // Special handling for password reset

@@ -15,7 +15,7 @@ import { Loader2, Eye, EyeOff, CheckCircle, User, Lock, BookOpen, Heart, ArrowRi
 import { Logo } from '@/components/ui/logo'
 import { z } from 'zod'
 
-type SetupFlow = 'p2p' | 'new' | 'general'
+type SetupFlow = 'p2p' | 'new' | 'general' | 'migration'
 type SetupStep = 'profile' | 'password' | 'complete'
 
 // Validation schemas
@@ -212,6 +212,15 @@ function SetupAccountContent() {
           icon: <BookOpen className="h-10 w-10 text-[hsl(315,15%,60%)]" />,
           bgImage: '/images/papers-to-profit-bg.jpg',
           completionMessage: 'Your account is ready! You can now access your Papers to Profits course.',
+          redirectPath: '/dashboard'
+        }
+      case 'migration':
+        return {
+          title: 'Welcome Back!',
+          subtitle: 'Complete your account setup to access all your materials',
+          icon: <User className="h-10 w-10 text-[hsl(315,15%,60%)]" />,
+          bgImage: '/images/homeschool-pattern-bg.jpg',
+          completionMessage: 'Your account is fully set up! You can now access all your materials.',
           redirectPath: '/dashboard'
         }
       case 'new':
