@@ -51,8 +51,30 @@ export default function MagicLinkVerifyContent({ token }: MagicLinkVerifyContent
       const redirectTo = searchParams.get('redirect')
       
       // For account setup, we need to create a session
+      // Check multiple sources to determine if this is account setup:
+      // 1. URL redirect parameter includes 'setup-account'
+      // 2. URL purpose parameter is 'account_setup' 
+      // 3. JWT token purpose is 'account_setup' (most reliable)
+      let tokenPurpose = null
+      try {
+        // Decode JWT token to check purpose (without verification since server will verify)
+        const tokenPayload = JSON.parse(atob(token.split('.')[1]))
+        tokenPurpose = tokenPayload.purpose
+        console.log('[MagicLinkVerify] Token purpose from JWT:', tokenPurpose)
+      } catch (e) {
+        console.warn('[MagicLinkVerify] Could not decode token purpose:', e)
+      }
+      
       const isAccountSetup = redirectTo?.includes('setup-account') || 
-                            searchParams.get('purpose') === 'account_setup'
+                            searchParams.get('purpose') === 'account_setup' ||
+                            tokenPurpose === 'account_setup'
+      
+      console.log('[MagicLinkVerify] Account setup check:', {
+        redirectTo,
+        urlPurpose: searchParams.get('purpose'),
+        tokenPurpose,
+        isAccountSetup
+      })
       
       if (isAccountSetup) {
         // Use POST method to create session for account setup
