@@ -193,21 +193,61 @@ export async function ensureAuthUserAndProfile({ email, firstName, lastName, pho
   // const lastName = rest.length > 0 ? rest.join(' ') : null;
   // -- REMOVED Name Parsing - Use passed firstName and lastName directly --
 
-  // 4. Upsert the user's profile in unified_profiles
+  // 4. Upsert the user's profile in unified_profiles with comprehensive data
   if (!userId) {
     throw new Error('Cannot upsert profile: userId is undefined');
   }
   
+  // Prepare tags array with p2p_customer if from course enrollment flow
+  let tags: string[] = [];
+  const isFromPaymentFlow = true; // This function is called from payment flow
+  
+  // Get existing profile data first (to preserve existing tags if any)
+  const { data: existingProfile } = await supabase
+    .from('unified_profiles')
+    .select('tags, created_at')
+    .eq('id', userId)
+    .maybeSingle();
+    
+  // If existing tags, use them as base
+  if (existingProfile?.tags && Array.isArray(existingProfile.tags)) {
+    tags = [...existingProfile.tags];
+  }
+  
+  // Add p2p_customer tag if not already present
+  if (!tags.includes('p2p_customer')) {
+    tags.push('p2p_customer');
+  }
+  
+  // Get current timestamp
+  const now = new Date().toISOString();
+  
+  // Prepare profile data with all necessary fields
+  const profileData = {
+    id: userId, // PK matches auth.users.id - now guaranteed to be defined
+    email: normalizedEmail,
+    first_name: firstName,
+    last_name: lastName || null,
+    phone: phone || null,
+    tags: tags, // Include tags array with p2p_customer
+    status: 'active', // Set active status for new users
+    is_student: true, // Mark as student since this is for course enrollment
+    acquisition_source: 'payment_flow', // Track acquisition source
+    created_at: existingProfile?.created_at || now, // Preserve existing created_at or set new one
+    updated_at: now,
+    email_marketing_subscribed: true, // Default to subscribed for marketing communications
+    admin_metadata: { 
+      last_purchase_date: now,
+      registration_source: 'payment_webhook'
+    }
+  };
+  
+  // Log profile data being upserted (excluding sensitive info)
+  console.log(`[Auth] Upserting comprehensive profile data for user, including tags: ${JSON.stringify(tags)}`);
+  
   const { data: profile, error: profileError } = await supabase
     .from('unified_profiles')
-    .upsert({
-      id: userId, // PK matches auth.users.id - now guaranteed to be defined
-      email: normalizedEmail,
-      first_name: firstName,
-      last_name: lastName || null,
-      phone: phone || null,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'id' })
+    .upsert(profileData, { onConflict: 'id' })
     .select()
     .maybeSingle();
 
