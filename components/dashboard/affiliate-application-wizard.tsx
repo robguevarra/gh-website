@@ -397,6 +397,15 @@ export function AffiliateApplicationWizard({
   const [affiliateStatus, setAffiliateStatus] = useState<AffiliateStatus | null>(null)
   const [initialCheckComplete, setInitialCheckComplete] = useState(false)
   
+  // Helper to validate phone numbers (PH local or international E.164)
+  const isValidPhoneNumber = (number: string) => {
+    return (
+      /^09\d{9}$/.test(number) ||      // PH numbers
+      /^\+\d{10,15}$/.test(number) ||  // International with +
+      /^\d{10,15}$/.test(number)        // Digits only 10-15
+    )
+  }
+
   // Application data state
   const [applicationData, setApplicationData] = useState<ApplicationData>({
     agreestoTerms: false,
@@ -561,8 +570,7 @@ export function AffiliateApplicationWizard({
       case 'agreement':
         return applicationData.agreestoTerms && applicationData.confirmAgreement
       case 'payment':
-        return applicationData.gcashNumber.length === 11 && 
-               applicationData.gcashNumber.startsWith('09') &&
+        return isValidPhoneNumber(applicationData.gcashNumber) &&
                applicationData.gcashName.trim().length > 0
       case 'review':
         return true // Always valid if we got here
