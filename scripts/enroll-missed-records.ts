@@ -37,16 +37,21 @@ const supabaseAdmin = createClient(
 )
 
 // Define batch size for test run
-const TEST_BATCH_SIZE = 2 // Reduced to improve testing speed
+const TEST_BATCH_SIZE = 50 // Larger batch for extended testing
 const CUTOFF_DATE = '2023-05-15' // End date of the initial migration
 const DEFAULT_COURSE_ID = '7e386720-8839-4252-bd5f-09a33c3e1afb' // Using a valid UUID format for course ID
 const IMPORTED_TAG = 'imported' // Tag used to identify imported records
 const PAID_P2P_TAG = 'PaidP2P'
+
+// Runtime flags
+const FULL_RUN = process.argv.includes('--full')
+const FULL_BATCH_SIZE = 5000 // generous upper bound larger than total expected records
+const BATCH_SIZE = FULL_RUN ? FULL_BATCH_SIZE : TEST_BATCH_SIZE
 const CUTOFF_EMAIL = 'smilee.mearah@gmail.com'
 const TRANSACTION_AMOUNT = 500 // Standard transaction amount for P2P enrollments
 
 // Define interfaces for clarity
-interface SystemioRecord {
+export interface SystemioRecord {
   [key: string]: string | number | boolean | null | undefined
   Email: string
   "First Name": string
@@ -87,17 +92,22 @@ async function logTransaction(userEmail: string, firstName: string, lastName: st
     console.log(`Checking for existing transaction for ${userEmail}...`)
     const { data: existingTransactions, error: lookupError } = await supabaseAdmin
       .from('transactions')
-      .select('id')
-      .eq('transaction_type', 'enrollment')
-      .eq('status', 'SUCCEEDED')
-      .eq('contact_email', userEmail)
-      .eq('amount', TRANSACTION_AMOUNT)
+      .select('id, transaction_type, metadata, amount')
+      .eq('contact_email', userEmail.toLowerCase())
+      .in('status', ['SUCCEEDED', 'success']);
     
     if (lookupError) {
-      console.log(`Error looking up existing transactions: ${lookupError.message}`)
+      console.log(`Error looking up existing transactions: ${lookupError.message}`);
     } else if (existingTransactions && existingTransactions.length > 0) {
-      console.log(`Found existing transaction ${existingTransactions[0].id} for ${userEmail}`)
-      return existingTransactions[0].id
+      // pick the first transaction that is clearly linked to P2P course
+      const priorTxn = existingTransactions.find((txn: any) =>
+        ['p2p_course', 'p2p', 'enrollment', 'migration_remediation'].includes(txn.transaction_type) ||
+        (txn.metadata && txn.metadata.course === 'p2p-course-2023')
+      );
+      if (priorTxn) {
+        console.log(`Found existing qualifying transaction ${priorTxn.id} for ${userEmail}`);
+        return priorTxn.id;
+      }
     }
     
     const date = new Date(record['Date Registered'] || '')
@@ -123,7 +133,7 @@ async function logTransaction(userEmail: string, firstName: string, lastName: st
     const transactionId = uuidv4()
     const transaction: TransactionRecord = {
       id: transactionId,
-      contact_email: userEmail,
+      contact_email: userEmail.toLowerCase(),
       amount: amount,
       currency: 'PHP',
       status: 'SUCCEEDED',
@@ -185,8 +195,8 @@ async function ensureAuthUserAndProfile(email: string, firstName: string, lastNa
     // Try direct SQL with exec_sql first
     let userFound = false
     try {
-      const { data, error: sqlError } = await supabaseAdmin.rpc('exec_sql', {
-        sql: `SELECT id FROM auth.users WHERE LOWER(email) = LOWER('${email.replace(/'/g, "''")}') LIMIT 1`
+      const { data, error: sqlError } = await supabaseAdmin.rpc('get_auth_user_by_email', {
+        search_email: email
       })
       
       if (sqlError) {
@@ -210,7 +220,7 @@ async function ensureAuthUserAndProfile(email: string, firstName: string, lastNa
       const perPage = 100
       let hasMore = true
       
-      while (!userFound && hasMore && page <= 20) { // Limit to 20 pages (2000 users)
+      while (!userFound && hasMore) { // Continue paging until an empty page is returned
         try {
           console.log(`Checking page ${page}...`)
           const { data: usersPage, error: pageError } = await supabaseAdmin.auth.admin.listUsers({
@@ -396,10 +406,11 @@ async function createEnrollment(userId: string, courseId: string, transactionId:
       return existingEnrollments[0].id
     }
     
-    // Create new enrollment
+    // Create new enrollment with explicit UUID
+    const enrollmentId = uuidv4()
     const { data, error } = await supabaseAdmin
       .from('enrollments')
-      .insert([{
+      .insert([{        id: enrollmentId,
         user_id: userId,
         course_id: courseId,
         status: 'active',
@@ -425,6 +436,20 @@ async function createEnrollment(userId: string, courseId: string, transactionId:
   } catch (err: any) {
     console.error(`Error creating enrollment for ${userId}: ${err.message}`)
     throw err
+  }
+}
+
+// Helper to log migration result
+async function logMigrationResult(email: string, status: 'success' | 'skipped' | 'error', details?: string) {
+  try {
+    await supabaseAdmin.from('migration_log').insert({
+      email: email.toLowerCase(),
+      status,
+      details: details || null,
+      processed_at: new Date().toISOString()
+    })
+  } catch (err) {
+    console.log(`Failed to write migration_log for ${email}: ${err}`)
   }
 }
 
@@ -574,7 +599,7 @@ async function getMissedRecords(batchSize: number = TEST_BATCH_SIZE): Promise<Sy
 }
 
 // Process a single record through the full enrollment flow
-async function processRecord(record: SystemioRecord) {
+export async function processRecord(record: SystemioRecord) {
   const email = record.Email
   const firstName = record['First name']
   const lastName = record['Last name']
@@ -596,14 +621,27 @@ async function processRecord(record: SystemioRecord) {
     // 3. Create enrollment
     await createEnrollment(userId, DEFAULT_COURSE_ID, transactionId, profileId, record)
     
-    return {
+    // mark success in migration_log and set profile flag
+await logMigrationResult(email, 'success')
+if (profileId) {
+  await supabaseAdmin.from('unified_profiles').update({
+    admin_metadata: supabaseAdmin.rpc('jsonb_set', {
+      target: 'admin_metadata',
+      path: '{remediation_done}',
+      value: 'true',
+      create_missing: true
+    })
+  }).eq('id', profileId)
+}
+return {
       email,
       success: true
     }
   } catch (err: unknown) {
     const error = err as Error
     console.error(`❌ Failed to process record for ${email}: ${error.message}`)
-    return {
+    await logMigrationResult(email, 'error', error.message)
+return {
       email,
       success: false,
       error: error.message
@@ -655,5 +693,52 @@ async function runTestBatch() {
   }
 }
 
-// Call the runTestBatch function
-runTestBatch()
+// Function to run the full batch
+async function runFullBatch() {
+  console.log('=== MISSED RECORDS REMEDIATION - FULL RUN ===')
+  console.log('Processing full set of missed records…')
+  try {
+    const missedRecords = await getMissedRecords(BATCH_SIZE)
+    const results = []
+    for (const record of missedRecords) {
+      const result = await processRecord(record)
+      results.push(result)
+    }
+
+    console.log('\n=== FULL RUN RESULTS ===')
+    const successful = results.filter(r => r.success).length
+    console.log(`Successfully processed: ${successful} out of ${results.length} records`)
+    const failures = results.filter(r => !r.success)
+    if (failures.length > 0) {
+      console.log(`\nFailed records: ${failures.length}`)
+      failures.forEach(f => console.log(`- ${f.email}: ${f.error}`))
+    }
+    console.log('\nℹ️  Detailed audit trail available in migration_log table.')
+  } catch (err: unknown) {
+    const error = err as Error
+    console.error(`❌ Error in full remediation process: ${error.message}`)
+  }
+}
+
+// Dispatch based on flag when executed directly (not when imported)
+const isCliExecution = ((): boolean => {
+  // CommonJS
+  // @ts-ignore
+  if (typeof require !== 'undefined' && typeof module !== 'undefined') {
+    // @ts-ignore
+    return require.main === module
+  }
+  // ESM (tsx / ts-node-esm etc.)
+  // import.meta.url is like file:///path/to/file.ts
+  const thisUrl = (import.meta as any).url as string
+  const invokedScript = process.argv[1] ? `file://${process.argv[1].replace(/\\/g, '/')}` : ''
+  return thisUrl === invokedScript
+})()
+
+if (isCliExecution) {
+  if (FULL_RUN) {
+    (async () => { await runFullBatch() })()
+  } else {
+    runTestBatch()
+  }
+}

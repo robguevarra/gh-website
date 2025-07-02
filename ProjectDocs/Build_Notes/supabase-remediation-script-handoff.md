@@ -207,6 +207,24 @@ A comprehensive audit comparing auth users, identities, and unified profiles may
 
 While significant progress has been made on the remediation script, the ghost user account issue remains the primary blocker to successful completion. The script architecture is sound and follows the recommended approach from the data migration investigation findings. With the resolution of the ghost user issue, the script should be able to successfully process the missed records and complete the remediation effort.
 
+## 2025-07-02 Progress Update
+
+- Patched remediation script:
+  - Added UUID generation for `enrollments.id` (fixed NOT NULL violation).
+  - Implemented robust transaction deduplication and processed-record tracking (`migration_log`, metadata flag).
+- Testing:
+  - 50-record test batch – 100 % success.
+  - Full run processed 2 000 / 2 000 records without errors.
+- Verification query shows 148 remaining candidates:
+  - 147 contacts have **no `auth.users` row** (likely typos, duplicates, or abandoned carts in Systeme.io).
+  - 1 contact has an auth user but **no `unified_profiles` row** – profile creation failed during run.
+- Exported full list of these 148 emails to CSV for manual audit:
+  `ProjectDocs/exports/unenrolled_emails_2025-07-02.csv`.
+- Next Steps:
+  1. Product/ops team to review CSV and decide which addresses warrant manual enrollment or a targeted script rerun.
+  2. For the single “missing profile” account, rerun script on that email to finish enrollment.
+  3. Close out remediation once approved.
+
 ## References
 
 - [ProjectDocs/data-migration-investigation-findings.md](../data-migration-investigation-findings.md)

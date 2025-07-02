@@ -47,10 +47,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 })
     }
 
+    // Fetch emails that already received this template to avoid duplicates
+    const { data: sentLogs, error: sentLogsError } = await supabase
+      .from('email_send_log')
+      .select('recipient_email')
+      .eq('template_id', templateId)
+
+    if (sentLogsError) {
+      console.error('❌ Error fetching sent email logs:', sentLogsError)
+      return NextResponse.json({ error: 'Failed to fetch email logs' }, { status: 500 })
+    }
+
+    const sentEmailSet = new Set<string>(
+      (sentLogs ?? []).map((log: any) => (log.recipient_email as string).toLowerCase())
+    )
+
     // Get users (paginated for batching or filtered by test emails)
     let query = supabase
       .from('unified_profiles')
       .select('id, email, first_name, last_name')
+      .eq('acquisition_source', 'migrated')
       .or('email_bounced.is.null,email_bounced.eq.false')
       .not('email', 'is', null)
 
@@ -65,12 +81,17 @@ export async function POST(request: NextRequest) {
 
     const { data: profiles, error: profilesError } = await query.order('id')
 
+    // Remove users who have already been sent this template
+    const filteredProfiles = (profiles ?? []).filter(
+      (p: any) => !sentEmailSet.has((p.email as string).toLowerCase())
+    )
+
     if (profilesError) {
       console.error('❌ Error fetching profiles:', profilesError)
       return NextResponse.json({ error: 'Failed to fetch user profiles' }, { status: 500 })
     }
 
-    if (!profiles || profiles.length === 0) {
+    if (!filteredProfiles || filteredProfiles.length === 0) {
       console.log(`⚠️ No profiles found for processing`)
       const message = testEmails ? 'No users found with the specified test emails' : 'No more users to process'
       return NextResponse.json({ 
@@ -86,15 +107,15 @@ export async function POST(request: NextRequest) {
       }, { status: 200 })
     }
 
-    console.log(`📧 Processing ${profiles.length} users...`)
-    console.log(`👥 Found profiles: ${profiles.map(p => p.email).join(', ')}`)
+    console.log(`📧 Processing ${filteredProfiles.length} users...`)
+    console.log(`👥 Found profiles: ${filteredProfiles.map(p => p.email).join(', ')}`)
 
     let successCount = 0
     let errorCount = 0
     const errors: string[] = []
 
     // Process each user  
-    for (const profile of profiles) {
+    for (const profile of filteredProfiles) {
       try {
         // Skip customer classification for migration - use simple account_setup flow
         // const customerClassification = await classifyCustomer(profile.email)
@@ -164,7 +185,7 @@ export async function POST(request: NextRequest) {
     const response = {
       message: `Template migration batch completed`,
       templateId,
-      batchSize: profiles.length,
+      batchSize: filteredProfiles.length,
       successCount,
       errorCount,
       startFrom,
