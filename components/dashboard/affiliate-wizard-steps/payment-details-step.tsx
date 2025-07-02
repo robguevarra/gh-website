@@ -29,9 +29,13 @@ export function PaymentDetailsStep({
 }: PaymentDetailsStepProps) {
   
   const handleNumberChange = (value: string) => {
-    // Only allow numbers and limit to 11 digits
-    const cleaned = value.replace(/\D/g, '')
-    if (cleaned.length <= 11) {
+    // Allow digits and a single leading '+'. Limit to 15 digits per E.164.
+    let cleaned = value
+      .replace(/[^+\d]/g, '')      // keep digits or '+'
+      .replace(/(?!^)\+/g, '')     // allow '+' only at start
+
+    const digitsOnly = cleaned.startsWith('+') ? cleaned.slice(1) : cleaned
+    if (digitsOnly.length <= 15) {
       updateData({ gcashNumber: cleaned })
     }
   }
@@ -42,7 +46,12 @@ export function PaymentDetailsStep({
 
   // Validation helpers
   const isValidPhoneNumber = (number: string) => {
-    return /^09\d{9}$/.test(number)
+    // Valid if PH local (09XXXXXXXXX), international E.164 (+1234567890...), or local digits (10-15)
+    return (
+      /^09\d{9}$/.test(number) ||        // PH numbers
+      /^\+\d{10,15}$/.test(number) ||    // International numbers with '+'
+      /^\d{10,15}$/.test(number)          // Digits only, 10-15 characters
+    )
   }
 
   const isValidName = (name: string) => {
@@ -50,7 +59,8 @@ export function PaymentDetailsStep({
   }
 
   const formatPhoneNumber = (number: string) => {
-    if (number.length === 11) {
+    // Only format standard PH numbers for readability
+    if (/^09\d{9}$/.test(number)) {
       return `${number.slice(0, 4)}-${number.slice(4, 7)}-${number.slice(7)}`
     }
     return number
@@ -103,8 +113,8 @@ export function PaymentDetailsStep({
               type="tel"
               value={data.gcashNumber}
               onChange={(e) => handleNumberChange(e.target.value)}
-              placeholder="09XXXXXXXXX"
-              maxLength={11}
+              placeholder="09XXXXXXXXX or +1234567890"
+              maxLength={16}
               className={`font-mono ${
                 data.gcashNumber && !isValidPhoneNumber(data.gcashNumber) 
                   ? 'border-red-300 focus:border-red-500' 
@@ -113,7 +123,7 @@ export function PaymentDetailsStep({
             />
             <div className="flex items-center justify-between">
               <p className="text-sm text-gray-500">
-                Enter your 11-digit GCash mobile number starting with 09
+                Enter a valid mobile number. PH numbers should start with 09; international numbers must include the country code (e.g., +1...).
               </p>
               {data.gcashNumber && (
                 <div className="flex items-center text-sm">
