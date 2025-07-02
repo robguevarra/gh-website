@@ -449,7 +449,7 @@ export function UserPurchaseHistory({ userId, purchaseHistory }: UserPurchaseHis
             <CreditCard className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium">No purchase history</h3>
             <p className="text-muted-foreground mt-2">
-              This user has no purchase history or no records match your filters.
+              This user has no purchase history or no records match your filters!
             </p>
           </div>
         )}
