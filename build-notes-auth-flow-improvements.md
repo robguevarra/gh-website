@@ -191,7 +191,37 @@ Improve the authentication flow and affiliate application wizard to properly han
 - [x] **Maintained proper button states** - "Pending Review" button is disabled for pending applications
 - [x] **Corrected status terminology** - Using "active" instead of "approved" to match database enum
 
-### Phase 5: Testing & Validation
+### ✅ Phase 5: User Purchase History View Fix (CRITICAL DATABASE FIX)
+- [x] **Identified Root Cause** - `user_purchase_history_view` was pointing to backup tables from 2025-06-30 instead of live data
+- [x] **Database Issue Analysis**:
+  - View was using `unified_profiles_backup_2025_06_30_02_45_55` instead of `unified_profiles`
+  - View was using `transactions_backup_2025_06_30_02_45_55` instead of `transactions`
+  - This caused admin user purchase history component to show zero orders
+- [x] **View Definition Update** - Recreated view to use current live tables:
+  - Now using `unified_profiles` for user data
+  - Now using `transactions` for transaction data
+  - Now using `shopify_orders` and `shopify_customers` for Shopify data
+- [x] **Data Quality Improvements**:
+  - Added fallback for null `processed_at` dates in Shopify orders (uses `created_at`)
+  - Added default currency 'PHP' for null currency values
+  - Enhanced date handling with `COALESCE` for better data integrity
+- [x] **Verification Results**:
+  - View now returns 5,617 records instead of 0
+  - Test queries show proper data for users like robneil@gmail.com
+  - Both transaction and Shopify order records are appearing correctly
+- [x] **Impact**: Admin user purchase history component now displays orders properly
+
+#### Technical Details:
+- **Migration**: `fix_user_purchase_history_view_table_references`
+- **View Update**: Used `CREATE OR REPLACE VIEW` for seamless transition
+- **Data Sources**: 
+  - Transactions from `transactions` table
+  - Shopify orders from `shopify_orders` joined via `shopify_customers`
+- **Safety**: No data loss, only view definition updated to point to correct tables
+
+### Phase 6: Testing & Validation
+- [x] **Test purchase history display** - Verified orders now appear in admin interface
+- [x] **Test data integrity** - Confirmed both transaction and Shopify data display correctly
 - [ ] **Test new application flow** - Verify wizard works for users without applications
 - [ ] **Test pending application state** - Verify users see proper pending UI
 - [ ] **Test active affiliate state** - Verify approved affiliates see portal redirect

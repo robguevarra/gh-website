@@ -359,92 +359,89 @@ export function UserPurchaseHistory({ userId, purchaseHistory }: UserPurchaseHis
                     key={`${purchase.record_type}-${purchase.record_id}`}
                     open={expandedItems.includes(`${purchase.record_type}-${purchase.record_id}`)}
                     onOpenChange={() => toggleExpanded(`${purchase.record_type}-${purchase.record_id}`)}
-                    asChild
                   >
-                    <>
-                      <TableRow className="cursor-pointer hover:bg-muted/50">
-                        <TableCell>
-                          <div className="flex items-center">
-                            {getRecordTypeIcon(purchase.record_type)}
+                    <TableRow className="cursor-pointer hover:bg-muted/50">
+                      <TableCell>
+                        <div className="flex items-center">
+                          {getRecordTypeIcon(purchase.record_type)}
+                          <div>
+                            <div className="font-medium">{formatDate(purchase.purchase_date)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {purchase.reference ? `Ref: ${purchase.reference}` : 'No reference'}
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">{purchase.product_type}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {purchase.payment_method || 'Unknown method'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">
+                          {formatCurrency(purchase.amount, purchase.currency)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getStatusBadge(purchase.status)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            {expandedItems.includes(`${purchase.record_type}-${purchase.record_id}`) ? 'Less' : 'More'}
+                          </Button>
+                        </CollapsibleTrigger>
+                      </TableCell>
+                    </TableRow>
+                    <CollapsibleContent asChild>
+                      <TableRow className="bg-muted/30">
+                        <TableCell colSpan={5} className="p-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <div className="font-medium">{formatDate(purchase.purchase_date)}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {purchase.reference ? `Ref: ${purchase.reference}` : 'No reference'}
-                              </div>
+                              <h4 className="text-sm font-semibold mb-2">Purchase Details</h4>
+                              <dl className="grid grid-cols-2 gap-2 text-sm">
+                                <dt className="text-muted-foreground">ID:</dt>
+                                <dd>{purchase.record_id}</dd>
+                                <dt className="text-muted-foreground">Type:</dt>
+                                <dd>{purchase.record_type}</dd>
+                                <dt className="text-muted-foreground">Date:</dt>
+                                <dd>{format(new Date(purchase.purchase_date), 'PPP')}</dd>
+                                <dt className="text-muted-foreground">Status:</dt>
+                                <dd>{purchase.status}</dd>
+                                <dt className="text-muted-foreground">Amount:</dt>
+                                <dd>{formatCurrency(purchase.amount, purchase.currency)}</dd>
+                              </dl>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{purchase.product_type}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {purchase.payment_method || 'Unknown method'}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-medium">
-                            {formatCurrency(purchase.amount, purchase.currency)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {getStatusBadge(purchase.status)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <CollapsibleTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              {expandedItems.includes(`${purchase.record_type}-${purchase.record_id}`) ? 'Less' : 'More'}
-                            </Button>
-                          </CollapsibleTrigger>
-                        </TableCell>
-                      </TableRow>
-                      <CollapsibleContent asChild>
-                        <TableRow className="bg-muted/30">
-                          <TableCell colSpan={5} className="p-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <h4 className="text-sm font-semibold mb-2">Purchase Details</h4>
-                                <dl className="grid grid-cols-2 gap-2 text-sm">
-                                  <dt className="text-muted-foreground">ID:</dt>
-                                  <dd>{purchase.record_id}</dd>
-                                  <dt className="text-muted-foreground">Type:</dt>
-                                  <dd>{purchase.record_type}</dd>
-                                  <dt className="text-muted-foreground">Date:</dt>
-                                  <dd>{format(new Date(purchase.purchase_date), 'PPP')}</dd>
-                                  <dt className="text-muted-foreground">Status:</dt>
-                                  <dd>{purchase.status}</dd>
-                                  <dt className="text-muted-foreground">Amount:</dt>
-                                  <dd>{formatCurrency(purchase.amount, purchase.currency)}</dd>
-                                </dl>
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-semibold mb-2">Product Information</h4>
-                                <dl className="grid grid-cols-2 gap-2 text-sm">
-                                  <dt className="text-muted-foreground">Product:</dt>
-                                  <dd>{purchase.product_type}</dd>
-                                  <dt className="text-muted-foreground">Payment Method:</dt>
-                                  <dd>{purchase.payment_method || 'Unknown'}</dd>
-                                  <dt className="text-muted-foreground">Reference:</dt>
-                                  <dd>{purchase.reference || 'N/A'}</dd>
-                                </dl>
-                                {purchase.product_details && (
-                                  <div className="mt-2">
-                                    <h5 className="text-xs font-semibold mb-1">Product Details</h5>
-                                    <pre className="text-xs bg-muted p-2 rounded-md overflow-auto max-h-24">
-                                      {JSON.stringify(purchase.product_details, null, 2)}
-                                    </pre>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex justify-end gap-2 mt-4">
-                              <Button variant="outline" size="sm">View Details</Button>
-                              {['completed', 'pending'].includes(purchase.status.toLowerCase()) && (
-                                <Button variant="outline" size="sm">Issue Refund</Button>
+                            <div>
+                              <h4 className="text-sm font-semibold mb-2">Product Information</h4>
+                              <dl className="grid grid-cols-2 gap-2 text-sm">
+                                <dt className="text-muted-foreground">Product:</dt>
+                                <dd>{purchase.product_type}</dd>
+                                <dt className="text-muted-foreground">Payment Method:</dt>
+                                <dd>{purchase.payment_method || 'Unknown'}</dd>
+                                <dt className="text-muted-foreground">Reference:</dt>
+                                <dd>{purchase.reference || 'N/A'}</dd>
+                              </dl>
+                              {purchase.product_details && (
+                                <div className="mt-2">
+                                  <h5 className="text-xs font-semibold mb-1">Product Details</h5>
+                                  <pre className="text-xs bg-muted p-2 rounded-md overflow-auto max-h-24">
+                                    {JSON.stringify(purchase.product_details, null, 2)}
+                                  </pre>
+                                </div>
                               )}
                             </div>
-                          </TableCell>
-                        </TableRow>
-                      </CollapsibleContent>
-                    </>
+                          </div>
+                          <div className="flex justify-end gap-2 mt-4">
+                            <Button variant="outline" size="sm">View Details</Button>
+                            {['completed', 'pending'].includes(purchase.status.toLowerCase()) && (
+                              <Button variant="outline" size="sm">Issue Refund</Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    </CollapsibleContent>
                   </Collapsible>
                 ))}
               </TableBody>
