@@ -103,7 +103,29 @@ export default function SettingsPage() {
 
   const handlePaymentInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setPaymentForm(prev => ({ ...prev, [name]: value }));
+
+    // Sanitize phone number input to support international formats
+    if (name === 'gcashNumber') {
+      let cleaned = value
+        .replace(/[^+\d]/g, '')      // keep digits and '+'
+        .replace(/(?!^)\+/g, '');    // allow '+' only at the start
+
+      const digitsOnly = cleaned.startsWith('+') ? cleaned.slice(1) : cleaned;
+      if (digitsOnly.length > 15) {
+        return; // ignore extra input beyond E.164 limit
+      }
+      setPaymentForm(prev => ({ ...prev, [name]: cleaned }));
+    } else {
+      setPaymentForm(prev => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const isValidPhoneNumber = (number: string) => {
+    return (
+      /^09\d{9}$/.test(number) ||        // PH numbers
+      /^\+\d{10,15}$/.test(number) ||    // International with '+'
+      /^\d{10,15}$/.test(number)          // Digits only 10-15
+    );
   };
   
   const handleSwitchChange = (name: string, checked: boolean) => {
@@ -410,11 +432,16 @@ export default function SettingsPage() {
                             name="gcashNumber"
                             value={paymentForm.gcashNumber}
                             onChange={handlePaymentInputChange}
-                            placeholder="09XXXXXXXXX"
-                            maxLength={11}
+                            placeholder="09XXXXXXXXX or +1234567890"
+                            maxLength={16}
+                            className={`font-mono ${
+                              paymentForm.gcashNumber && !isValidPhoneNumber(paymentForm.gcashNumber)
+                                ? 'border-red-300 focus:border-red-500'
+                                : ''
+                            }`}
                           />
                           <p className="text-sm text-muted-foreground">
-                            Enter your 11-digit GCash mobile number
+                            Enter a valid mobile number. PH numbers should start with 09; international numbers must include the country code (e.g., +1...).
                           </p>
                         </div>
 
@@ -437,10 +464,13 @@ export default function SettingsPage() {
                       {verificationStatus.gcashVerificationStatus !== 'verified' && (
                         <Alert>
                           <Info className="h-4 w-4" />
-                          <AlertTitle>Verification Required</AlertTitle>
+                          <AlertTitle>Safety and Privacy Reminder</AlertTitle>
                           <AlertDescription>
-                            To receive payouts, you'll need to verify your GCash account. After saving your details, 
-                            you'll be guided through the verification process which includes uploading a valid ID and selfie.
+                            We take the safety and security of your personal and financial information very seriously.
+                            We'll never ask for your GCash PIN or password, and we encourage you to be cautious when sharing
+                            your GCash account details with others. It is your responsibility to verify the accuracy of your 
+                            GCash information. We are not held responsible for any incorrect information that may result in 
+                            failed payouts.
                           </AlertDescription>
                         </Alert>
                       )}
