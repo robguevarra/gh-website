@@ -108,21 +108,42 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log the change
-    try {
+    // -------------------------------------------------------------------
+    //  Auto-link Shopify layer (customers + orders) to this profile
+    // -------------------------------------------------------------------
+    // 1. Upsert shopify_customer row for the secondary email;
+    //    creates a minimal record if none exists, otherwise just sets the linkage.
+    const { data: existingCustomer } = await adminClient
+      .from('shopify_customers')
+      .select('id')
+      .eq('email', lowerEmail)
+      .maybeSingle();
+
+    let targetCustomerId = existingCustomer?.id as string | undefined;
+
+    if (targetCustomerId) {
+      // update linkage if missing
       await adminClient
-        .from('email_change_log' as any)
-        .insert({
-          user_id: userId,
-          old_email: null,
-          new_email: lowerEmail,
-          changed_by: validation.user.id,
-          change_type: 'secondary_add',
-          verification_status: 'pending'
-        });
-    } catch (logError) {
-      console.error('Failed to log secondary email addition:', logError);
-      // Don't fail the main operation for logging issues
+        .from('shopify_customers')
+        .update({ unified_profile_id: userId, updated_at: new Date().toISOString() })
+        .eq('id', targetCustomerId);
+    } else {
+      // create minimal customer row (shopify_customer_id left NULL for historical)
+      const { data: newCust, error: custErr } = await adminClient
+        .from('shopify_customers')
+        .insert({ email: lowerEmail, unified_profile_id: userId, shopify_customer_id: null as any })
+        .select('id')
+        .maybeSingle();
+      if (!custErr && newCust) targetCustomerId = newCust.id;
+    }
+
+    if (targetCustomerId) {
+      // 2. Attach any orders still missing customer_id but matching this email
+      await adminClient
+        .from('shopify_orders')
+        .update({ customer_id: targetCustomerId, updated_at: new Date().toISOString() })
+        .is('customer_id', null)
+        .eq('email', lowerEmail);
     }
 
     return NextResponse.json({
