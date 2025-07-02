@@ -210,6 +210,9 @@ Improve the authentication flow and affiliate application wizard to properly han
   - Test queries show proper data for users like robneil@gmail.com
   - Both transaction and Shopify order records are appearing correctly
 - [x] **Impact**: Admin user purchase history component now displays orders properly
+- [x] **Fixed React component errors**: Removed Collapsible component that was causing HTML structure violations
+- [x] **Proper HTML table structure**: Restructured to use React.Fragment and conditional rendering for expand/collapse functionality
+- [x] **Eliminated hydration errors**: Fixed `<div>` inside `<tbody>` and `<tr>` element nesting issues
 
 #### Technical Details:
 - **Migration**: `fix_user_purchase_history_view_table_references`
