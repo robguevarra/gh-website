@@ -2737,14 +2737,18 @@ export async function validateAffiliatePayoutDetails(affiliateId: string): Promi
     
     // Validate based on payout method
     if (payoutMethod === 'gcash') {
-      // GCash validation - primary method for Philippines
+      // GCash validation - supports Philippine and international numbers
       if (!affiliate.gcash_number) {
         errors.push('GCash mobile number is required');
       } else {
-        // Validate Philippine mobile number format (09XXXXXXXXX)
-        const gcashNumberRegex = /^09\d{9}$/;
-        if (!gcashNumberRegex.test(affiliate.gcash_number)) {
-          errors.push('GCash number must be in format 09XXXXXXXXX (11 digits starting with 09)');
+        // Validate phone number format (PH local or international)
+        const isValidPhone = (
+          /^09\d{9}$/.test(affiliate.gcash_number) ||      // PH numbers (09XXXXXXXXX)
+          /^\+\d{10,15}$/.test(affiliate.gcash_number) ||  // International with + (10-15 digits)
+          /^\d{10,15}$/.test(affiliate.gcash_number)       // Digits only 10-15 digits (international without +)
+        );
+        if (!isValidPhone) {
+          errors.push('GCash number must be either PH format (09XXXXXXXXX) or international format (+CountryCode + 10-15 digits)');
         }
       }
       

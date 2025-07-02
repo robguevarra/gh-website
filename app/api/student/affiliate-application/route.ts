@@ -4,13 +4,24 @@ import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { assignMembershipTier, MembershipTier } from "@/lib/services/affiliate/membership-service/tier-management"
 import { z } from "zod"
 
+// Helper function to validate phone numbers (PH local or international E.164)
+const isValidPhoneNumber = (number: string): boolean => {
+  return (
+    /^09\d{9}$/.test(number) ||      // PH numbers (09XXXXXXXXX)
+    /^\+\d{10,15}$/.test(number) ||  // International with + (10-15 digits)
+    /^\d{10,15}$/.test(number)       // Digits only 10-15 digits (international without +)
+  )
+}
+
 // Validation schema for affiliate application
 const affiliateApplicationSchema = z.object({
   userId: z.string().uuid(),
   applicationData: z.object({
     agreestoTerms: z.boolean(),
     confirmAgreement: z.boolean(),
-    gcashNumber: z.string().regex(/^09\d{9}$/, "GCash number must be 11 digits starting with 09"),
+    gcashNumber: z.string().refine(isValidPhoneNumber, {
+      message: "GCash number must be either PH format (09XXXXXXXXX) or international format (+CountryCode + 10-15 digits)"
+    }),
     gcashName: z.string().min(2, "GCash name must be at least 2 characters"),
     acceptsLiability: z.boolean(),
     understandsPayout: z.boolean()

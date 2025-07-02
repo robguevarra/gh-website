@@ -73,7 +73,7 @@ export class GCashVerificationService {
       if (!this.isValidGCashNumber(gcashNumber)) {
         return { 
           success: false, 
-          error: 'Invalid GCash number format. Must be 09XXXXXXXXX (11 digits starting with 09)' 
+          error: 'Invalid GCash number format. Must be either PH format (09XXXXXXXXX) or international format (+CountryCode + 10-15 digits)' 
         };
       }
 
@@ -432,12 +432,14 @@ export class GCashVerificationService {
   }
 
   /**
-   * Validate GCash number format
+   * Validate GCash number format - supports both PH local and international numbers
    */
   private isValidGCashNumber(gcashNumber: string): boolean {
-    // Philippine mobile number format: 09XXXXXXXXX (11 digits starting with 09)
-    const gcashRegex = /^09\d{9}$/;
-    return gcashRegex.test(gcashNumber);
+    return (
+      /^09\d{9}$/.test(gcashNumber) ||      // PH numbers (09XXXXXXXXX)
+      /^\+\d{10,15}$/.test(gcashNumber) ||  // International with + (10-15 digits)
+      /^\d{10,15}$/.test(gcashNumber)       // Digits only 10-15 digits (international without +)
+    )
   }
 
   /**
