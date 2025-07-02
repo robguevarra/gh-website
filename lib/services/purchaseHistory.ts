@@ -99,7 +99,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
                 variant_title,
                 quantity,
                 price,
-                shopify_products (id, featured_image_url)
+                shopify_products (id, featured_image_url, google_drive_file_id)
               )
             `
             )
@@ -141,7 +141,9 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
 
     // 3. Fetch Shopify product images - PRIMARY METHOD: by ID
     const imageMapById = new Map<string, string | null>();
+    const googleDriveMapById = new Map<string, string | null>();
     const titleToImageMap = new Map<string, string | null>();
+    const titleToGoogleDriveMap = new Map<string, string | null>();
     
     if (shopifyData?.length) {
       // Step 1: Extract all product IDs and titles from order items
@@ -180,14 +182,17 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
         try {
           const { data: imagesById, error: imgError } = await supabase
             .from('shopify_products')
-            .select('id, featured_image_url')
+            .select('id, featured_image_url, google_drive_file_id')
             .in('id', uniqueProductIds);
 
           if (imgError) {
             console.error('[fetchPurchaseHistory] Image fetch by ID error:', imgError);
           } else if (imagesById && imagesById.length > 0) {
             //console.log(`[fetchPurchaseHistory] Successfully fetched ${imagesById.length} product images by ID`);
-            imagesById.forEach(img => imageMapById.set(img.id, img.featured_image_url));
+            imagesById.forEach(img => {
+              imageMapById.set(img.id, img.featured_image_url);
+              googleDriveMapById.set(img.id, img.google_drive_file_id);
+            });
           }
         } catch (imgFetchErr) {
           console.error('[fetchPurchaseHistory] Exception during image fetch by ID:', imgFetchErr);
@@ -203,7 +208,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
           // Get all products (simpler and more reliable than complex OR queries)
           const { data: allProducts, error: productsError } = await supabase
             .from('shopify_products')
-            .select('id, title, featured_image_url');
+            .select('id, title, featured_image_url, google_drive_file_id');
 
           if (productsError) {
             console.error('[fetchPurchaseHistory] Error fetching all products:', productsError);
@@ -230,6 +235,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
                 
                 // Map the exact title for direct lookup
                 titleToImageMap.set(lowerOrderTitle, matches[0].featured_image_url);
+                titleToGoogleDriveMap.set(lowerOrderTitle, matches[0].google_drive_file_id);
               } else {
                 //console.log(`[fetchPurchaseHistory] No product matches found for "${lowerOrderTitle}"`);
               }
@@ -302,6 +308,20 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
               imageUrl = titleToImageMap.get(i.title.toLowerCase()) ?? null;
             }
             
+            // Try to get google_drive_file_id from multiple sources with fallbacks:
+            // 1. Direct relationship (if the nested shopify_products is available)
+            // 2. ID mapping (if we have a product ID)
+            // 3. Title mapping (as a last resort)
+            let googleDriveFileId = i.shopify_products?.google_drive_file_id ?? null;
+            
+            if (!googleDriveFileId && productId) {
+              googleDriveFileId = googleDriveMapById.get(productId) ?? null;
+            }
+            
+            if (!googleDriveFileId && i.title) {
+              googleDriveFileId = titleToGoogleDriveMap.get(i.title.toLowerCase()) ?? null;
+            }
+            
             return {
               id: i.id,
               product_id: productId,
@@ -310,6 +330,7 @@ export async function fetchPurchaseHistory(userId: string): Promise<Purchase[] |
               quantity: i.quantity,
               price_at_purchase: parseFloat(i.price) || 0,
               image_url: imageUrl,
+              google_drive_file_id: googleDriveFileId,
               source: 'shopify' as const,
             };
           }) ?? [],
