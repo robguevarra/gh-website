@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Users, TrendingUp, UserPlus, Activity } from "lucide-react";
+import { Users, TrendingUp, UserPlus, Activity, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -26,16 +26,16 @@ export function DashboardOverview() {
   const { dateRange, setDateRange } = useSharedDashboardFiltersStore();
   const { granularity } = useEnrollmentAnalyticsStore();
   const { data, isLoading, error, fetchOverview } = useDashboardOverviewStore();
+  
+  // Pagination state for enrollments and payments
+  const [enrollmentsPage, setEnrollmentsPage] = useState(1);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     if (dateRange?.from && granularity) {
-        const currentState = useDashboardOverviewStore.getState();
-        
-        if (currentState.data === null) {
-             fetchOverview(dateRange, granularity);
-        } else {
-            // Data exists in store, skipping fetch
-        }
+        // Always fetch when date range or granularity changes
+        fetchOverview(dateRange, granularity);
     } else {
         console.warn("DashboardOverview: Skipping fetch, dateRange or granularity not ready.");
     }
@@ -84,6 +84,20 @@ export function DashboardOverview() {
 
   const { summaryMetrics, enrollmentTrends, revenueTrends, recentActivity, performanceSummaries } = data;
 
+  // Pagination logic
+  const paginateData = (items: any[], page: number) => {
+    const startIndex = (page - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return items.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = (totalItems: number) => Math.ceil(totalItems / itemsPerPage);
+
+  const paginatedEnrollments = paginateData(recentActivity.enrollments, enrollmentsPage);
+  const paginatedPayments = paginateData(recentActivity.payments, paymentsPage);
+  const enrollmentsTotalPages = getTotalPages(recentActivity.enrollments.length);
+  const paymentsTotalPages = getTotalPages(recentActivity.payments.length);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -92,32 +106,6 @@ export function DashboardOverview() {
           <p className="text-muted-foreground">Overview of your business performance</p>
         </div>
         <DateRangePicker value={dateRange} onChange={setDateRange} />
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => router.push("/admin/user-diagnostic")}
-            disabled={isLoading}
-          >
-            User Diagnostic Tool
-          </Button>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              try {
-                const response = await fetch("/api/admin/dashboard/sync", { method: "POST" });
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.message || "Sync failed");
-                toast.success(result.message || "Manual sync completed");
-              } catch (err: any) {
-                toast.error(err.message || "Manual sync failed");
-              }
-            }}
-            disabled={isLoading}
-          >
-            Data Sync
-          </Button>
-        </div>
-        <Button onClick={() => router.push("/admin/courses/new")} disabled={isLoading}>New Course</Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -182,22 +170,57 @@ export function DashboardOverview() {
                     <h3 className="text-lg font-medium">No recent enrollments</h3>
                   </div>
                 ) : (
-                  recentActivity.enrollments.map((enrollment, idx) => {
-                    const name = `${enrollment.user.first_name || ''} ${enrollment.user.last_name || ''}`.trim() || enrollment.user.id;
-                    const courseTitle = enrollment.course.title || enrollment.course.id;
-                    return (
-                      <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
-                        <Avatar>
-                          <AvatarFallback>{(enrollment.user.first_name?.charAt(0) || enrollment.user.id.charAt(0)).toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium">{name}</p>
-                          <p className="text-xs text-muted-foreground">Course: {courseTitle}</p>
+                  <>
+                    <div className="space-y-4">
+                      {paginatedEnrollments.map((enrollment, idx) => {
+                        const name = `${enrollment.user.first_name || ''} ${enrollment.user.last_name || ''}`.trim() || enrollment.user.id;
+                        const courseTitle = enrollment.course.title || enrollment.course.id;
+                        return (
+                          <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
+                            <Avatar>
+                              <AvatarFallback>{(enrollment.user.first_name?.charAt(0) || enrollment.user.id.charAt(0)).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 space-y-1">
+                              <p className="text-sm font-medium">{name}</p>
+                              <p className="text-xs text-muted-foreground">Course: {courseTitle}</p>
+                            </div>
+                            <div className="text-xs text-muted-foreground">{formatDate(enrollment.enrolledAt)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {enrollmentsTotalPages > 1 && (
+                      <div className="flex items-center justify-between pt-4 border-t">
+                        <div className="text-sm text-muted-foreground">
+                          Showing {paginatedEnrollments.length} of {recentActivity.enrollments.length} enrollments
                         </div>
-                        <div className="text-xs text-muted-foreground">{formatDate(enrollment.enrolledAt)}</div>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEnrollmentsPage(prev => Math.max(1, prev - 1))}
+                            disabled={enrollmentsPage === 1}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-sm">
+                            Page {enrollmentsPage} of {enrollmentsTotalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEnrollmentsPage(prev => Math.min(enrollmentsTotalPages, prev + 1))}
+                            disabled={enrollmentsPage === enrollmentsTotalPages}
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                    );
-                  })
+                    )}
+                  </>
                 )}
               </div>
             </CardContent>
@@ -217,24 +240,59 @@ export function DashboardOverview() {
                     <h3 className="text-lg font-medium">No recent payments</h3>
                   </div>
                 ) : (
-                  recentActivity.payments.map((payment, idx) => {
-                    const name = `${payment.user.first_name || ''} ${payment.user.last_name || ''}`.trim() || payment.user.id || 'Anonymous';
-                    const fallbackInitial = payment.user.first_name?.charAt(0) || payment.user.id?.charAt(0) || 'A';
-                    return (
-                      <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
-                        <Avatar>
-                          <AvatarFallback>{fallbackInitial.toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 space-y-1">
-                          <p className="text-sm font-medium">{name}</p>
-                          <p className="text-xs text-muted-foreground">Amount: {formatCurrency(payment.amount)}</p>
-                          {payment.method && <p className="text-xs text-muted-foreground">Method: {payment.method}</p>}
-                          {payment.transactionType && <p className="text-xs text-muted-foreground">Type: {payment.transactionType}</p>}
+                  <>
+                    <div className="space-y-4">
+                      {paginatedPayments.map((payment, idx) => {
+                        const name = `${payment.user.first_name || ''} ${payment.user.last_name || ''}`.trim() || payment.user.id || 'Anonymous';
+                        const fallbackInitial = payment.user.first_name?.charAt(0) || payment.user.id?.charAt(0) || 'A';
+                        return (
+                          <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
+                            <Avatar>
+                              <AvatarFallback>{fallbackInitial.toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 space-y-1">
+                              <p className="text-sm font-medium">{name}</p>
+                              <p className="text-xs text-muted-foreground">Amount: {formatCurrency(payment.amount)}</p>
+                              {payment.method && <p className="text-xs text-muted-foreground">Method: {payment.method}</p>}
+                              {payment.transactionType && <p className="text-xs text-muted-foreground">Type: {payment.transactionType}</p>}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{formatDate(payment.paidAt)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {paymentsTotalPages > 1 && (
+                      <div className="flex items-center justify-between pt-4 border-t">
+                        <div className="text-sm text-muted-foreground">
+                          Showing {paginatedPayments.length} of {recentActivity.payments.length} payments
                         </div>
-                        <div className="text-xs text-muted-foreground">{formatDate(payment.paidAt)}</div>
+                        <div className="flex items-center space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPaymentsPage(prev => Math.max(1, prev - 1))}
+                            disabled={paymentsPage === 1}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                            Previous
+                          </Button>
+                          <span className="text-sm">
+                            Page {paymentsPage} of {paymentsTotalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setPaymentsPage(prev => Math.min(paymentsTotalPages, prev + 1))}
+                            disabled={paymentsPage === paymentsTotalPages}
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                    );
-                  })
+                    )}
+                  </>
                 )}
               </div>
             </CardContent>

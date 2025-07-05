@@ -53,14 +53,8 @@ export const useDashboardOverviewStore = create<DashboardOverviewState>((set, ge
         return;
     }
 
-    // Prevent fetch if filters haven't changed since last successful fetch
-    // Use lodash.isEqual for deep comparison of dateRange objects
-    if (lastFetchedFilters && isEqual(currentFilters, lastFetchedFilters)) {
-        console.log("DashboardOverviewStore: Filters haven't changed, skipping fetch.");
-        // Optionally update loading state if needed, though it should be false
-        // set({ isLoading: false }); 
-        return;
-    }
+    // Always fetch when requested - remove the filter comparison that was preventing refreshes
+    console.log("DashboardOverviewStore: Fetching data for filters:", currentFilters);
 
     // --- Proceed with fetch --- 
     console.log("DashboardOverviewStore: Fetching new data...");
