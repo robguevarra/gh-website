@@ -47,6 +47,10 @@ const PAID_P2P_TAG = 'PaidP2P'
 const FULL_RUN = process.argv.includes('--full')
 const FULL_BATCH_SIZE = 5000 // generous upper bound larger than total expected records
 const BATCH_SIZE = FULL_RUN ? FULL_BATCH_SIZE : TEST_BATCH_SIZE
+
+// Single email mode argument e.g., --email=example@example.com
+const EMAIL_ARG = process.argv.find(arg => arg.startsWith('--email='))
+const SINGLE_EMAIL = EMAIL_ARG ? EMAIL_ARG.split('=')[1].trim().toLowerCase() : null
 const CUTOFF_EMAIL = 'smilee.mearah@gmail.com'
 const TRANSACTION_AMOUNT = 500 // Standard transaction amount for P2P enrollments
 
@@ -720,6 +724,54 @@ async function runFullBatch() {
   }
 }
 
+// Function to process a single email passed via --email flag
+async function processSingleEmail(targetEmail: string) {
+  console.log(`=== REMEDIATION FOR SINGLE EMAIL: ${targetEmail} ===`)
+
+  // Attempt to fetch record from systemeio
+  let record: SystemioRecord | null = null
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('systemeio')
+      .select('*')
+      .ilike('Email', targetEmail)
+      .limit(1)
+      .single()
+
+    if (error) {
+      console.log(`Could not fetch systemeio record: ${error.message}`)
+    }
+    if (data) {
+      record = data as unknown as SystemioRecord
+    }
+  } catch (err) {
+    console.log(`Error retrieving systemeio record: ${(err as Error).message}`)
+  }
+
+  // Fallback to minimal record if not found
+  if (!record) {
+    console.log('No systemeio record found, constructing minimal record for processing')
+    record = {
+      Email: targetEmail,
+      "First Name": 'Unknown',
+      "Last Name": '',
+      "Date Registered": new Date().toISOString(),
+      Tag: 'manual_enroll'
+    } as unknown as SystemioRecord
+    // add lowercase variants for compatibility
+    ;(record as any)['First name'] = 'Unknown'
+    ;(record as any)['Last name'] = ''
+  }
+
+  // Process the record through existing workflow
+  const result = await processRecord(record)
+  if (result.success) {
+    console.log(`✅ Successfully remediated ${targetEmail}`)
+  } else {
+    console.log(`❌ Failed to remediate ${targetEmail}: ${result.error}`)
+  }
+}
+
 // Dispatch based on flag when executed directly (not when imported)
 const isCliExecution = ((): boolean => {
   // CommonJS
@@ -735,7 +787,10 @@ const isCliExecution = ((): boolean => {
   return thisUrl === invokedScript
 })()
 
-if (isCliExecution) {
+// Execute based on provided flags regardless of module loader nuances
+if (SINGLE_EMAIL) {
+  (async () => { await processSingleEmail(SINGLE_EMAIL) })()
+} else if (isCliExecution) {
   if (FULL_RUN) {
     (async () => { await runFullBatch() })()
   } else {

@@ -391,51 +391,69 @@ export default function PapersToProfit() {
     ))
   }
 
-  // Module data
+  // Module data (updated July 5 2025)
   const modules = [
     {
-      title: "Module 1: Foundations of Paper Products",
-      description: "Learn the basics of paper types, tools, and design principles",
+      title: "Module 1: Print Class",
+      description:
+        "Start strong with the core foundations of creating profitable paper products.",
       lessons: [
-        "Understanding paper weights and types",
-        "Essential tools for paper crafting",
-        "Basic design principles for paper products",
-        "Planning your first journal or planner",
+        "How to turn your creative ideas into tangible, high-quality products",
+        "Basics of printing and paper crafting for beginners",
+        "The essential mindset to start your paperpreneur journey",
+        "Clarifying your purpose, passion, vision, mission, and values",
+        "Building a strong foundation before moving to design and production",
       ],
       duration: "2 hours",
     },
     {
-      title: "Module 2: Design & Layout",
-      description: "Master the art of creating functional and beautiful layouts",
+      title: "Module 2: Product Creation Class",
+      description:
+        "Learn how to confidently turn your ideas into polished, sellable products.",
       lessons: [
-        "Creating user-friendly page layouts",
-        "Typography for readability and style",
-        "Color theory for paper products",
-        "Designing covers that sell",
-      ],
-      duration: "3 hours",
-    },
-    {
-      title: "Module 3: Binding Techniques",
-      description: "Learn various binding methods to create professional products",
-      lessons: [
-        "Spiral and coil binding basics",
-        "Perfect binding for professional look",
-        "Japanese stab binding for decorative journals",
-        "Choosing the right binding for your product",
+        "The full process of developing your own paper product from idea to output",
+        "How to bring your unique ideas to life, whether you're a beginner or already selling",
+        "Ways to improve or refine existing designs for better quality and appeal",
+        "A clear, step-by-step approach to creating with purpose and strategy",
       ],
       duration: "2.5 hours",
     },
     {
-      title: "Module 4: Business Fundamentals",
-      description: "Transform your skills into a profitable business",
+      title: "Module 3: Launch Class",
+      description:
+        "Turn your product into profit with a successful and strategic launch.",
       lessons: [
-        "Pricing strategies for handmade products",
-        "Building your brand identity",
-        "Marketing to the homeschooling community",
-        "Scaling your production efficiently",
+        "A step-by-step guide to launching your paper products with confidence",
+        "Key strategies to bring your product to market successfully",
+        "How to plan, prepare, and execute a strong product launch",
+        "Tips for launching a new collection or expanding an existing line",
+        "Insights to help you stand out and sell well from day one",
       ],
-      duration: "3.5 hours",
+      duration: "3 hours",
+    },
+    {
+      title: "Module 4: Binding Techniques",
+      description: "Upgrade your paper products with professional binding skills.",
+      lessons: [
+        "How binding methods impact product quality, durability, and appearance",
+        "Choosing the best binding technique for your journals, planners, or notepads",
+        "Practical tips to make your products look polished and premium",
+        "Skills that elevate your brand and set your products apart",
+      ],
+      duration: "2 hours",
+    },
+    {
+      title: "Module 5: Bonus Elective",
+      description:
+        "Strengthen the backbone of your paper product business with practical tools and strategies.",
+      lessons: [
+        "Core principles every paperpreneur needs to run a sustainable business",
+        "How to manage and price your products with confidence",
+        "Key mindset shifts for growth and long-term success",
+        "Practical systems to help you stay organized and profitable",
+        "Foundations that prepare you to scale your brand with purpose",
+      ],
+      duration: "1.5 hours",
     },
   ]
 
