@@ -218,11 +218,12 @@ export function DashboardOverview() {
                   </div>
                 ) : (
                   recentActivity.payments.map((payment, idx) => {
-                    const name = `${payment.user.first_name || ''} ${payment.user.last_name || ''}`.trim() || payment.user.id;
+                    const name = `${payment.user.first_name || ''} ${payment.user.last_name || ''}`.trim() || payment.user.id || 'Anonymous';
+                    const fallbackInitial = payment.user.first_name?.charAt(0) || payment.user.id?.charAt(0) || 'A';
                     return (
                       <div key={idx} className="flex items-center space-x-3 border-b pb-3 last:border-0 last:pb-0">
                         <Avatar>
-                          <AvatarFallback>{(payment.user.first_name?.charAt(0) || payment.user.id.charAt(0)).toUpperCase()}</AvatarFallback>
+                          <AvatarFallback>{fallbackInitial.toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 space-y-1">
                           <p className="text-sm font-medium">{name}</p>

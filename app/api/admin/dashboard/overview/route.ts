@@ -162,25 +162,21 @@ async function fetchSummaryMetrics(
   ]);
   if (errE1 || errE2) throw errE1 || errE2;
 
-  // Parallel revenues
+  // Parallel revenues - Use unified revenue view with all successful statuses
   const [
     { data: revThis = [], error: errR1 },
     { data: revPrev = [], error: errR2 }
   ] = await Promise.all([
     admin
-      .from('transactions')
+      .from('unified_revenue_view')
       .select('amount')
-      .eq('status', 'completed')
-      // Adjust transaction date filter as well for consistency?
-      // For now, keeping original logic unless specified
-      .gte('created_at', dr.current.start.toISOString())
-      .lte('created_at', dr.current.end.toISOString()), // Original end date for revenue
+      .gte('transaction_date', dr.current.start.toISOString())
+      .lte('transaction_date', dr.current.end.toISOString()),
     admin
-      .from('transactions')
+      .from('unified_revenue_view')
       .select('amount')
-      .eq('status', 'completed')
-      .gte('created_at', dr.previous.start.toISOString())
-      .lte('created_at', dr.previous.end.toISOString()) // Original end date for revenue
+      .gte('transaction_date', dr.previous.start.toISOString())
+      .lte('transaction_date', dr.previous.end.toISOString())
   ]);
   if (errR1 || errR2) throw errR1 || errR2;
 
@@ -367,9 +363,9 @@ async function fetchRevenueTrends(
   const periodMapKeyFormat = granularity === 'month' ? 'YYYY-MM-01' : 'YYYY-MM-DD';
 
   if (granularity === 'month') {
-    // --- Use Database RPC for Monthly Aggregation ---
+    // --- Use Database RPC for Monthly Aggregation with Unified Revenue ---
     const { data: monthlyData = [], error: rpcError } = await admin.rpc(
-      'get_monthly_revenue_trends',
+      'get_monthly_unified_revenue_trends',
       {
         p_start_date: dr.current.start.toISOString(),
         p_end_date: dr.current.end.toISOString()
@@ -377,7 +373,7 @@ async function fetchRevenueTrends(
     );
 
     if (rpcError) {
-      console.error('RPC get_monthly_revenue_trends error:', rpcError);
+      console.error('RPC get_monthly_unified_revenue_trends error:', rpcError);
       throw rpcError;
     }
     console.log('[fetchRevenueTrends] RPC result count:', monthlyData?.length ?? 0);
@@ -399,20 +395,19 @@ async function fetchRevenueTrends(
       return { date: dateKey, amount: sums[dateKey] || 0 };
     });
   } else {
-     // --- Keep original logic for Day/Week Granularity ---
+     // --- Use unified revenue view for Day/Week Granularity ---
     const { data = [] as any[], error } = await admin
-      .from('transactions')
-      .select('paid_at, amount')
-      .eq('status', 'completed')
-      .gte('paid_at', dr.current.start.toISOString())
-      .lte('paid_at', dr.current.end.toISOString());
+      .from('unified_revenue_view')
+      .select('transaction_date, amount')
+      .gte('transaction_date', dr.current.start.toISOString())
+      .lte('transaction_date', dr.current.end.toISOString());
     if (error) throw error;
 
     console.log('[fetchRevenueTrends] fetched rows count:', data?.length ?? 0);
 
     const sums: Record<string, number> = {};
-    (data || []).forEach(({ paid_at, amount }) => {
-      const dt = new Date(paid_at);
+    (data || []).forEach(({ transaction_date, amount }) => {
+      const dt = new Date(transaction_date);
       let key: string;
       if (granularity === 'week') {
         const monday = new Date(dt);
@@ -458,15 +453,14 @@ async function fetchRecentActivity(
     enrolledAt: r.enrolled_at
   }));
 
-  // Recent Payments
+  // Recent Payments - Use unified revenue view
   const { data: pr = [] as any[], error: prErr } = await admin
-    .from('transactions')
-    .select('user_id, amount, payment_method, paid_at, transaction_type')
-    .eq('status', 'completed')
-    .order('paid_at', { ascending: false })
+    .from('unified_revenue_view')
+    .select('user_id, amount, platform, transaction_date, product_type')
+    .order('transaction_date', { ascending: false })
     .limit(10)
-    .gte('paid_at', dr.current.start.toISOString())
-    .lte('paid_at', dr.current.end.toISOString());
+    .gte('transaction_date', dr.current.start.toISOString())
+    .lte('transaction_date', dr.current.end.toISOString());
   if (prErr) throw prErr;
 
   const userIds = Array.from(new Set((pr || []).map((p) => p.user_id)));
@@ -483,9 +477,9 @@ async function fetchRecentActivity(
   const payments: RecentPayment[] = (pr || []).map((r: any) => ({
     user: { id: r.user_id, ...profileMap[r.user_id] },
     amount: r.amount,
-    paidAt: r.paid_at,
-    method: r.payment_method,
-    transactionType: r.transaction_type
+    paidAt: r.transaction_date,
+    method: r.platform,
+    transactionType: r.product_type
   }));
 
   return { enrollments, payments };
