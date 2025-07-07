@@ -21,8 +21,8 @@ import Link from 'next/link';
 // Dashboard Sections
 //import { AdminHeader } from '@/components/admin/admin-header';
 import { DashboardOverview } from '@/components/admin/dashboard-overview';
-import { EnrollmentAnalytics } from '@/components/admin/enrollment-analytics';
-import RevenueAnalyticsPage from '@/app/admin/revenue-analytics/page';
+import { EnrollmentsSection } from '@/components/admin/enrollments-section';
+import { RevenueSection } from '@/components/admin/revenue-section';
 import MarketingAnalyticsContent from '@/app/admin/marketing/MarketingAnalyticsContent';
 import EmailAnalyticsDashboard from '@/components/admin/email-analytics-dashboard';
 import { TemplateMigration } from '@/components/admin/template-migration';
@@ -43,7 +43,7 @@ export default async function AdminDashboardPage() {
       {/* Dashboard title and description */}
       <div className="space-y-1">
         <h2 className="text-2xl font-bold tracking-tight">Business Intelligence Dashboard</h2>
-        <p className="text-muted-foreground">Track enrollments, revenue, and marketing performance</p>
+        <p className="text-muted-foreground">Real-time analytics for enrollment tracking, revenue analysis, and business performance insights</p>
       </div>
       {/* Tab navigation for dashboard sections. Add new sections as needed. */}
       <Tabs defaultValue="overview" className="space-y-8">
@@ -86,14 +86,14 @@ export default async function AdminDashboardPage() {
         </TabsContent>
         <TabsContent value="enrollments">
           <Suspense fallback={<DashboardSkeleton />}>
-            <EnrollmentAnalytics />
+            <EnrollmentsSection />
           </Suspense>
         </TabsContent>
         
-        {/* Connect the new Revenue Analytics page */}
+        {/* Connect the new Revenue Section */}
         <TabsContent value="revenue">
           <Suspense fallback={<DashboardSkeleton />}>
-            <RevenueAnalyticsPage /> {/* Use the new page component */}
+            <RevenueSection />
           </Suspense>
         </TabsContent>
         {/* Add Marketing TabsContent */}

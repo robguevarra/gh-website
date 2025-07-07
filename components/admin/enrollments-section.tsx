@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { MetricCard } from './metric-card';
 import { ChartContainer } from './chart-container';

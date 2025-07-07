@@ -196,7 +196,7 @@ export function EnrollmentAnalytics() {
     <div className="space-y-8">
       {/* Top Controls: Use the standard DateRangePicker */}
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <h3 className="text-xl font-semibold">Enrollment Overview</h3>
+        <h3 className="text-xl font-semibold">Enrollment Overviewx</h3>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Granularity Selector */}
           <Select value={granularity} onValueChange={setGranularity}>

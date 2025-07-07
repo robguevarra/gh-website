@@ -1272,6 +1272,10 @@ export async function POST(request: NextRequest) {
             } catch (err) {
               console.error("[Webhook][Canva] Failed to store ebook contact info:", err)
             }
+          } else if (tx.transaction_type === "PUBLIC_SALE") {
+            // --- PUBLIC_SALE TRANSACTION LOGIC ---
+            const { handlePublicSaleTransaction } = await import('@/lib/webhooks/public-sale-handler');
+            await handlePublicSaleTransaction(tx, supabase);
           } else {
              // Log if transaction type is unknown or not handled
              console.warn(`[Webhook] Unhandled transaction_type encountered: ${tx.transaction_type} for transaction ID: ${tx.id}`);

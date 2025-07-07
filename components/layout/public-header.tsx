@@ -35,6 +35,7 @@ export function PublicHeader({ onHoverChange }: PublicHeaderProps) {
     { href: '/', label: 'Home' },
     { href: '/p2p-order-form', label: 'Papers to Profits' },
     { href: '/canva-order', label: 'Get Ebook' },
+    { href: '/specialsale', label: '🔥 Special Sale' },
     { href: '/shop', label: 'Shop' }
   ]
 
