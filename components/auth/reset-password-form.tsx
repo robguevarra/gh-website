@@ -12,9 +12,10 @@ import Link from 'next/link';
 
 interface ResetPasswordFormProps {
   showHeader?: boolean;
+  onDirectSetupChange?: (directSetup: boolean) => void;
 }
 
-export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps) {
+export function ResetPasswordForm({ showHeader = true, onDirectSetupChange }: ResetPasswordFormProps) {
   const { resetPassword } = useAuth();
   const router = useRouter();
 
@@ -75,6 +76,7 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
         console.log('[ResetPasswordForm] Direct setup required for user');
         console.log('[ResetPasswordForm] Setting directSetup to true');
         setDirectSetup(true);
+        onDirectSetupChange?.(true); // Notify parent component
         setEmail(result.email || email); // Use the normalized email from response
         return;
       }

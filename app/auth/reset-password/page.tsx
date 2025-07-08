@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 
 export default function ResetPasswordPage() {
   const [mounted, setMounted] = useState(false);
+  const [directSetup, setDirectSetup] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -121,10 +122,13 @@ export default function ResetPasswordPage() {
           <div className="mx-auto w-full max-w-sm space-y-6">
             <motion.div variants={fadeIn} className="flex flex-col space-y-2 text-center">
               <h1 className="text-3xl font-serif font-semibold tracking-tight text-[#5d4037]">
-                Reset your password
+                {directSetup ? 'Welcome to Our New Site!' : 'Reset your password'}
               </h1>
               <p className="text-sm text-[#6d4c41]">
-                Enter your email address and we'll send you a link to reset your password
+                {directSetup 
+                  ? 'We\'ve detected your account as an existing user from our previous platform. To ensure the best experience on our updated site, please set up your password below so you can access all the new features we\'ve prepared for you!'
+                  : 'Enter your email address and we\'ll send you a link to reset your password'
+                }
               </p>
               <motion.div 
                 className="mx-auto h-1 w-12 bg-gradient-to-r from-brand-purple to-brand-pink rounded-full mt-2"
@@ -135,7 +139,7 @@ export default function ResetPasswordPage() {
             </motion.div>
             
             <motion.div variants={fadeIn}>
-              <ResetPasswordForm showHeader={false} />
+              <ResetPasswordForm showHeader={false} onDirectSetupChange={setDirectSetup} />
             </motion.div>
             
             <motion.div variants={fadeIn} className="text-center text-sm text-[#6d4c41]">
