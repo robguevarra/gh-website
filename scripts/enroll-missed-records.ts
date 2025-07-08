@@ -352,18 +352,30 @@ async function ensureAuthUserAndProfile(email: string, firstName: string, lastNa
     }
 
     // Create new profile for user with ID matching the auth user ID
+    // Parse systemeio registration date for created_at
+    const registrationDate = record['Date Registered']
+    const createdAt = registrationDate ? new Date(registrationDate).toISOString() : new Date().toISOString()
+    
+    // Parse tags from systemeio (comma-separated string to array)
+    const systemioTags = record.Tag ? record.Tag.split(',').map(tag => tag.trim()) : []
+    
     const { data: newProfile, error: profileError } = await supabaseAdmin.from('unified_profiles').insert([{
       id: userId, // Use the auth user ID as the profile ID to maintain FK integrity
       email,
+      first_name: firstName,
+      last_name: lastName,
+      tags: systemioTags, // Convert comma-separated tags to array
+      acquisition_source: 'migrated',
+      created_at: createdAt, // Use original systemeio registration date
+      updated_at: new Date().toISOString(),
+      status: 'active',
+      is_student: true,
       admin_metadata: {
         auth_user_id: userId,
         source: 'remediation',
         systemeio_id: record.ID,
         created_at: new Date().toISOString()
-      },
-      // Any additional profile data we want to store
-      first_name: firstName,
-      last_name: lastName
+      }
     }]).select('id')
 
     if (profileError) {
