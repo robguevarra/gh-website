@@ -17,7 +17,7 @@ interface ResetPasswordFormProps {
 export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps) {
   const { resetPassword } = useAuth();
   const router = useRouter();
-  
+
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,6 +27,9 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+
+  // Debug logging
+  console.log('[ResetPasswordForm] Component render - directSetup:', directSetup);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,6 +73,7 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
       // Check if user needs direct password setup
       if (result.directSetup) {
         console.log('[ResetPasswordForm] Direct setup required for user');
+        console.log('[ResetPasswordForm] Setting directSetup to true');
         setDirectSetup(true);
         setEmail(result.email || email); // Use the normalized email from response
         return;
