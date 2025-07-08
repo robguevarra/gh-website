@@ -59,11 +59,9 @@ export async function detectInvalidBcryptHash(email: string): Promise<HashDetect
     }
     
     // Get the encrypted password hash directly from auth.users table
+    // Note: auth.users is in the auth schema, not public schema
     const { data: hashData, error: hashError } = await supabase
-      .from('auth.users')
-      .select('encrypted_password')
-      .eq('id', profile.id)
-      .single();
+      .rpc('get_user_encrypted_password', { user_id: profile.id });
     
     if (hashError) {
       console.error('[HashDetection] Error fetching password hash:', hashError);
@@ -73,7 +71,8 @@ export async function detectInvalidBcryptHash(email: string): Promise<HashDetect
       };
     }
     
-    const encryptedPassword = hashData?.encrypted_password;
+    // RPC function returns the password directly as a string, not in a data object
+    const encryptedPassword = hashData;
     
     if (!encryptedPassword) {
       console.log('[HashDetection] NULL hash detected');
