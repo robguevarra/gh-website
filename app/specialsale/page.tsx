@@ -61,7 +61,7 @@ const productDetails = {
     "Love Bank & Reconnect (10-Day Devotional)",
     "Recommitting Vows"
   ],
-  saleEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+  saleEndDate: new Date('2025-07-15T23:59:59+08:00') // July 15, 2025 11:59 PM Philippine Time (UTC+8)
 };
 
 // Countdown Timer Component
