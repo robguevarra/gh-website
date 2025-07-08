@@ -1,148 +1,134 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@supabase/supabase-js';
+import { detectInvalidBcryptHash } from '@/lib/auth/hash-validation-service';
 
-export async function POST(request: NextRequest) {
+// Admin client for password updates
+function getAdminClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase credentials');
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+}
+
+export async function POST(request: Request) {
+  console.log('[PasswordUpdate] Processing direct password update request');
   try {
-    const { email, password, userData } = await request.json()
-
+    const { email, password } = await request.json();
+    
     if (!email || !password) {
-      return NextResponse.json(
-        { success: false, error: 'Email and password are required' },
-        { status: 400 }
-      )
-    }
-
-    console.log('[UpdatePassword] Updating password for user:', email)
-
-    const adminClient = getAdminClient()
-    const normalizedEmail = email.toLowerCase()
-    
-    // First strategy: Look up the user ID from unified_profiles
-    // This is more efficient than using listUsers API
-    let userId = null
-    let user = null
-
-    try {
-      console.log('[UpdatePassword] Looking up user in unified_profiles table...')
-      const { data: profileData, error: profileError } = await adminClient
-        .from('unified_profiles')
-        .select('id')
-        .eq('email', normalizedEmail)
-        .maybeSingle()
-
-      if (profileError) {
-        console.error('[UpdatePassword] Error looking up user in profiles:', profileError)
-      } else if (profileData?.id) {
-        userId = profileData.id
-        console.log('[UpdatePassword] Found user ID in profiles:', userId)
-      }
-    } catch (profileLookupError) {
-      console.error('[UpdatePassword] Exception during profile lookup:', profileLookupError)
-      // Continue to next strategy
+      return Response.json({ 
+        success: false, 
+        error: 'Email and password are required' 
+      }, { status: 400 });
     }
     
-    // Second strategy: If we have the userId, fetch the user details directly
-    if (userId) {
-      try {
-        const { data: userData, error: userError } = await adminClient.auth.admin.getUserById(userId)
-        
-        if (userError) {
-          console.error('[UpdatePassword] Error fetching user by ID:', userError)
-        } else if (userData?.user) {
-          user = userData.user
-          console.log('[UpdatePassword] Successfully retrieved user details by ID')
-        }
-      } catch (userLookupError) {
-        console.error('[UpdatePassword] Exception fetching user by ID:', userLookupError)
-        // Will continue to next strategy if needed
-      }
+    // Validate password strength
+    if (password.length < 8) {
+      return Response.json({ 
+        success: false, 
+        error: 'Password must be at least 8 characters long' 
+      }, { status: 400 });
     }
     
-    // Third strategy: Try to use the ID from the profile to fetch user info
-    if (userId && !user) {
-      try {
-        console.log('[UpdatePassword] Fetching user by ID:', userId)
-        const { data, error } = await adminClient.auth.admin.getUserById(userId)
-        if (error) {
-          console.error('[UpdatePassword] Error fetching user by ID:', error)
-        } else if (data?.user) {
-          user = data.user
-          console.log('[UpdatePassword] Found user by ID:', user.id)
-        }
-      } catch (idLookupError) {
-        console.error('[UpdatePassword] Exception fetching user by ID:', idLookupError)
-      }
+    console.log(`[PasswordUpdate] Validating hash status for: ${email}`);
+    
+    // Double validation: Ensure user actually has invalid hash
+    const hashDetection = await detectInvalidBcryptHash(email);
+    
+    if (hashDetection.status !== 'invalid_temp_hash') {
+      console.warn(`[PasswordUpdate] Unauthorized direct update attempt for ${email}, hash status: ${hashDetection.status}`);
+      return Response.json({ 
+        success: false, 
+        error: 'Direct password update not allowed for this account' 
+      }, { status: 403 });
     }
     
-    // If we still don't have the user, it doesn't exist
-    if (!user) {
-      console.error('[UpdatePassword] User not found after all lookup attempts:', email)
-      return NextResponse.json(
-        { success: false, error: 'User not found' },
-        { status: 404 }
-      )
+    if (!hashDetection.userId) {
+      console.error('[PasswordUpdate] No user ID found in hash detection result');
+      return Response.json({ 
+        success: false, 
+        error: 'User ID not found' 
+      }, { status: 404 });
     }
-
-    console.log('[UpdatePassword] Found user:', user.id)
-
-    // Update the user's password using Admin API
-    const { data: updateData, error: updateError } = await adminClient.auth.admin.updateUserById(
-      user.id,
-      {
-        password: password,
+    
+    console.log(`[PasswordUpdate] Updating password for user ID: ${hashDetection.userId}`);
+    
+    const supabase = getAdminClient();
+    
+    // Update the user's password using admin client
+    const { error: updateError } = await supabase.auth.admin.updateUserById(
+      hashDetection.userId,
+      { 
+        password,
         user_metadata: {
-          ...user.user_metadata,
-          ...userData,
-          password_set_at: new Date().toISOString()
+          password_set_at: new Date().toISOString(),
+          password_update_method: 'direct_setup'
         }
       }
-    )
-
+    );
+    
     if (updateError) {
-      console.error('[UpdatePassword] Error updating password:', updateError)
-      return NextResponse.json(
-        { success: false, error: 'Failed to update password' },
-        { status: 500 }
-      )
+      console.error('[PasswordUpdate] Password update failed:', updateError);
+      return Response.json({ 
+        success: false, 
+        error: updateError.message || 'Failed to update password' 
+      }, { status: 500 });
     }
-
-    console.log('[UpdatePassword] Password updated successfully for user:', user.id)
-
-    // Also update the unified_profiles table if userData is provided
-    if (userData && (userData.first_name || userData.last_name)) {
-      try {
-        const { error: profileError } = await adminClient
-          .from('unified_profiles')
-          .update({
-            first_name: userData.first_name,
-            last_name: userData.last_name,
-            updated_at: new Date().toISOString()
-          })
-          .eq('email', email)
-
-        if (profileError) {
-          console.error('[UpdatePassword] Error updating profile:', profileError)
-          // Don't fail the password update for profile update issues
-        } else {
-          console.log('[UpdatePassword] Profile updated successfully for:', email)
-        }
-      } catch (profileError) {
-        console.error('[UpdatePassword] Profile update exception:', profileError)
-        // Don't fail the password update for profile update issues
-      }
+    
+    // Verify the password was actually updated by checking hash length
+    const { data: verifyUser, error: verifyError } = await supabase.auth.admin.getUserById(hashDetection.userId);
+    
+    if (verifyError) {
+      console.error('[PasswordUpdate] Verification failed:', verifyError);
+    } else {
+      console.log('[PasswordUpdate] Password update verified successfully');
     }
-
-    return NextResponse.json({
+    
+    // Log the successful password setup
+    try {
+      await supabase
+        .from('email_send_log')
+        .insert({
+          template_id: 'password-setup-completion',
+          template_name: 'Password Setup Completion',
+          template_category: 'authentication',
+          recipient_email: email.toLowerCase(),
+          subject: 'Password setup completed successfully',
+          status: 'internal_notification',
+          variables: {
+            event_type: 'direct_password_setup_completed',
+            user_id: hashDetection.userId,
+            ip_address: request.headers.get('x-forwarded-for') || 'unknown',
+            user_agent: request.headers.get('user-agent') || 'unknown',
+            timestamp: new Date().toISOString()
+          }
+        });
+    } catch (logError) {
+      // Non-critical error, just log it
+      console.error('[PasswordUpdate] Failed to log password setup:', logError);
+    }
+    
+    console.log(`[PasswordUpdate] Password successfully updated for ${email}`);
+    
+    return Response.json({ 
       success: true,
-      message: 'Password updated successfully',
-      userId: user.id
-    })
-
+      email: email.toLowerCase(),
+      message: 'Your password has been created successfully'
+    });
   } catch (error) {
-    console.error('[UpdatePassword] Unexpected error:', error)
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    )
+    console.error('[PasswordUpdate] Unexpected error:', error);
+    
+    return Response.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'An unexpected error occurred' 
+    }, { status: 500 });
   }
 } 

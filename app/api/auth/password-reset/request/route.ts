@@ -1,6 +1,7 @@
 import { generateMagicLink } from '@/lib/auth/magic-link-service';
 import { sendTransactionalEmail } from '@/lib/email/transactional-email-service';
 import { createClient } from '@supabase/supabase-js';
+import { detectInvalidBcryptHash } from '@/lib/auth/hash-validation-service';
 
 // Create direct admin client - needed to avoid auth session issues
 function getDirectAdminClient() {
@@ -30,6 +31,22 @@ export async function POST(request: Request) {
         error: 'Email is required' 
       }, { status: 400 });
     }
+    
+    // CRITICAL: Check for invalid bcrypt hash BEFORE generating magic link
+    console.log('[PasswordReset] Checking for invalid bcrypt hash...');
+    const hashDetection = await detectInvalidBcryptHash(email);
+    
+    if (hashDetection.status === 'invalid_temp_hash') {
+      console.log('[PasswordReset] Invalid hash detected, returning direct setup response');
+      return Response.json({ 
+        success: true, 
+        directSetup: true, 
+        email: email.toLowerCase(),
+        message: "Let's set up your password directly"
+      });
+    }
+    
+    console.log(`[PasswordReset] Hash status: ${hashDetection.status}, continuing with normal flow`);
     
     // Fetch user profile to get the first name if available
     let firstName = 'User';
