@@ -24,6 +24,7 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
   const [isSuccess, setIsSuccess] = useState(false);
   const [directSetup, setDirectSetup] = useState(false);
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
 
@@ -110,6 +111,16 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
       return;
     }
 
+    if (!confirmPassword) {
+      setPasswordError('Please confirm your password');
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return;
+    }
+
     try {
       setIsSubmittingPassword(true);
       
@@ -136,7 +147,7 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
       
       // Redirect to signin page after a short delay
       setTimeout(() => {
-        router.push(`/auth/signin?email=${encodeURIComponent(email)}&message=${encodeURIComponent('Your password has been created successfully! You can now sign in.')}`);
+        router.push(`/auth/signin?email=${encodeURIComponent(email)}&message=${encodeURIComponent('Welcome to our new platform! Your account is now ready. Please sign in to explore all the exciting features we\'ve prepared for you.')}`);
       }, 2000);
       
     } catch (err) {
@@ -152,11 +163,11 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
       {showHeader && (
         <div className="space-y-2 text-center">
           <h2 className="text-2xl font-serif text-foreground">
-            {directSetup ? 'Set Up Your Password' : 'Reset Your Password'}
+            {directSetup ? 'Welcome to Our New Site!' : 'Reset Your Password'}
           </h2>
           <p className="text-sm text-muted-foreground">
             {directSetup 
-              ? 'We detected your account needs password setup. Please create your password below.'
+              ? 'We\'ve detected your account as an existing user from our previous platform. To ensure the best experience on our updated site, please set up your password below so you can access all the new features we\'ve prepared for you!'
               : 'Enter your email and we\'ll send you a link to reset your password'
             }
           </p>
@@ -168,7 +179,7 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
           <Alert className="bg-primary/10 border-primary">
             <AlertDescription>
               {directSetup 
-                ? 'Your password has been created successfully! Redirecting to sign in...'
+                ? 'Perfect! Your account is now set up and ready to go. Redirecting you to sign in so you can explore all the exciting new features...'
                 : 'Password reset link sent! Please check your email for instructions to reset your password.'
               }
             </AlertDescription>
@@ -207,6 +218,23 @@ export function ResetPasswordForm({ showHeader = true }: ResetPasswordFormProps)
             />
             <p className="text-xs text-muted-foreground">
               Password must be at least 8 characters long
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="Confirm your new password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              disabled={isSubmittingPassword}
+              minLength={8}
+            />
+            <p className="text-xs text-muted-foreground">
+              Re-enter the same password to confirm
             </p>
           </div>
           
