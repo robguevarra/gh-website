@@ -181,7 +181,7 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
         setProcessedEmails(processedEmailList);
         setLoading(false);
 
-        if (subscriptionData && typeof subscriptionData.email_marketing_subscribed === 'boolean') {
+        if (subscriptionData && (typeof subscriptionData.email_marketing_subscribed === 'boolean' || subscriptionData.email_marketing_subscribed === null)) {
           setSubscriptionState(prev => ({
             ...prev,
             isMarketingSubscribed: subscriptionData.email_marketing_subscribed,
@@ -237,7 +237,11 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
   };
 
   const handleUpdateSubscription = async () => {
-    if (subscriptionState.isMarketingSubscribed === null) return;
+    // Only allow saving when user has selected a valid boolean value
+    if (subscriptionState.isMarketingSubscribed === null) {
+      toast.error('Please set a subscription preference before saving.');
+      return;
+    }
 
     setSubscriptionState(prev => ({ ...prev, isUpdating: true, error: null }));
     try {
@@ -362,8 +366,14 @@ export function UserEmailAnalytics({ userId }: UserEmailAnalyticsProps) {
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">
                     User is currently:{" "}
-                    <span className={`font-semibold ${subscriptionState.isMarketingSubscribed ? 'text-green-600' : 'text-red-600'}`}>
-                      {subscriptionState.isMarketingSubscribed ? 'Subscribed' : 'Unsubscribed'}
+                    <span className={`font-semibold ${
+                      subscriptionState.isMarketingSubscribed === true ? 'text-green-600' : 
+                      subscriptionState.isMarketingSubscribed === false ? 'text-red-600' : 
+                      'text-orange-600'
+                    }`}>
+                      {subscriptionState.isMarketingSubscribed === true ? 'Subscribed' : 
+                       subscriptionState.isMarketingSubscribed === false ? 'Unsubscribed' : 
+                       'Not Set'}
                     </span>
                   </p>
                   <Switch
