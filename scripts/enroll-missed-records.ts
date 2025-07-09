@@ -12,11 +12,11 @@
  */
 
 import { createClient } from '@supabase/supabase-js'
-import dotenv from 'dotenv'
+import { config } from 'dotenv'
 import { v4 as uuidv4 } from 'uuid'
 
 // Load environment variables
-dotenv.config()
+config()
 
 // Validate required environment variables
 if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -243,7 +243,7 @@ async function ensureAuthUserAndProfile(email: string, firstName: string, lastNa
           }
           
           // Find user in current page
-          const foundUser = usersPage.users.find(u => 
+          const foundUser = usersPage.users.find((u: any) => 
             u.email?.toLowerCase() === email.toLowerCase()
           )
           
@@ -617,8 +617,8 @@ async function getMissedRecords(batchSize: number = TEST_BATCH_SIZE): Promise<Sy
 // Process a single record through the full enrollment flow
 export async function processRecord(record: SystemioRecord) {
   const email = record.Email
-  const firstName = record['First name']
-  const lastName = record['Last name']
+  const firstName = String(record['First Name'] || 'Unknown')
+  const lastName = String(record['Last Name'] || '')
   
   console.log(`\nProcessing record for ${email} (${firstName} ${lastName})`)
   
@@ -638,18 +638,18 @@ export async function processRecord(record: SystemioRecord) {
     await createEnrollment(userId, DEFAULT_COURSE_ID, transactionId, profileId, record)
     
     // mark success in migration_log and set profile flag
-await logMigrationResult(email, 'success')
-if (profileId) {
-  await supabaseAdmin.from('unified_profiles').update({
-    admin_metadata: supabaseAdmin.rpc('jsonb_set', {
-      target: 'admin_metadata',
-      path: '{remediation_done}',
-      value: 'true',
-      create_missing: true
-    })
-  }).eq('id', profileId)
-}
-return {
+    await logMigrationResult(email, 'success')
+    if (profileId) {
+      await supabaseAdmin.from('unified_profiles').update({
+        admin_metadata: supabaseAdmin.rpc('jsonb_set', {
+          target: 'admin_metadata',
+          path: '{remediation_done}',
+          value: 'true',
+          create_missing: true
+        })
+      }).eq('id', profileId)
+    }
+    return {
       email,
       success: true
     }
@@ -657,7 +657,7 @@ return {
     const error = err as Error
     console.error(`❌ Failed to process record for ${email}: ${error.message}`)
     await logMigrationResult(email, 'error', error.message)
-return {
+    return {
       email,
       success: false,
       error: error.message
@@ -786,17 +786,15 @@ async function processSingleEmail(targetEmail: string) {
 
 // Dispatch based on flag when executed directly (not when imported)
 const isCliExecution = ((): boolean => {
-  // CommonJS
-  // @ts-ignore
+  // CommonJS check
   if (typeof require !== 'undefined' && typeof module !== 'undefined') {
     // @ts-ignore
     return require.main === module
   }
-  // ESM (tsx / ts-node-esm etc.)
-  // import.meta.url is like file:///path/to/file.ts
-  const thisUrl = (import.meta as any).url as string
-  const invokedScript = process.argv[1] ? `file://${process.argv[1].replace(/\\/g, '/')}` : ''
-  return thisUrl === invokedScript
+  // ESM check using process.argv
+  const currentFile = process.argv[1]
+  const thisFile = __filename || ''
+  return currentFile?.includes('enroll-missed-records') || thisFile.includes('enroll-missed-records')
 })()
 
 // Execute based on provided flags regardless of module loader nuances

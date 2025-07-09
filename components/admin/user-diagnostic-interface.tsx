@@ -10,7 +10,10 @@ import {
   ShoppingCart, 
   GraduationCap, 
   Link2, 
-  Info 
+  Info,
+  UserPlus,
+  Plus,
+  CheckCircle
 } from 'lucide-react';
 import { BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,6 +28,7 @@ import { Separator } from '@/components/ui/separator';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+
 
 // Types for the diagnostic data
 interface DiagnosticUser {
@@ -86,6 +90,22 @@ interface DiagnosticData {
   attributionGaps: {
     unlinkedShopifyCustomers: DiagnosticShopifyCustomer[];
   };
+  p2pEnrollmentAnalysis?: {
+    isEnrolledInP2P: boolean;
+    shouldBeEnrolledInP2P: boolean;
+    hasEnrollmentGap: boolean;
+    qualifyingTransactions: Array<{
+      id: string;
+      amount: number;
+      currency: string;
+      status: string;
+      transaction_type: string;
+      created_at: string;
+      metadata: any;
+    }>;
+    hasSystemeioP2PRecord: boolean;
+    canManuallyEnroll: boolean;
+  };
 }
 
 interface EmailManagementState {
@@ -119,6 +139,14 @@ export function UserDiagnosticInterface() {
     first_name: '',
     last_name: '',
     phone: ''
+  });
+
+  // P2P enrollment states
+  const [isEnrollingP2P, setIsEnrollingP2P] = useState(false);
+  const [showManualEnrollmentDialog, setShowManualEnrollmentDialog] = useState(false);
+  const [manualEnrollmentData, setManualEnrollmentData] = useState({
+    firstName: '',
+    lastName: ''
   });
 
   const handleSearch = async () => {
@@ -424,6 +452,72 @@ export function UserDiagnosticInterface() {
     });
   };
 
+  // P2P enrollment functions
+  const handleP2PEnrollment = async (source: 'transaction' | 'systemeio' | 'manual', transactionId?: string) => {
+    if (!searchEmail.trim()) {
+      toast.error('No email address available for enrollment');
+      return;
+    }
+
+    console.log('🚀 Starting P2P enrollment:', { source, transactionId, email: searchEmail });
+    setIsEnrollingP2P(true);
+    try {
+      const requestBody: any = {
+        email: searchEmail.trim(),
+        source
+      };
+
+      if (source === 'transaction' && transactionId) {
+        requestBody.transaction_id = transactionId;
+      } else if (source === 'manual') {
+        if (!manualEnrollmentData.firstName.trim()) {
+          toast.error('First name is required for manual enrollment');
+          setIsEnrollingP2P(false);
+          return;
+        }
+        requestBody.manual_data = {
+          firstName: manualEnrollmentData.firstName.trim(),
+          lastName: manualEnrollmentData.lastName.trim()
+        };
+      }
+
+      console.log('📤 Sending request body:', requestBody);
+
+      const response = await fetch('/api/admin/user-diagnostic/enroll-p2p', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log('📬 Response status:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('❌ API Error response:', error);
+        throw new Error(error.error || 'Failed to enroll user in P2P course');
+      }
+
+      const result = await response.json();
+      console.log('✅ Success response:', result);
+      toast.success(`Successfully enrolled ${searchEmail} in P2P course`);
+      
+      // Close manual enrollment dialog if it was open
+      setShowManualEnrollmentDialog(false);
+      setManualEnrollmentData({ firstName: '', lastName: '' });
+      
+      // Refresh diagnostic data
+      handleSearch();
+    } catch (error) {
+      console.error('💥 Error enrolling in P2P:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to enroll in P2P course');
+    } finally {
+      setIsEnrollingP2P(false);
+      console.log('🏁 P2P enrollment finished');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Search Interface */}
@@ -690,6 +784,203 @@ export function UserDiagnosticInterface() {
               )}
             </CardContent>
           </Card>
+
+          {/* P2P Enrollment Analysis */}
+          {diagnosticData.p2pEnrollmentAnalysis && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5" />
+                  P2P Course Enrollment Analysis
+                </CardTitle>
+                <CardDescription>
+                  Automatic detection of P2P enrollment status and missing enrollments
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Enrollment Status Banner */}
+                <div className="flex items-center justify-between p-4 rounded-lg border-2 bg-muted/50">
+                  <div className="flex items-center gap-3">
+                    <Badge 
+                      variant={diagnosticData.p2pEnrollmentAnalysis.isEnrolledInP2P ? 'default' : 'destructive'}
+                      className="text-sm"
+                    >
+                      {diagnosticData.p2pEnrollmentAnalysis.isEnrolledInP2P ? '✅ Enrolled in P2P' : '❌ Not Enrolled in P2P'}
+                    </Badge>
+                    {diagnosticData.p2pEnrollmentAnalysis.hasEnrollmentGap && (
+                      <Badge variant="outline" className="text-orange-600 border-orange-600">
+                        ⚠️ Missing Enrollment
+                      </Badge>
+                    )}
+                  </div>
+                  {diagnosticData.p2pEnrollmentAnalysis.hasEnrollmentGap && (
+                    <div className="text-sm text-orange-600 font-medium">
+                      User should be enrolled based on qualifying records
+                    </div>
+                  )}
+                </div>
+
+                {/* Qualifying Transactions Section */}
+                {diagnosticData.p2pEnrollmentAnalysis.qualifyingTransactions.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm font-semibold">Qualifying P2P Transactions</Label>
+                      <Badge variant="secondary" className="text-xs">
+                        {diagnosticData.p2pEnrollmentAnalysis.qualifyingTransactions.length}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {diagnosticData.p2pEnrollmentAnalysis.qualifyingTransactions.map((transaction) => (
+                        <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg bg-background">
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline" className="text-xs">{transaction.status}</Badge>
+                            <div className="text-sm">
+                              <span className="font-medium">{formatCurrency(transaction.amount)} {transaction.currency}</span>
+                              <span className="text-muted-foreground ml-2">•</span>
+                              <span className="text-muted-foreground ml-2">{transaction.transaction_type}</span>
+                              <span className="text-muted-foreground ml-2">•</span>
+                              <span className="text-muted-foreground ml-2">{formatDate(transaction.created_at)}</span>
+                            </div>
+                          </div>
+                          {diagnosticData.p2pEnrollmentAnalysis!.hasEnrollmentGap && (
+                            <Button 
+                              size="sm" 
+                              onClick={() => handleP2PEnrollment('transaction', transaction.id)}
+                              disabled={isEnrollingP2P}
+                              className="shrink-0"
+                            >
+                              {isEnrollingP2P ? (
+                                <RefreshCw className="h-4 w-4 animate-spin mr-1" />
+                              ) : (
+                                <UserPlus className="h-4 w-4 mr-1" />
+                              )}
+                              Enroll Now
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Systemeio Section */}
+                {diagnosticData.p2pEnrollmentAnalysis.hasSystemeioP2PRecord && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-semibold">Systemeio P2P Record</Label>
+                    <div className="flex items-center justify-between p-3 border rounded-lg bg-background">
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="text-xs">Systemeio</Badge>
+                        <div className="text-sm">
+                          <span className="font-medium">P2P Record Found</span>
+                          <span className="text-muted-foreground ml-2">Tagged as 'imported' or 'PaidP2P'</span>
+                        </div>
+                      </div>
+                      {diagnosticData.p2pEnrollmentAnalysis.hasEnrollmentGap && (
+                        <Button 
+                          size="sm" 
+                          onClick={() => handleP2PEnrollment('systemeio')}
+                          disabled={isEnrollingP2P}
+                          className="shrink-0"
+                        >
+                          {isEnrollingP2P ? (
+                            <RefreshCw className="h-4 w-4 animate-spin mr-1" />
+                          ) : (
+                            <UserPlus className="h-4 w-4 mr-1" />
+                          )}
+                          Enroll from Systemeio
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Manual Enrollment Section */}
+                {diagnosticData.p2pEnrollmentAnalysis.canManuallyEnroll && !diagnosticData.p2pEnrollmentAnalysis.isEnrolledInP2P && (
+                  <div className="space-y-3">
+                    <Label className="text-sm font-semibold">Manual Enrollment</Label>
+                    <div className="p-3 border rounded-lg bg-background">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                          Manually enroll this user in the P2P course
+                        </div>
+                        <Dialog open={showManualEnrollmentDialog} onOpenChange={setShowManualEnrollmentDialog}>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <Plus className="h-4 w-4 mr-2" />
+                              Manual P2P Enrollment
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>Manual P2P Enrollment</DialogTitle>
+                              <DialogDescription>
+                                Manually enroll {searchEmail} in the P2P course. This will create necessary records.
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div>
+                                <Label htmlFor="manualFirstName">First Name *</Label>
+                                <Input
+                                  id="manualFirstName"
+                                  value={manualEnrollmentData.firstName}
+                                  onChange={(e) => setManualEnrollmentData(prev => ({ ...prev, firstName: e.target.value }))}
+                                  placeholder="Enter first name"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="manualLastName">Last Name</Label>
+                                <Input
+                                  id="manualLastName"
+                                  value={manualEnrollmentData.lastName}
+                                  onChange={(e) => setManualEnrollmentData(prev => ({ ...prev, lastName: e.target.value }))}
+                                  placeholder="Enter last name (optional)"
+                                />
+                              </div>
+                              <div className="flex justify-end gap-3">
+                                <Button 
+                                  variant="outline" 
+                                  onClick={() => setShowManualEnrollmentDialog(false)}
+                                  disabled={isEnrollingP2P}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button 
+                                  onClick={() => handleP2PEnrollment('manual')}
+                                  disabled={isEnrollingP2P || !manualEnrollmentData.firstName.trim()}
+                                >
+                                  {isEnrollingP2P ? (
+                                    <>
+                                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                      Enrolling...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <UserPlus className="h-4 w-4 mr-2" />
+                                      Enroll in P2P
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Success State */}
+                {!diagnosticData.p2pEnrollmentAnalysis.hasEnrollmentGap && diagnosticData.p2pEnrollmentAnalysis.isEnrolledInP2P && (
+                  <Alert className="border-green-200 bg-green-50">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-800">
+                      ✅ User is properly enrolled in P2P course. No action needed.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Ebook Contact Information - Only show if user not found but ebook contact exists */}
           {!diagnosticData.user && diagnosticData.ebookContact && (

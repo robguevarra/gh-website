@@ -103,6 +103,48 @@ export async function POST(request: NextRequest) {
         (customer: any) => !customer.unified_profile_id
       );
 
+      // **NEW: P2P ENROLLMENT DETECTION**
+      const P2P_COURSE_ID = '7e386720-8839-4252-bd5f-09a33c3e1afb';
+      const successStatuses = ['success', 'succeeded', 'paid', 'SUCCEEDED'];
+      
+      // Check if user is already enrolled in P2P course
+      const hasP2PEnrollment = transformedEnrollments.some((enrollment: any) => 
+        enrollment.course_title?.toLowerCase().includes('papers to profits') ||
+        enrollment.course_title?.toLowerCase().includes('p2p')
+      );
+
+      // Check for qualifying P2P transactions
+      const qualifyingTransactions = (transactionsResult.data || []).filter((transaction: any) => {
+        const isSuccessful = successStatuses.includes(transaction.status);
+        const isP2PRelated = 
+          transaction.transaction_type?.includes('p2p') ||
+          transaction.transaction_type?.includes('migration_remediation') ||
+          transaction.metadata?.course?.includes('p2p') ||
+          (transaction.amount >= 500 && transaction.currency === 'PHP'); // Standard P2P price
+        return isSuccessful && isP2PRelated;
+      });
+
+      // Check systemeio records for P2P indicators
+      let hasSystemeioP2PRecord = false;
+      try {
+        const systemeioResult = await adminClient
+          .from('systemeio')
+          .select('Tag')
+          .ilike('Email', searchEmail)
+          .maybeSingle();
+        
+        if (systemeioResult.data?.Tag) {
+          const tags = systemeioResult.data.Tag.toLowerCase();
+          hasSystemeioP2PRecord = tags.includes('imported') || tags.includes('paidp2p');
+        }
+      } catch (systemeioError) {
+        console.log('Systemeio lookup error (non-critical):', systemeioError);
+      }
+
+      // Determine P2P enrollment status
+      const shouldBeEnrolledInP2P = qualifyingTransactions.length > 0 || hasSystemeioP2PRecord;
+      const p2pEnrollmentGap = shouldBeEnrolledInP2P && !hasP2PEnrollment;
+
       // Build response matching UI expectations
       const diagnosticData = {
         user: userProfile,
@@ -113,6 +155,23 @@ export async function POST(request: NextRequest) {
         enrollments: transformedEnrollments,
         attributionGaps: {
           unlinkedShopifyCustomers: unlinkedShopifyCustomers
+        },
+        // **NEW: P2P enrollment analysis**
+        p2pEnrollmentAnalysis: {
+          isEnrolledInP2P: hasP2PEnrollment,
+          shouldBeEnrolledInP2P,
+          hasEnrollmentGap: p2pEnrollmentGap,
+          qualifyingTransactions: qualifyingTransactions.map(t => ({
+            id: t.id,
+            amount: t.amount,
+            currency: t.currency,
+            status: t.status,
+            transaction_type: t.transaction_type,
+            created_at: t.created_at,
+            metadata: t.metadata
+          })),
+          hasSystemeioP2PRecord,
+          canManuallyEnroll: true // Always allow manual enrollment regardless of existing records
         }
       };
 
