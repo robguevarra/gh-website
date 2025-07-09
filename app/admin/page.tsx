@@ -12,11 +12,8 @@ import {
   Settings, 
   TrendingUp, 
   Target, 
-  Package,
-  Tags as TagsIcon,
-  Megaphone // Added for Announcements
+  Package
 } from 'lucide-react';
-import Link from 'next/link';
 
 // Dashboard Sections
 //import { AdminHeader } from '@/components/admin/admin-header';
@@ -25,7 +22,7 @@ import { EnrollmentsSection } from '@/components/admin/enrollments-section';
 import { RevenueSection } from '@/components/admin/revenue-section';
 import MarketingAnalyticsContent from '@/app/admin/marketing/MarketingAnalyticsContent';
 import EmailAnalyticsDashboard from '@/components/admin/email-analytics-dashboard';
-import { TemplateMigration } from '@/components/admin/template-migration';
+
 //import { RevenueAnalysis } from '@/components/admin/revenue-analysis';
 //import { MarketingInsights } from '@/components/admin/marketing-insights';
 
@@ -45,39 +42,92 @@ export default async function AdminDashboardPage() {
         <h2 className="text-2xl font-bold tracking-tight">Business Intelligence Dashboard</h2>
         <p className="text-muted-foreground">Real-time analytics for enrollment tracking, revenue analysis, and business performance insights</p>
       </div>
-      {/* Tab navigation for dashboard sections. Add new sections as needed. */}
+            {/* Award-winning tab navigation for dashboard sections */}
       <Tabs defaultValue="overview" className="space-y-8">
-        <TabsList className="grid w-full grid-cols-7 md:w-auto"> 
-          {/* Tab triggers for each dashboard section */}
-          <TabsTrigger value="overview" className="flex items-center gap-2">
-            <BarChart2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Overview</span>
-          </TabsTrigger>
-          <TabsTrigger value="enrollments" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">Enrollments</span>
-          </TabsTrigger>
-          <TabsTrigger value="revenue" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" />
-            <span className="hidden sm:inline">Revenue</span>
-          </TabsTrigger>
-          <TabsTrigger value="marketing" className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4" />
-            <span className="hidden sm:inline">Marketing</span>
-          </TabsTrigger>
-          <TabsTrigger value="email" className="flex items-center gap-2">
-            <BarChart2 className="h-4 w-4" />
-            <span className="hidden sm:inline">Email Analytics</span>
-          </TabsTrigger>
-          <TabsTrigger value="migration" className="flex items-center gap-2">
-            <Megaphone className="h-4 w-4" />
-            <span className="hidden sm:inline">Migration</span>
-          </TabsTrigger>
-          <TabsTrigger value="tag-management" className="flex items-center gap-2">
-            <TagsIcon className="h-4 w-4" />
-            <span className="hidden sm:inline">Tag Management</span>
-          </TabsTrigger>
-        </TabsList>
+        {/* Mobile-first responsive tab design */}
+        <div className="w-full">
+          <TabsList className="flex p-1 bg-muted/50 rounded-lg w-full h-auto">
+            {/* Mobile: Horizontal scroll layout */}
+            <div className="flex md:hidden w-full overflow-x-auto scrollbar-hide">
+              <div className="flex space-x-1 px-2 py-1 min-w-max">
+                <TabsTrigger 
+                  value="overview" 
+                  className="flex items-center justify-center gap-2 min-w-[90px] px-4 py-3 text-sm font-medium rounded-md transition-all whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <BarChart2 className="h-4 w-4" />
+                  <span>Overview</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="enrollments" 
+                  className="flex items-center justify-center gap-2 min-w-[90px] px-4 py-3 text-sm font-medium rounded-md transition-all whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <Users className="h-4 w-4" />
+                  <span>Enrollments</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="revenue" 
+                  className="flex items-center justify-center gap-2 min-w-[90px] px-4 py-3 text-sm font-medium rounded-md transition-all whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  <span>Revenue</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="marketing" 
+                  className="flex items-center justify-center gap-2 min-w-[90px] px-4 py-3 text-sm font-medium rounded-md transition-all whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <TrendingUp className="h-4 w-4" />
+                  <span>Marketing</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="email" 
+                  className="flex items-center justify-center gap-2 min-w-[90px] px-4 py-3 text-sm font-medium rounded-md transition-all whitespace-nowrap data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <BarChart2 className="h-4 w-4" />
+                  <span>Email</span>
+                </TabsTrigger>
+              </div>
+            </div>
+            
+            {/* Desktop: Grid layout */}
+            <div className="hidden md:grid md:grid-cols-5 w-full gap-1">
+              <TabsTrigger 
+                value="overview" 
+                className="flex items-center justify-center gap-2 px-6 py-4 text-sm font-medium rounded-md transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                <BarChart2 className="h-4 w-4" />
+                <span>Overview</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="enrollments" 
+                className="flex items-center justify-center gap-2 px-6 py-4 text-sm font-medium rounded-md transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                <Users className="h-4 w-4" />
+                <span>Enrollments</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="revenue" 
+                className="flex items-center justify-center gap-2 px-6 py-4 text-sm font-medium rounded-md transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                <CreditCard className="h-4 w-4" />
+                <span>Revenue</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="marketing" 
+                className="flex items-center justify-center gap-2 px-6 py-4 text-sm font-medium rounded-md transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                <TrendingUp className="h-4 w-4" />
+                <span>Marketing</span>
+              </TabsTrigger>
+              <TabsTrigger 
+                value="email" 
+                className="flex items-center justify-center gap-2 px-6 py-4 text-sm font-medium rounded-md transition-all data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              >
+                <BarChart2 className="h-4 w-4" />
+                <span>Email</span>
+              </TabsTrigger>
+            </div>
+          </TabsList>
+        </div>
     
         <TabsContent value="overview">
           <Suspense fallback={<DashboardSkeleton />}>
@@ -109,27 +159,7 @@ export default async function AdminDashboardPage() {
           </Suspense>
         </TabsContent>
 
-        {/* Add Template Migration TabsContent */}
-        <TabsContent value="migration">
-          <Suspense fallback={<DashboardSkeleton />}>
-            <TemplateMigration />
-          </Suspense>
-        </TabsContent>
 
-        {/* Add Tag Management TabsContent */}
-        <TabsContent value="tag-management">
-          <div className="p-4 border rounded-lg shadow-sm">
-            <h3 className="text-xl font-semibold mb-2">Access Tag & Category Management</h3>
-            <p className="text-muted-foreground mb-4">
-              Organize and manage your platform's tagging system, including tag types, hierarchical tags, and metadata.
-            </p>
-            <Link href="/admin/tag-management" legacyBehavior passHref>
-              <a className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2">
-                Go to Tag Management
-              </a>
-            </Link>
-          </div>
-        </TabsContent>
 
       </Tabs>
     </div>

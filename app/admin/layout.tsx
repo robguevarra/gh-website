@@ -70,7 +70,10 @@ export default async function AdminLayout({
         <UserContextFetcher />
         <AdminHeader />
         <div className="flex flex-1 flex-col md:flex-row">
-          <AdminSidebar />
+          {/* Desktop sidebar - hidden on mobile, AdminHeader handles mobile navigation */}
+          <div className="hidden md:block">
+            <AdminSidebar />
+          </div>
           {/* Use conditional rendering for main element based on path */}
           {pathname.includes('/admin/email-templates') ? (
             <main className="flex-1 overflow-auto">

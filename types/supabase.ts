@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          operationName?: string
-          query?: string
-          variables?: Json
-          extensions?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instanciate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "12.2.3 (519615d)"
   }
   public: {
     Tables: {
@@ -101,7 +81,22 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "access_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "access_grants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       Account: {
         Row: {
@@ -477,7 +472,22 @@ export type Database = {
           target_user_id?: string | null
           timestamp?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "admin_activity_log_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "admin_activity_log_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       admin_audit_log: {
         Row: {
@@ -689,7 +699,9 @@ export type Database = {
       affiliate_conversions: {
         Row: {
           affiliate_id: string
+          auto_cleared: boolean | null
           cleared_at: string | null
+          clearing_reason: string | null
           click_id: string | null
           commission_amount: number
           created_at: string
@@ -698,6 +710,7 @@ export type Database = {
           level: number
           order_id: string | null
           paid_at: string | null
+          payout_id: string | null
           status: Database["public"]["Enums"]["conversion_status_type"]
           status_history: Json | null
           sub_id: string | null
@@ -705,7 +718,9 @@ export type Database = {
         }
         Insert: {
           affiliate_id: string
+          auto_cleared?: boolean | null
           cleared_at?: string | null
+          clearing_reason?: string | null
           click_id?: string | null
           commission_amount: number
           created_at?: string
@@ -714,6 +729,7 @@ export type Database = {
           level?: number
           order_id?: string | null
           paid_at?: string | null
+          payout_id?: string | null
           status?: Database["public"]["Enums"]["conversion_status_type"]
           status_history?: Json | null
           sub_id?: string | null
@@ -721,7 +737,9 @@ export type Database = {
         }
         Update: {
           affiliate_id?: string
+          auto_cleared?: boolean | null
           cleared_at?: string | null
+          clearing_reason?: string | null
           click_id?: string | null
           commission_amount?: number
           created_at?: string
@@ -730,6 +748,7 @@ export type Database = {
           level?: number
           order_id?: string | null
           paid_at?: string | null
+          payout_id?: string | null
           status?: Database["public"]["Enums"]["conversion_status_type"]
           status_history?: Json | null
           sub_id?: string | null
@@ -748,6 +767,13 @@ export type Database = {
             columns: ["click_id"]
             isOneToOne: false
             referencedRelation: "affiliate_clicks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_conversions_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "affiliate_payouts"
             referencedColumns: ["id"]
           },
         ]
@@ -963,32 +989,56 @@ export type Database = {
       }
       affiliate_program_config: {
         Row: {
+          auto_clear_enabled: boolean | null
           cookie_duration_days: number
           created_at: string
+          enabled_payout_methods: string[] | null
+          fraud_check_enabled: boolean | null
           id: number
+          max_days_before_clear: number | null
+          min_days_before_clear: number | null
           min_payout_threshold: number
           payout_currency: string | null
           payout_schedule: string | null
+          refund_period_days: number | null
+          require_verification_for_bank_transfer: boolean | null
+          require_verification_for_gcash: boolean | null
           terms_of_service_content: string | null
           updated_at: string
         }
         Insert: {
+          auto_clear_enabled?: boolean | null
           cookie_duration_days?: number
           created_at?: string
+          enabled_payout_methods?: string[] | null
+          fraud_check_enabled?: boolean | null
           id?: number
+          max_days_before_clear?: number | null
+          min_days_before_clear?: number | null
           min_payout_threshold?: number
           payout_currency?: string | null
           payout_schedule?: string | null
+          refund_period_days?: number | null
+          require_verification_for_bank_transfer?: boolean | null
+          require_verification_for_gcash?: boolean | null
           terms_of_service_content?: string | null
           updated_at?: string
         }
         Update: {
+          auto_clear_enabled?: boolean | null
           cookie_duration_days?: number
           created_at?: string
+          enabled_payout_methods?: string[] | null
+          fraud_check_enabled?: boolean | null
           id?: number
+          max_days_before_clear?: number | null
+          min_days_before_clear?: number | null
           min_payout_threshold?: number
           payout_currency?: string | null
           payout_schedule?: string | null
+          refund_period_days?: number | null
+          require_verification_for_bank_transfer?: boolean | null
+          require_verification_for_gcash?: boolean | null
           terms_of_service_content?: string | null
           updated_at?: string
         }
@@ -1138,6 +1188,69 @@ export type Database = {
         }
         Relationships: []
       }
+      api_cache: {
+        Row: {
+          api_type: string
+          cache_key: string
+          created_at: string | null
+          data: Json
+          expires_at: string
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          api_type: string
+          cache_key: string
+          created_at?: string | null
+          data: Json
+          expires_at: string
+          id?: string
+          updated_at?: string | null
+        }
+        Update: {
+          api_type?: string
+          cache_key?: string
+          created_at?: string | null
+          data?: Json
+          expires_at?: string
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      auth_users_staging: {
+        Row: {
+          created_at: string | null
+          email: string
+          email_confirmed_at: string | null
+          encrypted_password: string | null
+          id: string
+          raw_app_meta_data: Json | null
+          raw_user_meta_data: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          email_confirmed_at?: string | null
+          encrypted_password?: string | null
+          id?: string
+          raw_app_meta_data?: Json | null
+          raw_user_meta_data?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          email_confirmed_at?: string | null
+          encrypted_password?: string | null
+          id?: string
+          raw_app_meta_data?: Json | null
+          raw_user_meta_data?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       campaign_analytics: {
         Row: {
           bounce_rate: number | null
@@ -1253,6 +1366,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "email_campaigns"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_recipients_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -1456,6 +1576,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "courses"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -1726,6 +1853,13 @@ export type Database = {
             referencedRelation: "unified_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ecommerce_orders_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       email_alerts: {
@@ -1765,7 +1899,15 @@ export type Database = {
           resolved_by?: string | null
           timestamp?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "email_alerts_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       email_automations: {
         Row: {
@@ -1958,6 +2100,54 @@ export type Database = {
           },
         ]
       }
+      email_change_log: {
+        Row: {
+          change_type: string | null
+          changed_at: string | null
+          changed_by: string | null
+          id: string
+          new_email: string | null
+          old_email: string | null
+          user_id: string | null
+          verification_status: string | null
+        }
+        Insert: {
+          change_type?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          id?: string
+          new_email?: string | null
+          old_email?: string | null
+          user_id?: string | null
+          verification_status?: string | null
+        }
+        Update: {
+          change_type?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          id?: string
+          new_email?: string | null
+          old_email?: string | null
+          user_id?: string | null
+          verification_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_change_log_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "email_change_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       email_events: {
         Row: {
           campaign_id: string | null
@@ -2052,6 +2242,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "email_preference_audit_logs_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "email_preference_audit_logs_user_id_fkey"
             columns: ["user_id"]
@@ -2330,6 +2527,64 @@ export type Database = {
       }
       enrollments: {
         Row: {
+          course_id: string | null
+          enrolled_at: string | null
+          expires_at: string | null
+          id: string
+          last_accessed_at: string | null
+          metadata: Json | null
+          status: string | null
+          transaction_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          course_id?: string | null
+          enrolled_at?: string | null
+          expires_at?: string | null
+          id: string
+          last_accessed_at?: string | null
+          metadata?: Json | null
+          status?: string | null
+          transaction_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          course_id?: string | null
+          enrolled_at?: string | null
+          expires_at?: string | null
+          id?: string
+          last_accessed_at?: string | null
+          metadata?: Json | null
+          status?: string | null
+          transaction_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollments_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enrollments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "unified_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enrollments_backup_2025_06_30_02_45_55: {
+        Row: {
           course_id: string
           enrolled_at: string
           expires_at: string | null
@@ -2370,21 +2625,79 @@ export type Database = {
             referencedRelation: "courses"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "enrollments_transaction_id_fkey"
-            columns: ["transaction_id"]
-            isOneToOne: false
-            referencedRelation: "transactions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "enrollments_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "unified_profiles"
-            referencedColumns: ["id"]
-          },
         ]
+      }
+      enrollments_backup_pre_migration: {
+        Row: {
+          course_id: string | null
+          enrolled_at: string | null
+          expires_at: string | null
+          id: string | null
+          last_accessed_at: string | null
+          metadata: Json | null
+          status: string | null
+          transaction_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          course_id?: string | null
+          enrolled_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          last_accessed_at?: string | null
+          metadata?: Json | null
+          status?: string | null
+          transaction_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          course_id?: string | null
+          enrolled_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          last_accessed_at?: string | null
+          metadata?: Json | null
+          status?: string | null
+          transaction_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      enrollments_to_preserve: {
+        Row: {
+          course_id: string | null
+          enrolled_at: string | null
+          expires_at: string | null
+          id: string | null
+          last_accessed_at: string | null
+          metadata: Json | null
+          status: string | null
+          transaction_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          course_id?: string | null
+          enrolled_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          last_accessed_at?: string | null
+          metadata?: Json | null
+          status?: string | null
+          transaction_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          course_id?: string | null
+          enrolled_at?: string | null
+          expires_at?: string | null
+          id?: string | null
+          last_accessed_at?: string | null
+          metadata?: Json | null
+          status?: string | null
+          transaction_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       fraud_flags: {
         Row: {
@@ -2565,6 +2878,13 @@ export type Database = {
             referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "invoices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       lessons: {
@@ -2721,6 +3041,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "purchase_leads"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "magic_links_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -2927,6 +3254,13 @@ export type Database = {
             referencedRelation: "modules"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "module_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       modules: {
@@ -3106,7 +3440,15 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "payment_methods_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       payout_items: {
         Row: {
@@ -3194,6 +3536,24 @@ export type Database = {
           message_id?: string | null
           payload?: Json
           record_type?: string
+        }
+        Relationships: []
+      }
+      problem_emails: {
+        Row: {
+          created_at: string | null
+          email: string
+          reason: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          reason?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          reason?: string | null
         }
         Relationships: []
       }
@@ -3310,7 +3670,170 @@ export type Database = {
           role?: string
           updated_at?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      profiles_to_preserve: {
+        Row: {
+          acquisition_source: string | null
+          admin_metadata: Json | null
+          affiliate_general_status:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id: string | null
+          created_at: string | null
+          email: string | null
+          email_bounced: boolean | null
+          email_last_spam_at: string | null
+          email_marketing_subscribed: boolean | null
+          email_spam_complained: boolean | null
+          first_name: string | null
+          id: string | null
+          is_admin: boolean | null
+          is_affiliate: boolean | null
+          is_student: boolean | null
+          last_login_at: string | null
+          last_name: string | null
+          login_count: number | null
+          membership_level_id: string | null
+          phone: string | null
+          status: string | null
+          tags: string[] | null
+          tier_assignment_notes: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          acquisition_source?: string | null
+          admin_metadata?: Json | null
+          affiliate_general_status?:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          email_bounced?: boolean | null
+          email_last_spam_at?: string | null
+          email_marketing_subscribed?: boolean | null
+          email_spam_complained?: boolean | null
+          first_name?: string | null
+          id?: string | null
+          is_admin?: boolean | null
+          is_affiliate?: boolean | null
+          is_student?: boolean | null
+          last_login_at?: string | null
+          last_name?: string | null
+          login_count?: number | null
+          membership_level_id?: string | null
+          phone?: string | null
+          status?: string | null
+          tags?: string[] | null
+          tier_assignment_notes?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          acquisition_source?: string | null
+          admin_metadata?: Json | null
+          affiliate_general_status?:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          email_bounced?: boolean | null
+          email_last_spam_at?: string | null
+          email_marketing_subscribed?: boolean | null
+          email_spam_complained?: boolean | null
+          first_name?: string | null
+          id?: string | null
+          is_admin?: boolean | null
+          is_affiliate?: boolean | null
+          is_student?: boolean | null
+          last_login_at?: string | null
+          last_name?: string | null
+          login_count?: number | null
+          membership_level_id?: string | null
+          phone?: string | null
+          status?: string | null
+          tags?: string[] | null
+          tier_assignment_notes?: string | null
+          updated_at?: string | null
+        }
         Relationships: []
+      }
+      public_sale_orders: {
+        Row: {
+          created_at: string | null
+          customer_email: string
+          customer_name: string
+          customer_phone: string | null
+          delivered_at: string | null
+          delivery_method: string | null
+          drive_link: string | null
+          id: string
+          original_price: number
+          product_code: string
+          product_name: string
+          sale_price: number
+          transaction_id: string | null
+          updated_at: string | null
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          customer_email: string
+          customer_name: string
+          customer_phone?: string | null
+          delivered_at?: string | null
+          delivery_method?: string | null
+          drive_link?: string | null
+          id?: string
+          original_price: number
+          product_code: string
+          product_name: string
+          sale_price: number
+          transaction_id?: string | null
+          updated_at?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          customer_email?: string
+          customer_name?: string
+          customer_phone?: string | null
+          delivered_at?: string | null
+          delivery_method?: string | null
+          drive_link?: string | null
+          id?: string
+          original_price?: number
+          product_code?: string
+          product_name?: string
+          sale_price?: number
+          transaction_id?: string | null
+          updated_at?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "public_sale_orders_transaction_id_fkey"
+            columns: ["transaction_id"]
+            isOneToOne: true
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       purchase_leads: {
         Row: {
@@ -3372,6 +3895,36 @@ export type Database = {
           utm_medium?: string | null
           utm_source?: string | null
           xendit_external_id?: string | null
+        }
+        Relationships: []
+      }
+      raw_manual_transactions: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          email: string
+          id: number
+          notes: string | null
+          payment_date: string | null
+          payment_method: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          email: string
+          id?: number
+          notes?: string | null
+          payment_date?: string | null
+          payment_method?: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          email?: string
+          id?: number
+          notes?: string | null
+          payment_date?: string | null
+          payment_method?: string
         }
         Relationships: []
       }
@@ -3513,7 +4066,15 @@ export type Database = {
           user_agent?: string | null
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "security_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       segments: {
         Row: {
@@ -3579,9 +4140,12 @@ export type Database = {
           first_name: string | null
           id: string
           last_name: string | null
+          linked_at: string | null
+          linked_by: string | null
+          manual_link_notes: string | null
           orders_count: number | null
           phone: string | null
-          shopify_customer_id: number
+          shopify_customer_id: number | null
           state: string | null
           tags: string[] | null
           total_spent: number | null
@@ -3595,9 +4159,12 @@ export type Database = {
           first_name?: string | null
           id?: string
           last_name?: string | null
+          linked_at?: string | null
+          linked_by?: string | null
+          manual_link_notes?: string | null
           orders_count?: number | null
           phone?: string | null
-          shopify_customer_id: number
+          shopify_customer_id?: number | null
           state?: string | null
           tags?: string[] | null
           total_spent?: number | null
@@ -3611,9 +4178,12 @@ export type Database = {
           first_name?: string | null
           id?: string
           last_name?: string | null
+          linked_at?: string | null
+          linked_by?: string | null
+          manual_link_notes?: string | null
           orders_count?: number | null
           phone?: string | null
-          shopify_customer_id?: number
+          shopify_customer_id?: number | null
           state?: string | null
           tags?: string[] | null
           total_spent?: number | null
@@ -3621,6 +4191,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "shopify_customers_linked_by_fkey"
+            columns: ["linked_by"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "shopify_customers_unified_profile_id_fkey"
             columns: ["unified_profile_id"]
@@ -3696,6 +4273,79 @@ export type Database = {
           },
           {
             foreignKeyName: "shopify_order_items_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_product_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_order_items_duplicate: {
+        Row: {
+          id: string
+          order_id: string | null
+          price: number | null
+          product_id: string | null
+          quantity: number | null
+          shopify_line_item_id: number
+          shopify_product_id: number | null
+          shopify_variant_id: number | null
+          sku: string | null
+          title: string | null
+          total_discount: number | null
+          variant_id: string | null
+          variant_title: string | null
+          vendor: string | null
+        }
+        Insert: {
+          id?: string
+          order_id?: string | null
+          price?: number | null
+          product_id?: string | null
+          quantity?: number | null
+          shopify_line_item_id: number
+          shopify_product_id?: number | null
+          shopify_variant_id?: number | null
+          sku?: string | null
+          title?: string | null
+          total_discount?: number | null
+          variant_id?: string | null
+          variant_title?: string | null
+          vendor?: string | null
+        }
+        Update: {
+          id?: string
+          order_id?: string | null
+          price?: number | null
+          product_id?: string | null
+          quantity?: number | null
+          shopify_line_item_id?: number
+          shopify_product_id?: number | null
+          shopify_variant_id?: number | null
+          sku?: string | null
+          title?: string | null
+          total_discount?: number | null
+          variant_id?: string | null
+          variant_title?: string | null
+          vendor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_order_items_duplicate_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_order_items_duplicate_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_order_items_duplicate_variant_id_fkey"
             columns: ["variant_id"]
             isOneToOne: false
             referencedRelation: "shopify_product_variants"
@@ -3779,6 +4429,89 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "shopify_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_orders_duplicate: {
+        Row: {
+          cancelled_at: string | null
+          closed_at: string | null
+          created_at: string | null
+          currency: string | null
+          customer_id: string | null
+          email: string | null
+          financial_status: string | null
+          fulfillment_status: string | null
+          id: string
+          landing_site: string | null
+          order_number: string | null
+          phone: string | null
+          processed_at: string | null
+          referring_site: string | null
+          shopify_order_id: number
+          source_name: string | null
+          subtotal_price: number | null
+          tags: string[] | null
+          total_discounts: number | null
+          total_price: number | null
+          total_tax: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          cancelled_at?: string | null
+          closed_at?: string | null
+          created_at?: string | null
+          currency?: string | null
+          customer_id?: string | null
+          email?: string | null
+          financial_status?: string | null
+          fulfillment_status?: string | null
+          id?: string
+          landing_site?: string | null
+          order_number?: string | null
+          phone?: string | null
+          processed_at?: string | null
+          referring_site?: string | null
+          shopify_order_id: number
+          source_name?: string | null
+          subtotal_price?: number | null
+          tags?: string[] | null
+          total_discounts?: number | null
+          total_price?: number | null
+          total_tax?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          cancelled_at?: string | null
+          closed_at?: string | null
+          created_at?: string | null
+          currency?: string | null
+          customer_id?: string | null
+          email?: string | null
+          financial_status?: string | null
+          fulfillment_status?: string | null
+          id?: string
+          landing_site?: string | null
+          order_number?: string | null
+          phone?: string | null
+          processed_at?: string | null
+          referring_site?: string | null
+          shopify_order_id?: number
+          source_name?: string | null
+          subtotal_price?: number | null
+          tags?: string[] | null
+          total_discounts?: number | null
+          total_price?: number | null
+          total_tax?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_orders_duplicate_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "shopify_customers"
@@ -3966,6 +4699,13 @@ export type Database = {
             referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "subscription_payments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       systemeio: {
@@ -4013,6 +4753,39 @@ export type Database = {
           "First name"?: string | null
           "Last name"?: string | null
           Tag?: string | null
+        }
+        Relationships: []
+      }
+      systemeio_raw_staging: {
+        Row: {
+          api_extracted_at: string | null
+          created_at: string | null
+          email: string | null
+          first_name: string | null
+          id: string
+          last_name: string | null
+          tags: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          api_extracted_at?: string | null
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          id: string
+          last_name?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          api_extracted_at?: string | null
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          tags?: string[] | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -4090,6 +4863,75 @@ export type Database = {
       }
       transactions: {
         Row: {
+          amount: number | null
+          contact_email: string | null
+          created_at: string | null
+          currency: string | null
+          expires_at: string | null
+          external_id: string | null
+          id: string
+          metadata: Json | null
+          paid_at: string | null
+          payment_method: string | null
+          settled_at: string | null
+          status: string | null
+          transaction_type: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          contact_email?: string | null
+          created_at?: string | null
+          currency?: string | null
+          expires_at?: string | null
+          external_id?: string | null
+          id?: string
+          metadata?: Json | null
+          paid_at?: string | null
+          payment_method?: string | null
+          settled_at?: string | null
+          status?: string | null
+          transaction_type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          contact_email?: string | null
+          created_at?: string | null
+          currency?: string | null
+          expires_at?: string | null
+          external_id?: string | null
+          id?: string
+          metadata?: Json | null
+          paid_at?: string | null
+          payment_method?: string | null
+          settled_at?: string | null
+          status?: string | null
+          transaction_type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_staging_transactions_user_id"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      transactions_backup_2025_06_30_02_45_55: {
+        Row: {
           amount: number
           contact_email: string | null
           created_at: string | null
@@ -4140,9 +4982,234 @@ export type Database = {
           updated_at?: string | null
           user_id?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      transactions_backup_pre_migration: {
+        Row: {
+          amount: number | null
+          contact_email: string | null
+          created_at: string | null
+          currency: string | null
+          expires_at: string | null
+          external_id: string | null
+          id: string | null
+          metadata: Json | null
+          paid_at: string | null
+          payment_method: string | null
+          settled_at: string | null
+          status: string | null
+          transaction_type: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          contact_email?: string | null
+          created_at?: string | null
+          currency?: string | null
+          expires_at?: string | null
+          external_id?: string | null
+          id?: string | null
+          metadata?: Json | null
+          paid_at?: string | null
+          payment_method?: string | null
+          settled_at?: string | null
+          status?: string | null
+          transaction_type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          contact_email?: string | null
+          created_at?: string | null
+          currency?: string | null
+          expires_at?: string | null
+          external_id?: string | null
+          id?: string | null
+          metadata?: Json | null
+          paid_at?: string | null
+          payment_method?: string | null
+          settled_at?: string | null
+          status?: string | null
+          transaction_type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      transactions_to_preserve: {
+        Row: {
+          amount: number | null
+          contact_email: string | null
+          created_at: string | null
+          currency: string | null
+          expires_at: string | null
+          external_id: string | null
+          id: string | null
+          metadata: Json | null
+          paid_at: string | null
+          payment_method: string | null
+          settled_at: string | null
+          status: string | null
+          transaction_type: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          contact_email?: string | null
+          created_at?: string | null
+          currency?: string | null
+          expires_at?: string | null
+          external_id?: string | null
+          id?: string | null
+          metadata?: Json | null
+          paid_at?: string | null
+          payment_method?: string | null
+          settled_at?: string | null
+          status?: string | null
+          transaction_type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          contact_email?: string | null
+          created_at?: string | null
+          currency?: string | null
+          expires_at?: string | null
+          external_id?: string | null
+          id?: string | null
+          metadata?: Json | null
+          paid_at?: string | null
+          payment_method?: string | null
+          settled_at?: string | null
+          status?: string | null
+          transaction_type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
         Relationships: []
       }
       unified_profiles: {
+        Row: {
+          acquisition_source: string | null
+          admin_metadata: Json | null
+          affiliate_general_status:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id: string | null
+          created_at: string | null
+          email: string | null
+          email_bounced: boolean | null
+          email_last_spam_at: string | null
+          email_marketing_subscribed: boolean | null
+          email_spam_complained: boolean | null
+          first_name: string | null
+          id: string
+          is_admin: boolean | null
+          is_affiliate: boolean | null
+          is_student: boolean | null
+          last_login_at: string | null
+          last_name: string | null
+          login_count: number | null
+          membership_level_id: string | null
+          phone: string | null
+          status: string | null
+          tags: string[] | null
+          tier_assignment_notes: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          acquisition_source?: string | null
+          admin_metadata?: Json | null
+          affiliate_general_status?:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          email_bounced?: boolean | null
+          email_last_spam_at?: string | null
+          email_marketing_subscribed?: boolean | null
+          email_spam_complained?: boolean | null
+          first_name?: string | null
+          id: string
+          is_admin?: boolean | null
+          is_affiliate?: boolean | null
+          is_student?: boolean | null
+          last_login_at?: string | null
+          last_name?: string | null
+          login_count?: number | null
+          membership_level_id?: string | null
+          phone?: string | null
+          status?: string | null
+          tags?: string[] | null
+          tier_assignment_notes?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          acquisition_source?: string | null
+          admin_metadata?: Json | null
+          affiliate_general_status?:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          email_bounced?: boolean | null
+          email_last_spam_at?: string | null
+          email_marketing_subscribed?: boolean | null
+          email_spam_complained?: boolean | null
+          first_name?: string | null
+          id?: string
+          is_admin?: boolean | null
+          is_affiliate?: boolean | null
+          is_student?: boolean | null
+          last_login_at?: string | null
+          last_name?: string | null
+          login_count?: number | null
+          membership_level_id?: string | null
+          phone?: string | null
+          status?: string | null
+          tags?: string[] | null
+          tier_assignment_notes?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_staging_unified_profiles_affiliate_id"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unified_profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "unified_profiles_staging_membership_level_id_fkey"
+            columns: ["membership_level_id"]
+            isOneToOne: false
+            referencedRelation: "membership_levels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unified_profiles_backup_2025_06_30_02_45_55: {
         Row: {
           acquisition_source: string | null
           admin_metadata: Json | null
@@ -4236,6 +5303,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "unified_profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
+          {
             foreignKeyName: "unified_profiles_membership_level_id_fkey"
             columns: ["membership_level_id"]
             isOneToOne: false
@@ -4243,6 +5317,93 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      unified_profiles_backup_pre_migration: {
+        Row: {
+          acquisition_source: string | null
+          admin_metadata: Json | null
+          affiliate_general_status:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id: string | null
+          created_at: string | null
+          email: string | null
+          email_bounced: boolean | null
+          email_last_spam_at: string | null
+          email_marketing_subscribed: boolean | null
+          email_spam_complained: boolean | null
+          first_name: string | null
+          id: string | null
+          is_admin: boolean | null
+          is_affiliate: boolean | null
+          is_student: boolean | null
+          last_login_at: string | null
+          last_name: string | null
+          login_count: number | null
+          membership_level_id: string | null
+          phone: string | null
+          status: string | null
+          tags: string[] | null
+          tier_assignment_notes: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          acquisition_source?: string | null
+          admin_metadata?: Json | null
+          affiliate_general_status?:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          email_bounced?: boolean | null
+          email_last_spam_at?: string | null
+          email_marketing_subscribed?: boolean | null
+          email_spam_complained?: boolean | null
+          first_name?: string | null
+          id?: string | null
+          is_admin?: boolean | null
+          is_affiliate?: boolean | null
+          is_student?: boolean | null
+          last_login_at?: string | null
+          last_name?: string | null
+          login_count?: number | null
+          membership_level_id?: string | null
+          phone?: string | null
+          status?: string | null
+          tags?: string[] | null
+          tier_assignment_notes?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          acquisition_source?: string | null
+          admin_metadata?: Json | null
+          affiliate_general_status?:
+            | Database["public"]["Enums"]["affiliate_status_type"]
+            | null
+          affiliate_id?: string | null
+          created_at?: string | null
+          email?: string | null
+          email_bounced?: boolean | null
+          email_last_spam_at?: string | null
+          email_marketing_subscribed?: boolean | null
+          email_spam_complained?: boolean | null
+          first_name?: string | null
+          id?: string | null
+          is_admin?: boolean | null
+          is_affiliate?: boolean | null
+          is_student?: boolean | null
+          last_login_at?: string | null
+          last_name?: string | null
+          login_count?: number | null
+          membership_level_id?: string | null
+          phone?: string | null
+          status?: string | null
+          tags?: string[] | null
+          tier_assignment_notes?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       User: {
         Row: {
@@ -4360,6 +5521,13 @@ export type Database = {
             referencedRelation: "shopify_products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_carts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       user_email_preferences: {
@@ -4393,49 +5561,13 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
-      }
-      user_enrollments: {
-        Row: {
-          course_id: string
-          created_at: string | null
-          enrolled_at: string | null
-          expires_at: string | null
-          id: string
-          payment_id: string | null
-          status: string
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          course_id: string
-          created_at?: string | null
-          enrolled_at?: string | null
-          expires_at?: string | null
-          id?: string
-          payment_id?: string | null
-          status?: string
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          course_id?: string
-          created_at?: string | null
-          enrolled_at?: string | null
-          expires_at?: string | null
-          id?: string
-          payment_id?: string | null
-          status?: string
-          updated_at?: string | null
-          user_id?: string
-        }
         Relationships: [
           {
-            foreignKeyName: "user_enrollments_course_id_fkey"
-            columns: ["course_id"]
-            isOneToOne: false
-            referencedRelation: "courses"
-            referencedColumns: ["id"]
+            foreignKeyName: "user_email_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -4480,6 +5612,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "membership_tiers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -4573,6 +5712,13 @@ export type Database = {
             referencedRelation: "lessons"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       user_roles: {
@@ -4599,6 +5745,13 @@ export type Database = {
             referencedRelation: "roles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       user_segments: {
@@ -4624,6 +5777,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_user_segments_user_id"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "user_segments_segment_id_fkey"
             columns: ["segment_id"]
@@ -4699,6 +5859,13 @@ export type Database = {
             referencedRelation: "lessons"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_time_spent_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       VerificationToken: {
@@ -4745,6 +5912,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "shopify_products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "wishlist_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "auth_token_check"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -4892,8 +6066,68 @@ export type Database = {
         }
         Relationships: []
       }
+      xendit_raw_staging: {
+        Row: {
+          amount: number | null
+          api_extracted_at: string | null
+          created: string | null
+          currency: string | null
+          customer_email: string | null
+          description: string | null
+          external_id: string | null
+          id: string
+          payment_method: string | null
+          status: string | null
+          updated: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount?: number | null
+          api_extracted_at?: string | null
+          created?: string | null
+          currency?: string | null
+          customer_email?: string | null
+          description?: string | null
+          external_id?: string | null
+          id: string
+          payment_method?: string | null
+          status?: string | null
+          updated?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number | null
+          api_extracted_at?: string | null
+          created?: string | null
+          currency?: string | null
+          customer_email?: string | null
+          description?: string | null
+          external_id?: string | null
+          id?: string
+          payment_method?: string | null
+          status?: string | null
+          updated?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
+      auth_token_check: {
+        Row: {
+          needs_token_healing: boolean | null
+          user_id: string | null
+        }
+        Insert: {
+          needs_token_healing?: never
+          user_id?: string | null
+        }
+        Update: {
+          needs_token_healing?: never
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       marketing_performance_view: {
         Row: {
           ad_id: string | null
@@ -4966,6 +6200,20 @@ export type Database = {
         }
         Relationships: []
       }
+      unified_revenue_view: {
+        Row: {
+          amount: number | null
+          contact_email: string | null
+          currency: string | null
+          platform: string | null
+          product_type: string | null
+          status: string | null
+          transaction_date: string | null
+          transaction_id: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       unified_transactions_view: {
         Row: {
           amount: number | null
@@ -5029,9 +6277,80 @@ export type Database = {
         Args: { user_id: string }
         Returns: boolean
       }
+      clean_expired_cache: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      debug_auth_info: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          auth_uid: string
+          is_authenticated: boolean
+          role_name: string
+          is_admin: boolean
+        }[]
+      }
+      debug_canva_emails: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          email: string
+          passes_simple_check: boolean
+          passes_regex_check: boolean
+        }[]
+      }
+      debug_canva_transactions_section: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      debug_enrollments: {
+        Args: { lookup_user_id: string }
+        Returns: {
+          enrollment_id: string
+          user_id: string
+          course_id: string
+          status: string
+          course_title: string
+        }[]
+      }
+      debug_enrollments_section: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      debug_incremental_sync_section: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      debug_p2p_customers_section: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      debug_p2p_leads_section: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      debug_p2p_transactions_section: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      debug_tags_section: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      exec_sql: {
+        Args: { sql: string }
+        Returns: undefined
+      }
       execute_sql: {
         Args: { sql: string }
         Returns: undefined
+      }
+      extract_api_data_to_staging: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      fix_historical_dates: {
+        Args: { debug_mode?: boolean }
+        Returns: string
       }
       generate_enrollments: {
         Args: Record<PropertyKey, never>
@@ -5058,10 +6377,66 @@ export type Database = {
           sub_id: string
         }[]
       }
+      get_auth_user_by_email: {
+        Args: { search_email: string }
+        Returns: {
+          id: string
+          email: string
+        }[]
+      }
+      get_current_environment: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_daily_enrollment_trends: {
+        Args: {
+          start_date: string
+          end_date: string
+          target_course_id?: string
+        }
+        Returns: {
+          date: string
+          count: number
+        }[]
+      }
       get_daily_p2p_enrollment_trends: {
         Args: { start_date: string; end_date: string; target_course_id: string }
         Returns: {
           date: string
+          count: number
+        }[]
+      }
+      get_daily_unified_revenue_trends: {
+        Args: { p_start_date: string; p_end_date: string }
+        Returns: {
+          date: string
+          total_revenue: number
+          transaction_count: number
+        }[]
+      }
+      get_environment_suffix: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      get_migrated_users: {
+        Args: { result_limit?: number }
+        Returns: unknown[]
+      }
+      get_migrated_users_sample: {
+        Args: { sample_size: number }
+        Returns: {
+          id: string
+          email: string
+        }[]
+      }
+      get_monthly_enrollment_trends: {
+        Args: {
+          start_date: string
+          end_date: string
+          target_course_id?: string
+        }
+        Returns: {
+          month_start_date: string
           count: number
         }[]
       }
@@ -5079,6 +6454,15 @@ export type Database = {
           total_revenue: number
         }[]
       }
+      get_monthly_unified_revenue_trends: {
+        Args: { p_start_date: string; p_end_date: string }
+        Returns: {
+          month_start: string
+          total_revenue: number
+          transaction_count: number
+          platform_breakdown: Json
+        }[]
+      }
       get_payout_batch_stats: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -5088,6 +6472,19 @@ export type Database = {
           completedBatches: number
           failedBatches: number
           totalAmount: number
+        }[]
+      }
+      get_population_history: {
+        Args: { limit_count?: number }
+        Returns: {
+          operation_name: string
+          table_name: string
+          status: string
+          records_processed: number
+          duration_ms: number
+          started_at: string
+          completed_at: string
+          error_message: string
         }[]
       }
       get_revenue_by_product: {
@@ -5130,11 +6527,86 @@ export type Database = {
           review_count: number
         }[]
       }
+      get_student_course_progress: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_student_dashboard_data: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_student_detailed_enrollment_data: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_student_enrollment_data: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_student_lesson_progress: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_unified_revenue_summary: {
+        Args: { p_start_date: string; p_end_date: string }
+        Returns: {
+          total_revenue: number
+          transaction_count: number
+          platform_breakdown: Json
+          product_breakdown: Json
+        }[]
+      }
+      get_user_by_email: {
+        Args: { user_email: string }
+        Returns: {
+          id: string
+          email: string
+          created_at: string
+        }[]
+      }
+      get_user_encrypted_password: {
+        Args: { user_id: string }
+        Returns: string
+      }
+      get_user_enrollments: {
+        Args: { lookup_user_id?: string }
+        Returns: {
+          id: string
+          user_id: string
+          course_id: string
+          transaction_id: string
+          status: string
+          enrolled_at: string
+          expires_at: string
+          last_accessed_at: string
+          metadata: Json
+          courses: Json
+        }[]
+      }
+      get_weekly_enrollment_trends: {
+        Args: {
+          start_date: string
+          end_date: string
+          target_course_id?: string
+        }
+        Returns: {
+          week_start_date: string
+          count: number
+        }[]
+      }
       get_weekly_p2p_enrollment_trends: {
         Args: { start_date: string; end_date: string; target_course_id: string }
         Returns: {
           week_start_date: string
           count: number
+        }[]
+      }
+      get_weekly_unified_revenue_trends: {
+        Args: { p_start_date: string; p_end_date: string }
+        Returns: {
+          week_start_date: string
+          total_revenue: number
+          transaction_count: number
         }[]
       }
       gtrgm_compress: {
@@ -5161,6 +6633,10 @@ export type Database = {
         Args: { user_id: string; required_permission: string }
         Returns: boolean
       }
+      heal_user_tokens: {
+        Args: { user_id: string }
+        Returns: undefined
+      }
       increment: {
         Args: {
           x: number
@@ -5179,8 +6655,16 @@ export type Database = {
         Returns: undefined
       }
       is_admin: {
-        Args: Record<PropertyKey, never>
+        Args: Record<PropertyKey, never> | { p_user_id?: string }
         Returns: boolean
+      }
+      launch_clean_production: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      launch_clean_production_test2: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       log_admin_action: {
         Args: {
@@ -5233,6 +6717,34 @@ export type Database = {
         }
         Returns: undefined
       }
+      populate_all_prod_tables: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      populate_clean_customer_data: {
+        Args:
+          | Record<PropertyKey, never>
+          | { should_clear_tables?: boolean; debug_mode?: boolean }
+        Returns: string
+      }
+      populate_clean_data: {
+        Args: { debug_mode?: boolean; should_clear_tables?: boolean }
+        Returns: string
+      }
+      populate_leads_data: {
+        Args:
+          | Record<PropertyKey, never>
+          | { should_clear_tables?: boolean; debug_mode?: boolean }
+        Returns: string
+      }
+      populate_transactions_prod: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      populate_unified_profiles_prod: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       release_lock: {
         Args: { p_key: string }
         Returns: boolean
@@ -5244,6 +6756,18 @@ export type Database = {
       reorder_modules: {
         Args: { p_course_id: string; p_module_order: Json }
         Returns: undefined
+      }
+      resolve_table_name: {
+        Args: { base_table_name: string }
+        Returns: string
+      }
+      rollback_migration: {
+        Args: { backup_timestamp: string }
+        Returns: string
+      }
+      rollback_migration_preserve_staging: {
+        Args: { backup_timestamp: string }
+        Returns: string
       }
       search_users: {
         Args: {
@@ -5299,9 +6823,21 @@ export type Database = {
         Args: { "": string }
         Returns: string[]
       }
+      switch_environment: {
+        Args: { target_env: string }
+        Returns: string
+      }
+      switch_environment_and_set_session: {
+        Args: { target_env: string; switch_notes?: string }
+        Returns: string
+      }
       sync_all_user_tags_from_unified_profiles: {
         Args: Record<PropertyKey, never>
         Returns: Json
+      }
+      sync_incremental_data: {
+        Args: { debug_mode?: boolean }
+        Returns: string
       }
       sync_new_data: {
         Args: Record<PropertyKey, never>
@@ -5310,6 +6846,14 @@ export type Database = {
       sync_profile_data: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      sync_systemeio_api_data: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
+      sync_xendit_api_data: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       update_module_positions: {
         Args: { module_updates: Json[] }
@@ -5339,6 +6883,14 @@ export type Database = {
           p_completed_at: string
         }
         Returns: Json
+      }
+      validate_and_prepare_clean_data: {
+        Args: {
+          batch_size?: number
+          should_clear_tables?: boolean
+          debug_mode?: boolean
+        }
+        Returns: string
       }
     }
     Enums: {
@@ -5380,21 +6932,25 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database[Extract<keyof Database, "public">]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
@@ -5412,14 +6968,16 @@ export type Tables<
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
@@ -5435,14 +6993,16 @@ export type TablesInsert<
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
@@ -5458,14 +7018,16 @@ export type TablesUpdate<
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = DefaultSchemaEnumNameOrOptions extends { schema: keyof Database }
-  ? Database[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
@@ -5473,22 +7035,21 @@ export type Enums<
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof Database },
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof Database
+    schema: keyof DatabaseWithoutInternals
   }
-    ? keyof Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
-> = PublicCompositeTypeNameOrOptions extends { schema: keyof Database }
-  ? Database[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       activity_log_type: [

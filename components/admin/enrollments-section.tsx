@@ -2,109 +2,95 @@
 
 import { useState, useEffect } from 'react';
 import { MetricCard } from './metric-card';
-import { ChartContainer } from './chart-container';
-import { DataTable } from './data-table';
-import { FilterDropdown } from './filter-dropdown';
-import { Users, UserPlus, TrendingUp, Activity, Calendar, Target } from 'lucide-react';
-import { useSharedDashboardFiltersStore } from '@/lib/stores/admin/sharedDashboardFiltersStore';
+import { Users, UserPlus, Calendar, TrendingUp } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { EnrollmentTrendsChart } from './enrollment-trends-chart';
+import { UnifiedAnalyticsService } from '@/lib/services/analytics/unified-analytics';
+import type { DateRange } from "react-day-picker";
+import { toast } from 'sonner';
+import type { 
+  EnrollmentMetrics, 
+  UnifiedAnalyticsOptions, 
+  TimeFilter,
+  DateRange as AnalyticsDateRange
+} from '@/lib/services/analytics/unified-analytics';
 
-type EnrollmentMetrics = {
-  summary: {
-    totalEnrollmentsToday: number;
-    totalEnrollmentsThisMonth: number;
-    totalEnrollmentsInRange: number;
-    previousPeriodEnrollments: number;
-    trendPercentage: number;
-  };
-  todayBySource: Array<{
-    acquisition_source: string;
-    enrollments_today: number;
-  }>;
-  monthlyBySource: Array<{
-    acquisition_source: string;
-    enrollments_this_month: number;
-  }>;
-  recentEnrollments: Array<{
-    enrollment_id: string;
-    enrolled_at: string;
-    status: string;
-    user_id: string;
-    email: string;
-    acquisition_source: string;
-    course_title: string;
-    userName: string;
-  }>;
-};
+// TrendPoint type for the chart
+type TrendPoint = { date: string; count?: number };
 
 /**
- * EnrollmentsSection - Enhanced enrollments analytics with acquisition source tracking.
- * Shows today's enrollments, monthly enrollments by source, and detailed insights.
+ * EnrollmentsSection - Simple enrollment analytics showing today and monthly enrollments with trends chart
  */
 export function EnrollmentsSection() {
-  const { dateRange } = useSharedDashboardFiltersStore();
-  const [acquisitionSource, setAcquisitionSource] = useState('all');
-  const [enrollmentData, setEnrollmentData] = useState<EnrollmentMetrics | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [enrollmentMetrics, setEnrollmentMetrics] = useState<EnrollmentMetrics | null>(null);
+  const [enrollmentTrends, setEnrollmentTrends] = useState<TrendPoint[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null); // Add error state
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('this_month'); // Default to this month for enrollment tracking
+  const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
   
-  const formatPercent = (value: number | null) => {
-    if (value === null || isNaN(value)) return "-";
-    return `${value > 0 ? "+" : ""}${value.toFixed(1)}% vs prev. period`;
+  const analyticsService = new UnifiedAnalyticsService();
+
+  // Convert react-day-picker DateRange to AnalyticsDateRange
+  const convertDateRange = (range: DateRange | undefined): AnalyticsDateRange | undefined => {
+    if (!range?.from || !range?.to) return undefined;
+    return {
+      from: range.from,
+      to: range.to
+    };
   };
 
-  // Fetch enrollment data
-  useEffect(() => {
-    const fetchEnrollmentData = async () => {
-      if (!dateRange?.from) return;
-      
+  // Fetch enrollment data from analytics service
+  const fetchEnrollmentData = async () => {
+    try {
       setIsLoading(true);
-      setError(null);
-      
-      try {
-        const params = new URLSearchParams();
-        params.append('startDate', dateRange.from.toISOString());
-        const endDate = dateRange.to || dateRange.from;
-        params.append('endDate', endDate.toISOString());
+      setError(null); // Clear any previous errors
 
-        const response = await fetch(`/api/admin/dashboard/enrollment-metrics?${params.toString()}`);
-        
-        if (!response.ok) {
-          throw new Error(`Failed to fetch enrollment metrics (${response.status})`);
-        }
-        
-        const data: EnrollmentMetrics = await response.json();
-        setEnrollmentData(data);
-      } catch (err: any) {
-        console.error('Error fetching enrollment data:', err);
-        setError(err.message || 'Failed to load enrollment data');
-      } finally {
-        setIsLoading(false);
+      const options: UnifiedAnalyticsOptions = {
+        includeMigrationData: false, // Enrollments tab shows only new data
+        timeFilter,
+        dateRange: convertDateRange(customDateRange)
+      };
+
+      const enrollment = await analyticsService.getEnrollmentMetrics(options);
+      setEnrollmentMetrics(enrollment);
+
+      // Extract daily trends from enrollment metrics for the chart
+      if (enrollment.enrollmentTrend && enrollment.enrollmentTrend.length > 0) {
+        const trends = enrollment.enrollmentTrend.map((trend: { date: string; count: number }) => ({
+          date: trend.date,
+          count: trend.count
+        }));
+        setEnrollmentTrends(trends);
+      } else {
+        setEnrollmentTrends([]);
       }
-    };
 
-    fetchEnrollmentData();
-  }, [dateRange]);
+    } catch (error) {
+      console.error('Error fetching enrollment data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load enrollment data'); // Set error state
+      toast.error('Failed to load enrollment data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  // Filter data based on acquisition source
-  const filteredEnrollments = enrollmentData?.recentEnrollments.filter(enrollment => 
-    acquisitionSource === 'all' || enrollment.acquisition_source === acquisitionSource
-  ) || [];
-
-  // Prepare table data
-  const columns = [
-    { header: 'User', accessor: 'userName' },
-    { header: 'Email', accessor: 'email' },
-    { header: 'Course', accessor: 'course_title' },
-    { header: 'Source', accessor: 'acquisition_source' },
-    { header: 'Enrolled At', accessor: 'enrolledAtFormatted' },
-  ];
-  
-  const tableData = filteredEnrollments.map(item => ({
-    ...item,
-    enrolledAtFormatted: item.enrolled_at ? format(new Date(item.enrolled_at), 'PPpp') : '-',
-  }));
+  // Effect to fetch data when filters change
+  useEffect(() => {
+    // Only fetch data if we have a valid configuration
+    if (timeFilter === 'custom') {
+      // For custom filter, only fetch if we have a valid date range
+      if (customDateRange?.from && customDateRange?.to) {
+        fetchEnrollmentData();
+      }
+    } else {
+      // For non-custom filters, we can always fetch
+      fetchEnrollmentData();
+    }
+  }, [timeFilter, customDateRange]);
 
   if (error) {
     return (
@@ -116,107 +102,87 @@ export function EnrollmentsSection() {
 
   return (
     <div className="space-y-6">
-      {/* Metric Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">Enrollment Analytics</h1>
+          <p className="text-muted-foreground text-sm md:text-base">P2P Course enrollment tracking and metrics</p>
+        </div>
+
+        {/* Date Filter Controls */}
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <Select value={timeFilter} onValueChange={(value: TimeFilter) => setTimeFilter(value)}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Select time period" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="this_month">This Month</SelectItem>
+              <SelectItem value="last_3_months">Last 3 Months</SelectItem>
+              <SelectItem value="custom">Custom Range</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Custom Date Range Picker */}
+          {timeFilter === 'custom' && (
+            <DateRangePicker
+              value={customDateRange}
+              onChange={setCustomDateRange}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Enrollment Metric Cards */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
         {isLoading ? (
-          Array(4).fill(0).map((_, i) => (
+          Array(2).fill(0).map((_, i) => (
             <Skeleton key={i} className="h-32 w-full" />
           ))
-        ) : (
+        ) : enrollmentMetrics ? (
           <>
             <MetricCard
               icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
               title="Enrolled Today"
-              value={enrollmentData?.summary.totalEnrollmentsToday || 0}
-              description="New enrollments today"
+              value={enrollmentMetrics.enrolledToday}
+              description="New P2P enrollments today"
             />
             <MetricCard
               icon={<Users className="h-4 w-4 text-muted-foreground" />}
-              title="Enrolled This Month"
-              value={enrollmentData?.summary.totalEnrollmentsThisMonth || 0}
-              description="Monthly enrollments"
-            />
-            <MetricCard
-              icon={<Target className="h-4 w-4 text-muted-foreground" />}
-              title="Period Enrollments"
-              value={enrollmentData?.summary.totalEnrollmentsInRange || 0}
-              description={formatPercent(enrollmentData?.summary.trendPercentage || null)}
-            />
-            <MetricCard
-              icon={<Activity className="h-4 w-4 text-muted-foreground" />}
-              title="Recent Activity"
-              value={filteredEnrollments.length}
-              description="Displayed entries"
+              title={timeFilter === 'this_month' ? 'Enrolled This Month' : 'Enrolled In Period'}
+              value={timeFilter === 'this_month' ? enrollmentMetrics.enrolledThisMonth : enrollmentMetrics.enrolledInPeriod}
+              description={`Total enrollments ${timeFilter === 'custom' ? 'in selected period' : timeFilter.replace('_', ' ')}`}
             />
           </>
-        )}
-      </div>
-      
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <FilterDropdown
-          label="Acquisition Source"
-          value={acquisitionSource}
-          onChange={setAcquisitionSource}
-          options={[
-            { label: 'All Sources', value: 'all' },
-            { label: 'Payment Flow', value: 'payment_flow' },
-            { label: 'Migrated', value: 'migrated' },
-            { label: 'Manual', value: 'MANUAL' },
-            { label: 'Admin Import', value: 'admin_import' },
-          ]}
-        />
-      </div>
-      
-      {/* Enrollment Sources Overview */}
-      <ChartContainer title="Enrollments by Acquisition Source">
-        {isLoading ? (
-          <Skeleton className="h-64 w-full" />
-        ) : !enrollmentData ? (
-          <div className="h-64 flex items-center justify-center text-muted-foreground">
+        ) : (
+          <div className="col-span-2 text-center py-8 text-muted-foreground">
             No enrollment data available
           </div>
-        ) : (
-          <div className="space-y-6 p-4">
-            <div>
-              <h4 className="font-medium text-lg mb-4">Today's Enrollments by Source</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {enrollmentData.todayBySource.map((source, idx) => (
-                  <div key={idx} className="text-center p-4 bg-muted rounded-lg">
-                    <h5 className="font-medium">{source.acquisition_source}</h5>
-                    <p className="text-2xl font-bold text-primary">{source.enrollments_today}</p>
-                    <p className="text-sm text-muted-foreground">enrollments today</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            <div>
-              <h4 className="font-medium text-lg mb-4">This Month's Enrollments by Source</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {enrollmentData.monthlyBySource.slice(0, 6).map((source, idx) => (
-                  <div key={idx} className="text-center p-4 bg-muted rounded-lg">
-                    <h5 className="font-medium">{source.acquisition_source}</h5>
-                    <p className="text-2xl font-bold text-primary">{source.enrollments_this_month}</p>
-                    <p className="text-sm text-muted-foreground">enrollments this month</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         )}
-      </ChartContainer>
-      
-      {/* Enrollments Data Table */}
-      <DataTable 
-        columns={columns} 
-        data={tableData} 
-        emptyState={
-          <span>
-            {isLoading ? 'Loading...' : 'No enrollments found for the selected filters.'}
-          </span>
-        } 
-      />
+      </div>
+
+      {/* Daily Enrollment Trends Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Daily Enrollment Trends
+          </CardTitle>
+          <CardDescription>
+            Daily enrollment activity for {timeFilter === 'custom' ? 'selected period' : timeFilter.replace('_', ' ')} (new data only)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            <Skeleton className="h-64 w-full" />
+          ) : enrollmentTrends.length > 0 ? (
+            <EnrollmentTrendsChart data={enrollmentTrends} granularity="day" />
+          ) : (
+            <div className="h-64 flex items-center justify-center text-muted-foreground">
+              No enrollment trends data available for the selected period
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
     </div>
   );
 } 

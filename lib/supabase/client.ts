@@ -1,6 +1,6 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { createBrowserClient } from '@supabase/ssr';
-import type { Database } from '@/types/supabase';
+import type { Database } from '../../types/supabase';
 
 // Create a single supabase client for server-side use with admin privileges
 // This is different from the server.ts implementation which uses cookies

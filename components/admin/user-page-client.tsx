@@ -35,10 +35,10 @@ export function UserPageClient({ children, searchParams }: UserPageClientProps) 
           </Button>
           <Button 
             variant="outline"
-            onClick={() => router.push('/admin/users/reconciliation')}
+            onClick={() => router.push('/admin/tag-management')}
           >
             <UserSearch className="mr-2 h-4 w-4" />
-            Account Reconciliation
+            User Tag Management
           </Button>
           <Button asChild>
             <Link href="/admin/users/new">

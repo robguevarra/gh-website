@@ -21,31 +21,33 @@ export interface DataTableProps {
 
 export function DataTable({ columns, data, emptyState }: DataTableProps) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {columns.map((col) => (
-            <TableHead key={col.accessor}>{col.header}</TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {data.length === 0 ? (
+    <div className="relative w-full overflow-x-auto">
+      <Table className="min-w-full">
+        <TableHeader>
           <TableRow>
-            <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
-              {emptyState || 'No data available.'}
-            </TableCell>
+            {columns.map((col) => (
+              <TableHead key={col.accessor} className="whitespace-nowrap">{col.header}</TableHead>
+            ))}
           </TableRow>
-        ) : (
-          data.map((row, i) => (
-            <TableRow key={i}>
-              {columns.map((col) => (
-                <TableCell key={col.accessor}>{row[col.accessor]}</TableCell>
-              ))}
+        </TableHeader>
+        <TableBody>
+          {data.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
+                {emptyState || 'No data available.'}
+              </TableCell>
             </TableRow>
-          ))
-        )}
-      </TableBody>
-    </Table>
+          ) : (
+            data.map((row, i) => (
+              <TableRow key={i}>
+                {columns.map((col) => (
+                  <TableCell key={col.accessor} className="whitespace-nowrap">{row[col.accessor]}</TableCell>
+                ))}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
   );
 } 

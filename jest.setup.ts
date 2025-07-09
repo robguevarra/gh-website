@@ -50,8 +50,8 @@ jest.mock('@supabase/supabase-js', () => ({
       insert: jest.fn(() => ({ select: jest.fn() })),
       update: jest.fn(() => ({ eq: jest.fn() })),
       delete: jest.fn(() => ({ eq: jest.fn() })),
-    }),
-  })),
+    })),
+  }))
 }));
 
 // Mock environment variables
