@@ -413,7 +413,8 @@ export class UnifiedAnalyticsService {
         .select('status, transactions!inner(status)')
         .gte('enrolled_at', dateRange.from.toISOString())
         .lte('enrolled_at', dateRange.to.toISOString())
-        .in('transactions.status', statusFilter);
+        .in('transactions.status', statusFilter)
+        .limit(10000);
 
       if (statusError) throw statusError;
 

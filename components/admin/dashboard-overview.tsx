@@ -10,13 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MetricCard } from './metric-card';
-import { UnifiedAnalyticsService } from '@/lib/services/analytics/unified-analytics';
+import { getOverviewMetrics } from '@/app/actions/analytics-actions';
 import type { 
   OverviewMetrics, 
   UnifiedAnalyticsOptions, 
   TimeFilter,
   DateRange as AnalyticsDateRange
-} from '@/lib/services/analytics/unified-analytics';
+} from '@/app/actions/analytics-actions';
 
 export function DashboardOverview() {
   // State management for the overview analytics
@@ -24,9 +24,6 @@ export function DashboardOverview() {
   const [overviewMetrics, setOverviewMetrics] = useState<OverviewMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  // Create analytics service instance
-  const analyticsService = new UnifiedAnalyticsService();
 
   // Fetch analytics data
   const fetchAnalyticsData = async () => {
@@ -40,7 +37,7 @@ export function DashboardOverview() {
         dateRange: undefined, // Use timeFilter instead of custom range for overview
       };
 
-      const overview = await analyticsService.getOverviewMetrics(options);
+      const overview = await getOverviewMetrics(options);
       setOverviewMetrics(overview);
     } catch (err: any) {
       console.error('Error fetching overview analytics:', err);
@@ -114,7 +111,7 @@ export function DashboardOverview() {
         <MetricCard
           icon={<UserPlus className="h-4 w-4 text-muted-foreground" />}
           title="Total Enrollees"
-          value={overviewMetrics.totalEnrollees.toString()}
+          value={overviewMetrics.totalEnrollments.toString()}
           description="P2P Course Students"
         />
         <MetricCard

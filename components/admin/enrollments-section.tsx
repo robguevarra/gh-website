@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { EnrollmentTrendsChart } from './enrollment-trends-chart';
-import { UnifiedAnalyticsService } from '@/lib/services/analytics/unified-analytics';
+import { getEnrollmentMetrics } from '@/app/actions/analytics-actions';
 import type { DateRange } from "react-day-picker";
 import { toast } from 'sonner';
 import type { 
@@ -16,7 +16,7 @@ import type {
   UnifiedAnalyticsOptions, 
   TimeFilter,
   DateRange as AnalyticsDateRange
-} from '@/lib/services/analytics/unified-analytics';
+} from '@/app/actions/analytics-actions';
 
 // TrendPoint type for the chart
 type TrendPoint = { date: string; count?: number };
@@ -31,8 +31,6 @@ export function EnrollmentsSection() {
   const [error, setError] = useState<string | null>(null); // Add error state
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('this_month'); // Default to this month for enrollment tracking
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
-  
-  const analyticsService = new UnifiedAnalyticsService();
 
   // Convert react-day-picker DateRange to AnalyticsDateRange
   const convertDateRange = (range: DateRange | undefined): AnalyticsDateRange | undefined => {
@@ -55,12 +53,12 @@ export function EnrollmentsSection() {
         dateRange: convertDateRange(customDateRange)
       };
 
-      const enrollment = await analyticsService.getEnrollmentMetrics(options);
+      const enrollment = await getEnrollmentMetrics(options);
       setEnrollmentMetrics(enrollment);
 
       // Extract daily trends from enrollment metrics for the chart
-      if (enrollment.enrollmentTrend && enrollment.enrollmentTrend.length > 0) {
-        const trends = enrollment.enrollmentTrend.map((trend: { date: string; count: number }) => ({
+      if (enrollment.enrollmentTrends && enrollment.enrollmentTrends.length > 0) {
+        const trends = enrollment.enrollmentTrends.map((trend: { date: string; count: number }) => ({
           date: trend.date,
           count: trend.count
         }));
@@ -142,13 +140,13 @@ export function EnrollmentsSection() {
             <MetricCard
               icon={<Calendar className="h-4 w-4 text-muted-foreground" />}
               title="Enrolled Today"
-              value={enrollmentMetrics.enrolledToday}
+              value={enrollmentMetrics.enrollmentsToday}
               description="New P2P enrollments today"
             />
             <MetricCard
               icon={<Users className="h-4 w-4 text-muted-foreground" />}
               title={timeFilter === 'this_month' ? 'Enrolled This Month' : 'Enrolled In Period'}
-              value={timeFilter === 'this_month' ? enrollmentMetrics.enrolledThisMonth : enrollmentMetrics.enrolledInPeriod}
+              value={timeFilter === 'this_month' ? enrollmentMetrics.enrollmentsThisMonth : enrollmentMetrics.totalEnrollments}
               description={`Total enrollments ${timeFilter === 'custom' ? 'in selected period' : timeFilter.replace('_', ' ')}`}
             />
           </>

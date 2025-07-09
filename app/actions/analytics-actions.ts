@@ -19,6 +19,16 @@ export interface OverviewMetrics {
   totalRevenue: number;
   totalEnrollments: number;
   totalTransactions: number;
+  totalCanvaOrders: number;
+  totalShopifyOrders: number;
+  totalPublicSaleOrders: number;
+}
+
+export interface EnrollmentMetrics {
+  totalEnrollments: number;
+  enrollmentsToday: number;
+  enrollmentsThisMonth: number;
+  enrollmentTrends: Array<{ date: string; count: number }>;
 }
 
 export interface RevenueBreakdown {
@@ -94,6 +104,43 @@ export async function getRevenueBreakdown(options: UnifiedAnalyticsOptions): Pro
   }
 }
 
+// Server action to get enrollment metrics using database RPC
+export async function getEnrollmentMetrics(options: UnifiedAnalyticsOptions): Promise<EnrollmentMetrics> {
+  const supabase = createServerSupabaseClient();
+  const dateRange = getDateRange(options.timeFilter, options.dateRange);
+
+  try {
+    const { data, error } = await supabase.rpc('get_enrollment_metrics' as any, {
+      start_date: dateRange.from.toISOString(),
+      end_date: dateRange.to.toISOString(),
+      include_migration_data: options.includeMigrationData
+    }) as { data: any[] | null; error: any };
+
+    if (error) {
+      console.error('Enrollment metrics RPC error:', error);
+      throw new Error(`Failed to get enrollment metrics: ${error.message}`);
+    }
+
+    const result = data && Array.isArray(data) ? data[0] : null;
+    if (!result) {
+      throw new Error('No enrollment metrics data returned');
+    }
+
+    // The enrollment trends come already parsed from the RPC function
+    const enrollmentTrends = result.enrollment_trends || [];
+
+    return {
+      totalEnrollments: Number(result.total_enrollments) || 0,
+      enrollmentsToday: Number(result.enrollments_today) || 0,
+      enrollmentsThisMonth: Number(result.enrollments_this_month) || 0,
+      enrollmentTrends: enrollmentTrends
+    };
+  } catch (error) {
+    console.error('Error in getEnrollmentMetrics:', error);
+    throw error;
+  }
+}
+
 // Server action to get overview metrics using database RPC
 export async function getOverviewMetrics(options: UnifiedAnalyticsOptions): Promise<OverviewMetrics> {
   const supabase = createServerSupabaseClient();
@@ -119,7 +166,10 @@ export async function getOverviewMetrics(options: UnifiedAnalyticsOptions): Prom
     return {
       totalRevenue: Number(result.total_revenue) || 0,
       totalEnrollments: Number(result.total_enrollments) || 0,
-      totalTransactions: Number(result.total_transactions) || 0
+      totalTransactions: Number(result.total_transactions) || 0,
+      totalCanvaOrders: Number(result.total_canva_orders) || 0,
+      totalShopifyOrders: Number(result.total_shopify_orders) || 0,
+      totalPublicSaleOrders: Number(result.total_public_sale_orders) || 0
     };
   } catch (error) {
     console.error('Error in getOverviewMetrics:', error);
