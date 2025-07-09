@@ -11,6 +11,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MetricCard } from './metric-card';
 import { getOverviewMetrics } from '@/app/actions/analytics-actions';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import type { 
   OverviewMetrics, 
   UnifiedAnalyticsOptions, 
@@ -24,6 +26,7 @@ export function DashboardOverview() {
   const [overviewMetrics, setOverviewMetrics] = useState<OverviewMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [includeMigrationData, setIncludeMigrationData] = useState(false); // Add migration data toggle
 
   // Fetch analytics data
   const fetchAnalyticsData = async () => {
@@ -33,7 +36,7 @@ export function DashboardOverview() {
 
       const options: UnifiedAnalyticsOptions = {
         timeFilter,
-        includeMigrationData: false, // Overview excludes migration data by default
+        includeMigrationData, // Use the toggle state like other tabs
         dateRange: undefined, // Use timeFilter instead of custom range for overview
       };
 
@@ -51,7 +54,7 @@ export function DashboardOverview() {
   // Effect to fetch data when filters change
   useEffect(() => {
     fetchAnalyticsData();
-  }, [timeFilter]);
+  }, [timeFilter, includeMigrationData]);
 
   const formatCurrency = (value: number) => {
     return value.toLocaleString(undefined, { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 });
@@ -87,6 +90,18 @@ export function DashboardOverview() {
         
         {/* Simple time filter for overview */}
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          {/* Migration Data Toggle */}
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="overview-migration-toggle"
+              checked={includeMigrationData}
+              onCheckedChange={setIncludeMigrationData}
+            />
+            <Label htmlFor="overview-migration-toggle" className="text-sm">
+              Include Migration Data
+            </Label>
+          </div>
+          
           <Select value={timeFilter} onValueChange={(value: TimeFilter) => setTimeFilter(value)}>
             <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Select time period" />

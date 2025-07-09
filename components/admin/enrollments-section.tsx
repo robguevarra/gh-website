@@ -7,6 +7,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { EnrollmentTrendsChart } from './enrollment-trends-chart';
 import { getEnrollmentMetrics } from '@/app/actions/analytics-actions';
 import type { DateRange } from "react-day-picker";
@@ -31,6 +33,7 @@ export function EnrollmentsSection() {
   const [error, setError] = useState<string | null>(null); // Add error state
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('this_month'); // Default to this month for enrollment tracking
   const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>();
+  const [includeMigrationData, setIncludeMigrationData] = useState(false); // Add migration data toggle
 
   // Convert react-day-picker DateRange to AnalyticsDateRange
   const convertDateRange = (range: DateRange | undefined): AnalyticsDateRange | undefined => {
@@ -48,7 +51,7 @@ export function EnrollmentsSection() {
       setError(null); // Clear any previous errors
 
       const options: UnifiedAnalyticsOptions = {
-        includeMigrationData: false, // Enrollments tab shows only new data
+        includeMigrationData, // Use the toggle state like Revenue tab
         timeFilter,
         dateRange: convertDateRange(customDateRange)
       };
@@ -88,7 +91,7 @@ export function EnrollmentsSection() {
       // For non-custom filters, we can always fetch
       fetchEnrollmentData();
     }
-  }, [timeFilter, customDateRange]);
+  }, [timeFilter, customDateRange, includeMigrationData]);
 
   if (error) {
     return (
@@ -108,6 +111,18 @@ export function EnrollmentsSection() {
 
         {/* Date Filter Controls */}
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          {/* Migration Data Toggle */}
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="enrollment-migration-toggle"
+              checked={includeMigrationData}
+              onCheckedChange={setIncludeMigrationData}
+            />
+            <Label htmlFor="enrollment-migration-toggle" className="text-sm">
+              Include Migration Data
+            </Label>
+          </div>
+          
           <Select value={timeFilter} onValueChange={(value: TimeFilter) => setTimeFilter(value)}>
             <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Select time period" />
