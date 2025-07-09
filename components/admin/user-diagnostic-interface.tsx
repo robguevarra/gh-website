@@ -13,7 +13,8 @@ import {
   Info,
   UserPlus,
   Plus,
-  CheckCircle
+  CheckCircle,
+  Package
 } from 'lucide-react';
 import { BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
@@ -518,6 +519,42 @@ export function UserDiagnosticInterface() {
     }
   };
 
+  const [isLinkingUsers, setIsLinkingUsers] = useState(false);
+
+  const handleLinkUsers = async (userIds: string[]) => {
+    if (userIds.length < 2) {
+      toast.error('Please select two users to link.');
+      return;
+    }
+
+    setIsLinkingUsers(true);
+    try {
+      const response = await fetch('/api/admin/email-management/link-users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          primaryUserId: userIds[0],
+          secondaryUserId: userIds[1],
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to link users');
+      }
+
+      toast.success('Users linked successfully!');
+      handleSearch(); // Refresh data to show updated attribution
+    } catch (error) {
+      console.error('Error linking users:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to link users');
+    } finally {
+      setIsLinkingUsers(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Search Interface */}
@@ -532,7 +569,7 @@ export function UserDiagnosticInterface() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <Input
               placeholder="Enter email address to search..."
               value={searchEmail}
@@ -540,7 +577,7 @@ export function UserDiagnosticInterface() {
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               className="flex-1"
             />
-            <Button onClick={handleSearch} disabled={isSearching}>
+            <Button onClick={handleSearch} disabled={isSearching} className="w-full sm:w-auto">
               {isSearching ? (
                 <RefreshCw className="h-4 w-4 animate-spin mr-2" />
               ) : (
@@ -577,7 +614,7 @@ export function UserDiagnosticInterface() {
                     </div>
                     <div>
                       <Label className="text-sm font-medium">Primary Email</Label>
-                      <p className="text-sm">{diagnosticData.user.email}</p>
+                      <p className="text-sm break-all">{diagnosticData.user.email}</p>
                     </div>
                     <div>
                       <Label className="text-sm font-medium">Status</Label>
@@ -618,10 +655,12 @@ export function UserDiagnosticInterface() {
                         <Button 
                           variant="outline" 
                           size="sm"
+                          className="text-xs sm:text-sm"
                           onClick={() => setEmailManagement({ isOpen: true, action: 'update-primary' })}
                         >
-                          <Mail className="h-4 w-4 mr-2" />
-                          Update Primary Email
+                          <Mail className="h-4 w-4 mr-1 sm:mr-2" />
+                          <span className="hidden sm:inline">Update Primary Email</span>
+                          <span className="sm:hidden">Update Email</span>
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
@@ -674,10 +713,12 @@ export function UserDiagnosticInterface() {
                         <Button 
                           variant="outline" 
                           size="sm"
+                          className="text-xs sm:text-sm"
                           onClick={() => setEmailManagement({ isOpen: true, action: 'add-secondary' })}
                         >
-                          <Mail className="h-4 w-4 mr-2" />
-                          Add Secondary Email
+                          <Mail className="h-4 w-4 mr-1 sm:mr-2" />
+                          <span className="hidden sm:inline">Add Secondary Email</span>
+                          <span className="sm:hidden">Add Email</span>
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
@@ -728,46 +769,61 @@ export function UserDiagnosticInterface() {
                         <Button 
                           variant="outline" 
                           size="sm"
+                          className="text-xs sm:text-sm"
                           onClick={() => handleResendWelcomeEmail('P2P')}
                           disabled={emailLoadingStates['P2P']}
                         >
                           {emailLoadingStates['P2P'] ? (
                             <>
-                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Sending...
+                              <RefreshCw className="h-4 w-4 mr-1 sm:mr-2 animate-spin" />
+                              <span className="hidden sm:inline">Sending...</span>
+                              <span className="sm:hidden">...</span>
                             </>
                           ) : (
-                            'Resend P2P Welcome'
+                            <>
+                              <span className="hidden sm:inline">Resend P2P Welcome</span>
+                              <span className="sm:hidden">P2P Welcome</span>
+                            </>
                           )}
                         </Button>
                         <Button 
                           variant="outline" 
                           size="sm"
+                          className="text-xs sm:text-sm"
                           onClick={() => handleResendWelcomeEmail('Canva')}
                           disabled={emailLoadingStates['Canva']}
                         >
                           {emailLoadingStates['Canva'] ? (
                             <>
-                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Sending...
+                              <RefreshCw className="h-4 w-4 mr-1 sm:mr-2 animate-spin" />
+                              <span className="hidden sm:inline">Sending...</span>
+                              <span className="sm:hidden">...</span>
                             </>
                           ) : (
-                            'Resend Canva Welcome'
+                            <>
+                              <span className="hidden sm:inline">Resend Canva Welcome</span>
+                              <span className="sm:hidden">Canva Welcome</span>
+                            </>
                           )}
                         </Button>
                         <Button 
                           variant="outline" 
                           size="sm"
+                          className="text-xs sm:text-sm"
                           onClick={() => handleResendWelcomeEmail('Shopify')}
                           disabled={emailLoadingStates['Shopify']}
                         >
                           {emailLoadingStates['Shopify'] ? (
                             <>
-                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Sending...
+                              <RefreshCw className="h-4 w-4 mr-1 sm:mr-2 animate-spin" />
+                              <span className="hidden sm:inline">Sending...</span>
+                              <span className="sm:hidden">...</span>
                             </>
                           ) : (
-                            'Resend Shopify Welcome'
+                            <>
+                              <span className="hidden sm:inline">Resend Shopify Welcome</span>
+                              <span className="sm:hidden">Shopify Welcome</span>
+                            </>
                           )}
                         </Button>
                       </>
@@ -799,7 +855,7 @@ export function UserDiagnosticInterface() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Enrollment Status Banner */}
-                <div className="flex items-center justify-between p-4 rounded-lg border-2 bg-muted/50">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-lg border-2 bg-muted/50 gap-3">
                   <div className="flex items-center gap-3">
                     <Badge 
                       variant={diagnosticData.p2pEnrollmentAnalysis.isEnrolledInP2P ? 'default' : 'destructive'}
@@ -831,15 +887,16 @@ export function UserDiagnosticInterface() {
                     </div>
                     <div className="space-y-2">
                       {diagnosticData.p2pEnrollmentAnalysis.qualifyingTransactions.map((transaction) => (
-                        <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg bg-background">
-                          <div className="flex items-center gap-3">
-                            <Badge variant="outline" className="text-xs">{transaction.status}</Badge>
-                            <div className="text-sm">
-                              <span className="font-medium">{formatCurrency(transaction.amount)} {transaction.currency}</span>
-                              <span className="text-muted-foreground ml-2">•</span>
-                              <span className="text-muted-foreground ml-2">{transaction.transaction_type}</span>
-                              <span className="text-muted-foreground ml-2">•</span>
-                              <span className="text-muted-foreground ml-2">{formatDate(transaction.created_at)}</span>
+                        <div key={transaction.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg bg-background gap-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                            <Badge variant="outline" className="text-xs self-start">{transaction.status}</Badge>
+                            <div className="text-sm space-y-1 sm:space-y-0 min-w-0">
+                              <div className="font-medium">{formatCurrency(transaction.amount)} {transaction.currency}</div>
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-muted-foreground text-xs">
+                                <span className="break-all">{transaction.transaction_type}</span>
+                                <span className="hidden sm:inline">•</span>
+                                <span className="break-all">{formatDate(transaction.created_at)}</span>
+                              </div>
                             </div>
                           </div>
                           {diagnosticData.p2pEnrollmentAnalysis!.hasEnrollmentGap && (
@@ -847,7 +904,7 @@ export function UserDiagnosticInterface() {
                               size="sm" 
                               onClick={() => handleP2PEnrollment('transaction', transaction.id)}
                               disabled={isEnrollingP2P}
-                              className="shrink-0"
+                              className="shrink-0 w-full sm:w-auto"
                             >
                               {isEnrollingP2P ? (
                                 <RefreshCw className="h-4 w-4 animate-spin mr-1" />
@@ -867,12 +924,12 @@ export function UserDiagnosticInterface() {
                 {diagnosticData.p2pEnrollmentAnalysis.hasSystemeioP2PRecord && (
                   <div className="space-y-3">
                     <Label className="text-sm font-semibold">Systemeio P2P Record</Label>
-                    <div className="flex items-center justify-between p-3 border rounded-lg bg-background">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className="text-xs">Systemeio</Badge>
-                        <div className="text-sm">
-                          <span className="font-medium">P2P Record Found</span>
-                          <span className="text-muted-foreground ml-2">Tagged as 'imported' or 'PaidP2P'</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 border rounded-lg bg-background gap-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                        <Badge variant="outline" className="text-xs self-start">Systemeio</Badge>
+                        <div className="text-sm space-y-1 sm:space-y-0 min-w-0">
+                          <div className="font-medium">P2P Record Found</div>
+                          <div className="text-muted-foreground text-xs">Tagged as 'imported' or 'PaidP2P'</div>
                         </div>
                       </div>
                       {diagnosticData.p2pEnrollmentAnalysis.hasEnrollmentGap && (
@@ -880,7 +937,7 @@ export function UserDiagnosticInterface() {
                           size="sm" 
                           onClick={() => handleP2PEnrollment('systemeio')}
                           disabled={isEnrollingP2P}
-                          className="shrink-0"
+                          className="shrink-0 w-full sm:w-auto"
                         >
                           {isEnrollingP2P ? (
                             <RefreshCw className="h-4 w-4 animate-spin mr-1" />
@@ -1007,7 +1064,7 @@ export function UserDiagnosticInterface() {
                     </div>
                     <div>
                       <Label className="text-sm font-medium">Email</Label>
-                      <p className="text-sm">{diagnosticData.ebookContact.email}</p>
+                      <p className="text-sm break-all">{diagnosticData.ebookContact.email}</p>
                     </div>
                     <div>
                       <Label className="text-sm font-medium">Phone</Label>
@@ -1093,7 +1150,7 @@ export function UserDiagnosticInterface() {
                               placeholder="Enter email address"
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                               <Label htmlFor="ebookFirstName">First Name</Label>
                               <Input
@@ -1157,27 +1214,70 @@ export function UserDiagnosticInterface() {
 
           {/* Data Tabs */}
           <Tabs defaultValue="transactions" className="space-y-4">
-                         <TabsList className="grid w-full grid-cols-5">
-               <TabsTrigger value="transactions">
-                 <ShoppingCart className="h-4 w-4 mr-2" />
-                 Transactions ({diagnosticData.transactions?.length || 0})
-               </TabsTrigger>
-               <TabsTrigger value="shopify">
-                 <ShoppingCart className="h-4 w-4 mr-2" />
-                 Shopify ({diagnosticData.shopifyCustomers?.length || 0})
-               </TabsTrigger>
-               <TabsTrigger value="enrollments">
-                 <GraduationCap className="h-4 w-4 mr-2" />
-                 Enrollments ({diagnosticData.enrollments?.length || 0})
-               </TabsTrigger>
-               <TabsTrigger value="attribution">
-                 <Link2 className="h-4 w-4 mr-2" />
-                 Attribution Gaps ({diagnosticData.attributionGaps?.unlinkedShopifyCustomers?.length || 0})
-               </TabsTrigger>
-               <TabsTrigger value="orders">
-                 Orders ({diagnosticData.shopifyOrders?.length || 0})
-               </TabsTrigger>
-             </TabsList>
+            <div className="relative">
+              <div className="overflow-x-auto scrollbar-hide">
+                <TabsList className="inline-flex h-12 items-center justify-start rounded-lg bg-muted p-1 text-muted-foreground min-w-full w-max gap-1">
+                  <TabsTrigger 
+                    value="transactions" 
+                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
+                  >
+                    <ShoppingCart className="h-4 w-4 mr-2 shrink-0" />
+                    <span className="font-medium">Transactions</span>
+                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded-full font-medium shrink-0">
+                      {diagnosticData.transactions?.length || 0}
+                    </span>
+                  </TabsTrigger>
+                  
+                  <TabsTrigger 
+                    value="shopify" 
+                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
+                  >
+                    <ShoppingCart className="h-4 w-4 mr-2 shrink-0" />
+                    <span className="font-medium">Shopify</span>
+                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded-full font-medium shrink-0">
+                      {diagnosticData.shopifyCustomers?.length || 0}
+                    </span>
+                  </TabsTrigger>
+                  
+                  <TabsTrigger 
+                    value="enrollments" 
+                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
+                  >
+                    <GraduationCap className="h-4 w-4 mr-2 shrink-0" />
+                    <span className="font-medium">Enrollments</span>
+                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded-full font-medium shrink-0">
+                      {diagnosticData.enrollments?.length || 0}
+                    </span>
+                  </TabsTrigger>
+                  
+                  <TabsTrigger 
+                    value="attribution" 
+                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
+                  >
+                    <Link2 className="h-4 w-4 mr-2 shrink-0" />
+                    <span className="font-medium">Attribution Gaps</span>
+                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded-full font-medium shrink-0">
+                      {diagnosticData.attributionGaps?.unlinkedShopifyCustomers?.length || 0}
+                    </span>
+                  </TabsTrigger>
+                  
+                  <TabsTrigger 
+                    value="orders" 
+                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
+                  >
+                    <Package className="h-4 w-4 mr-2 shrink-0" />
+                    <span className="font-medium">Orders</span>
+                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded-full font-medium shrink-0">
+                      {diagnosticData.shopifyOrders?.length || 0}
+                    </span>
+                  </TabsTrigger>
+                </TabsList>
+              </div>
+              
+              {/* Scroll indicator gradients */}
+              <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-background to-transparent pointer-events-none opacity-60" />
+              <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-background to-transparent pointer-events-none opacity-60" />
+            </div>
 
             <TabsContent value="transactions" className="space-y-4">
               <Card>
@@ -1237,7 +1337,7 @@ export function UserDiagnosticInterface() {
                                   ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim()
                                   : customer.email}
                               </h4>
-                              <p className="text-sm text-muted-foreground">{customer.email}</p>
+                              <p className="text-sm text-muted-foreground break-all">{customer.email}</p>
                               <p className="text-sm text-muted-foreground">
                                 {customer.orders_count} orders • {formatCurrency(customer.total_spent)} total
                               </p>
@@ -1303,19 +1403,19 @@ export function UserDiagnosticInterface() {
                      <div className="space-y-3">
                        {diagnosticData.attributionGaps.unlinkedShopifyCustomers.map((customer) => (
                         <div key={customer.id} className="border rounded-lg p-3">
-                          <div className="flex justify-between items-center">
-                            <div>
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="flex-1 min-w-0">
                               <h4 className="font-medium">
                                 {customer.first_name || customer.last_name
                                   ? `${customer.first_name || ''} ${customer.last_name || ''}`.trim()
                                   : customer.email}
                               </h4>
-                              <p className="text-sm text-muted-foreground">{customer.email}</p>
+                              <p className="text-sm text-muted-foreground break-all">{customer.email}</p>
                               <p className="text-sm text-muted-foreground">
                                 {customer.orders_count} orders • {formatCurrency(customer.total_spent)} total
                               </p>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-2 w-full sm:w-auto">
                               <Dialog 
                                 open={emailManagement.isOpen && emailManagement.action === 'link-shopify' && emailManagement.targetShopifyCustomer?.id === customer.id} 
                                 onOpenChange={(open) => !open && setEmailManagement({ isOpen: false, action: null, targetShopifyCustomer: undefined })}
@@ -1323,6 +1423,7 @@ export function UserDiagnosticInterface() {
                                 <DialogTrigger asChild>
                                   <Button 
                                     size="sm"
+                                    className="w-full sm:w-auto"
                                     onClick={() => setEmailManagement({ 
                                       isOpen: true, 
                                       action: 'link-shopify', 
@@ -1330,7 +1431,8 @@ export function UserDiagnosticInterface() {
                                     })}
                                   >
                                     <Link2 className="h-4 w-4 mr-2" />
-                                    Link to User
+                                    <span className="hidden sm:inline">Link to User</span>
+                                    <span className="sm:hidden">Link</span>
                                   </Button>
                                 </DialogTrigger>
                                 <DialogContent>
@@ -1412,7 +1514,7 @@ export function UserDiagnosticInterface() {
                           <div className="flex justify-between items-start">
                             <div>
                               <h4 className="font-medium">Order #{order.order_number || order.id}</h4>
-                              <p className="text-sm text-muted-foreground">
+                              <p className="text-sm text-muted-foreground break-all">
                                 {order.email} • {formatDate(order.created_at)}
                               </p>
                             </div>

@@ -10,10 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import type { DateRange } from "react-day-picker";
-import { getRevenueBreakdown, getOverviewMetrics } from '@/app/actions/analytics-actions';
+import { getRevenueBreakdown, getOverviewMetrics, getShopifyProductBreakdown } from '@/app/actions/analytics-actions';
 import type { 
   RevenueBreakdown, 
   OverviewMetrics,
+  ShopifyProductBreakdown,
   UnifiedAnalyticsOptions, 
   TimeFilter,
   DateRange as AnalyticsDateRange
@@ -26,6 +27,7 @@ export function RevenueSection() {
   // Analytics state
   const [revenueData, setRevenueData] = useState<RevenueBreakdown | null>(null);
   const [overviewData, setOverviewData] = useState<OverviewMetrics | null>(null);
+  const [shopifyProducts, setShopifyProducts] = useState<ShopifyProductBreakdown[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -127,6 +129,20 @@ export function RevenueSection() {
         
         setRevenueData(revenue);
         setOverviewData(overview);
+
+        // Fetch Shopify product breakdown if there are Shopify orders
+        if (revenue['SHOPIFY_ECOM']?.count > 0) {
+          try {
+            const shopifyBreakdown = await getShopifyProductBreakdown(options);
+            setShopifyProducts(shopifyBreakdown);
+          } catch (shopifyError) {
+            console.error('Error fetching Shopify product breakdown:', shopifyError);
+            // Continue with main data, just set empty array for products
+            setShopifyProducts([]);
+          }
+        } else {
+          setShopifyProducts([]);
+        }
       } catch (err: any) {
         console.error('Error fetching revenue data:', err);
         setError(err.message || 'Failed to load revenue data');
@@ -284,6 +300,51 @@ export function RevenueSection() {
                     </div>
                   </div>
                 ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Shopify Ecommerce Product Breakdown */}
+      {!isLoading && shopifyProducts.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Shopify Ecommerce Product Breakdown</CardTitle>
+            <CardDescription>Detailed breakdown of products sold through ecommerce orders</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {shopifyProducts.map((product, index) => (
+                <div key={index} className="border-b border-gray-100 pb-3 last:border-b-0">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h4 className="text-sm font-semibold text-gray-900 line-clamp-2">
+                        {product.productName}
+                      </h4>
+                      <div className="mt-1 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                        <span>Qty: {product.totalQuantity}</span>
+                        <span>Orders: {product.orderCount}</span>
+                        <span>Avg Price: {formatCurrency(product.avgPrice)}</span>
+                      </div>
+                    </div>
+                    <div className="text-right ml-4">
+                      <div className="text-sm font-bold text-green-600">
+                        {formatCurrency(product.totalRevenue)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              
+              {/* Summary Footer */}
+              <div className="mt-4 pt-3 border-t border-gray-200">
+                <div className="flex justify-between items-center text-sm font-semibold">
+                  <span>Total Products: {shopifyProducts.length}</span>
+                  <span>
+                    Total Revenue: {formatCurrency(shopifyProducts.reduce((sum, p) => sum + p.totalRevenue, 0))}
+                  </span>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -102,6 +102,12 @@ export async function logSessionActivity({
         });
         return false;
       }
+
+      // If this is a login activity, update unified_profiles.last_login_at and login_count
+      if (activityType === SESSION_ACTIVITY_TYPES.LOGIN) {
+        await updateUserLoginProfile(formattedUserId, supabase);
+      }
+
     } catch (insertError) {
       console.error('Exception during activity log insertion:', insertError);
       return false;
@@ -112,6 +118,50 @@ export async function logSessionActivity({
     // Don't let logging failures break the application
     console.error('Error logging session activity:', error);
     return false;
+  }
+}
+
+/**
+ * Update user's last_login_at and increment login_count in unified_profiles
+ */
+async function updateUserLoginProfile(userId: string, supabase: any): Promise<void> {
+  try {
+    const now = new Date().toISOString();
+    
+    // First, get current login_count or default to 0
+    const { data: currentProfile } = await supabase
+      .from('unified_profiles')
+      .select('login_count')
+      .eq('id', userId)
+      .maybeSingle();
+    
+    const currentLoginCount = currentProfile?.login_count || 0;
+    
+    // Update last_login_at and increment login_count
+    const { error: updateError } = await supabase
+      .from('unified_profiles')
+      .update({
+        last_login_at: now,
+        login_count: currentLoginCount + 1,
+        updated_at: now
+      })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('Failed to update user login profile:', updateError);
+      // Log specific error details for debugging
+      console.error('Update error details:', {
+        code: updateError.code,
+        message: updateError.message,
+        details: updateError.details,
+        hint: updateError.hint,
+        userId: userId
+      });
+    } else {
+      console.log(`Successfully updated login profile for user ${userId}: login_count = ${currentLoginCount + 1}`);
+    }
+  } catch (error) {
+    console.error('Exception while updating user login profile:', error);
   }
 }
 

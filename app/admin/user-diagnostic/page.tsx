@@ -9,13 +9,13 @@ export const metadata: Metadata = {
 
 export default function UserDiagnosticPage() {
   return (
-    <div className="container py-8 space-y-6">
+    <div className="container py-4 sm:py-8 space-y-6">
       <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             User Support Diagnostic Tool
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm sm:text-base">
             Search users by any email, view all associated data, and manage email conflicts
           </p>
         </div>

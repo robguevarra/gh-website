@@ -100,7 +100,7 @@ export default function EmailAnalyticsDashboard() {
       {/* Filters */}
       <EmailAnalyticsFilters filters={filters} onChange={setFilters} />
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <MetricCard label="Delivered" value={analytics.total_delivered} />
         <MetricCard label="Opened" value={analytics.total_opened} />
         <MetricCard label="Clicked" value={analytics.total_clicked} />
@@ -108,7 +108,7 @@ export default function EmailAnalyticsDashboard() {
         <MetricCard label="Spam Complaints" value={analytics.total_spam_complaints} />
       </div>
       {/* Rates */}
-      <div className="flex flex-wrap gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <RateCard label="Open Rate" value={analytics.open_rate} />
         <RateCard label="Click Rate" value={analytics.click_rate} />
         <RateCard label="Spam Rate" value={analytics.spam_complaint_rate} />
@@ -162,31 +162,35 @@ function MetricCard({ label, value }: { label: string; value: number }) {
 
 function RateCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-muted rounded px-4 py-2 flex flex-col items-center">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="text-lg font-bold">{value.toFixed(1)}%</div>
-    </div>
+    <Card>
+      <CardContent className="p-4 text-center">
+        <div className="text-sm font-medium text-muted-foreground mb-1">{label}</div>
+        <div className="text-2xl font-bold">{value.toFixed(1)}%</div>
+      </CardContent>
+    </Card>
   );
 }
 
 function TopBouncedEmailsTable({ emails }: { emails: TopBouncedEmail[] }) {
   if (!emails.length) return <div className="text-muted-foreground">No bounces recorded.</div>;
   return (
-    <table className="min-w-full text-sm">
-      <thead>
-        <tr>
-          <th className="text-left font-semibold">Email</th>
-          <th className="text-left font-semibold">Count</th>
-        </tr>
-      </thead>
-      <tbody>
-        {emails.map((e) => (
-          <tr key={e.email}>
-            <td>{e.email}</td>
-            <td>{e.count}</td>
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="border-b">
+            <th className="text-left font-semibold py-3 px-4">Email</th>
+            <th className="text-left font-semibold py-3 px-4">Count</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {emails.map((e) => (
+            <tr key={e.email} className="border-b">
+              <td className="py-3 px-4 break-all">{e.email}</td>
+              <td className="py-3 px-4 font-medium">{e.count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
