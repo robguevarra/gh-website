@@ -2,6 +2,7 @@ import { generateMagicLink } from '@/lib/auth/magic-link-service';
 import { sendTransactionalEmail } from '@/lib/email/transactional-email-service';
 import { createClient } from '@supabase/supabase-js';
 import { detectInvalidBcryptHash } from '@/lib/auth/hash-validation-service';
+import { captureAuthError } from '@/lib/auth/auth-error-monitor';
 
 // Create direct admin client - needed to avoid auth session issues
 function getDirectAdminClient() {
@@ -118,12 +119,50 @@ export async function POST(request: Request) {
       return Response.json({ success: true });
     }
     
+    // Capture password reset failure for monitoring
+    await captureAuthError(
+      'password_reset_failure',
+      result.error || 'Failed to generate password reset link',
+      {
+        code: 'PASSWORD_RESET_LINK_GENERATION_FAILED',
+        status: 500,
+        endpoint: '/api/auth/password-reset/request',
+        method: 'POST',
+        userAgent: request.headers.get('user-agent') || undefined,
+        ipAddress: request.headers.get('x-forwarded-for') || undefined,
+        originalError: result.error,
+      },
+      {
+        url: request.url,
+        component: 'PasswordResetRequestAPI',
+      }
+    );
+    
     return Response.json({ 
       success: false, 
       error: result.error || 'Failed to generate password reset link' 
     }, { status: 500 });
   } catch (error) {
     console.error('Password reset request error:', error);
+    
+    // Capture unexpected password reset errors for monitoring
+    await captureAuthError(
+      'unknown_error',
+      error instanceof Error ? error.message : 'An unexpected error occurred in password reset',
+      {
+        code: 'UNEXPECTED_PASSWORD_RESET_ERROR',
+        status: 500,
+        endpoint: '/api/auth/password-reset/request',
+        method: 'POST',
+        userAgent: request.headers.get('user-agent') || undefined,
+        ipAddress: request.headers.get('x-forwarded-for') || undefined,
+        originalError: error,
+      },
+      {
+        url: request.url,
+        component: 'PasswordResetRequestAPI',
+      }
+    );
     
     return Response.json({ 
       success: false, 

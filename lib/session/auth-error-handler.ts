@@ -243,38 +243,100 @@ export function normalizeAuthError(error: any): AuthErrorWithMetadata {
  * Log authentication errors for security monitoring
  */
 export function logAuthError(error: AuthErrorWithMetadata, context?: Record<string, any>): void {
-  // In development, just log to console
-  if (process.env.NODE_ENV === 'development') {
-    console.error('Auth Error:', { error, context });
-    return;
-  }
-  
-  // In production, send to logging endpoint
-  try {
-    const logData = {
-      eventType: 'auth_error',
-      error: {
-        code: error.code,
-        message: error.message,
-        status: error.status,
-      },
-      context: {
-        ...context,
-        timestamp: new Date().toISOString(),
-        url: typeof window !== 'undefined' ? window.location.href : '',
-      },
-    };
+  // Import the auth error monitor dynamically to avoid circular imports
+  import('@/lib/auth/auth-error-monitor').then(({ captureAuthError }) => {
+    // Map our error code to monitor error type
+    const errorType = mapErrorCodeToMonitorType(error.code);
     
-    fetch('/api/security/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(logData),
-      // Use keepalive to ensure log is sent even during navigation
-      keepalive: true,
-    }).catch(err => console.error('Failed to log auth error:', err));
-  } catch (e) {
-    // Silent failure for logging - shouldn't impact user experience
-    console.error('Failed to log auth error:', e);
+    // Capture the error with our new monitoring system
+    captureAuthError(
+      errorType,
+      error.message,
+      {
+        code: error.code,
+        status: error.status,
+        originalError: error.original,
+        endpoint: context?.endpoint,
+        method: context?.method,
+        userAgent: typeof window !== 'undefined' ? navigator.userAgent : undefined,
+        ipAddress: context?.ipAddress,
+      },
+      {
+        url: typeof window !== 'undefined' ? window.location.href : context?.url,
+        referer: typeof window !== 'undefined' ? document.referrer : context?.referer,
+        component: context?.component,
+        action: context?.action,
+        attempt: context?.attempt,
+      },
+      context?.userId,
+      context?.sessionId
+    );
+  }).catch(() => {
+    // Fallback to original logging if monitor fails
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Auth Error:', { error, context });
+      return;
+    }
+    
+    // In production, send to logging endpoint
+    try {
+      const logData = {
+        eventType: 'auth_error',
+        error: {
+          code: error.code,
+          message: error.message,
+          status: error.status,
+        },
+        context: {
+          ...context,
+          timestamp: new Date().toISOString(),
+          url: typeof window !== 'undefined' ? window.location.href : '',
+        },
+      };
+      
+      fetch('/api/security/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(logData),
+        // Use keepalive to ensure log is sent even during navigation
+        keepalive: true,
+      }).catch(err => console.error('Failed to log auth error:', err));
+    } catch (e) {
+      // Silent failure for logging - shouldn't impact user experience
+      console.error('Failed to log auth error:', e);
+    }
+  });
+}
+
+/**
+ * Map our auth error codes to the monitoring system error types
+ */
+function mapErrorCodeToMonitorType(code: AuthErrorCode): 'login_failure' | 'signup_failure' | 'password_reset_failure' | 'password_update_failure' | 'session_expired' | 'session_invalid' | 'token_invalid' | 'permission_denied' | 'account_locked' | 'rate_limit_exceeded' | 'provider_error' | 'database_error' | 'network_error' | 'validation_error' | 'unknown_error' {
+  switch (code) {
+    case AUTH_ERROR_CODES.INVALID_CREDENTIALS:
+    case AUTH_ERROR_CODES.USER_NOT_FOUND:
+      return 'login_failure';
+    case AUTH_ERROR_CODES.ALREADY_REGISTERED:
+      return 'signup_failure';
+    case AUTH_ERROR_CODES.EXPIRED_TOKEN:
+    case AUTH_ERROR_CODES.INVALID_TOKEN:
+      return 'password_reset_failure';
+    case AUTH_ERROR_CODES.SESSION_EXPIRED:
+      return 'session_expired';
+    case AUTH_ERROR_CODES.NO_SESSION:
+      return 'session_invalid';
+    case AUTH_ERROR_CODES.RATE_LIMITED:
+    case AUTH_ERROR_CODES.RATE_LIMIT_EXCEEDED:
+      return 'rate_limit_exceeded';
+    case AUTH_ERROR_CODES.SERVER_ERROR:
+      return 'database_error';
+    case AUTH_ERROR_CODES.NETWORK_ERROR:
+      return 'network_error';
+    case AUTH_ERROR_CODES.INVALID_EMAIL:
+    case AUTH_ERROR_CODES.WEAK_PASSWORD:
+      return 'validation_error';
+    default:
+      return 'unknown_error';
   }
 }
 

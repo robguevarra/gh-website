@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { handleAuthEvent } from '@/lib/services/email/supabase-auth-email-handler';
+import { captureAuthError } from '@/lib/auth/auth-error-monitor';
 
 // Process auth webhook events from Supabase
 export async function POST(request: NextRequest) {
@@ -67,6 +68,26 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('Error in auth email webhook:', error);
+    
+    // Capture webhook processing error for monitoring
+    await captureAuthError(
+      'provider_error',
+      error instanceof Error ? error.message : 'Auth webhook processing failed',
+      {
+        code: 'AUTH_WEBHOOK_ERROR',
+        status: 500,
+        endpoint: '/api/auth/email-handler',
+        method: 'POST',
+        userAgent: request.headers.get('user-agent') || undefined,
+        ipAddress: request.headers.get('x-forwarded-for') || undefined,
+        originalError: error,
+      },
+      {
+        url: request.url,
+        component: 'AuthEmailWebhookHandler',
+      }
+    );
+    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

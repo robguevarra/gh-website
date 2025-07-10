@@ -3,6 +3,7 @@
 import { getBrowserClient } from './client';
 import type { Provider } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
+import { captureClientAuthError, mapSupabaseErrorToType, determineErrorSeverity } from '@/lib/auth/client-error-monitor';
 
 // Define auth error types
 export type AuthError = {
@@ -23,6 +24,25 @@ export async function signInWithEmail(email: string, password: string) {
     });
 
     if (error) {
+      // Capture signin error for monitoring
+      const errorType = mapSupabaseErrorToType(error);
+      const errorDetails = {
+        code: error.code || 'SIGNIN_FAILED',
+        status: 401,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+        originalError: error,
+      };
+      
+      captureClientAuthError(
+        errorType,
+        error.message,
+        errorDetails,
+        {
+          url: typeof window !== 'undefined' ? window.location.href : '',
+          component: 'SignInWithEmail',
+        }
+      ).catch(err => console.error('Failed to capture signin error:', err));
+      
       return { user: null, session: null, error: { message: error.message, code: error.code } };
     }
 
@@ -30,6 +50,27 @@ export async function signInWithEmail(email: string, password: string) {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
+      // Capture user validation error for monitoring
+      const errorMessage = userError ? userError.message : 'User validation failed';
+      const errorCode = userError ? userError.code : 'validation_error';
+      
+      const errorDetails = {
+        code: errorCode || 'USER_VALIDATION_FAILED',
+        status: 401,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+        originalError: userError,
+      };
+      
+      captureClientAuthError(
+        'session_invalid',
+        errorMessage,
+        errorDetails,
+        {
+          url: typeof window !== 'undefined' ? window.location.href : '',
+          component: 'SignInWithEmail_UserValidation',
+        }
+      ).catch(err => console.error('Failed to capture user validation error:', err));
+      
       return { 
         user: null, 
         session: null, 
@@ -42,6 +83,26 @@ export async function signInWithEmail(email: string, password: string) {
     return { user, session: data.session, error: null };
   } catch (err) {
     console.error('Sign in error:', err);
+    
+    // Capture unexpected signin error for monitoring
+    const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+    const errorDetails = {
+      code: 'UNEXPECTED_SIGNIN_ERROR',
+      status: 500,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+      originalError: err,
+    };
+    
+    captureClientAuthError(
+      'unknown_error',
+      errorMessage,
+      errorDetails,
+      {
+        url: typeof window !== 'undefined' ? window.location.href : '',
+        component: 'SignInWithEmail_Catch',
+      }
+    ).catch(captureErr => console.error('Failed to capture unexpected signin error:', captureErr));
+    
     return { 
       user: null, 
       session: null, 
@@ -66,6 +127,25 @@ export async function signUpWithEmail(email: string, password: string) {
     });
 
     if (error) {
+      // Capture signup error for monitoring
+      const errorType = mapSupabaseErrorToType(error);
+      const errorDetails = {
+        code: error.code || 'SIGNUP_FAILED',
+        status: 400,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+        originalError: error,
+      };
+      
+      captureClientAuthError(
+        errorType,
+        error.message,
+        errorDetails,
+        {
+          url: typeof window !== 'undefined' ? window.location.href : '',
+          component: 'SignUpWithEmail',
+        }
+      ).catch(err => console.error('Failed to capture signup error:', err));
+      
       return { user: null, session: null, error: { message: error.message, code: error.code } };
     }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { generateMagicLink } from '@/lib/auth/magic-link-service'
 import { classifyCustomer, getAuthenticationFlow } from '@/lib/auth/customer-classification-service'
 import { sendTransactionalEmail } from '@/lib/email/transactional-email-service'
+import { captureAuthError } from '@/lib/auth/auth-error-monitor'
 import { z } from 'zod'
 
 // Request validation schema
@@ -26,6 +27,26 @@ export async function POST(request: NextRequest) {
     
     if (!classificationResult.success) {
       console.error('[MagicLinkAPI] Customer classification failed:', classificationResult.error)
+      
+      // Capture classification failure for monitoring
+      await captureAuthError(
+        'database_error',
+        'Customer classification failed during magic link generation',
+        {
+          code: 'CUSTOMER_CLASSIFICATION_FAILED',
+          status: 500,
+          endpoint: '/api/auth/magic-link/generate',
+          method: 'POST',
+          userAgent: request.headers.get('user-agent') || undefined,
+          ipAddress: request.headers.get('x-forwarded-for') || undefined,
+          originalError: classificationResult.error,
+        },
+        {
+          url: request.url,
+          component: 'MagicLinkGenerateAPI',
+        }
+      );
+      
       return NextResponse.json(
         { error: 'Failed to classify customer', details: classificationResult.error },
         { status: 500 }
@@ -97,6 +118,26 @@ export async function POST(request: NextRequest) {
 
     if (!magicLinkResult.success) {
       console.error('[MagicLinkAPI] Magic link generation failed:', magicLinkResult.error)
+      
+      // Capture magic link generation failure for monitoring
+      await captureAuthError(
+        'provider_error',
+        'Magic link generation failed',
+        {
+          code: 'MAGIC_LINK_GENERATION_FAILED',
+          status: 500,
+          endpoint: '/api/auth/magic-link/generate',
+          method: 'POST',
+          userAgent: request.headers.get('user-agent') || undefined,
+          ipAddress: request.headers.get('x-forwarded-for') || undefined,
+          originalError: magicLinkResult.error,
+        },
+        {
+          url: request.url,
+          component: 'MagicLinkGenerateAPI',
+        }
+      );
+      
       return NextResponse.json(
         { error: 'Failed to generate magic link', details: magicLinkResult.error },
         { status: 500 }

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { detectInvalidBcryptHash } from '@/lib/auth/hash-validation-service';
+import { captureAuthError } from '@/lib/auth/auth-error-monitor';
 
 // Admin client for password updates
 function getAdminClient() {
@@ -93,6 +94,26 @@ export async function POST(request: Request) {
     
     if (updateError) {
       console.error('[PasswordUpdate] Password update failed:', updateError);
+      
+      // Capture the auth error for monitoring
+      await captureAuthError(
+        'password_update_failure',
+        updateError.message || 'Failed to update password',
+        {
+          code: updateError.code || 'PASSWORD_UPDATE_FAILED',
+          status: 500,
+          endpoint: '/api/auth/update-password',
+          method: 'POST',
+          userAgent: request.headers.get('user-agent') || undefined,
+          ipAddress: request.headers.get('x-forwarded-for') || undefined,
+          originalError: updateError,
+        },
+        {
+          url: request.url,
+          component: 'PasswordUpdateAPI',
+        }
+      );
+      
       return Response.json({ 
         success: false, 
         error: updateError.message || 'Failed to update password' 

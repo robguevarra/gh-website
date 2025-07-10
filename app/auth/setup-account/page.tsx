@@ -14,6 +14,7 @@ import { Progress } from '@/components/ui/progress'
 import { Loader2, Eye, EyeOff, CheckCircle, User, Lock, BookOpen, Heart, ArrowRight, ChevronRight } from 'lucide-react'
 import { Logo } from '@/components/ui/logo'
 import { z } from 'zod'
+import { captureClientAuthError, mapSupabaseErrorToType } from '@/lib/auth/client-error-monitor'
 
 type SetupFlow = 'p2p' | 'new' | 'general' | 'migration'
 type SetupStep = 'profile' | 'password' | 'complete'
@@ -346,6 +347,25 @@ function SetupAccountContent() {
 
           if (signInError) {
             console.error('[AccountSetup] Sign in failed after password update:', signInError)
+            
+            // Capture signin error for monitoring
+            const errorType = mapSupabaseErrorToType(signInError);
+            captureClientAuthError(
+              errorType,
+              signInError.message,
+              {
+                code: signInError.code || 'SETUP_SIGNIN_FAILED',
+                status: 401,
+                userAgent: navigator.userAgent,
+                originalError: signInError,
+              },
+              {
+                url: window.location.href,
+                component: 'SetupAccount_SigninAfterPasswordUpdate',
+                userAgent: navigator.userAgent,
+              }
+            ).catch(err => console.error('Failed to capture setup signin error:', err));
+            
             setErrors({ submit: 'Password set successfully, but sign in failed. Please try signing in manually.' })
             return
           }
@@ -355,6 +375,25 @@ function SetupAccountContent() {
 
         } catch (error) {
           console.error('[AccountSetup] Password update error:', error)
+          
+          // Capture password update error for monitoring
+          const errorMessage = error instanceof Error ? error.message : 'Password update failed';
+          captureClientAuthError(
+            'password_update_failure',
+            errorMessage,
+            {
+              code: 'SETUP_PASSWORD_UPDATE_ERROR',
+              status: 500,
+              userAgent: navigator.userAgent,
+              originalError: error,
+            },
+            {
+              url: window.location.href,
+              component: 'SetupAccount_PasswordUpdate',
+              userAgent: navigator.userAgent,
+            }
+          ).catch(err => console.error('Failed to capture password update error:', err));
+          
           setErrors({ submit: 'Failed to set password. Please try again.' })
           return
         }
@@ -378,6 +417,25 @@ function SetupAccountContent() {
 
         if (error) {
           console.error('[AccountSetup] Signup error:', error)
+          
+          // Capture signup error for monitoring
+          const errorType = mapSupabaseErrorToType(error);
+          captureClientAuthError(
+            errorType,
+            error.message,
+            {
+              code: error.code || 'SETUP_SIGNUP_FAILED',
+              status: 400,
+              userAgent: navigator.userAgent,
+              originalError: error,
+            },
+            {
+              url: window.location.href,
+              component: 'SetupAccount_Signup',
+              userAgent: navigator.userAgent,
+            }
+          ).catch(err => console.error('Failed to capture setup signup error:', err));
+          
           setErrors({ submit: error.message })
           return
         }
@@ -395,6 +453,25 @@ function SetupAccountContent() {
       
     } catch (error) {
       console.error('[AccountSetup] Account setup error:', error)
+      
+      // Capture general account setup error for monitoring
+      const errorMessage = error instanceof Error ? error.message : 'Account setup failed';
+      captureClientAuthError(
+        'unknown_error',
+        errorMessage,
+        {
+          code: 'SETUP_GENERAL_ERROR',
+          status: 500,
+          userAgent: navigator.userAgent,
+          originalError: error,
+        },
+        {
+          url: window.location.href,
+          component: 'SetupAccount_General',
+          userAgent: navigator.userAgent,
+        }
+      ).catch(err => console.error('Failed to capture general setup error:', err));
+      
       setErrors({ submit: 'Failed to complete account setup. Please try again.' })
     } finally {
       setIsLoading(false)
