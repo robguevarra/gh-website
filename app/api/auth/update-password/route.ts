@@ -21,7 +21,7 @@ function getAdminClient() {
 export async function POST(request: Request) {
   console.log('[PasswordUpdate] Processing direct password update request');
   try {
-    const { email, password } = await request.json();
+    const { email, password, userData } = await request.json();
     
     if (!email || !password) {
       return Response.json({ 
@@ -40,15 +40,20 @@ export async function POST(request: Request) {
     
     console.log(`[PasswordUpdate] Validating hash status for: ${email}`);
     
-    // Double validation: Ensure user actually has invalid hash
+    // Check hash status for context and logging
     const hashDetection = await detectInvalidBcryptHash(email);
     
-    if (hashDetection.status !== 'invalid_temp_hash') {
-      console.warn(`[PasswordUpdate] Unauthorized direct update attempt for ${email}, hash status: ${hashDetection.status}`);
+    // FIXED: Allow both invalid hash users (migration) AND valid hash users (new account setup)
+    // Valid scenarios:
+    // 1. invalid_temp_hash - Users from migration with 44-character temp hashes
+    // 2. valid - New users setting up their accounts (from setup-account page)
+    // 3. null_hash - Edge case where user exists but has no password
+    if (hashDetection.status === 'not_found') {
+      console.warn(`[PasswordUpdate] User not found for email: ${email}`);
       return Response.json({ 
         success: false, 
-        error: 'Direct password update not allowed for this account' 
-      }, { status: 403 });
+        error: 'User account not found' 
+      }, { status: 404 });
     }
     
     if (!hashDetection.userId) {
@@ -59,19 +64,30 @@ export async function POST(request: Request) {
       }, { status: 404 });
     }
     
-    console.log(`[PasswordUpdate] Updating password for user ID: ${hashDetection.userId}`);
+    console.log(`[PasswordUpdate] Updating password for user ID: ${hashDetection.userId}, hash status: ${hashDetection.status}`);
     
     const supabase = getAdminClient();
+    
+    // Prepare user metadata update
+    const metadataUpdate: any = {
+      password_set_at: new Date().toISOString(),
+      password_update_method: hashDetection.status === 'invalid_temp_hash' ? 'migration_fix' : 'account_setup'
+    };
+    
+    // Include additional user data if provided (from setup-account flow)
+    if (userData) {
+      if (userData.first_name) metadataUpdate.first_name = userData.first_name;
+      if (userData.last_name) metadataUpdate.last_name = userData.last_name;
+      if (userData.setup_flow) metadataUpdate.setup_flow = userData.setup_flow;
+      if (userData.setup_completed_at) metadataUpdate.setup_completed_at = userData.setup_completed_at;
+    }
     
     // Update the user's password using admin client
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       hashDetection.userId,
       { 
         password,
-        user_metadata: {
-          password_set_at: new Date().toISOString(),
-          password_update_method: 'direct_setup'
-        }
+        user_metadata: metadataUpdate
       }
     );
     
@@ -104,8 +120,9 @@ export async function POST(request: Request) {
           subject: 'Password setup completed successfully',
           status: 'internal_notification',
           variables: {
-            event_type: 'direct_password_setup_completed',
+            event_type: hashDetection.status === 'invalid_temp_hash' ? 'migration_password_fix' : 'new_account_password_setup',
             user_id: hashDetection.userId,
+            hash_status: hashDetection.status,
             ip_address: request.headers.get('x-forwarded-for') || 'unknown',
             user_agent: request.headers.get('user-agent') || 'unknown',
             timestamp: new Date().toISOString()
@@ -116,7 +133,7 @@ export async function POST(request: Request) {
       console.error('[PasswordUpdate] Failed to log password setup:', logError);
     }
     
-    console.log(`[PasswordUpdate] Password successfully updated for ${email}`);
+    console.log(`[PasswordUpdate] Password successfully updated for ${email} (status: ${hashDetection.status})`);
     
     return Response.json({ 
       success: true,
