@@ -17,13 +17,31 @@ const getClient = () => getBrowserClient();
 // Sign in with email and password
 export async function signInWithEmail(email: string, password: string) {
   try {
+    // Get a fresh client instance to avoid stale state
     const supabase = getClient();
+    
+    // Clear any existing session first to avoid conflicts
+    try {
+      const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' });
+      if (signOutError) {
+        console.warn('Error clearing previous session:', signOutError);
+        // Continue with sign-in attempt anyway
+      }
+    } catch (signOutErr) {
+      console.warn('Exception during session cleanup:', signOutErr);
+      // Continue with sign-in attempt
+    }
+    
+    // Attempt to sign in
+    console.log('Attempting sign-in for email:', email);
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
+      console.error('Supabase auth error during sign-in:', error);
+      
       // Capture signin error for monitoring
       const errorType = mapSupabaseErrorToType(error);
       const errorDetails = {
@@ -33,7 +51,7 @@ export async function signInWithEmail(email: string, password: string) {
         originalError: error,
       };
       
-      captureClientAuthError(
+      await captureClientAuthError(
         errorType,
         error.message,
         errorDetails,
@@ -45,44 +63,135 @@ export async function signInWithEmail(email: string, password: string) {
       
       return { user: null, session: null, error: { message: error.message, code: error.code } };
     }
-
-    // Validate the user with the server
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    if (userError || !user) {
-      // Capture user validation error for monitoring
-      const errorMessage = userError ? userError.message : 'User validation failed';
-      const errorCode = userError ? userError.code : 'validation_error';
+    if (!data.session || !data.user) {
+      console.error('Sign-in succeeded but session or user is missing');
       
       const errorDetails = {
-        code: errorCode || 'USER_VALIDATION_FAILED',
+        code: 'SESSION_MISSING',
         status: 401,
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-        originalError: userError,
       };
       
-      captureClientAuthError(
+      await captureClientAuthError(
         'session_invalid',
-        errorMessage,
+        'Authentication succeeded but session was not established',
         errorDetails,
         {
           url: typeof window !== 'undefined' ? window.location.href : '',
-          component: 'SignInWithEmail_UserValidation',
+          component: 'SignInWithEmail_SessionMissing',
         }
-      ).catch(err => console.error('Failed to capture user validation error:', err));
+      ).catch(err => console.error('Failed to capture session missing error:', err));
       
       return { 
         user: null, 
         session: null, 
-        error: userError ? 
-          { message: userError.message, code: userError.code } : 
-          { message: 'User validation failed', code: 'validation_error' } 
+        error: { 
+          message: 'Authentication succeeded but session was not established', 
+          code: 'session_missing' 
+        } 
       };
     }
 
-    return { user, session: data.session, error: null };
+    // Verify the session is valid with an explicit check
+    try {
+      console.log('Verifying session after sign-in');
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session verification failed:', sessionError);
+        
+        const errorDetails = {
+          code: sessionError.code || 'SESSION_VERIFICATION_FAILED',
+          status: 401,
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+          originalError: sessionError,
+        };
+        
+        await captureClientAuthError(
+          'session_invalid',
+          sessionError.message,
+          errorDetails,
+          {
+            url: typeof window !== 'undefined' ? window.location.href : '',
+            component: 'SignInWithEmail_SessionVerification',
+          }
+        ).catch(err => console.error('Failed to capture session verification error:', err));
+        
+        return { 
+          user: null, 
+          session: null, 
+          error: { 
+            message: 'Your session could not be verified after login', 
+            code: 'session_verification_failed' 
+          } 
+        };
+      }
+      
+      if (!sessionData.session) {
+        console.error('Session verification returned no session');
+        
+        const errorDetails = {
+          code: 'SESSION_VERIFICATION_EMPTY',
+          status: 401,
+          userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+        };
+        
+        await captureClientAuthError(
+          'session_invalid',
+          'Session verification returned no session',
+          errorDetails,
+          {
+            url: typeof window !== 'undefined' ? window.location.href : '',
+            component: 'SignInWithEmail_EmptySession',
+          }
+        ).catch(err => console.error('Failed to capture empty session error:', err));
+        
+        return { 
+          user: null, 
+          session: null, 
+          error: { 
+            message: 'Your session could not be verified after login', 
+            code: 'empty_session' 
+          } 
+        };
+      }
+      
+      console.log('Session verified successfully');
+    } catch (sessionVerifyErr) {
+      console.error('Exception during session verification:', sessionVerifyErr);
+      
+      const errorDetails = {
+        code: 'SESSION_VERIFICATION_EXCEPTION',
+        status: 500,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+        originalError: sessionVerifyErr,
+      };
+      
+      await captureClientAuthError(
+        'unknown_error',
+        sessionVerifyErr instanceof Error ? sessionVerifyErr.message : 'Unknown error during session verification',
+        errorDetails,
+        {
+          url: typeof window !== 'undefined' ? window.location.href : '',
+          component: 'SignInWithEmail_SessionVerificationException',
+        }
+      ).catch(err => console.error('Failed to capture session verification exception:', err));
+      
+      return { 
+        user: null, 
+        session: null, 
+        error: { 
+          message: 'An error occurred while verifying your session', 
+          code: 'session_verification_error' 
+        } 
+      };
+    }
+
+    console.log('Sign-in successful, returning user and session');
+    return { user: data.user, session: data.session, error: null };
   } catch (err) {
-    console.error('Sign in error:', err);
+    console.error('Unhandled exception during sign-in process:', err);
     
     // Capture unexpected signin error for monitoring
     const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
@@ -93,7 +202,7 @@ export async function signInWithEmail(email: string, password: string) {
       originalError: err,
     };
     
-    captureClientAuthError(
+    await captureClientAuthError(
       'unknown_error',
       errorMessage,
       errorDetails,
