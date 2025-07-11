@@ -141,17 +141,66 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   // Sign in with email and password
   const signIn = async (email: string, password: string) => {
     setIsLoading(true);
-    const result = await signInWithEmail(email, password);
+    let signInResult;
     
-    // Log the login activity if successful
-    if (!result.error && result.user) {
+    try {
+      signInResult = await signInWithEmail(email, password);
+      
+      // If there's an error, return early
+      if (signInResult.error) {
+        console.error('Authentication error:', signInResult.error);
+        setIsLoading(false);
+        return { error: signInResult.error };
+      }
+      
+      // Ensure we have a valid user and session
+      if (!signInResult.user || !signInResult.session) {
+        console.error('Missing user or session after successful authentication');
+        setIsLoading(false);
+        return { 
+          error: { 
+            message: 'Authentication succeeded but session was not established properly. Please try again.', 
+            code: 'session_establishment_failed' 
+          } 
+        };
+      }
+      
+      // Verify session is valid by making a test request
+      try {
+        const { data: sessionTest, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !sessionTest.session) {
+          console.error('Session verification failed:', sessionError);
+          setIsLoading(false);
+          return { 
+            error: { 
+              message: 'Your session could not be verified. Please try again.', 
+              code: 'session_verification_failed' 
+            } 
+          };
+        }
+        
+        // Session is valid, proceed with updating context
+        console.log('Session verified successfully');
+      } catch (sessionVerifyError) {
+        console.error('Error verifying session:', sessionVerifyError);
+        setIsLoading(false);
+        return { 
+          error: { 
+            message: 'An error occurred while verifying your session. Please try again.', 
+            code: 'session_verification_error' 
+          } 
+        };
+      }
+      
+      // Log the login activity
       try {
         const { userAgent } = getClientInfo();
-        console.log('Logging login activity for user:', result.user.id);
+        console.log('Logging login activity for user:', signInResult.user.id);
         await logSessionActivity({
-          userId: result.user.id,
+          userId: signInResult.user.id,
           activityType: SESSION_ACTIVITY_TYPES.LOGIN,
-          sessionId: result.session?.access_token || 'unknown',
+          sessionId: signInResult.session?.access_token || 'unknown',
           userAgent,
           metadata: {
             method: 'email',
@@ -160,19 +209,29 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         });
         console.log('Login activity logged successfully');
       } catch (logError) {
+        // Non-fatal error, just log it
         console.error('Failed to log login activity:', logError);
       }
 
       // Update user and session in context
-      setUser(result.user);
-      setSession(result.session);
+      setUser(signInResult.user);
+      setSession(signInResult.session);
       
-      // The profile and admin status will be loaded by the hooks after redirect
-      window.location.href = '/dashboard';
+      // Let the component handle redirection
+      // This prevents race conditions with session establishment
+    } catch (unexpectedError) {
+      console.error('Unexpected error during sign-in process:', unexpectedError);
+      setIsLoading(false);
+      return { 
+        error: { 
+          message: 'An unexpected error occurred during sign-in. Please try again.', 
+          code: 'unexpected_signin_error' 
+        } 
+      };
     }
 
     setIsLoading(false);
-    return { error: result.error };
+    return { error: null };
   };
 
   // Sign up with email and password

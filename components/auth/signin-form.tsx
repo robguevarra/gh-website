@@ -38,14 +38,42 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
 
     try {
       setIsLoading(true);
+      
+      // First, check if we already have an active session to avoid conflicts
+      if (signIn.session) {
+        try {
+          console.log('Existing session detected, signing out first...');
+          await signIn.logout();
+          console.log('Previous session cleared successfully');
+        } catch (logoutError) {
+          console.warn('Error clearing previous session:', logoutError);
+          // Continue with sign-in attempt anyway
+        }
+      }
+      
+      // Attempt to sign in with enhanced error handling
       const { error: signInError } = await signIn.signIn(email, password);
       
       if (signInError) {
-        setError(signInError.message);
+        console.error('Sign-in error:', signInError);
+        // Display a user-friendly error message based on the error code
+        let errorMessage = signInError.message || 'Authentication failed. Please try again.';
+        
+        // Map specific error codes to more user-friendly messages
+        if (signInError.code === 'session_establishment_failed') {
+          errorMessage = 'Unable to establish a secure session. Please try again.';
+        } else if (signInError.code === 'session_verification_failed') {
+          errorMessage = 'Your login was successful, but we couldn\'t verify your session. Please try again.';
+        } else if (signInError.code === 'invalid_credentials') {
+          errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+        }
+        
+        setError(errorMessage);
         setIsLoading(false);
         return;
       }
       
+      // The signIn function already verified the session, so we can proceed
       // Show success state before redirect
       setIsSuccess(true);
       
@@ -60,7 +88,20 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
 
           if (profileError) {
             console.error('Error fetching user profile:', profileError);
+            // Log the specific error for debugging
+            console.log('Profile fetch error details:', {
+              code: profileError.code,
+              message: profileError.message,
+              details: profileError.details,
+              hint: profileError.hint
+            });
             // Fallback to default redirectUrl if profile fetch fails
+            setTimeout(() => router.push(redirectUrl), 1200);
+            return;
+          }
+
+          if (!profile) {
+            console.error('No profile found for user:', signIn.user.id);
             setTimeout(() => router.push(redirectUrl), 1200);
             return;
           }
@@ -70,6 +111,8 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
           const isAffiliate = profile.is_affiliate;
           const isAdmin = profile.is_admin;
           const affiliateStatus = profile.affiliate_general_status;
+
+          console.log('User roles:', { isStudent, isAffiliate, isAdmin, affiliateStatus });
 
           // Role-based redirection priority: Admin > Affiliate > Student
           if (isAdmin) {
@@ -95,20 +138,40 @@ export function SignInForm({ redirectUrl = '/dashboard' }: SignInFormProps) {
           }
           // Else, targetPath remains the default redirectUrl
 
+          console.log('Redirecting user to:', targetPath);
           setTimeout(() => router.push(targetPath), 1200);
 
         } catch (profileCatchError) {
           console.error('Unexpected error fetching profile:', profileCatchError);
+          // Log detailed error information
+          if (profileCatchError instanceof Error) {
+            console.log('Error details:', {
+              name: profileCatchError.name,
+              message: profileCatchError.message,
+              stack: profileCatchError.stack
+            });
+          }
           setTimeout(() => router.push(redirectUrl), 1200); // Fallback
         }
       } else {
         // Fallback if user or supabase client is not available from context
-        console.warn('User ID or Supabase client not available for role-based redirect.');
+        console.warn('User ID or Supabase client not available for role-based redirect.', {
+          userId: signIn.user?.id || 'missing',
+          hasSupabase: !!signIn.supabase
+        });
         setTimeout(() => router.push(redirectUrl), 1200);
       }
     } catch (err) {
+      console.error('Unexpected error during sign-in process:', err);
+      // Log detailed error information
+      if (err instanceof Error) {
+        console.log('Error details:', {
+          name: err.name,
+          message: err.message,
+          stack: err.stack
+        });
+      }
       setError('An unexpected error occurred. Please try again.');
-      console.error(err);
       setIsLoading(false);
     }
   }
