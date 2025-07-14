@@ -30,6 +30,7 @@ const playfair = Playfair_Display({
 })
 
 export const metadata = {
+  metadataBase: new URL('https://gracefulhomeschooling.com'),
   title: "Graceful Homeschooling",
   description:
     "Empowering homeschooling parents with tools, resources, and insights to enhance their educational journey.",
