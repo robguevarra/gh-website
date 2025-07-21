@@ -213,9 +213,7 @@ export class PostmarkClient {
  * Create a singleton instance of PostmarkClient using environment variables
  */
 export const createPostmarkClient = () => {
-  // Using the hardcoded token value from .env for direct access
-  // This is the token from your .env file: 83ed42e9-a379-47d1-8996-047bb6a0a6db
-  const serverToken = process.env.POSTMARK_SERVER_TOKEN || '83ed42e9-a379-47d1-8996-047bb6a0a6db';
+  const serverToken = process.env.POSTMARK_SERVER_TOKEN;
   
   if (!serverToken) {
     throw new Error('POSTMARK_SERVER_TOKEN is not defined. Please check your environment setup.');
