@@ -571,10 +571,29 @@ export const getCampaignRecipients = async (campaignId: string, {
 export const populateCampaignRecipientsFromRules = async (campaignId: string, adminSupabaseClient: SupabaseClient) => {
   console.log(`[populateCampaignRecipientsFromRules] Starting for campaignId: ${campaignId}`);
 
+  // First, get the campaign's segment rules
+  const { data: campaign, error: campaignError } = await adminSupabaseClient
+    .from('email_campaigns')
+    .select('segment_rules')
+    .eq('id', campaignId)
+    .single();
+
+  if (campaignError) {
+    console.error('[populateCampaignRecipientsFromRules] Error fetching campaign:', campaignError);
+    throw new Error(`Failed to fetch campaign segment rules: ${campaignError.message}`);
+  }
+
+  if (!campaign?.segment_rules) {
+    console.log('[populateCampaignRecipientsFromRules] No segment rules found for campaign:', campaignId);
+    return { count: 0 };
+  }
+
+  console.log(`[populateCampaignRecipientsFromRules] Found segment rules for campaign:`, campaign.segment_rules);
+
   // 1. Invoke the 'resolve-audience-from-rules' Edge Function to get the list of userIds (profileIds)
   const { data: resolvedAudienceResponse, error: functionInvokeError } = await adminSupabaseClient.functions.invoke(
     'resolve-audience-from-rules',
-    { body: { campaign_id: campaignId } }
+    { body: { campaignId: campaignId, segmentRules: campaign.segment_rules } }
   );
 
   if (functionInvokeError) {

@@ -222,4 +222,6 @@ export const createPostmarkClient = () => {
   return new PostmarkClient(serverToken);
 };
 
-export default createPostmarkClient();
+// Export the factory function instead of a singleton instance
+// This ensures fresh token reading on each use
+export default createPostmarkClient;

@@ -18,14 +18,19 @@
  * npx tsx lib/services/email/test-emails.ts welcome robneil@gmail.com
  */
 
-// We're hardcoding the token here instead of using .env to ensure it works in standalone execution
-const POSTMARK_TOKEN = '83ed42e9-a379-47d1-8996-047bb6a0a6db';
+// Use environment variable for token
+const POSTMARK_TOKEN = process.env.POSTMARK_SERVER_TOKEN;
 
 import { ServerClient } from 'postmark';
 import fs from 'fs';
 import path from 'path';
 
-// Create a direct Postmark client without relying on environment variables
+if (!POSTMARK_TOKEN) {
+  console.error('POSTMARK_SERVER_TOKEN environment variable is required');
+  process.exit(1);
+}
+
+// Create a Postmark client using environment variable
 const postmarkClient = new ServerClient(POSTMARK_TOKEN);
 
 // Read HTML template files
