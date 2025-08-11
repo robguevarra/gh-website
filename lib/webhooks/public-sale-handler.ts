@@ -171,8 +171,8 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
             };
             break;
           case 'teacher_gift_set':
-            // Reuse the same template structure; variables are generic
-            templateName = 'Pillow Talk License Delivery';
+            // Use dedicated Teacher Gift Set template
+            templateName = 'Teacher Gift Set Delivery';
             emailVariables = {
               first_name: firstName,
               download_link: process.env.TEACHER_GIFT_SET_DRIVE_LINK || 'https://drive.google.com/drive/folders/1YmU-6znwqG0fL6mkOZ2NCpjxx-hfRfEf',
