@@ -45,18 +45,33 @@ export const extractAffiliateTrackingCookies = (request: Request): { affiliateSl
  */
 export const extractAffiliateTrackingFromMetadata = (metadata: any): { affiliateSlug: string | null; visitorId: string | null } => {
   try {
-    // Extract affiliate tracking from transaction metadata
-    const affiliateTracking = metadata?.affiliateTracking;
-    if (!affiliateTracking) {
-      return { affiliateSlug: null, visitorId: null };
+    // Prefer nested structure if present
+    const nested = metadata?.affiliateTracking;
+    let affiliateSlug: string | null = (nested?.affiliateSlug as string) ?? null;
+    let visitorId: string | null = (nested?.visitorId as string) ?? null;
+
+    // Fallbacks to support flat metadata written by older/newer flows
+    if (!affiliateSlug && typeof metadata?.affiliate_slug === 'string') {
+      affiliateSlug = metadata.affiliate_slug as string;
     }
-    
-    const affiliateSlug = affiliateTracking.affiliateSlug || null;
-    const visitorId = affiliateTracking.visitorId || null;
-    
-    console.log(`[AffiliateTracking] Extracted from metadata: affiliate=${affiliateSlug}, visitor=${visitorId}`);
-    
-    return { affiliateSlug, visitorId };
+    if (!visitorId && typeof metadata?.visitor_id === 'string') {
+      visitorId = metadata.visitor_id as string;
+    }
+
+    // Additional fallbacks for camelCase keys if ever used
+    if (!affiliateSlug && typeof metadata?.affiliateSlug === 'string') {
+      affiliateSlug = metadata.affiliateSlug as string;
+    }
+    if (!visitorId && typeof metadata?.visitorId === 'string') {
+      visitorId = metadata.visitorId as string;
+    }
+
+    if (affiliateSlug || visitorId) {
+      console.log(`[AffiliateTracking] Extracted from metadata: affiliate=${affiliateSlug}, visitor=${visitorId}`)
+      return { affiliateSlug, visitorId };
+    }
+
+    return { affiliateSlug: null, visitorId: null };
   } catch (error) {
     console.error('Error extracting affiliate tracking from metadata:', error);
     return { affiliateSlug: null, visitorId: null };
