@@ -52,7 +52,7 @@ const productDetails = {
     "Print guide to ensure perfect results",
   ],
   // Limited‑time message timer – set to Oct 20, 2025 00:00 (Asia/Manila, UTC+8)
-  saleEndDate: new Date("2025-10-20T00:00:00+08:00"),
+  saleEndDate: new Date("2025-08-20T00:00:00+08:00"),
 };
 
 // Countdown Timer Component
