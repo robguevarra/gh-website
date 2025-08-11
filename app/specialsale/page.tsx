@@ -51,8 +51,8 @@ const productDetails = {
     "Canva editable link to customize style or school theme",
     "Print guide to ensure perfect results",
   ],
-  // Limited‑time message timer – optional; set to a week from now
-  saleEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  // Limited‑time message timer – set to Oct 20, 2025 00:00 (Asia/Manila, UTC+8)
+  saleEndDate: new Date("2025-10-20T00:00:00+08:00"),
 };
 
 // Countdown Timer Component
