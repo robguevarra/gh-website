@@ -147,7 +147,8 @@ export async function POST(request: NextRequest) {
     };
     
     // Send the test email with directly fetched template data
-    const result = await postmarkClient.sendEmail({
+    const pmClient = postmarkClient();
+    const result = await pmClient.sendEmail({
       to: { email: recipientEmail },
       subject: `[TEST] ${template.name || templateId} Email Template`,
       htmlBody: html,

@@ -90,6 +90,9 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
             case 'pillow_talk':
               tagName = 'Pillow Talk Purchase';
               break;
+            case 'teacher_gift_set':
+              tagName = 'Teacher Gift Set Purchase';
+              break;
             default:
               tagName = 'Public Sale Purchase';
           }
@@ -165,6 +168,17 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
               ebook_title: 'Pillow Talk: A Married Couple\'s Intimacy Planner',
               order_number: tx.external_id || tx.id.substring(0, 8),
               access_instructions: 'Your commercial license has been delivered to your Google Drive. You can now use these templates for your own business!'
+            };
+            break;
+          case 'teacher_gift_set':
+            // Reuse the same template structure; variables are generic
+            templateName = 'Pillow Talk License Delivery';
+            emailVariables = {
+              first_name: firstName,
+              download_link: process.env.TEACHER_GIFT_SET_DRIVE_LINK || 'https://drive.google.com/drive/folders/1YmU-6znwqG0fL6mkOZ2NCpjxx-hfRfEf',
+              ebook_title: 'Teacher Gift Set',
+              order_number: tx.external_id || tx.id.substring(0, 8),
+              access_instructions: 'Your ready‑to‑print files, Canva editable link, and print guide are in the Drive folder. Save a copy to your own Drive for editing.'
             };
             break;
           default:

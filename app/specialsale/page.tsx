@@ -20,48 +20,39 @@ import { createPublicSalePaymentIntent } from "@/app/actions/public-sale-actions
 
 // --- Product Details ---
 const productDetails = {
-  id: "pillow-talk-commercial-license-77",
-  name: "Pillow Talk: A Married Couple's Intimacy Planner",
-  tagline: "Commercial License - Limited Time Offer!",
-  description: "A thoughtful guide to help couples nurture their bond, deepen connection, and grow in love. With tools like a 30-day Bible Reading Plan, shared vision board, faith and marriage goals, and creative date night ideas, this planner fosters meaningful communication and intentional living.",
-  originalPrice: 80000, // Original price in cents (₱800.00)
-  salePrice: 35000, // Sale price in cents (₱350.00) - 7.7 sale
+  id: "teacher-gift-set-100",
+  name: "Teacher Gift Set",
+  tagline: "Ready‑to‑Print + Canva Editable",
+  description:
+    "Show your appreciation to teachers with this beautifully curated Teacher Gift Set. Perfect for Teacher’s Day, end‑of‑year gifts, or just because. Practical, heartfelt, and ready to assemble.",
+  originalPrice: 15000, // ₱150.00 shown as crossed out
+  salePrice: 10000, // ₱100.00 current price
   currency: "PHP",
-  imageUrl: "/Pillow talk/2D59D4CD-61C5-4139-B56C-1422805E077C.png",
+  imageUrl: "/Teacher%20Gift%20Set/PXL_20250811_102453024%20copy.png",
   galleryImages: [
-    "/Pillow talk/4BF898CB-6CC4-4025-A901-5D1EE19279FD.png",
-    "/Pillow talk/4F0DE2C2-0144-4FFB-A910-7BF86ADB3E63.png",
-    "/Pillow talk/7D66B9AB-B384-48EF-861F-1291E29FE8C8.png",
-    "/Pillow talk/628B69BF-F759-40F9-ACC6-BC3D36469A8F.png"
+    "/Teacher%20Gift%20Set/PXL_20250811_102453024%20copy.png",
+    "/Teacher%20Gift%20Set/23da00cb-6209-4a2e-9358-9d4d2335a857.png",
+    "/Teacher%20Gift%20Set/23fdad69-6775-48d8-8b32-3087ec74158f.jpeg",
+    "/Teacher%20Gift%20Set/ed80a598-f57c-4484-8d7c-3d585901399d.jpeg",
+    "/Teacher%20Gift%20Set/e889edc9-5254-40eb-ba42-db55aeba94ab.jpeg",
   ],
   author: {
-    name: "Grace",
-    title: "Homeschooling Mom & Creator", 
-    imageUrl: "/Grace Edited.png",
+    name: "Graceful Homeschooling",
+    title: "Printable Craft + Classroom Resources",
+    imageUrl: "/Teacher%20Gift%20Set/23da00cb-6209-4a2e-9358-9d4d2335a857.png",
   },
   features: [
-    "Bible Verse to Claim this Year",
-    "Our Favorite Quotes",
-    "30-Day Bible Reading Plan",
-    "Our Vision Board",
-    "Our Faith Goals",
-    "Our Marriage Goals",
-    "Date Night Ideas & Intentional Plans",
-    "Biblical Manhood & Womanhood",
-    "10 Marriage Prayers",
-    "Conversation Starters (10 Pages)",
-    "Things I Love About You",
-    "The Power of Praying Together",
-    "Conflicts & Communication in Marriage",
-    "Intimacy Guidelines",
-    "Finance + Finance Goals",
-    "The Power of Words",
-    "1 Corinthians 13 (10 Days Devotional)",
-    "30-Day Love Dare Challenge",
-    "Love Bank & Reconnect (10-Day Devotional)",
-    "Recommitting Vows"
+    "Backing cards for pens, notepads, and magnetic bookmarks",
+    "Pen sleeves for an elegant finish",
+    "Notepads for quick notes and reminders",
+    "Magnetic bookmarks – stylish and functional",
+    "Notebooks for lesson plans or journaling",
+    "Ready‑to‑print files for quick production",
+    "Canva editable link to customize style or school theme",
+    "Print guide to ensure perfect results",
   ],
-  saleEndDate: new Date('2025-07-15T23:59:59+08:00') // July 15, 2025 11:59 PM Philippine Time (UTC+8)
+  // Limited‑time message timer – optional; set to a week from now
+  saleEndDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
 };
 
 // Countdown Timer Component
@@ -244,17 +235,16 @@ function PillowTalkSaleContent() {
             firstName: formData.firstName,
             lastName: formData.lastName,
             phone: formData.phone,
-            productType: 'Pillow Talk Commercial License',
+            productType: 'Teacher Gift Set',
             amount: productDetails.salePrice,
             currency: productDetails.currency,
             sourcePage: '/specialsale',
             utmSource: new URLSearchParams(window.location.search).get('utm_source') || 'organic',
-            utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || '77sale',
-            utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || 'pillow-talk-77-sale',
+            utmMedium: new URLSearchParams(window.location.search).get('utm_medium') || 'site',
+            utmCampaign: new URLSearchParams(window.location.search).get('utm_campaign') || 'teacher-gift-set',
             metadata: {
-              product_type: "commercial_license",
+              product_type: "teacher_gift_set",
               product_id: productDetails.id,
-              sale_event: "77_anniversary_sale",
               original_price: productDetails.originalPrice,
               sale_price: productDetails.salePrice
             }
@@ -282,18 +272,18 @@ function PillowTalkSaleContent() {
         firstName: formData.firstName,
         lastName: formData.lastName,
         phone: formData.phone,
-        description: `${productDetails.name} - 7.7 Anniversary Sale`,
-        productCode: "pillow_talk",
+        description: `${productDetails.name} – Printable Set`,
+        productCode: "teacher_gift_set",
         productName: productDetails.name,
         originalPrice: productDetails.originalPrice,
         metadata: {
           source: "website",
-          product_type: "commercial_license",
+          product_type: "teacher_gift_set",
           product_id: productDetails.id,
-          sale_event: "77_anniversary_sale",
+          sale_event: "special_offer",
           utm_source: new URLSearchParams(window.location.search).get('utm_source') || 'organic',
-          utm_medium: new URLSearchParams(window.location.search).get('utm_medium') || '77sale',
-          utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign') || 'pillow-talk-77-sale',
+          utm_medium: new URLSearchParams(window.location.search).get('utm_medium') || 'site',
+          utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign') || 'teacher-gift-set',
           ...(leadId && { lead_id: leadId }),
         },
       });
@@ -338,7 +328,7 @@ function PillowTalkSaleContent() {
     <>
       <Head>
         <title>Special Sale - {productDetails.name} - Graceful Homeschooling</title>
-        <meta name="description" content={`Special Sale! Get the ${productDetails.name} commercial license for only ₱350 (${discountPercentage}% off). Limited time offer!`} />
+        <meta name="description" content={`Get the ${productDetails.name} for only ₱${(productDetails.salePrice/100).toFixed(0)}. Ready‑to‑print files, Canva editable link, and print guide included.`} />
       </Head>
 
       <div className="flex min-h-screen flex-col bg-[#f9f6f2]">
@@ -351,11 +341,11 @@ function PillowTalkSaleContent() {
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                   <Gift className="h-6 w-6" />
-                  <span className="font-bold text-lg">SPECIAL SALE - {discountPercentage}% OFF!</span>
+                  <span className="font-bold text-lg">TEACHER GIFT SET – ₱{(productDetails.salePrice/100).toFixed(0)} ONLY</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Timer className="h-5 w-5" />
-                  <span className="text-sm font-medium">Sale Ends In:</span>
+                  <span className="text-sm font-medium">Offer Ends In:</span>
                   <CountdownTimer endDate={productDetails.saleEndDate} />
                 </div>
               </div>
@@ -375,10 +365,10 @@ function PillowTalkSaleContent() {
                 >
                   <motion.div variants={fadeIn} className="space-y-2">
                     <Badge className="bg-brand-purple text-white hover:bg-[#8d6e63]">
-                      LIMITED TIME - SPECIAL OFFER
+                      READY‑TO‑PRINT + CANVA LINK
                     </Badge>
                     <Badge className="bg-green-500 text-white hover:bg-green-600 ml-2">
-                      COMMERCIAL LICENSE INCLUDED
+                      PRINT GUIDE INCLUDED
                     </Badge>
                   </motion.div>
 
@@ -394,7 +384,7 @@ function PillowTalkSaleContent() {
                         >
                           <Image
                             src={productDetails.galleryImages[currentImageIndex]}
-                            alt={`${productDetails.name} - Page ${currentImageIndex + 1}`}
+                            alt={`${productDetails.name} - Photo ${currentImageIndex + 1}`}
                             width={600}
                             height={600}
                             className="aspect-[5/5] object-cover object-center w-full"
@@ -446,9 +436,9 @@ function PillowTalkSaleContent() {
                     <div className="flex items-start gap-3">
                       <Star className="h-5 w-5 text-yellow-500 mt-0.5" />
                       <div>
-                        <p className="font-semibold text-[#5d4037]">Special Anniversary Offer!</p>
+                        <p className="font-semibold text-[#5d4037]">Thoughtful and Practical</p>
                         <p className="text-sm text-[#6d4c41]">
-                          Usually exclusive to Papers to Profits students, now available to everyone for a limited time during our anniversary month!
+                          Perfect for Teacher’s Day, end‑of‑year gifts, or small business bundles. Print, assemble, and gift with love.
                         </p>
                       </div>
                     </div>
@@ -463,7 +453,7 @@ function PillowTalkSaleContent() {
                       }}
                     >
                       <span className="flex items-center">
-                        Claim Your License Now - ₱350 Only!
+                        Get the Teacher Gift Set – ₱{(productDetails.salePrice / 100).toFixed(2)}
                         <ArrowRight className="ml-2 h-5 w-5" />
                       </span>
                     </Button>
@@ -481,15 +471,15 @@ function PillowTalkSaleContent() {
                  > 
                    <Card className="shadow-xl border border-gray-100">
                      <CardHeader className="bg-gradient-to-r from-brand-purple to-brand-pink p-6 text-white rounded-t-lg">
-                       <CardTitle className="text-2xl font-serif">🎉 Special Sale!</CardTitle>
-                       <p className="text-white/90">Complete your order now - Limited time offer!</p>
+                       <CardTitle className="text-2xl font-serif">🎁 Teacher Gift Set</CardTitle>
+                       <p className="text-white/90">Complete your order now – Instant access after payment</p>
                        <div className="bg-white/20 rounded-lg p-3 mt-4">
                          <div className="flex justify-between items-center text-sm">
                            <span>Regular Price:</span>
                            <span className="line-through">₱{(productDetails.originalPrice / 100).toFixed(2)}</span>
                          </div>
                          <div className="flex justify-between items-center text-lg font-bold">
-                           <span>Anniversary Price:</span>
+                           <span>Today’s Price:</span>
                            <span>₱{(productDetails.salePrice / 100).toFixed(2)}</span>
                          </div>
                          <div className="text-center text-sm mt-2 font-semibold">
@@ -527,8 +517,8 @@ function PillowTalkSaleContent() {
                          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start text-sm text-[#6d4c41] mb-6">
                            <Shield className="h-5 w-5 text-green-600 mr-2 flex-shrink-0 mt-0.5" />
                            <div>
-                             <p className="font-semibold text-green-800">Commercial License Included!</p>
-                             <p>You'll receive full commercial rights to use and resell this planner.</p>
+                             <p className="font-semibold text-green-800">Ready‑to‑Print + Canva Link Included</p>
+                             <p>You’ll receive ready‑to‑print files, a Canva editable link, and a print guide. The download link will be emailed after payment.</p>
                            </div>
                          </div>
    
@@ -548,13 +538,13 @@ function PillowTalkSaleContent() {
                               </>
                            ) : (
                              <>
-                               🎉 Get Commercial License - ₱{(productDetails.salePrice / 100).toFixed(2)}
+                               🛒 Buy Now – ₱{(productDetails.salePrice / 100).toFixed(2)}
                                <ArrowRight className="ml-2 h-5 w-5" />
                              </>
                            )}
                          </Button>
                          <p className="text-xs text-center text-gray-500 mt-4">
-                             Secure payment powered by Xendit. Your data is protected and encrypted.
+                             Secure payment powered by Xendit. Your download link will be sent via email.
                          </p>
                        </form>
                      </CardContent>
@@ -574,9 +564,9 @@ function PillowTalkSaleContent() {
                    transition={{ duration: 0.6 }}
                    className="flex flex-col items-center space-y-4 text-center mb-12"
                 >
-                   <h2 className="text-3xl font-serif tracking-tight text-[#5d4037]">What's Inside Your Planner</h2>
+                   <h2 className="text-3xl font-serif tracking-tight text-[#5d4037]">What’s Inside</h2>
                    <p className="max-w-[700px] text-[#6d4c41] md:text-lg font-light">
-                      A comprehensive guide with everything you need to strengthen your marriage and deepen your connection.
+                      Everything you need to prepare thoughtful teacher gifts without starting from scratch.
                    </p>
                 </motion.div>
                 <motion.div
@@ -596,7 +586,7 @@ function PillowTalkSaleContent() {
              </div>
           </section>
 
-          {/* Author Section */}
+          {/* Preview / About Section */}
           <section className="w-full py-16 md:py-24 bg-brand-purple/5">
              <div className="container px-4 md:px-6">
                <div className="grid gap-8 md:grid-cols-2 items-center max-w-5xl mx-auto">
@@ -613,17 +603,17 @@ function PillowTalkSaleContent() {
                       initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.1 }}
                       className="space-y-4"
                     >
-                      <h2 className="text-3xl font-serif text-[#5d4037]">Created by {productDetails.author.name}</h2>
+                      <h2 className="text-3xl font-serif text-[#5d4037]">Designed for Busy Parents and Crafters</h2>
                       <p className="text-lg text-brand-purple font-light">{productDetails.author.title}</p>
                       <p className="text-[#6d4c41]">
-                          As a homeschooling mom who understands the importance of strong family foundations, I created this planner to help couples strengthen their bond while balancing family life. This comprehensive guide provides practical tools for meaningful connection and intentional relationship building.
+                          Print, cut, assemble, and gift. Use the Canva link to match your school colors or personal style, then follow the included print guide for best results.
                       </p>
                       <p className="text-[#6d4c41] italic">
-                          My hope is that this planner helps couples create deeper connections and build stronger marriages that serve as the foundation for thriving families.
+                          After checkout, you’ll receive a secure Google Drive link via email to download all files.
                       </p>
                       <div className="flex items-center gap-2 text-[#6d4c41]">
                          <Heart className="h-4 w-4 text-brand-pink"/>
-                         <span>Building stronger marriages, one couple at a time</span>
+                         <span>Make teachers feel valued and loved ♥</span>
                       </div>
                   </motion.div>
                </div>
@@ -641,13 +631,12 @@ function PillowTalkSaleContent() {
                   transition={{ duration: 0.6 }}
                   className="space-y-6"
                 >
-                  <h2 className="text-3xl md:text-4xl font-serif">Don't Miss This Special Offer!</h2>
+                  <h2 className="text-3xl md:text-4xl font-serif">Ready to Create Meaningful Gifts?</h2>
                   <p className="text-xl text-white/90">
-                    This is a rare opportunity to get our commercial license at this special price. 
-                    Once this sale ends, this exclusive offer goes back to Papers to Profits students only.
+                    Get instant access to print‑ready files, a Canva editable link, and a step‑by‑step print guide.
                   </p>
                   <div className="bg-white/20 rounded-lg p-6 max-w-md mx-auto">
-                    <div className="text-sm font-semibold mb-2">⏰ Sale Ends In:</div>
+                    <div className="text-sm font-semibold mb-2">⏰ Offer Ends In:</div>
                     <CountdownTimer endDate={productDetails.saleEndDate} />
                   </div>
                   <Button
@@ -658,7 +647,7 @@ function PillowTalkSaleContent() {
                     }}
                   >
                     <span className="flex items-center">
-                      Secure Your License Now!
+                      Get the Teacher Gift Set Now
                       <ArrowRight className="ml-2 h-5 w-5" />
                     </span>
                   </Button>
