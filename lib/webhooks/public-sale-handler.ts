@@ -126,11 +126,42 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
         // Don't throw - tagging failure shouldn't break payment processing
       }
       
-      // Send product delivery email (same pattern as Canva)
+      // Send product delivery email (generalized for SHOPIFY_ECOM)
       try {
         const metadata = tx.metadata as any || {};
         const firstName = metadata.firstName || 'Friend';
-        const productCode = metadata.product_code || 'unknown';
+        const productCode = metadata.product_code || metadata.product_handle || 'unknown';
+
+        // Resolve Google Drive link from DB when possible (prefer DB over env)
+        let resolvedDriveLink: string | null = null;
+        try {
+          // Try resolve by handle first
+          if (productCode && productCode !== 'unknown') {
+            const { data: byHandle, error: byHandleErr } = await supabase
+              .from('shopify_products')
+              .select('google_drive_file_id, title')
+              .eq('handle', productCode)
+              .limit(1)
+              .maybeSingle();
+            if (!byHandleErr && byHandle?.google_drive_file_id) {
+              resolvedDriveLink = `https://drive.google.com/drive/folders/${byHandle.google_drive_file_id}`;
+            }
+          }
+          // Fallback: resolve by product_id from metadata
+          if (!resolvedDriveLink && metadata.product_id) {
+            const { data: byId, error: byIdErr } = await supabase
+              .from('shopify_products')
+              .select('google_drive_file_id, title')
+              .eq('id', metadata.product_id)
+              .limit(1)
+              .maybeSingle();
+            if (!byIdErr && byId?.google_drive_file_id) {
+              resolvedDriveLink = `https://drive.google.com/drive/folders/${byId.google_drive_file_id}`;
+            }
+          }
+        } catch (resolveErr) {
+          console.error('[Webhook][PublicSale] Failed resolving product drive link:', resolveErr);
+        }
         
         // Update lead status if leadId exists in metadata (same as Canva)
         const leadId = metadata.lead_id;
@@ -164,7 +195,7 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
             templateName = 'Pillow Talk License Delivery';
             emailVariables = {
               first_name: firstName,
-              download_link: process.env.PILLOW_TALK_DRIVE_LINK || 'https://drive.google.com/file/d/example',
+              download_link: resolvedDriveLink || process.env.PILLOW_TALK_DRIVE_LINK || 'https://drive.google.com/file/d/example',
               ebook_title: 'Pillow Talk: A Married Couple\'s Intimacy Planner',
               order_number: tx.external_id || tx.id.substring(0, 8),
               access_instructions: 'Your commercial license has been delivered to your Google Drive. You can now use these templates for your own business!'
@@ -175,7 +206,7 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
             templateName = 'Teacher Gift Set Delivery';
             emailVariables = {
               first_name: firstName,
-              download_link: process.env.TEACHER_GIFT_SET_DRIVE_LINK || 'https://drive.google.com/drive/folders/1YmU-6znwqG0fL6mkOZ2NCpjxx-hfRfEf',
+              download_link: resolvedDriveLink || process.env.TEACHER_GIFT_SET_DRIVE_LINK || 'https://drive.google.com/drive/folders/1YmU-6znwqG0fL6mkOZ2NCpjxx-hfRfEf',
               ebook_title: 'Teacher Gift Set',
               order_number: tx.external_id || tx.id.substring(0, 8),
               access_instructions: 'Your ready‑to‑print files, Canva editable link, and print guide are in the Drive folder. Save a copy to your own Drive for editing.'
@@ -183,10 +214,10 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
             break;
           default:
             // Fallback for unknown products
-            templateName = 'Pillow Talk License Delivery'; // Use same template as fallback
+            templateName = 'Pillow Talk License Delivery'; // Reuse existing generic template
             emailVariables = {
               first_name: firstName,
-              download_link: process.env.PUBLIC_SALE_DEFAULT_LINK || 'https://drive.google.com/file/d/example',
+              download_link: resolvedDriveLink || process.env.PUBLIC_SALE_DEFAULT_LINK || 'https://drive.google.com/file/d/example',
               ebook_title: metadata.product_name || 'Digital Product',
               order_number: tx.external_id || tx.id.substring(0, 8),
               access_instructions: 'Your digital product has been delivered to your email.'
@@ -206,7 +237,7 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
         try {
           await supabase
             .from('public_sale_orders')
-            .update({ delivered_at: new Date().toISOString() })
+            .update({ delivered_at: new Date().toISOString(), drive_link: emailVariables.download_link || null })
             .eq('transaction_id', tx.id);
           console.log("[Webhook][PublicSale] Delivery timestamp updated");
         } catch (deliveryUpdateError) {

@@ -1094,6 +1094,7 @@ export const createActions = (
           )
         `)
         .or('status.eq.ACTIVE,status.eq.active')
+        .eq('vendor', 'Graceful Publications')
         .not('shopify_product_variants', 'is', null)
         .limit(1, { foreignTable: 'shopify_product_variants' }); // Fetch only one variant (assuming the primary one)
 
@@ -1228,7 +1229,8 @@ export const createActions = (
       // Query for collection handles
       const { data, error } = await supabase
         .from('shopify_products')
-        .select('collection_handles'); // Select the array column
+        .select('collection_handles, vendor') // Select vendor to filter
+        .eq('vendor', 'Graceful Publications');
 
       if (error) {
         console.error('[Store Action] Error fetching collection handles:', error);

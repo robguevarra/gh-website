@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/ui/logo'
 import { useMobile } from '@/hooks/use-mobile'
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import PublicCartIndicator from '@/components/store/PublicCartIndicator'
 
 interface PublicHeaderProps {
   onHoverChange?: (isHovering: boolean) => void
@@ -84,6 +85,7 @@ export function PublicHeader({ onHoverChange }: PublicHeaderProps) {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="hidden md:flex items-center gap-4"
         >
+          <PublicCartIndicator />
           <Link
             href="/auth/signin"
             className="text-sm font-medium text-[#5d4037] transition-colors hover:text-brand-purple relative group"
