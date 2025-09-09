@@ -25,8 +25,8 @@ const productDetails = {
   tagline: "Balance + Faith + Organization",
   description:
     "A comprehensive planner that blends practical organization with spiritual reflection. More than just a place to write tasks, it's a companion that encourages intentional living and daily faith.",
-  originalPrice: 60000, // ₱600.00 shown as crossed out
-  salePrice: 40000, // ₱400.00 current price
+  originalPrice: 60000, // ₱600.00 reference price (not displayed)
+  salePrice: 40000, // ₱400.00 starting price (Early Bird tier)
   currency: "PHP",
   imageUrl: "/Planner/main.jpeg",
   galleryImages: [
@@ -466,8 +466,8 @@ function PillowTalkSaleContent() {
             metadata: {
               product_type: "spiritual_life_planner",
               product_id: productDetails.id,
-              original_price: productDetails.originalPrice,
-              sale_price: productDetails.salePrice
+              current_tier_price: currentPrice,
+              starting_price: productDetails.salePrice
             }
           })
         });
@@ -496,12 +496,14 @@ function PillowTalkSaleContent() {
         description: `${productDetails.name} – Digital Planner`,
         productCode: "spiritual_life_planner",
         productName: productDetails.name,
-        originalPrice: productDetails.originalPrice,
+        originalPrice: currentPrice, // Use current tier price as the "original" for this transaction
         metadata: {
           source: "website",
           product_type: "spiritual_life_planner",
           product_id: productDetails.id,
-          sale_event: "special_offer",
+          sale_event: "tiered_pricing",
+          current_tier_price: currentPrice,
+          starting_price: productDetails.salePrice,
           utm_source: new URLSearchParams(window.location.search).get('utm_source') || 'organic',
           utm_medium: new URLSearchParams(window.location.search).get('utm_medium') || 'site',
           utm_campaign: new URLSearchParams(window.location.search).get('utm_campaign') || 'spiritual-life-planner',
@@ -549,7 +551,7 @@ function PillowTalkSaleContent() {
     <>
       <Head>
         <title>Special Sale - {productDetails.name} - Graceful Homeschooling</title>
-        <meta name="description" content={`Get the ${productDetails.name} for only ₱${(productDetails.salePrice/100).toFixed(0)}. A comprehensive planner that blends practical organization with spiritual reflection.`} />
+        <meta name="description" content={`Get the ${productDetails.name} starting at ₱${(productDetails.salePrice/100).toFixed(0)}. A comprehensive planner that blends practical organization with spiritual reflection. Price increases with demand!`} />
         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
         <style>{`
           .touch-target {
@@ -677,12 +679,14 @@ function PillowTalkSaleContent() {
                      <span className="text-3xl md:text-4xl font-bold text-brand-purple">
                        ₱{(currentPrice / 100).toFixed(2)}
                      </span>
-                     <span className="text-xl md:text-2xl text-gray-500 line-through">
-                       ₱{(productDetails.originalPrice / 100).toFixed(2)}
-                     </span>
-                     <Badge className="bg-brand-purple text-white hover:bg-[#8d6e63] text-xs md:text-sm">
-                       SAVE {Math.round(((productDetails.originalPrice - currentPrice) / productDetails.originalPrice) * 100)}%
-                     </Badge>
+                     <div className="flex flex-col sm:flex-row items-center gap-2">
+                       <Badge className="bg-gradient-to-r from-brand-pink to-accent-blue text-white text-xs md:text-sm">
+                         PRICE INCREASES WITH DEMAND
+                       </Badge>
+                       <span className="text-sm text-[#6d4c41] font-medium">
+                         Current Tier Price
+                       </span>
+                     </div>
                   </motion.div>
 
                   <motion.div variants={fadeIn} className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -729,16 +733,15 @@ function PillowTalkSaleContent() {
                        <CardTitle className="text-2xl font-serif">📖 Planner Bundle Sale</CardTitle>
                        <p className="text-white/90">Complete your order now – Instant access after payment</p>
                        <div className="bg-white/20 rounded-lg p-3 mt-4">
-                         <div className="flex justify-between items-center text-sm">
-                           <span>Regular Price:</span>
-                           <span className="line-through">₱{(productDetails.originalPrice / 100).toFixed(2)}</span>
-                         </div>
                          <div className="flex justify-between items-center text-lg font-bold">
-                           <span>Today's Price:</span>
+                           <span>Current Tier Price:</span>
                            <span>₱{(currentPrice / 100).toFixed(2)}</span>
                          </div>
                          <div className="text-center text-sm mt-2 font-semibold">
-                           You Save ₱{((productDetails.originalPrice - currentPrice) / 100).toFixed(2)}!
+                           📈 Price increases as slots fill up!
+                         </div>
+                         <div className="text-center text-xs mt-1 opacity-90">
+                           Early Bird: ₱400 • Regular: ₱750 • Final: ₱1000
                          </div>
                        </div>
                      </CardHeader>
