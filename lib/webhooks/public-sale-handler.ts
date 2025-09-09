@@ -93,6 +93,9 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
             case 'teacher_gift_set':
               tagName = 'Teacher Gift Set Purchase';
               break;
+            case 'spiritual_life_planner':
+              tagName = 'Spiritual Life Planner Purchase';
+              break;
             default:
               tagName = 'Public Sale Purchase';
           }
@@ -179,6 +182,17 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
               ebook_title: 'Teacher Gift Set',
               order_number: tx.external_id || tx.id.substring(0, 8),
               access_instructions: 'Your ready‑to‑print files, Canva editable link, and print guide are in the Drive folder. Save a copy to your own Drive for editing.'
+            };
+            break;
+          case 'spiritual_life_planner':
+            // Use dedicated Spiritual Life Planner template
+            templateName = 'Spiritual Life Planner Delivery';
+            emailVariables = {
+              first_name: firstName,
+              download_link: process.env.SPIRITUAL_LIFE_PLANNER_DRIVE_LINK || 'https://drive.google.com/drive/folders/12Qo58wGuaInUbE1L2ptvHDmSYCEK3tCP',
+              ebook_title: 'Spiritual Life Planner',
+              order_number: tx.external_id || tx.id.substring(0, 8),
+              access_instructions: 'Your complete digital planner with all organizational and spiritual sections is ready! Save a copy to your own Drive and start your journey toward intentional living.'
             };
             break;
           default:
