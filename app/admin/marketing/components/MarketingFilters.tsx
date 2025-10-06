@@ -1,7 +1,6 @@
 import React from 'react';
 import { DateRange } from 'react-day-picker';
 import { DateRangePicker } from '@/components/ui/date-range-picker'; // Corrected import name
-import { Button } from '@/components/ui/button';
 
 interface MarketingFiltersProps {
   filters: { startDate: string | null; endDate: string | null };

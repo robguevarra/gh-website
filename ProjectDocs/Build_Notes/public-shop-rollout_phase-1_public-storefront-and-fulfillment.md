@@ -25,14 +25,14 @@ Create a public-facing shop (no login required) that lists selected Shopify prod
    - [ ] Confirm cron sync persists Shopify tags into `shopify_products.tags` and product status (published/active) fields.
    - [ ] Ensure each public product has a valid `google_drive_file_id` (folder) in `shopify_products`.
    - [ ] Use `updateProductDriveId` flow to backfill any missing Drive IDs.
-   - [ ] Decide on `productType` for lead capture: use `SHOPIFY_ECOM` (preferred) to align with existing tables and flows.
-   - [ ] If needed, extend `/api/leads/capture` validation to accept `SHOPIFY_ECOM` consistently.
+   - [x] Decide on `productType` for lead capture: use `SHOPIFY_ECOM` (preferred) to align with existing tables and flows. (Verified in `/app/api/leads/capture/route.ts`)
+   - [x] If needed, extend `/api/leads/capture` validation to accept `SHOPIFY_ECOM` consistently. (Implemented)
 
 2) Handler Strategy (Webhook Fulfillment)
-   - [ ] Recommendation: Extend `public-sale-handler.ts` to be product-agnostic and handle `SHOPIFY_ECOM` gracefully, instead of creating a separate handler. This avoids fragmentation and reuses proven code paths.
-   - [ ] Internally route by metadata/product type: look up product by `product_code` (handle/sku) → fetch `shopify_products.google_drive_file_id` → send a generic "Digital Product Delivery" email (or product-specific template if configured).
-   - [ ] Keep idempotency and error handling consistent with current webhook.
-   - [ ] Fallback behavior: if Drive ID is missing, send a helpful support email and log a warning for follow-up.
+   - [ ] Recommendation: Extend `public-sale-handler.ts` to be product-agnostic and handle `SHOPIFY_ECOM` gracefully, instead of creating a separate handler. This avoids fragmentation and reuses proven code paths. (PARTIAL: `lib/webhooks/public-sale-handler.ts` exists and is wired via `/app/api/webhooks/xendit/route.ts`, but currently maps Drive links via env vars; DB lookup pending)
+   - [ ] Internally route by metadata/product type: look up product by `product_code` (handle/sku) → fetch `shopify_products.google_drive_file_id` → send a generic "Digital Product Delivery" email (or product-specific template if configured). (NOT IMPLEMENTED)
+   - [ ] Keep idempotency and error handling consistent with current webhook. (UNVERIFIED)
+   - [ ] Fallback behavior: if Drive ID is missing, send a helpful support email and log a warning for follow-up. (NOT IMPLEMENTED)
 
 3) Public Storefront (SSR-first)
    - [ ] `app/shop/page.tsx` (convert from Coming Soon):
@@ -53,31 +53,32 @@ Create a public-facing shop (no login required) that lists selected Shopify prod
         - [ ] Redirect to `invoice_url` on success.
    - [ ] Keep UI consistent with our brand, reuse Button/Card components.
    - [ ] Consider optional FB CAPI `InitiateCheckout` event parity with `p2p-order-client` (non-blocking).
+   - [x] Implement `/payment-failure` page to handle Xendit failure redirects (reads `id`, `error`) with retry CTA. (Completed 2025-08-27)
 
 5) Webhook Fulfillment & Email
-   - [ ] In Xendit webhook, route public store payments to the unified handler.
-   - [ ] Handler: retrieve product via `product_code` and send email using existing delivery system.
-   - [ ] Default to a generic "Public Digital Delivery" template with variables: `first_name`, `product_name`, `download_link` (Drive folder), `order_number`, `support_email`.
-   - [ ] For products with custom templates (e.g., `teacher_gift_set`), keep specific branches.
-   - [ ] Ensure `payment-success` page displays items and Drive access button when applicable.
+   - [x] In Xendit webhook, route public store payments to the unified handler. (Verified in `/app/api/webhooks/xendit/route.ts`)
+   - [ ] Handler: retrieve product via `product_code` and send email using existing delivery system. (NOT IMPLEMENTED)
+   - [ ] Default to a generic "Public Digital Delivery" template with variables: `first_name`, `product_name`, `download_link` (Drive folder), `order_number`, `support_email`. (PARTIAL: currently fixed templates with env-mapped links)
+   - [x] For products with custom templates (e.g., `teacher_gift_set`), keep specific branches. (Implemented in `lib/webhooks/public-sale-handler.ts`)
+   - [ ] Ensure `payment-success` page displays items and Drive access button when applicable. (NOT IMPLEMENTED; route missing)
 
 6) Observability, Performance, and Security
-   - [ ] Add structured logs for: lead capture, invoice creation, webhook receipt, email send result.
+   - [x] Add structured logs for: lead capture, invoice creation, webhook receipt, email send result. (Present across `/app/actions/public-sale-actions.ts`, `/app/api/leads/capture/route.ts`, `/app/api/webhooks/xendit/route.ts`)
    - [ ] Rate-limit `/api/leads/capture` and validate inputs (already exists; verify limits in place).
    - [ ] Cache SSR lists/detail with short revalidation windows (e.g., 60–300s) to balance freshness with performance.
    - [ ] Optimize images via Next/Image; defer non-critical scripts.
    - [ ] Confirm idempotency keys in webhook to avoid duplicate emails.
 
 7) QA & Rollout
-   - [ ] Pilot with 1–2 tagged public products.
-   - [ ] Test flows end-to-end:
-        - [ ] Product visible on `/shop` and detail page.
-        - [ ] Lead captured with UTM params.
-        - [ ] Xendit invoice created and redirect works.
-        - [ ] Webhook transitions to PAID → email delivered with correct Drive link.
-        - [ ] Success page displays purchased items and access buttons.
-   - [ ] Validate SEO (title/meta/OG) and lighthouse performance.
-   - [ ] Monitor logs for 24–48 hours; confirm no duplicate sends or missing links.
+- [ ] Pilot with 1–2 tagged public products.
+- [ ] Test flows end-to-end:
+-        - [ ] Product visible on `/shop` and detail page.
+-        - [ ] Lead captured with UTM params.
+-        - [ ] Xendit invoice created and redirect works.
+-        - [ ] Webhook transitions to PAID → email delivered with correct Drive link.
+-        - [ ] Success page displays purchased items and access buttons.
+- [ ] Validate SEO (title/meta/OG) and lighthouse performance.
+- [ ] Monitor logs for 24–48 hours; confirm no duplicate sends or missing links.
 
 ## Decisions & Rationale
 - **Handler choice:** Extend `public-sale-handler.ts` into a unified delivery strategy rather than introducing a separate handler. This keeps the integration surface small, maximizes reuse of our proven logic, and still supports product-specific branching via metadata (e.g., `product_code`). If later we support additional providers/flows, we can extract internal strategy functions (e.g., `resolveDeliveryTemplate`, `resolveDownloadLink`) without changing the webhook entry point.
@@ -99,6 +100,15 @@ Create a public-facing shop (no login required) that lists selected Shopify prod
 
 ### Progress Log (Append-only)
 - 2025-08-15: Drafted Phase 1 plan. Pending decision confirmation on handler strategy and `SHOPIFY_ECOM` standardization.
+- 2025-08-27: Verification pass
+  - Confirmed `/app/api/webhooks/xendit/route.ts` routes `PUBLIC_SALE` to `lib/webhooks/public-sale-handler.ts`.
+  - Verified `lib/webhooks/public-sale-handler.ts` stores contact + order, updates lead status, tags user (when `user_id` exists), and sends delivery email. Drive link currently sourced from env vars per product code; DB lookup by `product_code` not implemented yet.
+  - Verified `/app/api/leads/capture/route.ts` supports `SHOPIFY_ECOM` and prevents same-day duplicates.
+  - Verified `/app/actions/public-sale-actions.ts` creates Xendit invoice and logs transaction with `transaction_type` → `PUBLIC_SALE`; redirects to `/payment-success` and `/payment-failure` (success implemented; failure route verified present 2025-08-27).
+  - Observed `/app/shop/page.tsx` is a "Coming Soon" client page; SSR product listing not started. No `/app/shop/product/[handle]/page.tsx` route found.
+  - Noted `app/specialsale/page.tsx` posts lead capture with a non-standard productType string; should be `SHOPIFY_ECOM` for consistency.
 
-
-
+ - 2025-08-27: Implementation adjustments
+   - Updated `app/specialsale/page.tsx` to use `productType: 'SHOPIFY_ECOM'` in lead capture for analytics consistency.
+   - Verified `app/payment-failure/page.tsx` exists and correctly reads `id` and `error` from query params; aligns with `failure_redirect_url` in `createPublicSalePaymentIntent`.
+   - Next focus: implement SSR product listing on `/app/shop/page.tsx` and detail route `/app/shop/product/[handle]/page.tsx`; enhance webhook handler to resolve Drive links from DB by `product_code`.

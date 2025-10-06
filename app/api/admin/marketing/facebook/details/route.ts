@@ -2,17 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { validateAdminStatus } from '@/lib/supabase/admin';
-import { Database } from '@/types/supabase';
 
 // Define the schema for query parameters
 const querySchema = z.object({
   startDate: z.string().optional(), // ISO 8601 date string
-  endDate: z.string().optional(), // ISO 8601 date string
-  // Add pagination and sorting parameters if needed later
-  // page: z.string().optional().default('1'),
-  // limit: z.string().optional().default('20'),
-  // sortBy: z.string().optional().default('date'),
-  // sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
+  endDate: z.string().optional(),   // ISO 8601 date string
+  page: z.string().optional(),
+  limit: z.string().optional(),
+  sortBy: z.enum(['date', 'spend', 'impressions', 'clicks']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
 });
 
 // Define the structure for the response items
@@ -54,44 +52,44 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid query parameters', details: validationResult.error.errors }, { status: 400 });
   }
 
-  const { startDate, endDate } = validationResult.data;
-  // const page = parseInt(validationResult.data.page || '1');
-  // const limit = parseInt(validationResult.data.limit || '20');
-  // const offset = (page - 1) * limit;
+  const { startDate, endDate, page, limit, sortBy, sortOrder } = validationResult.data;
 
-  // 3. Fetch detailed Facebook ad spend data
+  // Normalize dates to YYYY-MM-DD to avoid TZ issues with a date column
+  const toYmd = (iso?: string) => {
+    if (!iso) return undefined;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return undefined;
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const ymdStart = toYmd(startDate);
+  const ymdEnd = toYmd(endDate);
+
+  // Pagination & sorting defaults/sanitization
+  const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
+  const limitNum = Math.min(200, Math.max(1, parseInt(limit ?? '50', 10) || 50));
+  const offset = (pageNum - 1) * limitNum;
+  const orderBy = sortBy ?? 'date';
+  const ascending = (sortOrder ?? 'desc') === 'asc';
+
+  // 3. Fetch detailed Facebook ad spend data from consolidated performance view
   try {
-    // We query ad_spend and join upwards to get campaign/adset/ad names
-    // Using the view might be less efficient here as we only need FB data
     let query = supabase
-      .from('ad_spend')
-      .select(`
-        date,
-        spend,
-        impressions,
-        clicks,
-        ad_ads!inner(
-          ad_id:id,
-          ad_name:name,
-          ad_adsets!inner(
-            adset_id:id,
-            adset_name:name,
-            ad_campaigns!inner(
-              campaign_id:id,
-              campaign_name:name
-            )
-          )
-        )
-      `)
-      // .order(validationResult.data.sortBy, { ascending: validationResult.data.sortOrder === 'asc' })
-      // .range(offset, offset + limit - 1);
+      .from('marketing_performance_view')
+      .select('date,campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,spend,impressions,clicks,source_channel')
+      .eq('source_channel', 'facebook')
+      .order(orderBy, { ascending })
+      .range(offset, offset + limitNum - 1);
 
     // Apply date filters
-    if (startDate) {
-      query = query.gte('date', startDate);
+    if (ymdStart) {
+      query = query.gte('date', ymdStart);
     }
-    if (endDate) {
-      query = query.lte('date', endDate);
+    if (ymdEnd) {
+      query = query.lte('date', ymdEnd);
     }
 
     const { data, error } = await query;
@@ -103,13 +101,13 @@ export async function GET(request: NextRequest) {
 
     // 4. Format the response
     const responseData: FacebookAdDetail[] = data?.map((row: any) => ({
-      date: row.date,
-      campaign_id: row.ad_ads?.ad_adsets?.ad_campaigns?.campaign_id ?? null,
-      campaign_name: row.ad_ads?.ad_adsets?.ad_campaigns?.campaign_name ?? null,
-      adset_id: row.ad_ads?.ad_adsets?.adset_id ?? null,
-      adset_name: row.ad_ads?.ad_adsets?.adset_name ?? null,
-      ad_id: row.ad_ads?.ad_id ?? null,
-      ad_name: row.ad_ads?.ad_name ?? null,
+      date: row.date ?? null,
+      campaign_id: row.campaign_id ?? null,
+      campaign_name: row.campaign_name ?? null,
+      adset_id: row.adset_id ?? null,
+      adset_name: row.adset_name ?? null,
+      ad_id: row.ad_id ?? null,
+      ad_name: row.ad_name ?? null,
       spend: row.spend ?? null,
       impressions: row.impressions ?? null,
       clicks: row.clicks ?? null,

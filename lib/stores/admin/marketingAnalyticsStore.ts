@@ -83,7 +83,7 @@ const fetchApiData = async (endpoint: string, params: Record<string, string | un
     }
   });
 
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), { cache: 'no-store' });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response' }));
     throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
@@ -111,11 +111,7 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
   // Data Actions
   fetchMarketingSummary: async (currentFilters: MarketingFiltersState) => {
     if (get().loadingStates.summary) return;
-    // Uncomment caching logic
-    if (isEqual(currentFilters, get().lastFetchedFilters)) {
-      console.log('Skipping summary fetch: filters match last fetch');
-      return;
-    }
+    // Do not short-circuit here; fetchAll controls caching to avoid races
     set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, summary: true }, errorStates: { ...state.errorStates, summary: null } }));
     try {
       const params = { 
@@ -123,10 +119,10 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
         endDate: currentFilters.dateRange?.to?.toISOString(),
       };
       const data = await fetchApiData('/api/admin/marketing/summary', params);
-      set({ summaryData: data, lastFetchedFilters: currentFilters }); // Re-enable caching part
+      set({ summaryData: data });
     } catch (error: any) {
       console.error('Failed to fetch marketing summary:', error);
-      set((state: MarketingAnalyticsStore) => ({ errorStates: { ...state.errorStates, summary: error.message }, lastFetchedFilters: null })); // Re-enable caching part (reset on error)
+      set((state: MarketingAnalyticsStore) => ({ errorStates: { ...state.errorStates, summary: error.message } }));
     } finally {
       set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, summary: false } }));
     }
@@ -134,11 +130,7 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
 
   fetchMarketingByChannel: async (currentFilters: MarketingFiltersState) => {
     if (get().loadingStates.channel) return;
-    // Uncomment caching logic
-    if (isEqual(currentFilters, get().lastFetchedFilters)) {
-      console.log('Skipping channel fetch: filters match last fetch');
-      return;
-    }
+    // Do not short-circuit here; fetchAll controls caching to avoid races
     set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, channel: true }, errorStates: { ...state.errorStates, channel: null } }));
     try {
       const params = { 
@@ -146,10 +138,10 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
         endDate: currentFilters.dateRange?.to?.toISOString(),
       };
       const data = await fetchApiData('/api/admin/marketing/by-channel', params);
-      set({ channelData: data, lastFetchedFilters: currentFilters }); // Re-enable caching part
+      set({ channelData: data });
     } catch (error: any) {
       console.error('Failed to fetch marketing by channel:', error);
-      set((state: MarketingAnalyticsStore) => ({ errorStates: { ...state.errorStates, channel: error.message }, lastFetchedFilters: null })); // Re-enable caching part (reset on error)
+      set((state: MarketingAnalyticsStore) => ({ errorStates: { ...state.errorStates, channel: error.message } }));
     } finally {
       set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, channel: false } }));
     }
@@ -157,11 +149,7 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
 
   fetchFacebookDetails: async (currentFilters: MarketingFiltersState) => {
     if (get().loadingStates.details) return;
-    // Uncomment caching logic
-    if (isEqual(currentFilters, get().lastFetchedFilters)) {
-      console.log('Skipping details fetch: filters match last fetch');
-      return;
-    }
+    // Do not short-circuit here; fetchAll controls caching to avoid races
     set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, details: true }, errorStates: { ...state.errorStates, details: null } }));
     try {
       const params = { 
@@ -169,26 +157,27 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
         endDate: currentFilters.dateRange?.to?.toISOString(),
       };
       const data = await fetchApiData('/api/admin/marketing/facebook/details', params);
-      set({ facebookDetailsData: data, lastFetchedFilters: currentFilters }); // Re-enable caching part
+      set({ facebookDetailsData: data });
     } catch (error: any) {
       console.error('Failed to fetch facebook details:', error);
-      set((state: MarketingAnalyticsStore) => ({ errorStates: { ...state.errorStates, details: error.message }, lastFetchedFilters: null })); // Re-enable caching part (reset on error)
+      set((state: MarketingAnalyticsStore) => ({ errorStates: { ...state.errorStates, details: error.message } }));
     } finally {
       set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, details: false } }));
     }
   },
 
   fetchAllMarketingData: async (currentFilters: MarketingFiltersState) => {
-    // Uncomment caching logic
+    // Cache guard at fetchAll level only
     if (isEqual(currentFilters, get().lastFetchedFilters)) {
-        console.log('Skipping fetchAll: filters match last successful fetch');
-        return;
+      console.log('Skipping fetchAll: filters match last successful fetch');
+      return;
     }
-    await Promise.all([
+    const results = await Promise.allSettled([
       get().fetchMarketingSummary(currentFilters),
       get().fetchMarketingByChannel(currentFilters),
       get().fetchFacebookDetails(currentFilters),
     ]);
-    // Note: lastFetchedFilters is updated individually
+    const allOk = results.every(r => r.status === 'fulfilled');
+    set({ lastFetchedFilters: allOk ? currentFilters : null });
   },
 }));

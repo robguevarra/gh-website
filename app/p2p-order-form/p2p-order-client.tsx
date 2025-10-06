@@ -33,6 +33,7 @@ export default function PapersToProfit() {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
 
+
   const heroRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLDivElement>(null)
   const empathyRef = useRef<HTMLDivElement>(null)

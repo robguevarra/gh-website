@@ -2,12 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { validateAdminStatus } from '@/lib/supabase/admin';
-import { Database } from '@/types/supabase';
 
 // Define the schema for query parameters
 const querySchema = z.object({
   startDate: z.string().optional(), // ISO 8601 date string
-  endDate: z.string().optional(), // ISO 8601 date string
+  endDate: z.string().optional(),   // ISO 8601 date string
 });
 
 // Define the structure for the response items
@@ -49,63 +48,97 @@ export async function GET(request: NextRequest) {
 
   const { startDate, endDate } = validationResult.data;
 
-  // 3. Fetch data using the marketing_performance_view
+  // Normalize dates to YYYY-MM-DD to avoid timezone issues with date columns
+  const toYmd = (iso?: string) => {
+    if (!iso) return undefined;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return undefined;
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const ymdStart = toYmd(startDate);
+  const ymdEnd = toYmd(endDate);
+
+  // 3. Fetch data: deduplicate ad_spend to avoid inflated totals
   try {
-    let query = supabase
-      .from('marketing_performance_view')
-      .select('source_channel, spend, impressions, clicks, attributed_revenue, enrollment_id');
+    // Pull raw ad spend
+    let spendQuery = supabase
+      .from('ad_spend')
+      .select('date, ad_id, adset_id, campaign_id, spend, impressions, clicks');
 
     // Apply date filters if provided
-    if (startDate) {
-      query = query.gte('date', startDate);
-    }
-    if (endDate) {
-      query = query.lte('date', endDate);
-    }
+    if (ymdStart) spendQuery = spendQuery.gte('date', ymdStart);
+    if (ymdEnd) spendQuery = spendQuery.lte('date', ymdEnd);
 
-    // Regenerated types should now correctly infer the return type
-    const { data: viewData, error: viewError } = await query;
-
-    if (viewError) {
-      console.error('Error fetching marketing performance view:', viewError);
-      return NextResponse.json({ error: 'Failed to fetch marketing data', details: viewError.message }, { status: 500 });
+    const { data: spendRows, error: spendError } = await spendQuery;
+    if (spendError) {
+      console.error('Error fetching ad_spend (by-channel):', spendError);
+      return NextResponse.json({ error: 'Failed to fetch marketing data', details: spendError.message }, { status: 500 });
     }
 
-    // 4. Aggregate data by channel
-    const aggregatedData: { [key: string]: Partial<ChannelPerformanceData> } = {};
+    // Dedup per (date, entity) using max values
+    const dedup = new Map<string, { spend: number; impressions: number; clicks: number }>();
+    for (const r of (spendRows ?? []) as any[]) {
+      const id = r.ad_id ?? r.adset_id ?? r.campaign_id ?? 'unknown';
+      const key = `${r.date}|${id}`;
+      const cur = dedup.get(key);
+      const next = {
+        spend: Math.max(cur?.spend ?? 0, Number(r.spend) || 0),
+        impressions: Math.max(cur?.impressions ?? 0, Number(r.impressions) || 0),
+        clicks: Math.max(cur?.clicks ?? 0, Number(r.clicks) || 0),
+      };
+      dedup.set(key, next);
+    }
 
-    // Use optional chaining and nullish coalescing for safety
-    viewData?.forEach(row => {
-      // Access properties directly, relying on regenerated types
-      const channel = row.source_channel || 'unknown';
-      if (!aggregatedData[channel]) {
-        aggregatedData[channel] = { channel, spend: 0, impressions: 0, clicks: 0, revenue: 0, enrollments: 0 };
+    // Aggregate Facebook channel totals from deduped rows
+    const fb = Array.from(dedup.values()).reduce(
+      (acc, v) => {
+        acc.spend += v.spend;
+        acc.impressions += v.impressions;
+        acc.clicks += v.clicks;
+        return acc;
+      },
+      { spend: 0, impressions: 0, clicks: 0 }
+    );
+
+    // Enrollments (optional): count distinct p2p enrollments from performance view for the same window, facebook channel
+    let enrollments = 0;
+    try {
+      let enrollQuery = supabase
+        .from('marketing_performance_view')
+        .select('enrollment_id, source_channel, date')
+        .eq('source_channel', 'facebook');
+      if (ymdStart) enrollQuery = enrollQuery.gte('date', ymdStart);
+      if (ymdEnd) enrollQuery = enrollQuery.lte('date', ymdEnd);
+      const { data: enrollRows, error: enrollErr } = await enrollQuery;
+      if (!enrollErr && Array.isArray(enrollRows)) {
+        const set = new Set<string>();
+        for (const er of enrollRows as any[]) {
+          if (er.enrollment_id) set.add(er.enrollment_id);
+        }
+        enrollments = set.size;
       }
+    } catch {}
 
-      aggregatedData[channel].spend = (aggregatedData[channel].spend || 0) + (row.spend || 0);
-      aggregatedData[channel].impressions = (aggregatedData[channel].impressions || 0) + (row.impressions || 0);
-      aggregatedData[channel].clicks = (aggregatedData[channel].clicks || 0) + (row.clicks || 0);
-      aggregatedData[channel].revenue = (aggregatedData[channel].revenue || 0) + (row.attributed_revenue || 0);
-      if (row.enrollment_id) {
-        aggregatedData[channel].enrollments = (aggregatedData[channel].enrollments || 0) + 1;
-      }
-    });
-
-    // Format the response, ensuring null defaults for potentially missing aggregated values
-    const responseData: ChannelPerformanceData[] = Object.values(aggregatedData).map(channelData => ({
-      channel: channelData.channel!,
-      spend: channelData.spend ?? null,
-      impressions: channelData.impressions ?? null,
-      clicks: channelData.clicks ?? null,
-      revenue: channelData.revenue ?? null,
-      enrollments: channelData.enrollments ?? null,
-      // Blocked metrics
-      attributedRevenue: null,
-      roas: null,
-      cpa: null,
-      conversionCount: null,
-      conversionRate: null,
-    }));
+    const responseData: ChannelPerformanceData[] = [
+      {
+        channel: 'facebook',
+        spend: fb.spend,
+        impressions: fb.impressions,
+        clicks: fb.clicks,
+        revenue: null,
+        enrollments,
+        // Blocked metrics
+        attributedRevenue: null,
+        roas: null,
+        cpa: null,
+        conversionCount: null,
+        conversionRate: null,
+      },
+    ];
 
     return NextResponse.json(responseData);
 

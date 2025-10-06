@@ -1,18 +1,11 @@
 import { Suspense } from 'react';
-import { cookies } from 'next/headers';
-import type { Database } from '@/types/supabase';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  BookOpen, 
   Users, 
   BarChart2, 
   CreditCard, 
-  Settings, 
-  TrendingUp, 
-  Target, 
-  Package
+  TrendingUp
 } from 'lucide-react';
 
 // Dashboard Sections
