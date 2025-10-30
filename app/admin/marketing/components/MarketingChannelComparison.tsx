@@ -31,8 +31,10 @@ interface MarketingChannelComparisonProps {
   error: string | null;
 }
 
-const formatNumber = (num: number | null | undefined) => num?.toLocaleString() ?? 'N/A';
-const formatCurrency = (num: number | null | undefined) => num != null ? `₱${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
+const formatNumber = (num: number | null | undefined) => num != null ? Number(num).toLocaleString() : 'N/A';
+const formatCurrency = (num: number | null | undefined) => num != null ? `₱${Number(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A';
+const formatPercent = (num: number | null | undefined) => num != null ? `${Number(num).toFixed(2)}%` : 'N/A';
+const safeDiv = (num: number, den: number) => (den > 0 ? num / den : null);
 
 const MarketingChannelComparison: React.FC<MarketingChannelComparisonProps> = ({ data, isLoading, error }) => {
   if (error) {
@@ -46,25 +48,50 @@ const MarketingChannelComparison: React.FC<MarketingChannelComparisonProps> = ({
         <TableCell><Skeleton className="h-5 w-16" /></TableCell>
         <TableCell><Skeleton className="h-5 w-16" /></TableCell>
         <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
         <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+        <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+        <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+        <TableCell><Skeleton className="h-5 w-20" /></TableCell>
       </TableRow>
     ))
   );
 
   const renderDataRows = () => (
-    data?.map((channel) => (
-      <TableRow key={channel.channel}>
-        <TableCell className="font-medium capitalize">{channel.channel.replace(/_/g, ' ')}</TableCell>
-        <TableCell>{formatCurrency(channel.spend)}</TableCell>
-        <TableCell>{formatNumber(channel.impressions)}</TableCell>
-        <TableCell>{formatNumber(channel.clicks)}</TableCell>
-        {/* Remove Shopify-specific revenue column from this view later */}
-        {/* <TableCell>{formatCurrency(channel.revenue)}</TableCell> */}
-        <TableCell>{formatNumber(channel.enrollments)}</TableCell>
-      </TableRow>
-    ))
+    data?.map((channel) => {
+      const spend = channel.spend ?? 0;
+      const imps = channel.impressions ?? 0;
+      const clicks = channel.clicks ?? 0;
+      const ctr = safeDiv(clicks, imps);
+      const cpc = safeDiv(spend, clicks);
+      const cpm = safeDiv(spend * 1000, imps);
+      return (
+        <TableRow key={channel.channel}>
+          <TableCell className="font-medium capitalize">{channel.channel.replace(/_/g, ' ')}</TableCell>
+          <TableCell>{formatCurrency(channel.spend)}</TableCell>
+          <TableCell>{formatNumber(channel.impressions)}</TableCell>
+          <TableCell>{formatNumber(channel.clicks)}</TableCell>
+          <TableCell>{formatPercent(ctr != null ? ctr * 100 : null)}</TableCell>
+          <TableCell>{formatCurrency(cpc)}</TableCell>
+          <TableCell>{formatCurrency(cpm)}</TableCell>
+          <TableCell>{formatNumber(channel.enrollments)}</TableCell>
+        </TableRow>
+      );
+    })
   );
+
+  const totals = (data ?? []).reduce(
+    (acc, v) => {
+      acc.spend += v.spend ?? 0;
+      acc.impressions += v.impressions ?? 0;
+      acc.clicks += v.clicks ?? 0;
+      acc.enrollments += v.enrollments ?? 0;
+      return acc;
+    },
+    { spend: 0, impressions: 0, clicks: 0, enrollments: 0 }
+  );
+  const totalsCtr = safeDiv(totals.clicks, totals.impressions);
+  const totalsCpc = safeDiv(totals.spend, totals.clicks);
+  const totalsCpm = safeDiv(totals.spend * 1000, totals.impressions);
 
   return (
     <Card className="mb-6">
@@ -82,12 +109,26 @@ const MarketingChannelComparison: React.FC<MarketingChannelComparisonProps> = ({
               <TableHead>Spend</TableHead>
               <TableHead>Impressions</TableHead>
               <TableHead>Clicks</TableHead>
-              {/* <TableHead>Total Revenue</TableHead> */}
+              <TableHead>CTR</TableHead>
+              <TableHead>CPC</TableHead>
+              <TableHead>CPM</TableHead>
               <TableHead>P2P Enrollments</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? renderSkeleton() : renderDataRows()}
+            {!isLoading && data && data.length > 0 && (
+              <TableRow>
+                <TableCell className="font-semibold">Total</TableCell>
+                <TableCell className="font-semibold">{formatCurrency(totals.spend)}</TableCell>
+                <TableCell className="font-semibold">{formatNumber(totals.impressions)}</TableCell>
+                <TableCell className="font-semibold">{formatNumber(totals.clicks)}</TableCell>
+                <TableCell className="font-semibold">{formatPercent(totalsCtr != null ? totalsCtr * 100 : null)}</TableCell>
+                <TableCell className="font-semibold">{formatCurrency(totalsCpc)}</TableCell>
+                <TableCell className="font-semibold">{formatCurrency(totalsCpm)}</TableCell>
+                <TableCell className="font-semibold">{formatNumber(totals.enrollments)}</TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
         {!isLoading && (!data || data.length === 0) && (

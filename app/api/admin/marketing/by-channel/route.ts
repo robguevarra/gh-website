@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const dynamic = 'force-dynamic';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { validateAdminStatus } from '@/lib/supabase/admin';
@@ -62,43 +63,27 @@ export async function GET(request: NextRequest) {
   const ymdStart = toYmd(startDate);
   const ymdEnd = toYmd(endDate);
 
-  // 3. Fetch data: deduplicate ad_spend to avoid inflated totals
+  // 3. Fetch data: aggregate from marketing_performance_view (already deduped via ad_spend_dedup)
   try {
-    // Pull raw ad spend
-    let spendQuery = supabase
-      .from('ad_spend')
-      .select('date, ad_id, adset_id, campaign_id, spend, impressions, clicks');
-
-    // Apply date filters if provided
-    if (ymdStart) spendQuery = spendQuery.gte('date', ymdStart);
-    if (ymdEnd) spendQuery = spendQuery.lte('date', ymdEnd);
-
-    const { data: spendRows, error: spendError } = await spendQuery;
-    if (spendError) {
-      console.error('Error fetching ad_spend (by-channel):', spendError);
-      return NextResponse.json({ error: 'Failed to fetch marketing data', details: spendError.message }, { status: 500 });
+    // Fetch rows and aggregate in-memory (parity with Summary, avoids PostgREST aggregate syntax issues)
+    let rowsQuery = supabase
+      .from('marketing_performance_view')
+      .select('date, spend, impressions, clicks')
+      .eq('source_channel', 'facebook');
+    if (ymdStart) rowsQuery = rowsQuery.gte('date', ymdStart);
+    if (ymdEnd) rowsQuery = rowsQuery.lte('date', ymdEnd);
+    // Use a generous range to avoid pagination undercounts in larger windows
+    // Note: PostgREST respects Range header; supabase-js translates .range()
+    const { data: rows, error: rowsErr } = await rowsQuery.range(0, 100000);
+    if (rowsErr) {
+      console.error('Error fetching rows from marketing_performance_view (by-channel):', rowsErr);
+      return NextResponse.json({ error: 'Failed to fetch marketing data', details: rowsErr.message }, { status: 500 });
     }
-
-    // Dedup per (date, entity) using max values
-    const dedup = new Map<string, { spend: number; impressions: number; clicks: number }>();
-    for (const r of (spendRows ?? []) as any[]) {
-      const id = r.ad_id ?? r.adset_id ?? r.campaign_id ?? 'unknown';
-      const key = `${r.date}|${id}`;
-      const cur = dedup.get(key);
-      const next = {
-        spend: Math.max(cur?.spend ?? 0, Number(r.spend) || 0),
-        impressions: Math.max(cur?.impressions ?? 0, Number(r.impressions) || 0),
-        clicks: Math.max(cur?.clicks ?? 0, Number(r.clicks) || 0),
-      };
-      dedup.set(key, next);
-    }
-
-    // Aggregate Facebook channel totals from deduped rows
-    const fb = Array.from(dedup.values()).reduce(
-      (acc, v) => {
-        acc.spend += v.spend;
-        acc.impressions += v.impressions;
-        acc.clicks += v.clicks;
+    const fb = (rows ?? []).reduce(
+      (acc, r: any) => {
+        acc.spend += Number(r.spend) || 0;
+        acc.impressions += Number(r.impressions) || 0;
+        acc.clicks += Number(r.clicks) || 0;
         return acc;
       },
       { spend: 0, impressions: 0, clicks: 0 }
@@ -139,6 +124,16 @@ export async function GET(request: NextRequest) {
         conversionRate: null,
       },
     ];
+
+    if (searchParams.get('debug') === '1') {
+      return NextResponse.json({
+        data: responseData,
+        debug: {
+          filters: { startDate: ymdStart ?? null, endDate: ymdEnd ?? null },
+          note: 'Aggregated from marketing_performance_view (deduped)',
+        }
+      });
+    }
 
     return NextResponse.json(responseData);
 

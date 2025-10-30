@@ -53,10 +53,10 @@ export async function GET(request: NextRequest) {
 
   // 3. Fetch data
   try {
-    // Deduplicate spend per day and entity; read from deduped performance view
+    // Read from the deduplicated performance view to respect RLS and avoid inflated totals
     let query = supabase
       .from('marketing_performance_view')
-      .select('date, ad_id, adset_id, campaign_id, spend, spend_currency, source_channel');
+      .select('date, spend, source_channel');
 
     if (ymdStart) query = query.gte('date', ymdStart);
     if (ymdEnd) query = query.lte('date', ymdEnd);
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
     }
     const channelFilterActive = channelList.length > 0;
     const includesFacebook = !channelFilterActive || channelList.some(c => /facebook/i.test(c));
-    // Filter to facebook since that's our only ad spend source currently
+    // Filter to facebook since that's our only spend source
     query = query.eq('source_channel', 'facebook');
 
     const { data, error } = await query;
@@ -82,24 +82,9 @@ export async function GET(request: NextRequest) {
     }
 
     let totalAdSpend = 0;
-    let currency: string | null = null;
     if (includesFacebook) {
       const rows = data ?? [];
-      // Dedup key: day + entity (prefer ad_id, else adset_id, else campaign_id)
-      const seen = new Map<string, { spend: number; impressions: number; clicks: number }>();
-      for (const r of rows as any[]) {
-        const id = r.ad_id ?? r.adset_id ?? r.campaign_id ?? 'unknown';
-        const key = `${r.date}|${id}`;
-        const cur = seen.get(key);
-        const next = {
-          spend: Math.max(cur?.spend ?? 0, Number(r.spend) || 0),
-          impressions: Math.max(cur?.impressions ?? 0, 0),
-          clicks: Math.max(cur?.clicks ?? 0, 0),
-        };
-        seen.set(key, next);
-        if (!currency && (r as any).spend_currency) currency = (r as any).spend_currency;
-      }
-      totalAdSpend = Array.from(seen.values()).reduce((s, v) => s + v.spend, 0);
+      totalAdSpend = rows.reduce((s, r: any) => s + (Number(r.spend) || 0), 0);
     } else {
       totalAdSpend = 0;
     }
@@ -107,7 +92,6 @@ export async function GET(request: NextRequest) {
     // Prepare summary data
     const summary = {
       totalAdSpend: totalAdSpend.toFixed(2),
-      currency: currency ?? null,
       totalAttributedRevenue: null, // Blocked by ad attribution
       overallROAS: null, // Blocked by ad attribution
       averageCPA: null, // Blocked by ad attribution
@@ -118,7 +102,7 @@ export async function GET(request: NextRequest) {
         summary,
         debug: {
           filters: { startDate: ymdStart ?? null, endDate: ymdEnd ?? null, channels: channelList ?? null },
-          note: 'Deduped per (date, entity) using max values',
+          note: 'Using marketing_performance_view (deduped via ad_spend_dedup)',
         },
       });
     }
