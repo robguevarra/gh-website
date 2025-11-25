@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { getVisitorStats, type VisitorStats } from '@/app/actions/analytics-dashboard-actions';
-import { DailyViewsChart, TopSourcesChart, TopPagesTable } from '@/components/analytics/visitor-charts';
+import { DailyViewsChart, TopSourcesChart, TopPagesTable, TopLocationsChart, DeviceStatsChart } from '@/components/analytics/visitor-charts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Clock } from 'lucide-react';
 
 export default function VisitorAnalyticsPage() {
     const [timeRange, setTimeRange] = useState('30days');
@@ -38,6 +38,12 @@ export default function VisitorAnalyticsPage() {
 
         fetchStats();
     }, [timeRange]);
+
+    const formatDuration = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}m ${secs}s`;
+    };
 
     return (
         <div className="p-8 space-y-8">
@@ -79,6 +85,15 @@ export default function VisitorAnalyticsPage() {
                                 <div className="text-2xl font-bold">{stats.uniqueVisitors}</div>
                             </CardContent>
                         </Card>
+                        <Card>
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">Avg. Time on Page</CardTitle>
+                                <Clock className="h-4 w-4 text-muted-foreground" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold">{formatDuration(stats.avgDuration)}</div>
+                            </CardContent>
+                        </Card>
                     </div>
 
                     {/* Charts */}
@@ -88,6 +103,16 @@ export default function VisitorAnalyticsPage() {
                         </div>
                         <div className="col-span-3">
                             <TopSourcesChart data={stats.topSources} />
+                        </div>
+                    </div>
+
+                    {/* Advanced Charts */}
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+                        <div className="col-span-4">
+                            <TopLocationsChart data={stats.topLocations} />
+                        </div>
+                        <div className="col-span-3">
+                            <DeviceStatsChart data={stats.deviceStats} />
                         </div>
                     </div>
 

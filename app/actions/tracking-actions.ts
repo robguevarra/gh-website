@@ -1,6 +1,7 @@
 'use server';
 
 import { createServerSupabaseClient } from '@/lib/supabase/client';
+import { headers } from 'next/headers';
 
 export interface PageViewData {
     url: string;
@@ -16,17 +17,27 @@ export interface PageViewData {
     utmContent?: string;
     fbp?: string;
     fbc?: string;
+    deviceType?: string;
+    browser?: string;
+    os?: string;
     metadata?: Record<string, any>;
 }
 
 export async function recordPageView(data: PageViewData) {
     const supabase = createServerSupabaseClient();
+    const headersList = headers();
 
     try {
         // Get current user if authenticated (optional)
         const { data: { user } } = await supabase.auth.getUser();
 
-        const { error } = await supabase.from('page_views').insert({
+        // Extract IP and Country from headers
+        const forwardedFor = headersList.get('x-forwarded-for');
+        const ip = forwardedFor ? forwardedFor.split(',')[0] : headersList.get('x-real-ip');
+        const country = headersList.get('x-vercel-ip-country') || headersList.get('cf-ipcountry');
+        const city = headersList.get('x-vercel-ip-city'); // Vercel specific
+
+        const { data: insertedData, error } = await supabase.from('page_views').insert({
             url: data.url,
             path: data.path,
             referrer: data.referrer,
@@ -40,9 +51,15 @@ export async function recordPageView(data: PageViewData) {
             utm_content: data.utmContent,
             fbp: data.fbp,
             fbc: data.fbc,
+            ip_address: ip,
+            country: country,
+            city: city,
+            device_type: data.deviceType,
+            browser: data.browser,
+            os: data.os,
             user_id: user?.id,
             metadata: data.metadata || {},
-        });
+        }).select('id').single();
 
         if (error) {
             console.error('Error recording page view:', error);
@@ -50,9 +67,30 @@ export async function recordPageView(data: PageViewData) {
             return { success: false, error: error.message };
         }
 
-        return { success: true };
+        return { success: true, id: insertedData?.id };
     } catch (err) {
         console.error('Unexpected error recording page view:', err);
+        return { success: false, error: 'Internal server error' };
+    }
+}
+
+export async function updatePageDuration(pageViewId: string, duration: number) {
+    const supabase = createServerSupabaseClient();
+
+    try {
+        const { error } = await supabase
+            .from('page_views')
+            .update({ duration })
+            .eq('id', pageViewId);
+
+        if (error) {
+            console.error('Error updating page duration:', error);
+            return { success: false, error: error.message };
+        }
+
+        return { success: true };
+    } catch (err) {
+        console.error('Unexpected error updating page duration:', err);
         return { success: false, error: 'Internal server error' };
     }
 }

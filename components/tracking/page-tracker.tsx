@@ -3,20 +3,25 @@
 import { useEffect, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
-import { recordPageView } from '@/app/actions/tracking-actions';
+import { UAParser } from 'ua-parser-js';
+import { recordPageView, updatePageDuration } from '@/app/actions/tracking-actions';
 
 const VISITOR_ID_KEY = 'gh_visitor_id';
 const SESSION_ID_KEY = 'gh_session_id';
+const HEARTBEAT_INTERVAL = 10000; // 10 seconds
 
 export function PageTracker() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const initialized = useRef(false);
+    const pageViewIdRef = useRef<string | null>(null);
+    const startTimeRef = useRef<number>(0);
 
     useEffect(() => {
         // Prevent double firing in React Strict Mode
         if (initialized.current) return;
         initialized.current = true;
+        startTimeRef.current = Date.now();
 
         const trackPage = async () => {
             try {
@@ -49,8 +54,15 @@ export function PageTracker() {
                 const utmTerm = searchParams.get('utm_term') || undefined;
                 const utmContent = searchParams.get('utm_content') || undefined;
 
-                // 5. Record Page View
-                await recordPageView({
+                // 5. Parse User Agent
+                const parser = new UAParser(navigator.userAgent);
+                const result = parser.getResult();
+                const deviceType = result.device.type || 'desktop'; // Default to desktop if undefined (common for desktops)
+                const browser = `${result.browser.name} ${result.browser.version}`;
+                const os = `${result.os.name} ${result.os.version}`;
+
+                // 6. Record Page View
+                const response = await recordPageView({
                     url: window.location.href,
                     path: pathname,
                     referrer: document.referrer || undefined,
@@ -64,7 +76,14 @@ export function PageTracker() {
                     utmContent,
                     fbp,
                     fbc,
+                    deviceType,
+                    browser,
+                    os,
                 });
+
+                if (response.success && response.id) {
+                    pageViewIdRef.current = response.id;
+                }
             } catch (error) {
                 console.error('Tracking error:', error);
             }
@@ -72,7 +91,27 @@ export function PageTracker() {
 
         // Small delay to ensure cookies/DOM are ready
         const timer = setTimeout(trackPage, 500);
-        return () => clearTimeout(timer);
+
+        // Heartbeat for duration tracking
+        const heartbeat = setInterval(() => {
+            if (pageViewIdRef.current) {
+                const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
+                updatePageDuration(pageViewIdRef.current, duration);
+            }
+        }, HEARTBEAT_INTERVAL);
+
+        return () => {
+            clearTimeout(timer);
+            clearInterval(heartbeat);
+            // Attempt one last update on unmount (best effort)
+            if (pageViewIdRef.current) {
+                const duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
+                updatePageDuration(pageViewIdRef.current, duration);
+            }
+            // Reset for next mount (if any)
+            initialized.current = false;
+            pageViewIdRef.current = null;
+        };
     }, [pathname, searchParams]); // Re-run on route change
 
     return null; // This component renders nothing

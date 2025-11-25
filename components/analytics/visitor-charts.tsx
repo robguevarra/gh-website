@@ -108,3 +108,63 @@ export function TopPagesTable({ data }: TopPagesTableProps) {
         </Card>
     );
 }
+
+interface TopLocationsChartProps {
+    data: { location: string; count: number }[];
+}
+
+export function TopLocationsChart({ data }: TopLocationsChartProps) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Top Locations</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                        <XAxis type="number" />
+                        <YAxis dataKey="location" type="category" width={100} />
+                        <Tooltip />
+                        <Bar dataKey="count" fill="#8884d8" name="Views" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </CardContent>
+        </Card>
+    );
+}
+
+interface DeviceStatsChartProps {
+    data: { device: string; count: number }[];
+}
+
+export function DeviceStatsChart({ data }: DeviceStatsChartProps) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Device Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={data}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#82ca9d"
+                            dataKey="count"
+                        >
+                            {data.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                        </Pie>
+                        <Tooltip />
+                    </PieChart>
+                </ResponsiveContainer>
+            </CardContent>
+        </Card>
+    );
+}
