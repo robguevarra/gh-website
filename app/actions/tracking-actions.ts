@@ -74,14 +74,14 @@ export async function recordPageView(data: PageViewData) {
     }
 }
 
-export async function updatePageDuration(pageViewId: string, duration: number) {
+export async function updatePageDuration(id: string, duration: number) {
     const supabase = createServerSupabaseClient();
 
     try {
         const { error } = await supabase
             .from('page_views')
             .update({ duration })
-            .eq('id', pageViewId);
+            .eq('id', id);
 
         if (error) {
             console.error('Error updating page duration:', error);
@@ -91,6 +91,36 @@ export async function updatePageDuration(pageViewId: string, duration: number) {
         return { success: true };
     } catch (err) {
         console.error('Unexpected error updating page duration:', err);
+        return { success: false, error: 'Internal server error' };
+    }
+}
+
+export interface EventData {
+    eventName: string;
+    eventData?: Record<string, any>;
+    pageViewId?: string;
+    visitorId?: string;
+}
+
+export async function trackEvent(data: EventData) {
+    const supabase = createServerSupabaseClient();
+
+    try {
+        const { error } = await supabase.from('events').insert({
+            event_name: data.eventName,
+            event_data: data.eventData || {},
+            page_view_id: data.pageViewId,
+            visitor_id: data.visitorId,
+        });
+
+        if (error) {
+            console.error('Error recording event:', error);
+            return { success: false, error: error.message };
+        }
+
+        return { success: true };
+    } catch (err) {
+        console.error('Unexpected error recording event:', err);
         return { success: false, error: 'Internal server error' };
     }
 }

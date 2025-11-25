@@ -68,16 +68,17 @@ export function TopSourcesChart({ data }: TopSourcesChartProps) {
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            label={({ source, percent }) => `${source} ${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="count"
+                            nameKey="source"
                         >
                             {data.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip formatter={(value: number, name: string, props: any) => [value, props.payload.source]} />
                     </PieChart>
                 </ResponsiveContainer>
             </CardContent>
@@ -124,8 +125,8 @@ export function TopLocationsChart({ data }: TopLocationsChartProps) {
                     <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                         <XAxis type="number" />
-                        <YAxis dataKey="location" type="category" width={100} />
-                        <Tooltip />
+                        <YAxis dataKey="location" type="category" width={100} tick={{ fontSize: 12 }} />
+                        <Tooltip cursor={{ fill: 'transparent' }} />
                         <Bar dataKey="count" fill="#8884d8" name="Views" radius={[0, 4, 4, 0]} />
                     </BarChart>
                 </ResponsiveContainer>
@@ -152,16 +153,89 @@ export function DeviceStatsChart({ data }: DeviceStatsChartProps) {
                             cx="50%"
                             cy="50%"
                             labelLine={false}
-                            label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                            label={({ device, percent }) => `${device} ${(percent * 100).toFixed(0)}%`}
                             outerRadius={80}
                             fill="#82ca9d"
                             dataKey="count"
+                            nameKey="device"
                         >
                             {data.map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                         </Pie>
-                        <Tooltip />
+                        <Tooltip formatter={(value: number, name: string, props: any) => [value, props.payload.device]} />
+                    </PieChart>
+                </ResponsiveContainer>
+            </CardContent>
+        </Card>
+    );
+}
+
+interface OSStatsChartProps {
+    data: { os: string; count: number }[];
+}
+
+export function OSStatsChart({ data }: OSStatsChartProps) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>OS Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={data}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ os, percent }) => `${os} ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="count"
+                            nameKey="os"
+                        >
+                            {data.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number, name: string, props: any) => [value, props.payload.os]} />
+                    </PieChart>
+                </ResponsiveContainer>
+            </CardContent>
+        </Card>
+    );
+}
+
+interface BrowserStatsChartProps {
+    data: { browser: string; count: number }[];
+}
+
+export function BrowserStatsChart({ data }: BrowserStatsChartProps) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Browser Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <Pie
+                            data={data}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ browser, percent }) => `${browser} ${(percent * 100).toFixed(0)}%`}
+                            outerRadius={80}
+                            fill="#82ca9d"
+                            dataKey="count"
+                            nameKey="browser"
+                        >
+                            {data.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                        </Pie>
+                        <Tooltip formatter={(value: number, name: string, props: any) => [value, props.payload.browser]} />
                     </PieChart>
                 </ResponsiveContainer>
             </CardContent>

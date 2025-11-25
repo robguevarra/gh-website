@@ -19,8 +19,10 @@ import { PublicFooter } from "@/components/layout/public-footer"
 import { useMobile } from "@/hooks/use-mobile"
 import { createPaymentIntent } from "@/app/actions/payment-actions"
 import { PageTracker } from "@/components/tracking/page-tracker"
+import { useTracking } from '@/hooks/use-tracking';
 
 export default function PapersToProfit() {
+  const { track } = useTracking();
   const [isLoaded, setIsLoaded] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState("full")
   const [isProcessing, setIsProcessing] = useState(false)
@@ -156,6 +158,13 @@ export default function PapersToProfit() {
     if (!validateForm()) return
 
     setIsProcessing(true)
+
+    // Track initiate checkout
+    track('initiate_checkout', {
+      step: 'form_submit',
+      product: 'p2p_system',
+      plan: selectedPlan
+    });
 
     try {
       // Get the price based on the selected plan

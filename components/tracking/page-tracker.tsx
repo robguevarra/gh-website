@@ -83,6 +83,7 @@ export function PageTracker() {
 
                 if (response.success && response.id) {
                     pageViewIdRef.current = response.id;
+                    sessionStorage.setItem('gh_page_view_id', response.id);
                 }
             } catch (error) {
                 console.error('Tracking error:', error);

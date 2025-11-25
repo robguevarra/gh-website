@@ -1,15 +1,33 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getVisitorStats, type VisitorStats } from '@/app/actions/analytics-dashboard-actions';
-import { DailyViewsChart, TopSourcesChart, TopPagesTable, TopLocationsChart, DeviceStatsChart } from '@/components/analytics/visitor-charts';
+import {
+    getVisitorStats,
+    getRecentActivity,
+    getConversionStats,
+    type VisitorStats,
+    type RecentActivityItem,
+    type ConversionStats
+} from '@/app/actions/analytics-dashboard-actions';
+import {
+    DailyViewsChart,
+    TopSourcesChart,
+    TopPagesTable,
+    TopLocationsChart,
+    DeviceStatsChart,
+    OSStatsChart,
+    BrowserStatsChart
+} from '@/components/analytics/visitor-charts';
+import { RecentActivityList } from '@/components/analytics/recent-activity';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Clock } from 'lucide-react';
+import { Loader2, Clock, TrendingUp } from 'lucide-react';
 
 export default function VisitorAnalyticsPage() {
     const [timeRange, setTimeRange] = useState('30days');
     const [stats, setStats] = useState<VisitorStats | null>(null);
+    const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
+    const [conversionStats, setConversionStats] = useState<ConversionStats | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -27,8 +45,15 @@ export default function VisitorAnalyticsPage() {
                     from.setDate(now.getDate() - 90);
                 }
 
-                const data = await getVisitorStats({ from, to: now });
-                setStats(data);
+                const [visitorData, activityData, conversionData] = await Promise.all([
+                    getVisitorStats({ from, to: now }),
+                    getRecentActivity(20),
+                    getConversionStats('initiate_checkout', { from, to: now })
+                ]);
+
+                setStats(visitorData);
+                setRecentActivity(activityData);
+                setConversionStats(conversionData);
             } catch (error) {
                 console.error('Failed to fetch stats:', error);
             } finally {
@@ -66,59 +91,78 @@ export default function VisitorAnalyticsPage() {
                     <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
             ) : stats ? (
-                <div className="space-y-8">
-                    {/* Key Metrics */}
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Total Page Views</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{stats.totalViews}</div>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Unique Visitors</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{stats.uniqueVisitors}</div>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-sm font-medium">Avg. Time on Page</CardTitle>
-                                <Clock className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{formatDuration(stats.avgDuration)}</div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Main Content */}
+                    <div className="lg:col-span-2 space-y-8">
+                        {/* Key Metrics */}
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Total Page Views</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold">{stats.totalViews}</div>
+                                </CardContent>
+                            </Card>
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Unique Visitors</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold">{stats.uniqueVisitors}</div>
+                                </CardContent>
+                            </Card>
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Avg. Time on Page</CardTitle>
+                                    <Clock className="h-4 w-4 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold">{formatDuration(stats.avgDuration)}</div>
+                                </CardContent>
+                            </Card>
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
+                                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold">{conversionStats?.conversionRate}%</div>
+                                    <p className="text-xs text-muted-foreground">
+                                        {conversionStats?.totalConversions} checkouts started
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        </div>
 
-                    {/* Charts */}
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                        <div className="col-span-4">
+                        {/* Charts */}
+                        <div className="grid gap-4 md:grid-cols-1">
                             <DailyViewsChart data={stats.dailyViews} />
                         </div>
-                        <div className="col-span-3">
-                            <TopSourcesChart data={stats.topSources} />
-                        </div>
-                    </div>
 
-                    {/* Advanced Charts */}
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-                        <div className="col-span-4">
-                            <TopLocationsChart data={stats.topLocations} />
-                        </div>
-                        <div className="col-span-3">
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <TopSourcesChart data={stats.topSources} />
                             <DeviceStatsChart data={stats.deviceStats} />
                         </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <OSStatsChart data={stats.osStats} />
+                            <BrowserStatsChart data={stats.browserStats} />
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-1">
+                            <TopLocationsChart data={stats.topLocations} />
+                        </div>
+
+                        {/* Tables */}
+                        <div className="grid gap-4 md:grid-cols-1">
+                            <TopPagesTable data={stats.topPages} />
+                        </div>
                     </div>
 
-                    {/* Tables */}
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <TopPagesTable data={stats.topPages} />
+                    {/* Sidebar */}
+                    <div className="space-y-8">
+                        <RecentActivityList data={recentActivity} />
                     </div>
                 </div>
             ) : (
