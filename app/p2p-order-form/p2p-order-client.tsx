@@ -18,6 +18,7 @@ import { PublicHeader } from "@/components/layout/public-header"
 import { PublicFooter } from "@/components/layout/public-footer"
 import { useMobile } from "@/hooks/use-mobile"
 import { createPaymentIntent } from "@/app/actions/payment-actions"
+import { PageTracker } from "@/components/tracking/page-tracker"
 
 export default function PapersToProfit() {
   const [isLoaded, setIsLoaded] = useState(false)
@@ -108,7 +109,7 @@ export default function PapersToProfit() {
         // Remove these logs after confirming correct capture
         console.log('[DEBUG] Facebook _fbp cookie:', getCookie('_fbp'));
         console.log('[DEBUG] Facebook _fbc cookie:', getCookie('_fbc'));
-      
+
         // ------------------------------------------------------------------------
       })
       .catch(err => {
@@ -139,7 +140,7 @@ export default function PapersToProfit() {
     }
     if (!formData.phone) {
       newErrors.phone = "Phone number is required"
-    } else if (!/^\+?[\d\s-()]{10,}$/.test(formData.phone)) { 
+    } else if (!/^\+?[\d\s-()]{10,}$/.test(formData.phone)) {
       // Basic check: optional +, digits, spaces, hyphens, parens, at least 10 digits total (adjust regex as needed)
       newErrors.phone = "Phone number format is invalid"
     }
@@ -158,8 +159,8 @@ export default function PapersToProfit() {
 
     try {
       // Get the price based on the selected plan
-      const planPrice = selectedPlan === "full" 
-        ? courseDetails.fullPrice 
+      const planPrice = selectedPlan === "full"
+        ? courseDetails.fullPrice
         : courseDetails.monthlyPrice;
 
       // --- Facebook Attribution: Capture fbp/fbc cookies for CAPI attribution ---
@@ -174,7 +175,7 @@ export default function PapersToProfit() {
       // --- STEP 1: CAPTURE LEAD BEFORE PAYMENT (Industry Best Practice) ---
       // This ensures we don't lose potential customers who abandon payment
       let leadId: string | undefined;
-      
+
       try {
         const leadCaptureResponse = await fetch('/api/leads/capture', {
           method: 'POST',
@@ -201,7 +202,7 @@ export default function PapersToProfit() {
         });
 
         const leadResult = await leadCaptureResponse.json();
-        
+
         if (leadResult.success) {
           leadId = leadResult.leadId;
           console.log('[Lead] Successfully captured lead before payment:', leadId);
@@ -294,8 +295,8 @@ export default function PapersToProfit() {
           typeof error === "string"
             ? error
             : error instanceof Error
-            ? error.message
-            : "Payment processing failed. Please try again later.",
+              ? error.message
+              : "Payment processing failed. Please try again later.",
       })
     } finally {
       setIsProcessing(false)
@@ -490,7 +491,7 @@ export default function PapersToProfit() {
       answer:
         "Recorded ang livestream classes. You can watch them anytime.",
     },
-  
+
   ]
 
   // Testimonial data
@@ -516,6 +517,7 @@ export default function PapersToProfit() {
 
   return (
     <>
+      <PageTracker />
       {/* Facebook Meta Pixel Code for analytics and ad attribution */}
       <Head>
         <script
@@ -788,24 +790,24 @@ export default function PapersToProfit() {
 
                     <div className="flex flex-col sm:flex-row gap-4 items-center">
                       <div className="flex items-center">
-                      <div className="flex -space-x-2">
-                        {[
-                          "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
-                          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
-                          "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
-                          "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face&auto=format&q=80"
-                        ].map((src, i) => (
-                          <div key={i} className="relative">
-                            <Image
-                              src={src}
-                              alt={`Student ${i + 1}`}
-                              width={32}
-                              height={32}
-                              className="w-8 h-8 rounded-full border-2 border-white object-cover"
-                            />
-                          </div>
-                        ))}
-                      </div>
+                        <div className="flex -space-x-2">
+                          {[
+                            "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
+                            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
+                            "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
+                            "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face&auto=format&q=80"
+                          ].map((src, i) => (
+                            <div key={i} className="relative">
+                              <Image
+                                src={src}
+                                alt={`Student ${i + 1}`}
+                                width={32}
+                                height={32}
+                                className="w-8 h-8 rounded-full border-2 border-white object-cover"
+                              />
+                            </div>
+                          ))}
+                        </div>
                         <span className="ml-2 text-sm text-[#6d4c41]">
                           <span className="font-medium">3,000+ students</span> enrolled
                         </span>
