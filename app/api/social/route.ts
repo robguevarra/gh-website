@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getYouTubeChannel, getYouTubeVideos } from "@/lib/youtube-api"
+import { getYouTubeData } from "@/lib/youtube-api"
 import { getFacebookPage, getFacebookPosts } from "@/lib/facebook-api"
 
 export async function GET(request: Request) {
@@ -10,12 +10,11 @@ export async function GET(request: Request) {
 
     // Fetch data based on the requested platform
     if (platform === "youtube") {
-      // Use Promise.allSettled to handle partial failures
-      const [channelResult, videosResult] = await Promise.allSettled([getYouTubeChannel(), getYouTubeVideos()])
+      const youtubeData = await getYouTubeData()
 
       return NextResponse.json({
-        channel: channelResult.status === "fulfilled" ? channelResult.value : null,
-        videos: videosResult.status === "fulfilled" ? videosResult.value : [],
+        channel: youtubeData.channelData,
+        videos: youtubeData.latestVideos,
       })
     } else if (platform === "facebook") {
       // Use Promise.allSettled to handle partial failures
@@ -27,17 +26,18 @@ export async function GET(request: Request) {
       })
     } else if (platform === "all" || !platform) {
       // Use Promise.allSettled to handle partial failures
-      const [ytChannelResult, ytVideosResult, fbPageResult, fbPostsResult] = await Promise.allSettled([
-        getYouTubeChannel(),
-        getYouTubeVideos(),
+      const [youtubeData, fbPageResult, fbPostsResult] = await Promise.allSettled([
+        getYouTubeData(),
         getFacebookPage(),
         getFacebookPosts(),
       ])
 
+      const ytData = youtubeData.status === "fulfilled" ? youtubeData.value : { channelData: null, latestVideos: [] }
+
       const response = {
         youtube: {
-          channel: ytChannelResult.status === "fulfilled" ? ytChannelResult.value : null,
-          videos: ytVideosResult.status === "fulfilled" ? ytVideosResult.value : [],
+          channel: ytData.channelData,
+          videos: ytData.latestVideos,
         },
         facebook: {
           page: fbPageResult.status === "fulfilled" ? fbPageResult.value : null,

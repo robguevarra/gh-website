@@ -35,6 +35,12 @@ export const metadata: Metadata = {
   },
 }
 
+import { Suspense } from "react"
+
 export default function Page() {
-  return <P2POrderClient />
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <P2POrderClient />
+    </Suspense>
+  )
 }
