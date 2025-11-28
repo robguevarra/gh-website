@@ -527,8 +527,6 @@ export default function PapersToProfit() {
   return (
     <>
       <PageTracker />
-      {/* Facebook Meta Pixel Code for analytics and ad attribution */}
-      <PageTracker />
       <div className="flex min-h-screen flex-col bg-[#f9f6f2]">
         <PublicHeader />
 
