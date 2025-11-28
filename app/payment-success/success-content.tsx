@@ -39,6 +39,7 @@ export function SuccessContent({
       amountPaid &&
       productName === "Papers to Profits Course"
     ) {
+      // 1. Fire Client-Side Pixel (Browser)
       (window as any).fbq('track', 'Purchase', {
         currency: 'PHP',
         value: amountPaid,
@@ -48,6 +49,9 @@ export function SuccessContent({
         event_id: externalId // Important for deduplication with server-side event
       });
       console.log("Facebook Pixel Purchase event fired for P2P", { amountPaid, externalId });
+
+      // Server-side CAPI event is now handled by the webhook (app/api/webhooks/xendit/route.ts)
+      // This ensures better reliability and security (IP/UA capture)
     }
   }, [amountPaid, productName, externalId]);
 

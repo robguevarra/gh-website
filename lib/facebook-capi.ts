@@ -24,6 +24,7 @@ interface RawUserData {
   clientUserAgent?: string;
   fbp?: string;
   fbc?: string;
+  fb_login_id?: string;
 }
 
 export function buildUserData(raw: RawUserData) {
@@ -40,6 +41,7 @@ export function buildUserData(raw: RawUserData) {
   if (raw.clientUserAgent) userData.client_user_agent = raw.clientUserAgent;
   if (raw.fbp) userData.fbp = raw.fbp;
   if (raw.fbc) userData.fbc = raw.fbc;
+  if (raw.fb_login_id) userData.fb_login_id = raw.fb_login_id;
   return userData;
 }
 

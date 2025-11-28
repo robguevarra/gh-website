@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { createServerSupabaseClient, createServiceRoleClient } from '@/lib/supabase/server'; // Import both client types
 import { CartItem } from '@/stores/cartStore'; // Type for cart items
 import { type Database } from '@/types/supabase';
@@ -233,6 +233,11 @@ export async function createXenditEcommercePayment(
     const { affiliateSlug, visitorId } = await extractAffiliateTrackingFromServerCookies();
     const { fbp, fbc } = await extractFacebookCookies();
 
+    // 5. Extract IP and User Agent from headers
+    const headersList = await headers();
+    const userAgent = headersList.get('user-agent') || undefined;
+    const ip = headersList.get('x-forwarded-for')?.split(',')[0] || undefined;
+
     // 4. Prepare metadata for transaction log
     const transactionMetadata = {
       // Use the validated data collected above
@@ -248,6 +253,9 @@ export async function createXenditEcommercePayment(
       // Add Facebook Pixel cookies for CAPI attribution
       fbp,
       fbc,
+      // Add IP and User Agent for CAPI
+      ip_address: ip,
+      user_agent: userAgent,
       // Add any other relevant info needed by the webhook
     };
 
