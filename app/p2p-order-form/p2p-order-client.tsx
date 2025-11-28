@@ -100,6 +100,15 @@ export default function PapersToProfit() {
     // Replace with your actual deployed function URL
     const functionUrl = 'https://cidenjydokpzpsnpywcf.functions.supabase.co/send-facebook-capi-event';
 
+    // Client-side Pixel Tracking (ViewContent)
+    if (typeof window !== 'undefined' && (window as any).fbq) {
+      (window as any).fbq('track', 'ViewContent', {
+        content_name: 'Papers to Profits Course',
+        content_ids: ['7e386720-8839-4252-bd5f-09a33c3e1afb'],
+        content_type: 'product',
+      });
+    }
+
     fetch(functionUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -227,6 +236,19 @@ export default function PapersToProfit() {
       // --- Facebook CAPI: Send InitiateCheckout event ---
       // This is best practice: fire when user starts checkout (form submit)
       try {
+        // Client-side Pixel Tracking (InitiateCheckout)
+        if (typeof window !== 'undefined' && (window as any).fbq) {
+          (window as any).fbq('track', 'InitiateCheckout', {
+            content_name: 'Papers to Profits Course',
+            content_ids: ['7e386720-8839-4252-bd5f-09a33c3e1afb'],
+            content_type: 'product',
+            currency: process.env.PAYMENT_CURRENCY || 'PHP',
+            value: planPrice / 100,
+            num_items: 1,
+            payment_plan: selectedPlan
+          });
+        }
+
         const capiPayload = {
           eventName: 'InitiateCheckout',
           eventSourceUrl: window.location.href,
