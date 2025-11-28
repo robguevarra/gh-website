@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { MetricCard } from './metric-card';
+import { MetricCardSkeleton } from './metric-card-skeleton';
 import { DollarSign, Package, ShoppingBag, FileText, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -221,34 +222,41 @@ export function RevenueSection() {
       </div>
 
       {/* Overview Metrics */}
-      {!isLoading && overviewData && (
-        <div className="grid gap-4 md:grid-cols-3">
-          <MetricCard
-            icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
-            title="Total Revenue"
-            value={formatCurrency(overviewData.totalRevenue)}
-            description={`${overviewData.totalTransactions} total transactions`}
-          />
-          <MetricCard
-            icon={<Users className="h-4 w-4 text-muted-foreground" />}
-            title="Total Enrollments"
-            value={overviewData.totalEnrollments.toString()}
-            description={formatCurrency(enrollmentData.revenue)}
-          />
-          <MetricCard
-            icon={<Package className="h-4 w-4 text-muted-foreground" />}
-            title="Other Products"
-            value={(overviewData.totalTransactions - overviewData.totalEnrollments).toString()}
-            description={formatCurrency(overviewData.totalRevenue - enrollmentData.revenue)}
-          />
-        </div>
-      )}
+      <div className="grid gap-4 md:grid-cols-3">
+        {isLoading || !overviewData ? (
+          Array(3).fill(0).map((_, i) => <MetricCardSkeleton key={i} />)
+        ) : (
+          <>
+            <MetricCard
+              icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+              title="Total Revenue"
+              value={formatCurrency(overviewData.totalRevenue)}
+              description={`${overviewData.totalTransactions} total transactions`}
+              intent="revenue"
+            />
+            <MetricCard
+              icon={<Users className="h-4 w-4 text-muted-foreground" />}
+              title="Total Enrollments"
+              value={overviewData.totalEnrollments.toString()}
+              description={formatCurrency(enrollmentData.revenue)}
+              intent="info"
+            />
+            <MetricCard
+              icon={<Package className="h-4 w-4 text-muted-foreground" />}
+              title="Other Products"
+              value={(overviewData.totalTransactions - overviewData.totalEnrollments).toString()}
+              description={formatCurrency(overviewData.totalRevenue - enrollmentData.revenue)}
+              intent="neutral"
+            />
+          </>
+        )}
+      </div>
 
       {/* Revenue Breakdown Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
           Array(4).fill(0).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+            <MetricCardSkeleton key={i} />
           ))
         ) : (
           <>
@@ -257,24 +265,32 @@ export function RevenueSection() {
               title="P2P Enrollments"
               value={enrollmentData.count.toString()}
               description={formatCurrency(enrollmentData.revenue)}
+              intent="info"
+              accent="emerald"
             />
             <MetricCard
               icon={<FileText className="h-4 w-4 text-muted-foreground" />}
               title="Canva Products"
               value={canvaData.count.toString()}
               description={formatCurrency(canvaData.revenue)}
+              intent="neutral"
+              accent="violet"
             />
             <MetricCard
               icon={<ShoppingBag className="h-4 w-4 text-muted-foreground" />}
               title="Shopify Orders"
               value={shopifyData.count.toString()}
               description={formatCurrency(shopifyData.revenue)}
+              intent="info"
+              accent="amber"
             />
             <MetricCard
               icon={<Package className="h-4 w-4 text-muted-foreground" />}
               title="Public Sale"
               value={publicSaleData.count.toString()}
               description={formatCurrency(publicSaleData.revenue)}
+              intent="neutral"
+              accent="teal"
             />
           </>
         )}

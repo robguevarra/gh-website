@@ -99,3 +99,21 @@ export async function sendFacebookEvent(event: EventData) {
   }
   throw lastError;
 }
+
+/**
+ * Extract Facebook tracking cookies from server-side cookies
+ */
+export async function extractFacebookCookies(): Promise<{ fbp: string | null; fbc: string | null }> {
+  try {
+    const { cookies } = await import('next/headers');
+    const cookieStore = await cookies();
+
+    const fbp = cookieStore.get('_fbp')?.value || null;
+    const fbc = cookieStore.get('_fbc')?.value || null;
+
+    return { fbp, fbc };
+  } catch (error) {
+    console.error('[Facebook CAPI] Error extracting cookies:', error);
+    return { fbp: null, fbc: null };
+  }
+}

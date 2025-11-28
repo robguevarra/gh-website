@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCampaignById, updateCampaign } from '@/lib/supabase/data-access/campaign-management';
 import { validateAdminAccess, handleServerError, handleNotFound } from '@/lib/supabase/route-handler';
 import { getAdminClient } from '@/lib/supabase/admin';
-import { addToQueue } from '@/lib/email/queue-utils';
+import type { Database, Json } from '@/types/supabase';
 
 export async function POST(
   request: NextRequest,
@@ -19,7 +19,7 @@ export async function POST(
       return NextResponse.json({ error: validation.error }, { status: validation.status });
     }
 
-    const { id: campaignId } = await params;
+    const { id: campaignId } = params;
     const adminClient = getAdminClient();
     
     const campaign = await getCampaignById(campaignId);
@@ -81,24 +81,25 @@ export async function POST(
     
     // Get profiles in batches (handles 5000+)
     console.log(`[SEND] Fetching ${userIds.length} profiles in batches...`);
-    const batchSize = 100; // Small batches to avoid 414 Request-URI Too Large errors
-    let allProfiles: any[] = [];
+    const profileBatchSize = 500; // Larger batches, still safe for IN queries
+    type UnifiedProfileLite = { id: string; email: string; first_name?: string | null; last_name?: string | null };
+    const allProfiles: UnifiedProfileLite[] = [];
     
-    for (let i = 0; i < userIds.length; i += batchSize) {
-      const batch = userIds.slice(i, i + batchSize);
+    for (let i = 0; i < userIds.length; i += profileBatchSize) {
+      const batch = userIds.slice(i, i + profileBatchSize);
       const { data: batchProfiles, error: batchError } = await adminClient
         .from('unified_profiles')
         .select('id, email, first_name, last_name')
         .in('id', batch)
         .not('email', 'is', null)
-        .is('email_bounced', null);
+        .or('email_bounced.is.null,email_bounced.eq.false');
       
       if (batchError) {
         return handleServerError(batchError, 'Failed to fetch profiles');
       }
       
-      if (batchProfiles) {
-        allProfiles.push(...batchProfiles);
+      if (batchProfiles && batchProfiles.length > 0) {
+        allProfiles.push(...(batchProfiles as UnifiedProfileLite[]));
       }
     }
     
@@ -108,25 +109,59 @@ export async function POST(
       return NextResponse.json({ message: 'No valid recipients found' }, { status: 200 });
     }
     
-    // Queue emails (SIMPLE - no frequency checks, just send)
-    console.log(`[SEND] Queueing ${allProfiles.length} emails...`);
-    let successCount = 0;
-    
-    for (const profile of allProfiles) {
-      try {
-        await addToQueue(adminClient, {
-          campaignId: campaignId,
-          recipientEmail: profile.email,
-          recipientData: profile,
-          priority: campaign.priority || 1
-        });
-        successCount++;
-      } catch (queueError) {
-        console.error(`[SEND] Failed to queue email for ${profile.email}:`, queueError);
+    // Duplicate check (campaign-specific) in batches
+    console.log(`[SEND] Checking duplicates in email_queue...`);
+    const emailsLower = allProfiles.map(p => p.email.toLowerCase());
+    const dupCheckBatch = 1000;
+    const emailsAlreadyInQueue = new Set<string>();
+    for (let i = 0; i < emailsLower.length; i += dupCheckBatch) {
+      const batch = emailsLower.slice(i, i + dupCheckBatch);
+      const { data: existing, error: dupErr } = await adminClient
+        .from('email_queue')
+        .select('recipient_email')
+        .eq('campaign_id', campaignId)
+        .in('recipient_email', batch);
+      if (dupErr) {
+        console.warn(`[SEND] Duplicate check error (continuing):`, dupErr.message);
+        continue;
       }
+      (existing || []).forEach((row: { recipient_email: string }) => {
+        if (row.recipient_email) emailsAlreadyInQueue.add(row.recipient_email.toLowerCase());
+      });
+    }
+    const finalProfilesToQueue = allProfiles.filter(p => !emailsAlreadyInQueue.has(p.email.toLowerCase()));
+    if (finalProfilesToQueue.length === 0) {
+      console.log('[SEND] No new recipients to queue after duplicate check.');
+      return NextResponse.json({ message: 'All recipients already queued for this campaign.' }, { status: 200 });
+    }
+
+    // Queue emails in BULK (batches)
+    console.log(`[SEND] Queueing ${finalProfilesToQueue.length} emails in bulk...`);
+    type EmailQueueInsert = Database['public']['Tables']['email_queue']['Insert'];
+    let successCount = 0;
+    const insertBatchSize = 1000;
+    for (let i = 0; i < finalProfilesToQueue.length; i += insertBatchSize) {
+      const batch = finalProfilesToQueue.slice(i, i + insertBatchSize);
+      const items: EmailQueueInsert[] = batch.map((profile) => ({
+        campaign_id: campaignId,
+        recipient_email: profile.email,
+        recipient_data: profile as unknown as Json,
+        priority: campaign.priority || 1,
+        status: 'pending',
+        scheduled_at: new Date().toISOString()
+      }));
+      const { data: inserted, error: insertError } = await adminClient
+        .from('email_queue')
+        .insert(items as EmailQueueInsert[])
+        .select('id');
+      if (insertError) {
+        console.error(`[SEND] Failed to insert queue batch at index ${i}:`, insertError);
+        continue;
+      }
+      successCount += inserted?.length || items.length;
     }
     
-    console.log(`[SEND] Successfully queued ${successCount}/${allProfiles.length} emails`);
+    console.log(`[SEND] Successfully queued ${successCount}/${finalProfilesToQueue.length} new emails`);
     
     // Update status to sent
     if (successCount > 0) {
@@ -135,6 +170,24 @@ export async function POST(
         status_message: `Successfully queued ${successCount} recipients`
       });
       console.log(`[SEND] Campaign status updated to sent`);
+    }
+
+    // Trigger immediate email processing so queued items get sent right away
+    if (successCount > 0) {
+      console.log(`[SEND] Triggering immediate email processing...`);
+      try {
+        const { data: processResponse, error: processError } = await adminClient.functions.invoke(
+          'process-email-queue',
+          { body: { triggered_by: 'immediate_send' } }
+        );
+        if (processError) {
+          console.warn(`[SEND] Warning: Failed to trigger immediate email processing:`, processError);
+        } else {
+          console.log(`[SEND] Email processing triggered:`, processResponse);
+        }
+      } catch (triggerError) {
+        console.warn(`[SEND] Warning: Exception when triggering email processing:`, triggerError);
+      }
     }
 
     return NextResponse.json({ 

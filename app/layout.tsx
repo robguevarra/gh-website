@@ -1,4 +1,4 @@
-import type React from "react"
+import React, { Suspense } from "react"
 import { Inter } from "next/font/google"
 import { Playfair_Display } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -11,6 +11,7 @@ import { AuthProvider } from "@/context/auth-context"
 // Enhanced auth functionality is now directly incorporated into the main auth context
 import { AuthCoordinationProvider } from "@/components/providers/auth-coordination-provider"
 import GlobalAffiliateTracker from "@/components/affiliate/global-affiliate-tracker"
+import FacebookPixel from "@/components/analytics/FacebookPixel"
 
 // Import critical CSS first for priority loading
 import './critical.css'
@@ -86,6 +87,9 @@ export default function RootLayout({
           strategy="lazyOnload"
           id="analytics-script"
         />
+        <Suspense fallback={null}>
+          <FacebookPixel />
+        </Suspense>
         {/* Add site-wide affiliate tracking */}
         <GlobalAffiliateTracker debug={true} />
       </body>

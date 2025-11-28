@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { MetricCard } from './metric-card';
+import { MetricCardSkeleton } from './metric-card-skeleton';
 import { Users, UserPlus, Calendar, TrendingUp } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -148,7 +149,7 @@ export function EnrollmentsSection() {
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
         {isLoading ? (
           Array(2).fill(0).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+            <MetricCardSkeleton key={i} />
           ))
         ) : enrollmentMetrics ? (
           <>
@@ -157,12 +158,16 @@ export function EnrollmentsSection() {
               title="Enrolled Today"
               value={enrollmentMetrics.enrollmentsToday}
               description="New P2P enrollments today"
+              intent="info"
+              accent="sky"
             />
             <MetricCard
               icon={<Users className="h-4 w-4 text-muted-foreground" />}
               title={timeFilter === 'this_month' ? 'Enrolled This Month' : 'Enrolled In Period'}
               value={timeFilter === 'this_month' ? enrollmentMetrics.enrollmentsThisMonth : enrollmentMetrics.totalEnrollments}
               description={`Total enrollments ${timeFilter === 'custom' ? 'in selected period' : timeFilter.replace('_', ' ')}`}
+              intent="info"
+              accent="emerald"
             />
           </>
         ) : (

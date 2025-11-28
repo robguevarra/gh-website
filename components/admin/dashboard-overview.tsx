@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MetricCard } from './metric-card';
+import { MetricCardSkeleton } from './metric-card-skeleton';
 import { getOverviewMetrics } from '@/app/actions/analytics-actions';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -73,7 +74,7 @@ export function DashboardOverview() {
         </div>
         <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-5">
           {Array(5).fill(0).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+            <MetricCardSkeleton key={i} />
           ))}
         </div>
       </div>
@@ -122,30 +123,40 @@ export function DashboardOverview() {
           title="Total Revenue"
           value={formatCurrency(overviewMetrics.totalRevenue)}
           description={`Period: ${timeFilter.replace('_', ' ')}`}
+          intent="revenue"
+          accent="indigo"
         />
         <MetricCard
           icon={<UserPlus className="h-4 w-4 text-muted-foreground" />}
           title="Total Enrollees"
           value={overviewMetrics.totalEnrollments.toString()}
           description="P2P Course Students"
+          intent="info"
+          accent="sky"
         />
         <MetricCard
           icon={<FileText className="h-4 w-4 text-muted-foreground" />}
           title="Canva Ebook Orders"
           value={overviewMetrics.totalCanvaOrders.toString()}
           description="Digital Ebook Sales"
+          intent="neutral"
+          accent="violet"
         />
         <MetricCard
           icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />}
           title="Shopify Orders"
           value={overviewMetrics.totalShopifyOrders.toString()}
           description="E-commerce Sales"
+          intent="neutral"
+          accent="amber"
         />
         <MetricCard
           icon={<Package className="h-4 w-4 text-muted-foreground" />}
           title="Public Sale Orders"
           value={overviewMetrics.totalPublicSaleOrders.toString()}
           description="Pillow Talk License"
+          intent="neutral"
+          accent="teal"
         />
       </div>
     </div>

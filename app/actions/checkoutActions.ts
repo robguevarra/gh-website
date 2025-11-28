@@ -7,6 +7,7 @@ import { CartItem } from '@/stores/cartStore'; // Type for cart items
 import { type Database } from '@/types/supabase';
 import { type SupabaseClient } from '@supabase/supabase-js'; // Import SupabaseClient type
 import { extractAffiliateTrackingFromServerCookies } from '@/lib/services/affiliate/tracking-service';
+import { extractFacebookCookies } from '@/lib/facebook-capi';
 // TODO: Import Xendit client and necessary types
 // TODO: Import transaction logging utility (e.g., logTransaction from '@/lib/payment-utils')
 
@@ -119,15 +120,15 @@ export async function createXenditEcommercePayment(
       console.error('Error fetching products and variants:', productFetchError);
       throw new Error('Could not verify cart items.');
     }
-    
+
     // Basic check: Ensure we found details for all products in the cart
     if (!dbProductsWithVariant || dbProductsWithVariant.length !== productIdsInCart.length) {
-        console.warn('Cart validation failed: Mismatch between cart product IDs and DB results.', { cartIds: productIdsInCart, dbResults: dbProductsWithVariant });
-        const foundDbIds = new Set(dbProductsWithVariant?.map(p => p.id) || []);
-        const missingIds = productIdsInCart.filter(id => !foundDbIds.has(id));
-        return { success: false, error: `Invalid items in cart. Could not find products: ${missingIds.join(', ')}` };
+      console.warn('Cart validation failed: Mismatch between cart product IDs and DB results.', { cartIds: productIdsInCart, dbResults: dbProductsWithVariant });
+      const foundDbIds = new Set(dbProductsWithVariant?.map(p => p.id) || []);
+      const missingIds = productIdsInCart.filter(id => !foundDbIds.has(id));
+      return { success: false, error: `Invalid items in cart. Could not find products: ${missingIds.join(', ')}` };
     }
-    
+
     // Create a map for easy lookup
     const dbProductMap = new Map(dbProductsWithVariant.map(p => [p.id, p]));
 
@@ -140,17 +141,17 @@ export async function createXenditEcommercePayment(
       if (!dbProduct) {
         return { success: false, error: `Product details not found for ID: ${cartItem.productId}.` };
       }
-      
+
       // Check product status (e.g., must be 'active'), converting DB value to lowercase for comparison
       if (dbProduct.status?.toLowerCase() !== 'active') {
-          return { success: false, error: `Product '${dbProduct.title}' is not available for purchase.` };
+        return { success: false, error: `Product '${dbProduct.title}' is not available for purchase.` };
       }
-      
+
       // Get the first variant's details (assuming one variant relevant for purchase)
       // Supabase returns foreign table data as an array, even if limited
       const variants = dbProduct.shopify_product_variants;
       if (!Array.isArray(variants) || variants.length === 0) {
-         return { success: false, error: `No pricing information found for product: ${dbProduct.title}.` };
+        return { success: false, error: `No pricing information found for product: ${dbProduct.title}.` };
       }
       const dbVariant = variants[0]; // Take the first variant associated
 
@@ -161,7 +162,7 @@ export async function createXenditEcommercePayment(
 
       const validatedPrice = Number(dbVariant.price);
       calculatedTotal += validatedPrice * cartItem.quantity;
-      
+
       // Store validated details for metadata logging
       validatedItemsData.push({
         productId: dbProduct.id, // Parent product ID
@@ -175,51 +176,51 @@ export async function createXenditEcommercePayment(
     }
 
     if (calculatedTotal <= 0) {
-        return { success: false, error: 'Calculated total must be positive.' };
+      return { success: false, error: 'Calculated total must be positive.' };
     }
 
     // --- Validation complete --- 
 
     // --- Add Duplicate Purchase Check --- 
     const oneTimePurchaseItemsInCart = validatedItemsData.filter(item => {
-        // Find the corresponding db product to check the flag
-        const dbProduct = dbProductMap.get(item.productId);
-        return dbProduct?.is_one_time_purchase === true;
+      // Find the corresponding db product to check the flag
+      const dbProduct = dbProductMap.get(item.productId);
+      return dbProduct?.is_one_time_purchase === true;
     });
 
     if (oneTimePurchaseItemsInCart.length > 0) {
-        const oneTimePurchaseProductIds = oneTimePurchaseItemsInCart.map(item => item.productId);
-        
-        const { data: existingOwnedItems, error: ownershipCheckError } = await supabase
-            .from('ecommerce_order_items')
-            .select(`
+      const oneTimePurchaseProductIds = oneTimePurchaseItemsInCart.map(item => item.productId);
+
+      const { data: existingOwnedItems, error: ownershipCheckError } = await supabase
+        .from('ecommerce_order_items')
+        .select(`
                 product_id,
                 ecommerce_orders!inner ( user_id, order_status )
             `)
-            .in('product_id', oneTimePurchaseProductIds)
-            .eq('ecommerce_orders.user_id', user.id)
-            .in('ecommerce_orders.order_status', ['processing', 'completed']); // Status indicating successful purchase
+        .in('product_id', oneTimePurchaseProductIds)
+        .eq('ecommerce_orders.user_id', user.id)
+        .in('ecommerce_orders.order_status', ['processing', 'completed']); // Status indicating successful purchase
 
-        if (ownershipCheckError) {
-            console.error('[CheckoutAction] Error checking product ownership:', ownershipCheckError);
-            // Proceed cautiously, but log the error. Depending on policy, could throw an error here.
-            // For now, we'll let it proceed but this might allow duplicates if the check fails.
-            // Consider returning an error: return { success: false, error: 'Could not verify product ownership. Please try again later.' };
+      if (ownershipCheckError) {
+        console.error('[CheckoutAction] Error checking product ownership:', ownershipCheckError);
+        // Proceed cautiously, but log the error. Depending on policy, could throw an error here.
+        // For now, we'll let it proceed but this might allow duplicates if the check fails.
+        // Consider returning an error: return { success: false, error: 'Could not verify product ownership. Please try again later.' };
+      }
+
+      if (existingOwnedItems && existingOwnedItems.length > 0) {
+        const alreadyOwnedIds = new Set(existingOwnedItems.map(item => item.product_id));
+        const duplicatesInCart = oneTimePurchaseItemsInCart.filter(item => alreadyOwnedIds.has(item.productId));
+
+        if (duplicatesInCart.length > 0) {
+          const duplicateNames = duplicatesInCart.map(item => item.title).join(', ');
+          console.warn(`[CheckoutAction] User ${user.id} attempting to repurchase owned items: ${duplicateNames}`);
+          return {
+            success: false,
+            error: `You have already purchased the following item(s): ${duplicateNames}. Please remove them from your cart.`,
+          };
         }
-
-        if (existingOwnedItems && existingOwnedItems.length > 0) {
-            const alreadyOwnedIds = new Set(existingOwnedItems.map(item => item.product_id));
-            const duplicatesInCart = oneTimePurchaseItemsInCart.filter(item => alreadyOwnedIds.has(item.productId));
-
-            if (duplicatesInCart.length > 0) {
-                const duplicateNames = duplicatesInCart.map(item => item.title).join(', ');
-                console.warn(`[CheckoutAction] User ${user.id} attempting to repurchase owned items: ${duplicateNames}`);
-                return {
-                    success: false,
-                    error: `You have already purchased the following item(s): ${duplicateNames}. Please remove them from your cart.`,
-                };
-            }
-        }
+      }
     }
     // --- End Duplicate Purchase Check --- 
 
@@ -229,8 +230,9 @@ export async function createXenditEcommercePayment(
     const externalId = `ecom-inv-${timestamp}-${randomSuffix}`;
 
     // 4. Extract affiliate tracking cookies from server-side session
-    const { affiliateSlug, visitorId } = extractAffiliateTrackingFromServerCookies();
-    
+    const { affiliateSlug, visitorId } = await extractAffiliateTrackingFromServerCookies();
+    const { fbp, fbc } = await extractFacebookCookies();
+
     // 4. Prepare metadata for transaction log
     const transactionMetadata = {
       // Use the validated data collected above
@@ -242,7 +244,10 @@ export async function createXenditEcommercePayment(
         affiliateSlug,
         visitorId,
         capturedAt: new Date().toISOString()
-      }
+      },
+      // Add Facebook Pixel cookies for CAPI attribution
+      fbp,
+      fbc,
       // Add any other relevant info needed by the webhook
     };
 
@@ -250,7 +255,7 @@ export async function createXenditEcommercePayment(
     try {
       // Get admin client that bypasses RLS policies
       const adminClient = await createServiceRoleClient();
-      
+
       await logEcommercePendingTransaction({
         supabase: adminClient, // Use admin client to bypass RLS
         userId: user.id,
@@ -261,9 +266,9 @@ export async function createXenditEcommercePayment(
         metadata: transactionMetadata,
       });
     } catch (logError) {
-       console.error(`[CheckoutAction] CRITICAL: Failed to log pending transaction for externalId ${externalId}. Aborting payment initiation.`, logError);
-       // Return an error to the user if logging fails, as the webhook will fail later.
-       return { success: false, error: 'Failed to prepare transaction. Please try again later.' };
+      console.error(`[CheckoutAction] CRITICAL: Failed to log pending transaction for externalId ${externalId}. Aborting payment initiation.`, logError);
+      // Return an error to the user if logging fails, as the webhook will fail later.
+      return { success: false, error: 'Failed to prepare transaction. Please try again later.' };
     }
 
     // 6. Create Xendit Invoice using fetch, following existing patterns
@@ -320,8 +325,8 @@ export async function createXenditEcommercePayment(
     }
 
     if (!responseData.invoice_url) {
-        console.error("[CheckoutAction] Xendit response missing invoice_url:", responseData);
-        throw new Error('Payment provider did not return a valid payment URL.');
+      console.error("[CheckoutAction] Xendit response missing invoice_url:", responseData);
+      throw new Error('Payment provider did not return a valid payment URL.');
     }
 
     const invoiceUrl = responseData.invoice_url;

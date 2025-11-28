@@ -13,9 +13,11 @@ import {
 } from '@/lib/supabase/data-access/campaign-management';
 import { validateAdminAccess, handleServerError, handleNotFound } from '@/lib/supabase/route-handler';
 import { getAdminClient } from '@/lib/supabase/admin';
-import { addToQueue } from '@/lib/email/queue-utils';
 import { UnifiedProfile } from '@/types/users';
-import { SupabaseClient } from '@supabase/supabase-js';
+// Note: Bulk insert is used for queueing to support 5k+ recipients quickly
+import type { Database, Json } from '@/types/supabase';
+
+type EmailQueueInsert = Database['public']['Tables']['email_queue']['Insert'];
 
 /**
  * POST /api/admin/campaigns/send
@@ -29,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { campaignId } = body;
+    const { campaignId } = body as { campaignId: string };
     
     if (!campaignId) {
       return NextResponse.json({ error: 'Missing required field: campaignId' }, { status: 400 });
@@ -92,20 +94,25 @@ export async function POST(request: NextRequest) {
     }
     console.log(`[API GENERIC SEND /${campaignId}] Resolved ${finalProfileIds.length} profile IDs.`);
 
-    // 3. Fetch UnifiedProfiles (non-bounced)
-    // TODO: Batching for large audiences
-    // Note: email_bounced can be NULL (not bounced), false (not bounced), or true (bounced)
-    const { data: profiles, error: profilesError } = await adminClient
-      .from('unified_profiles')
-      .select<string, UnifiedProfile>('id, email, first_name, last_name, tags, email_bounced')
-      .in('id', finalProfileIds)
-      .or('email_bounced.is.null,email_bounced.eq.false')
-      .returns<UnifiedProfile[]>();
-
-    if (profilesError) {
-      return handleServerError(profilesError, '[API GENERIC SEND] Failed to fetch recipient profiles');
+    // 3. Fetch UnifiedProfiles (non-bounced) IN BATCHES to support 5k+
+    const profileFetchBatchSize = 500; // keeps URL/IN payloads reasonable
+    const profiles: UnifiedProfile[] = [];
+    for (let i = 0; i < finalProfileIds.length; i += profileFetchBatchSize) {
+      const idBatch = finalProfileIds.slice(i, i + profileFetchBatchSize);
+      const { data: batchProfiles, error: profilesError } = await adminClient
+        .from('unified_profiles')
+        .select<string, UnifiedProfile>('id, email, first_name, last_name, tags, email_bounced')
+        .in('id', idBatch)
+        .or('email_bounced.is.null,email_bounced.eq.false')
+        .returns<UnifiedProfile[]>();
+      if (profilesError) {
+        return handleServerError(profilesError, '[API GENERIC SEND] Failed to fetch recipient profiles');
+      }
+      if (batchProfiles && batchProfiles.length > 0) {
+        profiles.push(...batchProfiles);
+      }
     }
-    if (!profiles || profiles.length === 0) {
+    if (profiles.length === 0) {
       return NextResponse.json({ error: 'No valid (non-bounced) profiles found for the resolved audience.' }, { status: 400 });
     }
     console.log(`[API GENERIC SEND /${campaignId}] Fetched ${profiles.length} non-bounced profiles.`);
@@ -135,17 +142,25 @@ export async function POST(request: NextRequest) {
     }
     console.log(`[API GENERIC SEND /${campaignId}] ${permittedProfiles.length} profiles after frequency cap.`);
 
-    // 5. Campaign-specific duplicate check (against email_queue)
+    // 5. Campaign-specific duplicate check (against email_queue), IN BATCHES
     const emailsOfPermittedProfiles = permittedProfiles.map(p => p.email.toLowerCase());
-    const { data: existingQueueItems, error: queueCheckError } = await adminClient
-      .from('email_queue')
-      .select('recipient_email')
-      .eq('campaign_id', campaignId)
-      .in('recipient_email', emailsOfPermittedProfiles);
-    if (queueCheckError) {
-      console.warn(`[API GENERIC SEND /${campaignId}] Error checking existing queue items:`, queueCheckError.message);
+    const emailsAlreadyInQueue = new Set<string>();
+    const dupCheckBatchSize = 1000;
+    for (let i = 0; i < emailsOfPermittedProfiles.length; i += dupCheckBatchSize) {
+      const emailBatch = emailsOfPermittedProfiles.slice(i, i + dupCheckBatchSize);
+      const { data: existingQueueItems, error: queueCheckError } = await adminClient
+        .from('email_queue')
+        .select('recipient_email')
+        .eq('campaign_id', campaignId)
+        .in('recipient_email', emailBatch);
+      if (queueCheckError) {
+        console.warn(`[API GENERIC SEND /${campaignId}] Error checking existing queue items:`, queueCheckError.message);
+        continue;
+      }
+      (existingQueueItems || []).forEach((item: { recipient_email: string }) => {
+        if (item.recipient_email) emailsAlreadyInQueue.add(item.recipient_email.toLowerCase());
+      });
     }
-    const emailsAlreadyInQueue = new Set((existingQueueItems || []).map((item: { recipient_email: string }) => item.recipient_email.toLowerCase()));
     const finalProfilesToQueue = permittedProfiles.filter(p => !emailsAlreadyInQueue.has(p.email.toLowerCase()));
         
     if (finalProfilesToQueue.length === 0) {
@@ -153,20 +168,28 @@ export async function POST(request: NextRequest) {
     }
     console.log(`[API GENERIC SEND /${campaignId}] ${finalProfilesToQueue.length} profiles to be queued.`);
 
-    // 6. Add to Queue
+    // 6. Add to Queue IN BULK (batches) for speed and to avoid timeouts
     let successfullyQueuedCount = 0;
-    for (const profile of finalProfilesToQueue) {
-      try {
-        await addToQueue(adminClient, {
-          campaignId: campaignId,
-          recipientEmail: profile.email,
-          recipientData: profile,
-          priority: campaign.priority || 1,
-        });
-        successfullyQueuedCount++;
-      } catch (queueError) {
-        console.error(`[API GENERIC SEND /${campaignId}] Error adding ${profile.email} to queue:`, queueError);
+    const insertBatchSize = 1000;
+    for (let i = 0; i < finalProfilesToQueue.length; i += insertBatchSize) {
+      const batch = finalProfilesToQueue.slice(i, i + insertBatchSize);
+      const items: EmailQueueInsert[] = batch.map(profile => ({
+        campaign_id: campaignId,
+        recipient_email: profile.email,
+        recipient_data: profile as unknown as Json,
+        priority: campaign.priority || 1,
+        status: 'pending',
+        scheduled_at: new Date().toISOString()
+      }));
+      const { data: inserted, error: insertError } = await adminClient
+        .from('email_queue')
+        .insert(items as EmailQueueInsert[])
+        .select('id');
+      if (insertError) {
+        console.error(`[API GENERIC SEND /${campaignId}] Error inserting queue batch starting at index ${i}:`, insertError);
+        continue;
       }
+      successfullyQueuedCount += inserted?.length || items.length;
     }
     console.log(`[API GENERIC SEND /${campaignId}] Successfully queued ${successfullyQueuedCount} emails.`);
 

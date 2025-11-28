@@ -6,6 +6,7 @@
 import { getAdminClient } from '@/lib/supabase/admin';
 import { logTransaction } from './payment-utils';
 import { extractAffiliateTrackingFromServerCookies } from '@/lib/services/affiliate/tracking-service';
+import { extractFacebookCookies } from '@/lib/facebook-capi';
 
 // Define payment method types (same as existing)
 export type PaymentMethod = "invoice" | "card" | "ewallet" | "direct_debit"
@@ -142,13 +143,15 @@ export async function createPublicSalePaymentIntent(params: PublicSalePaymentPar
     try {
       // Extract affiliate tracking (same as existing)
       const { affiliateSlug, visitorId } = await extractAffiliateTrackingFromServerCookies();
-      
+
       if (affiliateSlug && visitorId) {
         console.log(`[PublicSaleAction] Affiliate tracking captured: affiliate=${affiliateSlug}, visitor=${visitorId}`);
       } else {
         console.log('[PublicSaleAction] No affiliate tracking cookies found during checkout');
       }
-      
+
+      const { fbp, fbc } = await extractFacebookCookies();
+
       // Prepare metadata for logging
       interface TransactionMetadata {
         firstName: string;
@@ -173,18 +176,20 @@ export async function createPublicSalePaymentIntent(params: PublicSalePaymentPar
         sale_price: params.amount.toString(),
         source: params.metadata?.source || 'website',
       };
-      
+
       // Add affiliate tracking data
       if (affiliateSlug) loggedMetadata.affiliate_slug = affiliateSlug;
       if (visitorId) loggedMetadata.visitor_id = visitorId;
       if (affiliateSlug || visitorId) loggedMetadata.affiliate_capture_time = new Date().toISOString();
+      if (fbp) loggedMetadata.fbp = fbp;
+      if (fbc) loggedMetadata.fbc = fbc;
 
       // Clean metadata
       const metadataToClean: any = loggedMetadata;
-      Object.keys(metadataToClean).forEach(key => 
+      Object.keys(metadataToClean).forEach(key =>
         (metadataToClean[key] === undefined || metadataToClean[key] === null) && delete metadataToClean[key]
       );
-      
+
       // Log transaction with PUBLIC_SALE type (this maps to 'ebook' in logTransaction but uses metadata to distinguish)
       const transaction = await logTransaction({
         transactionType: 'ebook', // Use existing 'ebook' type but metadata will have product_code
