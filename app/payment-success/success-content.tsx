@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { CheckCircle, ArrowLeft, ChevronRight } from "lucide-react";
@@ -29,6 +31,26 @@ export function SuccessContent({
   formattedAmount,
   productType,
 }: SuccessContentProps) {
+  useEffect(() => {
+    // Fire Facebook Pixel Purchase event ONLY for Papers to Profits Course
+    if (
+      typeof window !== 'undefined' &&
+      (window as any).fbq &&
+      amountPaid &&
+      productName === "Papers to Profits Course"
+    ) {
+      (window as any).fbq('track', 'Purchase', {
+        currency: 'PHP',
+        value: amountPaid,
+        content_name: productName,
+        content_ids: externalId ? [externalId] : [],
+        content_type: 'product',
+        event_id: externalId // Important for deduplication with server-side event
+      });
+      console.log("Facebook Pixel Purchase event fired for P2P", { amountPaid, externalId });
+    }
+  }, [amountPaid, productName, externalId]);
+
   return (
     <div className="min-h-screen flex flex-col">
       <PublicHeader />
@@ -36,18 +58,18 @@ export function SuccessContent({
         {/* Decorative elements in background */}
         <div className="absolute top-20 right-[10%] w-64 h-64 rounded-full bg-[#f0e6dd] blur-3xl opacity-50"></div>
         <div className="absolute bottom-20 left-[5%] w-80 h-80 rounded-full bg-[#f0e6dd] blur-3xl opacity-30"></div>
-        
+
         <div className="max-w-7xl mx-auto px-4 py-16 md:py-24">
           <div className="max-w-2xl mx-auto">
             {/* Success message */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
               className="space-y-8"
             >
               <div>
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.2 }}
@@ -55,8 +77,8 @@ export function SuccessContent({
                 >
                   Payment Confirmed
                 </motion.div>
-                
-                <motion.h1 
+
+                <motion.h1
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.3 }}
@@ -64,8 +86,8 @@ export function SuccessContent({
                 >
                   Thank You For Your Purchase!
                 </motion.h1>
-                
-                <motion.p 
+
+                <motion.p
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.4 }}
@@ -73,8 +95,8 @@ export function SuccessContent({
                   {confirmationLine1}
                 </motion.p>
               </div>
-              
-              <motion.div 
+
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.5 }}
@@ -86,7 +108,7 @@ export function SuccessContent({
                   </div>
                   <h2 className="text-xl font-serif text-[#5d4037]">Order Details</h2>
                 </div>
-                
+
                 <div className="space-y-3 text-[#6d4c41]">
                   <div className="flex justify-between items-center border-b border-gray-100 pb-2">
                     <span className="font-medium">Product</span>
@@ -102,12 +124,12 @@ export function SuccessContent({
                       <span className="font-medium text-[#ad8174]">{formattedAmount}</span>
                     </div>
                   )}
-                  
+
                   <div className="pt-2 text-sm">
                     <p>{confirmationLine2}</p>
                   </div>
                 </div>
-                
+
                 <div className="pt-6 flex flex-col sm:flex-row gap-4">
                   <Link href="/" className="flex-1">
                     <Button className="w-full bg-[#ad8174] hover:bg-[#8d6e63] text-white">
@@ -115,7 +137,7 @@ export function SuccessContent({
                       Return to Home
                     </Button>
                   </Link>
-                  
+
                   {/* Show this button only for courses, not for ebooks */}
                   {productType === 'course' && (
                     <Link href="/dashboard/my-courses" className="flex-1">
