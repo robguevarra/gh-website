@@ -69,7 +69,7 @@ export function TopSourcesChart({ data }: TopSourcesChartProps) {
                             cy="50%"
                             labelLine={false}
                             label={({ source, percent }) => `${source} ${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
+                            outerRadius="70%"
                             fill="#8884d8"
                             dataKey="count"
                             nameKey="source"
@@ -125,7 +125,7 @@ export function TopLocationsChart({ data }: TopLocationsChartProps) {
                     <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                         <XAxis type="number" />
-                        <YAxis dataKey="location" type="category" width={100} tick={{ fontSize: 12 }} />
+                        <YAxis dataKey="location" type="category" width={120} tick={{ fontSize: 12 }} />
                         <Tooltip cursor={{ fill: 'transparent' }} />
                         <Bar dataKey="count" fill="#8884d8" name="Views" radius={[0, 4, 4, 0]} />
                     </BarChart>
@@ -154,7 +154,7 @@ export function DeviceStatsChart({ data }: DeviceStatsChartProps) {
                             cy="50%"
                             labelLine={false}
                             label={({ device, percent }) => `${device} ${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
+                            outerRadius="70%"
                             fill="#82ca9d"
                             dataKey="count"
                             nameKey="device"
@@ -190,7 +190,7 @@ export function OSStatsChart({ data }: OSStatsChartProps) {
                             cy="50%"
                             labelLine={false}
                             label={({ os, percent }) => `${os} ${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
+                            outerRadius="70%"
                             fill="#8884d8"
                             dataKey="count"
                             nameKey="os"
@@ -226,7 +226,7 @@ export function BrowserStatsChart({ data }: BrowserStatsChartProps) {
                             cy="50%"
                             labelLine={false}
                             label={({ browser, percent }) => `${browser} ${(percent * 100).toFixed(0)}%`}
-                            outerRadius={80}
+                            outerRadius="70%"
                             fill="#82ca9d"
                             dataKey="count"
                             nameKey="browser"
@@ -238,6 +238,30 @@ export function BrowserStatsChart({ data }: BrowserStatsChartProps) {
                         <Tooltip formatter={(value: number, name: string, props: any) => [value, props.payload.browser]} />
                     </PieChart>
                 </ResponsiveContainer>
+            </CardContent>
+        </Card>
+    );
+}
+
+interface TopSourcesTableProps {
+    data: { source: string; count: number }[];
+}
+
+export function TopSourcesTable({ data }: TopSourcesTableProps) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Traffic Sources</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-4">
+                    {data.map((source, index) => (
+                        <div key={index} className="flex items-center justify-between border-b pb-2 last:border-0">
+                            <div className="font-medium truncate max-w-[70%]">{source.source}</div>
+                            <div className="text-muted-foreground">{source.count} views</div>
+                        </div>
+                    ))}
+                </div>
             </CardContent>
         </Card>
     );

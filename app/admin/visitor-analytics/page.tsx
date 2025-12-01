@@ -12,6 +12,7 @@ import {
 import {
     DailyViewsChart,
     TopSourcesChart,
+    TopSourcesTable,
     TopPagesTable,
     TopLocationsChart,
     DeviceStatsChart,
@@ -21,7 +22,8 @@ import {
 import { RecentActivityList } from '@/components/analytics/recent-activity';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Clock, TrendingUp } from 'lucide-react';
+import { Loader2, Clock, TrendingUp, Activity } from 'lucide-react';
+import { VisitorAnalyticsSkeleton } from '@/components/analytics/visitor-analytics-skeleton';
 
 export default function VisitorAnalyticsPage() {
     const [timeRange, setTimeRange] = useState('30days');
@@ -71,11 +73,11 @@ export default function VisitorAnalyticsPage() {
     };
 
     return (
-        <div className="p-8 space-y-8">
-            <div className="flex items-center justify-between">
-                <h1 className="text-3xl font-bold tracking-tight">Visitor Analytics</h1>
+        <div className="p-4 md:p-8 space-y-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Visitor Analytics</h1>
                 <Select value={timeRange} onValueChange={setTimeRange}>
-                    <SelectTrigger className="w-[180px]">
+                    <SelectTrigger className="w-full md:w-[180px]">
                         <SelectValue placeholder="Select range" />
                     </SelectTrigger>
                     <SelectContent>
@@ -87,15 +89,13 @@ export default function VisitorAnalyticsPage() {
             </div>
 
             {loading ? (
-                <div className="flex items-center justify-center h-[400px]">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
+                <VisitorAnalyticsSkeleton />
             ) : stats ? (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Main Content */}
                     <div className="lg:col-span-2 space-y-8">
                         {/* Key Metrics */}
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                             <Card>
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                     <CardTitle className="text-sm font-medium">Total Page Views</CardTitle>
@@ -123,6 +123,15 @@ export default function VisitorAnalyticsPage() {
                             </Card>
                             <Card>
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium">Bounce Rate</CardTitle>
+                                    <Activity className="h-4 w-4 text-muted-foreground" />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold">{stats.bounceRate}%</div>
+                                </CardContent>
+                            </Card>
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                                     <CardTitle className="text-sm font-medium">Conversion Rate</CardTitle>
                                     <TrendingUp className="h-4 w-4 text-muted-foreground" />
                                 </CardHeader>
@@ -142,6 +151,10 @@ export default function VisitorAnalyticsPage() {
 
                         <div className="grid gap-4 md:grid-cols-2">
                             <TopSourcesChart data={stats.topSources} />
+                            <TopSourcesTable data={stats.topSources} />
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
                             <DeviceStatsChart data={stats.deviceStats} />
                         </div>
 
@@ -150,8 +163,25 @@ export default function VisitorAnalyticsPage() {
                             <BrowserStatsChart data={stats.browserStats} />
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-1">
+                        <div className="grid gap-4 md:grid-cols-2">
                             <TopLocationsChart data={stats.topLocations} />
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Top Cities</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        {stats.topCities.map((city, index) => (
+                                            <div key={index} className="flex items-center justify-between border-b pb-2 last:border-0">
+                                                <div className="font-medium truncate max-w-[70%]">
+                                                    {city.city}, {city.country}
+                                                </div>
+                                                <div className="text-muted-foreground">{city.count} views</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
                         </div>
 
                         {/* Tables */}
@@ -166,7 +196,12 @@ export default function VisitorAnalyticsPage() {
                     </div>
                 </div>
             ) : (
-                <div className="text-center text-muted-foreground">Failed to load data.</div>
+                <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+                    <div className="text-center space-y-2">
+                        <p className="text-lg font-medium">Failed to load data</p>
+                        <p className="text-sm">Please try refreshing the page</p>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { DateRange } from 'react-day-picker';
-import { isEqual } from 'lodash-es'; // Re-enable import
+import { isEqual } from 'lodash-es';
 
 // --- Interfaces matching API responses (or component props) ---
 
@@ -33,6 +33,18 @@ interface FacebookAdDetail {
   clicks: number | null;
 }
 
+interface MarketingComparisonData {
+  campaign_id: string;
+  campaign_name: string;
+  date: string;
+  fb_spend: number;
+  fb_clicks: number;
+  fb_impressions: number;
+  visitor_count: number;
+  bounce_count: number;
+  conversion_count: number;
+}
+
 // --- Filters ---
 interface MarketingFiltersState {
   dateRange: DateRange | undefined;
@@ -48,15 +60,18 @@ interface MarketingDataState {
   summaryData: MarketingSummaryData | null;
   channelData: ChannelPerformanceData[] | null;
   facebookDetailsData: FacebookAdDetail[] | null;
+  comparisonData: MarketingComparisonData[] | null;
   loadingStates: {
     summary: boolean;
     channel: boolean;
     details: boolean;
+    comparison: boolean;
   };
   errorStates: {
     summary: string | null;
     channel: string | null;
     details: string | null;
+    comparison: string | null;
   };
   lastFetchedFilters: MarketingFiltersState | null;
 }
@@ -66,15 +81,14 @@ interface MarketingDataActions {
   fetchMarketingSummary: (currentFilters: MarketingFiltersState) => Promise<void>;
   fetchMarketingByChannel: (currentFilters: MarketingFiltersState) => Promise<void>;
   fetchFacebookDetails: (currentFilters: MarketingFiltersState) => Promise<void>;
+  fetchComparisonData: (currentFilters: MarketingFiltersState) => Promise<void>;
   fetchAllMarketingData: (currentFilters: MarketingFiltersState) => Promise<void>;
 }
 
 // --- Combined Store Type ---
-// Ensure this type combines all state and action interfaces correctly
 type MarketingAnalyticsStore = MarketingFiltersState & MarketingFiltersActions & MarketingDataState & MarketingDataActions;
 
 // --- Helper function for API calls ---
-// Defined within the store or imported from a utility file
 const fetchApiData = async (endpoint: string, params: Record<string, string | undefined>): Promise<any> => {
   const url = new URL(endpoint, window.location.origin);
   Object.entries(params).forEach(([key, value]) => {
@@ -98,23 +112,23 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
 
   // Filter Actions
   setDateRange: (dateRange) => set({ dateRange }),
-  setFilters: (filters) => set((state: MarketingAnalyticsStore) => ({ ...state, ...filters })), // Add state type
+  setFilters: (filters) => set((state) => ({ ...state, ...filters })),
 
   // Data State
   summaryData: null,
   channelData: null,
   facebookDetailsData: null,
-  loadingStates: { summary: false, channel: false, details: false },
-  errorStates: { summary: null, channel: null, details: null },
+  comparisonData: null,
+  loadingStates: { summary: false, channel: false, details: false, comparison: false },
+  errorStates: { summary: null, channel: null, details: null, comparison: null },
   lastFetchedFilters: null,
 
   // Data Actions
-  fetchMarketingSummary: async (currentFilters: MarketingFiltersState) => {
+  fetchMarketingSummary: async (currentFilters) => {
     if (get().loadingStates.summary) return;
-    // Do not short-circuit here; fetchAll controls caching to avoid races
-    set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, summary: true }, errorStates: { ...state.errorStates, summary: null } }));
+    set((state) => ({ loadingStates: { ...state.loadingStates, summary: true }, errorStates: { ...state.errorStates, summary: null } }));
     try {
-      const params = { 
+      const params = {
         startDate: currentFilters.dateRange?.from?.toISOString(),
         endDate: currentFilters.dateRange?.to?.toISOString(),
       };
@@ -122,18 +136,17 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
       set({ summaryData: data });
     } catch (error: any) {
       console.error('Failed to fetch marketing summary:', error);
-      set((state: MarketingAnalyticsStore) => ({ errorStates: { ...state.errorStates, summary: error.message } }));
+      set((state) => ({ errorStates: { ...state.errorStates, summary: error.message } }));
     } finally {
-      set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, summary: false } }));
+      set((state) => ({ loadingStates: { ...state.loadingStates, summary: false } }));
     }
   },
 
-  fetchMarketingByChannel: async (currentFilters: MarketingFiltersState) => {
+  fetchMarketingByChannel: async (currentFilters) => {
     if (get().loadingStates.channel) return;
-    // Do not short-circuit here; fetchAll controls caching to avoid races
-    set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, channel: true }, errorStates: { ...state.errorStates, channel: null } }));
+    set((state) => ({ loadingStates: { ...state.loadingStates, channel: true }, errorStates: { ...state.errorStates, channel: null } }));
     try {
-      const params = { 
+      const params = {
         startDate: currentFilters.dateRange?.from?.toISOString(),
         endDate: currentFilters.dateRange?.to?.toISOString(),
       };
@@ -141,18 +154,17 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
       set({ channelData: data });
     } catch (error: any) {
       console.error('Failed to fetch marketing by channel:', error);
-      set((state: MarketingAnalyticsStore) => ({ errorStates: { ...state.errorStates, channel: error.message } }));
+      set((state) => ({ errorStates: { ...state.errorStates, channel: error.message } }));
     } finally {
-      set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, channel: false } }));
+      set((state) => ({ loadingStates: { ...state.loadingStates, channel: false } }));
     }
   },
 
-  fetchFacebookDetails: async (currentFilters: MarketingFiltersState) => {
+  fetchFacebookDetails: async (currentFilters) => {
     if (get().loadingStates.details) return;
-    // Do not short-circuit here; fetchAll controls caching to avoid races
-    set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, details: true }, errorStates: { ...state.errorStates, details: null } }));
+    set((state) => ({ loadingStates: { ...state.loadingStates, details: true }, errorStates: { ...state.errorStates, details: null } }));
     try {
-      const params = { 
+      const params = {
         startDate: currentFilters.dateRange?.from?.toISOString(),
         endDate: currentFilters.dateRange?.to?.toISOString(),
       };
@@ -160,14 +172,31 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
       set({ facebookDetailsData: data });
     } catch (error: any) {
       console.error('Failed to fetch facebook details:', error);
-      set((state: MarketingAnalyticsStore) => ({ errorStates: { ...state.errorStates, details: error.message } }));
+      set((state) => ({ errorStates: { ...state.errorStates, details: error.message } }));
     } finally {
-      set((state: MarketingAnalyticsStore) => ({ loadingStates: { ...state.loadingStates, details: false } }));
+      set((state) => ({ loadingStates: { ...state.loadingStates, details: false } }));
     }
   },
 
-  fetchAllMarketingData: async (currentFilters: MarketingFiltersState) => {
-    // Cache guard at fetchAll level only
+  fetchComparisonData: async (currentFilters) => {
+    if (get().loadingStates.comparison) return;
+    set((state) => ({ loadingStates: { ...state.loadingStates, comparison: true }, errorStates: { ...state.errorStates, comparison: null } }));
+    try {
+      const params = {
+        startDate: currentFilters.dateRange?.from?.toISOString(),
+        endDate: currentFilters.dateRange?.to?.toISOString(),
+      };
+      const data = await fetchApiData('/api/admin/marketing/comparison', params);
+      set({ comparisonData: data });
+    } catch (error: any) {
+      console.error('Failed to fetch comparison data:', error);
+      set((state) => ({ errorStates: { ...state.errorStates, comparison: error.message } }));
+    } finally {
+      set((state) => ({ loadingStates: { ...state.loadingStates, comparison: false } }));
+    }
+  },
+
+  fetchAllMarketingData: async (currentFilters) => {
     if (isEqual(currentFilters, get().lastFetchedFilters)) {
       console.log('Skipping fetchAll: filters match last successful fetch');
       return;
@@ -176,6 +205,7 @@ export const useMarketingAnalyticsStore = create<MarketingAnalyticsStore>((set, 
       get().fetchMarketingSummary(currentFilters),
       get().fetchMarketingByChannel(currentFilters),
       get().fetchFacebookDetails(currentFilters),
+      get().fetchComparisonData(currentFilters),
     ]);
     const allOk = results.every(r => r.status === 'fulfilled');
     set({ lastFetchedFilters: allOk ? currentFilters : null });

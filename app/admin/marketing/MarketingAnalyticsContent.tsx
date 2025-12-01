@@ -2,6 +2,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 // Adjust component import paths relative to the new location
+import CampaignPerformanceTable from './components/CampaignPerformanceTable';
+import MarketingVsVisitorChart from './components/MarketingVsVisitorChart';
 import MarketingMetricCards from './components/MarketingMetricCards';
 import MarketingChannelComparison from './components/MarketingChannelComparison';
 import FacebookAdsDetailTable from './components/FacebookAdsDetailTable';
@@ -19,6 +21,7 @@ export default function MarketingAnalyticsContent() {
     summaryData,
     channelData,
     facebookDetailsData,
+    comparisonData,
     loadingStates,
     errorStates,
     fetchAllMarketingData,
@@ -43,7 +46,7 @@ export default function MarketingAnalyticsContent() {
           setDateRange({ from: start, to: end });
           return;
         }
-      } catch {}
+      } catch { }
       // Fallback: last 30 days relative to today
       const end = new Date();
       end.setUTCHours(23, 59, 59, 999);
@@ -120,6 +123,25 @@ export default function MarketingAnalyticsContent() {
 
       {/* Channel Comparison */}
       <MarketingChannelComparison data={channelData} isLoading={loadingStates.channel} error={errorStates.channel} />
+
+      {/* Traffic Quality & Attribution Section */}
+      <div className="space-y-6">
+        <h2 className="text-xl font-semibold tracking-tight">Traffic Quality & Attribution</h2>
+
+        {/* Clicks vs Visits Chart */}
+        <MarketingVsVisitorChart
+          data={comparisonData}
+          isLoading={loadingStates.comparison}
+          error={errorStates.comparison}
+        />
+
+        {/* Campaign Performance Table */}
+        <CampaignPerformanceTable
+          data={comparisonData}
+          isLoading={loadingStates.comparison}
+          error={errorStates.comparison}
+        />
+      </div>
 
       {/* Facebook Ads Details */}
       <FacebookAdsDetailTable data={facebookDetailsData} isLoading={loadingStates.details} error={errorStates.details} />
