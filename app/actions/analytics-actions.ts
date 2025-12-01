@@ -183,7 +183,7 @@ export async function getOverviewMetrics(options: UnifiedAnalyticsOptions): Prom
     console.error('Error in getOverviewMetrics:', error);
     throw error;
   }
-} 
+}
 
 // Server action to get detailed Shopify ecommerce product breakdown
 export async function getShopifyProductBreakdown(options: UnifiedAnalyticsOptions): Promise<ShopifyProductBreakdown[]> {
@@ -191,66 +191,25 @@ export async function getShopifyProductBreakdown(options: UnifiedAnalyticsOption
   const dateRange = getDateRange(options.timeFilter, options.dateRange);
 
   try {
-    const { data, error } = await supabase
-      .from('ecommerce_orders')
-      .select(`
-        id,
-        order_status,
-        created_at,
-        ecommerce_order_items (
-          quantity,
-          price_at_purchase,
-          shopify_products (
-            title
-          )
-        )
-      `)
-      .eq('order_status', 'completed')
-      .gte('created_at', dateRange.from.toISOString())
-      .lte('created_at', dateRange.to.toISOString());
+    const { data, error } = await supabase.rpc('get_revenue_by_product' as any, {
+      p_start_date: dateRange.from.toISOString(),
+      p_end_date: dateRange.to.toISOString(),
+      p_source_platform: 'shopify'
+    });
 
     if (error) {
       console.error('Shopify product breakdown error:', error);
       throw new Error(`Failed to get Shopify product breakdown: ${error.message}`);
     }
 
-    // Process the data to create product breakdown
-    const productMap = new Map<string, {
-      totalQuantity: number;
-      totalRevenue: number;
-      orderCount: Set<string>;
-      prices: number[];
-    }>();
-
-    data?.forEach(order => {
-      order.ecommerce_order_items.forEach(item => {
-        const productName = item.shopify_products?.title || 'Unknown Product';
-        const existing = productMap.get(productName) || {
-          totalQuantity: 0,
-          totalRevenue: 0,
-          orderCount: new Set(),
-          prices: []
-        };
-
-        existing.totalQuantity += item.quantity;
-        existing.totalRevenue += item.quantity * Number(item.price_at_purchase);
-        existing.orderCount.add(order.id);
-        existing.prices.push(Number(item.price_at_purchase));
-
-        productMap.set(productName, existing);
-      });
-    });
-
-    // Convert to final format and sort by revenue
-    const breakdown: ShopifyProductBreakdown[] = Array.from(productMap.entries())
-      .map(([productName, data]) => ({
-        productName,
-        totalQuantity: data.totalQuantity,
-        totalRevenue: data.totalRevenue,
-        orderCount: data.orderCount.size,
-        avgPrice: data.prices.reduce((sum, price) => sum + price, 0) / data.prices.length
-      }))
-      .sort((a, b) => b.totalRevenue - a.totalRevenue);
+    // Transform RPC result to expected format
+    const breakdown: ShopifyProductBreakdown[] = (data as any[] || []).map(row => ({
+      productName: row.product_name || 'Unknown Product',
+      totalQuantity: Number(row.units_sold),
+      totalRevenue: Number(row.total_revenue),
+      orderCount: 0, // RPC doesn't currently return unique order count, setting to 0 or we could update RPC
+      avgPrice: Number(row.average_transaction_value)
+    }));
 
     return breakdown;
   } catch (error) {

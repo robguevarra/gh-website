@@ -12,11 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import type { DateRange } from "react-day-picker";
 import { getRevenueBreakdown, getOverviewMetrics, getShopifyProductBreakdown } from '@/app/actions/analytics-actions';
-import type { 
-  RevenueBreakdown, 
+import type {
+  RevenueBreakdown,
   OverviewMetrics,
   ShopifyProductBreakdown,
-  UnifiedAnalyticsOptions, 
+  UnifiedAnalyticsOptions,
   TimeFilter,
   DateRange as AnalyticsDateRange
 } from '@/app/actions/analytics-actions';
@@ -31,7 +31,7 @@ export function RevenueSection() {
   const [shopifyProducts, setShopifyProducts] = useState<ShopifyProductBreakdown[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Filter state
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('this_month');
   const [includeMigrationData, setIncludeMigrationData] = useState(false);
@@ -55,58 +55,58 @@ export function RevenueSection() {
   // Helper functions to aggregate data by category
   const getEnrollmentData = () => {
     if (!revenueData) return { count: 0, revenue: 0 };
-    
+
     const enrollmentTypes = ['P2P', 'p2p_course', 'migration_remediation', 'manual_enrollment'];
     let count = 0;
     let revenue = 0;
-    
+
     enrollmentTypes.forEach(type => {
       if (revenueData[type]) {
         count += revenueData[type].count;
         revenue += revenueData[type].revenue;
       }
     });
-    
+
     return { count, revenue };
   };
 
   const getCanvaData = () => {
     if (!revenueData) return { count: 0, revenue: 0 };
-    
+
     const canvaTypes = ['CANVA', 'Canva', 'canva_ebook'];
     let count = 0;
     let revenue = 0;
-    
+
     canvaTypes.forEach(type => {
       if (revenueData[type]) {
         count += revenueData[type].count;
         revenue += revenueData[type].revenue;
       }
     });
-    
+
     return { count, revenue };
   };
 
   const getShopifyData = () => {
     if (!revenueData) return { count: 0, revenue: 0 };
-    
+
     const shopifyTypes = ['SHOPIFY_ECOM'];
     let count = 0;
     let revenue = 0;
-    
+
     shopifyTypes.forEach(type => {
       if (revenueData[type]) {
         count += revenueData[type].count;
         revenue += revenueData[type].revenue;
       }
     });
-    
+
     return { count, revenue };
   };
 
   const getPublicSaleData = () => {
     if (!revenueData) return { count: 0, revenue: 0 };
-    
+
     return revenueData['PUBLIC_SALE'] || { count: 0, revenue: 0 };
   };
 
@@ -116,7 +116,7 @@ export function RevenueSection() {
       try {
         setIsLoading(true);
         setError(null);
-        
+
         const options: UnifiedAnalyticsOptions = {
           timeFilter,
           includeMigrationData,
@@ -127,21 +127,16 @@ export function RevenueSection() {
           getRevenueBreakdown(options),
           getOverviewMetrics(options)
         ]);
-        
+
         setRevenueData(revenue);
         setOverviewData(overview);
 
-        // Fetch Shopify product breakdown if there are Shopify orders
-        if (revenue['SHOPIFY_ECOM']?.count > 0) {
-          try {
-            const shopifyBreakdown = await getShopifyProductBreakdown(options);
-            setShopifyProducts(shopifyBreakdown);
-          } catch (shopifyError) {
-            console.error('Error fetching Shopify product breakdown:', shopifyError);
-            // Continue with main data, just set empty array for products
-            setShopifyProducts([]);
-          }
-        } else {
+        // Always fetch Shopify product breakdown to show all products including 0 sales
+        try {
+          const shopifyBreakdown = await getShopifyProductBreakdown(options);
+          setShopifyProducts(shopifyBreakdown);
+        } catch (shopifyError) {
+          console.error('Error fetching Shopify product breakdown:', shopifyError);
           setShopifyProducts([]);
         }
       } catch (err: any) {
@@ -184,7 +179,7 @@ export function RevenueSection() {
           <h1 className="text-3xl font-bold">Revenue Analytics</h1>
           <p className="text-muted-foreground">Database-optimized revenue breakdown and performance</p>
         </div>
-        
+
         {/* Revenue Analytics Controls */}
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
           {/* Migration Data Toggle */}
@@ -198,7 +193,7 @@ export function RevenueSection() {
               Include Migration Data
             </Label>
           </div>
-          
+
           {/* Date Filter Selection */}
           <Select value={timeFilter} onValueChange={(value: TimeFilter) => setTimeFilter(value)}>
             <SelectTrigger className="w-[180px]">
@@ -210,12 +205,12 @@ export function RevenueSection() {
               <SelectItem value="custom">Custom Range</SelectItem>
             </SelectContent>
           </Select>
-          
+
           {/* Custom Date Range Picker */}
           {timeFilter === 'custom' && (
-            <DateRangePicker 
-              value={customDateRange} 
-              onChange={setCustomDateRange} 
+            <DateRangePicker
+              value={customDateRange}
+              onChange={setCustomDateRange}
             />
           )}
         </div>
@@ -295,7 +290,7 @@ export function RevenueSection() {
           </>
         )}
       </div>
-      
+
       {/* Detailed Revenue Breakdown */}
       {!isLoading && revenueData && (
         <Card>
@@ -306,7 +301,7 @@ export function RevenueSection() {
           <CardContent>
             <div className="space-y-3">
               {Object.entries(revenueData)
-                .sort(([,a], [,b]) => b.revenue - a.revenue)
+                .sort(([, a], [, b]) => b.revenue - a.revenue)
                 .map(([type, data]) => (
                   <div key={type} className="flex justify-between items-center">
                     <span className="text-sm font-medium">{type}</span>
@@ -322,49 +317,132 @@ export function RevenueSection() {
       )}
 
       {/* Shopify Ecommerce Product Breakdown */}
-      {!isLoading && shopifyProducts.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Shopify Ecommerce Product Breakdown</CardTitle>
-            <CardDescription>Detailed breakdown of products sold through ecommerce orders</CardDescription>
+      {!isLoading && (
+        <Card className="col-span-1 lg:col-span-4">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Shopify Ecommerce Product Breakdown</CardTitle>
+              <CardDescription>Detailed breakdown of products sold through ecommerce orders</CardDescription>
+            </div>
+            <ProductTableControls />
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {shopifyProducts.map((product, index) => (
-                <div key={index} className="border-b border-gray-100 pb-3 last:border-b-0">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <h4 className="text-sm font-semibold text-gray-900 line-clamp-2">
-                        {product.productName}
-                      </h4>
-                      <div className="mt-1 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                        <span>Qty: {product.totalQuantity}</span>
-                        <span>Orders: {product.orderCount}</span>
-                        <span>Avg Price: {formatCurrency(product.avgPrice)}</span>
-                      </div>
-                    </div>
-                    <div className="text-right ml-4">
-                      <div className="text-sm font-bold text-green-600">
-                        {formatCurrency(product.totalRevenue)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-              
-              {/* Summary Footer */}
-              <div className="mt-4 pt-3 border-t border-gray-200">
-                <div className="flex justify-between items-center text-sm font-semibold">
-                  <span>Total Products: {shopifyProducts.length}</span>
-                  <span>
-                    Total Revenue: {formatCurrency(shopifyProducts.reduce((sum, p) => sum + p.totalRevenue, 0))}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <ProductTable data={shopifyProducts} />
           </CardContent>
         </Card>
       )}
     </div>
   );
-} 
+}
+
+// Sub-components for the product table to keep the main file clean
+function ProductTableControls() {
+  // This will be connected to local state in the main component or passed down
+  return null;
+}
+
+function ProductTable({ data }: { data: ShopifyProductBreakdown[] }) {
+  const [sortField, setSortField] = useState<'totalRevenue' | 'totalQuantity' | 'productName'>('totalRevenue');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [showZeroSales, setShowZeroSales] = useState(true);
+
+  const handleSort = (field: 'totalRevenue' | 'totalQuantity' | 'productName') => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
+
+  const sortedData = data.filter(item => showZeroSales || item.totalRevenue > 0).sort((a, b) => {
+    const multiplier = sortDirection === 'asc' ? 1 : -1;
+    if (sortField === 'productName') {
+      return multiplier * a.productName.localeCompare(b.productName);
+    }
+    return multiplier * (a[sortField] - b[sortField]);
+  });
+
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString(undefined, { style: 'currency', currency: 'PHP', maximumFractionDigits: 0 });
+  };
+
+  const SortIcon = ({ field }: { field: 'totalRevenue' | 'totalQuantity' | 'productName' }) => {
+    if (sortField !== field) return <ArrowUpDown className="ml-2 h-4 w-4 opacity-50 inline" />;
+    return sortDirection === 'asc' ?
+      <ArrowUp className="ml-2 h-4 w-4 inline" /> :
+      <ArrowDown className="ml-2 h-4 w-4 inline" />;
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowZeroSales(!showZeroSales)}
+          className={showZeroSales ? "bg-secondary" : ""}
+        >
+          {showZeroSales ? "Hide Zero Sales" : "Show Zero Sales"}
+        </Button>
+      </div>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[400px]">
+                <Button variant="ghost" onClick={() => handleSort('productName')} className="hover:bg-transparent pl-0 font-bold">
+                  Product Name <SortIcon field="productName" />
+                </Button>
+              </TableHead>
+              <TableHead className="text-right">
+                <Button variant="ghost" onClick={() => handleSort('totalQuantity')} className="hover:bg-transparent pr-0 font-bold ml-auto">
+                  Qty <SortIcon field="totalQuantity" />
+                </Button>
+              </TableHead>
+              <TableHead className="text-right">
+                <Button variant="ghost" onClick={() => handleSort('totalRevenue')} className="hover:bg-transparent pr-0 font-bold ml-auto">
+                  Total Revenue <SortIcon field="totalRevenue" />
+                </Button>
+              </TableHead>
+              <TableHead className="text-right">Avg Price</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedData.length > 0 ? (
+              sortedData.map((product, index) => (
+                <TableRow key={index} className={product.totalRevenue === 0 ? "opacity-60 bg-muted/20" : ""}>
+                  <TableCell className="font-medium">
+                    <div className="flex flex-col">
+                      <span>{product.productName}</span>
+                      {product.totalRevenue === 0 && <span className="text-xs text-muted-foreground italic">No sales</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">{product.totalQuantity}</TableCell>
+                  <TableCell className="text-right font-bold text-green-600">{formatCurrency(product.totalRevenue)}</TableCell>
+                  <TableCell className="text-right text-muted-foreground">{formatCurrency(product.avgPrice)}</TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={4} className="h-24 text-center">
+                  No products found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+      <div className="flex justify-between items-center text-sm font-semibold pt-2">
+        <span>Total Products: {sortedData.length}</span>
+        <span>
+          Total Revenue: {formatCurrency(sortedData.reduce((sum, p) => sum + p.totalRevenue, 0))}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"; 

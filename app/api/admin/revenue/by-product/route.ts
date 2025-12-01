@@ -68,10 +68,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const rpcParams = {
-      p_start_date: startDate,
-      p_end_date: endDate,
-      p_source_platform: sourcePlatform,
+      p_start_date: startDate ?? null,
+      p_end_date: endDate ?? null,
+      p_source_platform: sourcePlatform ?? null,
     };
+
+    console.log('[API /revenue/by-product] Calling RPC with params:', rpcParams);
 
     // Call the RPC function (assuming it exists)
     // We will create get_revenue_by_product next.
@@ -89,6 +91,6 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error('[API /revenue/by-product Error]', error);
-    return NextResponse.json({ error: 'Failed to fetch revenue by product', details: error.message || 'Unknown error' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch revenue by product', details: error.message || 'Unknown error', fullError: error }, { status: 500 });
   }
 } 
