@@ -14,7 +14,7 @@ export function getAudienceSizeWarning(size: number): { type: AudienceWarningTyp
   if (size >= 5000) {
     return {
       type: 'large',
-      message: 'Warning: Audience is very large. Consider narrowing your segments to avoid accidental mass sends.'
+      message: 'Warning: Audience is very large! Consider narrowing your segments to avoid accidental mass sends.'
     };
   }
   return null;
