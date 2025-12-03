@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useCallback } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useEnrollments } from '@/lib/hooks/state/use-enrollments';
 import { useFetchEnrollments } from '@/lib/hooks/data/use-fetch-enrollments';
 import { useUserProfile } from '@/lib/hooks/state/use-user-profile';
@@ -84,9 +84,9 @@ export function useEnrollmentsWithData(options?: {
   }, [error, setHasEnrollmentError]);
 
   // Refresh function to manually trigger a data fetch
-  const refresh = useCallback(async () => {
+  const refresh = async () => {
     return fetchEnrollments();
-  }, [fetchEnrollments]);
+  };
 
   return useMemo(() => ({
     enrollments: enrollments.length > 0 ? enrollments : data,
