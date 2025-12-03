@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { useEnrollments } from '@/lib/hooks/state/use-enrollments';
 import { useFetchEnrollments } from '@/lib/hooks/data/use-fetch-enrollments';
 import { useUserProfile } from '@/lib/hooks/state/use-user-profile';
@@ -37,57 +37,57 @@ export function useEnrollmentsWithData(options?: {
   autoFetch?: boolean;
 }) {
   const { userId: storeUserId } = useUserProfile();
-  const { 
-    enrollments, 
-    isLoadingEnrollments, 
+  const {
+    enrollments,
+    isLoadingEnrollments,
     hasEnrollmentError,
     setEnrollments,
     setIsLoadingEnrollments,
     setHasEnrollmentError
   } = useEnrollments();
-  
-  const { 
-    data, 
-    isLoading, 
-    error, 
-    fetchEnrollments 
+
+  const {
+    data,
+    isLoading,
+    error,
+    fetchEnrollments
   } = useFetchEnrollments(
     options?.userId || storeUserId,
     { includeExpired: options?.includeExpired }
   );
-  
+
   // Auto-fetch enrollment data if autoFetch is true (default)
   useEffect(() => {
     const autoFetch = options?.autoFetch !== false;
     const effectiveUserId = options?.userId || storeUserId;
-    
+
     if (autoFetch && effectiveUserId) {
       fetchEnrollments();
     }
   }, [options?.userId, storeUserId, fetchEnrollments, options?.autoFetch]);
-  
+
   // Update the store when data is fetched
   useEffect(() => {
     if (data && data.length > 0) {
       setEnrollments(data);
     }
   }, [data, setEnrollments]);
-  
+
   // Update loading state
   useEffect(() => {
     setIsLoadingEnrollments(isLoading);
   }, [isLoading, setIsLoadingEnrollments]);
-  
+
   // Update error state
   useEffect(() => {
     setHasEnrollmentError(!!error);
   }, [error, setHasEnrollmentError]);
-  
+
   // Refresh function to manually trigger a data fetch
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     return fetchEnrollments();
-  };
-  
+  }, [fetchEnrollments]);
+
   return useMemo(() => ({
     enrollments: enrollments.length > 0 ? enrollments : data,
     isLoading: isLoadingEnrollments || isLoading,
