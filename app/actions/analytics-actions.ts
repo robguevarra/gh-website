@@ -48,24 +48,40 @@ export interface ShopifyProductBreakdown {
 
 // Helper function to get date range from time filter
 function getDateRange(timeFilter: TimeFilter, customRange?: DateRange): DateRange {
+  // Use Manila time (UTC+8) for all date calculations to match database queries
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // Calculate offset in milliseconds (UTC+8 = 8 hours * 60 min * 60 sec * 1000 ms)
+  const MANILA_OFFSET = 8 * 60 * 60 * 1000;
+
+  // Get current time in Manila
+  const manilaNow = new Date(now.getTime() + MANILA_OFFSET);
+
+  // Get start of today in Manila
+  const manilaToday = new Date(manilaNow.getUTCFullYear(), manilaNow.getUTCMonth(), manilaNow.getUTCDate());
 
   switch (timeFilter) {
     case 'today':
       return {
-        from: today,
-        to: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1)
+        // Convert back to UTC for the query
+        from: new Date(manilaToday.getTime() - MANILA_OFFSET),
+        to: new Date(manilaToday.getTime() + 24 * 60 * 60 * 1000 - 1 - MANILA_OFFSET)
       };
     case 'this_month':
+      const manilaMonthStart = new Date(manilaNow.getUTCFullYear(), manilaNow.getUTCMonth(), 1);
+      const manilaMonthEnd = new Date(manilaNow.getUTCFullYear(), manilaNow.getUTCMonth() + 1, 0, 23, 59, 59, 999);
+
       return {
-        from: new Date(now.getFullYear(), now.getMonth(), 1),
-        to: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+        from: new Date(manilaMonthStart.getTime() - MANILA_OFFSET),
+        to: new Date(manilaMonthEnd.getTime() - MANILA_OFFSET)
       };
     case 'last_3_months':
+      const manila3MonthsStart = new Date(manilaNow.getUTCFullYear(), manilaNow.getUTCMonth() - 2, 1);
+      const manila3MonthsEnd = new Date(manilaNow.getUTCFullYear(), manilaNow.getUTCMonth() + 1, 0, 23, 59, 59, 999);
+
       return {
-        from: new Date(now.getFullYear(), now.getMonth() - 2, 1),
-        to: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
+        from: new Date(manila3MonthsStart.getTime() - MANILA_OFFSET),
+        to: new Date(manila3MonthsEnd.getTime() - MANILA_OFFSET)
       };
     case 'custom':
       if (!customRange) {
