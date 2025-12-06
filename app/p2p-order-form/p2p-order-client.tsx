@@ -1150,7 +1150,7 @@ export default function PapersToProfit() {
                           <div className="text-sm text-[#6d4c41]">Years of Experience</div>
                         </div>
                         <div className="bg-brand-purple/5 rounded-lg p-4 text-center">
-                          <div className="text-3xl font-bold text-brand-purple mb-1">3,000+</div>
+                          <div className="text-3xl font-bold text-brand-purple mb-1">4,000+</div>
                           <div className="text-sm text-[#6d4c41]">Students Taught</div>
                         </div>
                         <div className="bg-brand-purple/5 rounded-lg p-4 text-center">

@@ -289,7 +289,7 @@ function HomeContent() {
                 ))}
               </div>
               <div className="text-sm text-[#6d4c41]">
-                <span className="font-medium">3,000+ students</span> already enrolled
+                <span className="font-medium">4,000+ students</span> already enrolled
               </div>
             </motion.div>
           </motion.div>
@@ -477,7 +477,7 @@ function HomeContent() {
       <PublicHeader onHoverChange={setIsHovering} />
       <main ref={pageRef} className="relative min-h-screen overflow-x-hidden">
         {renderHeroSection()}
-        
+
         <section className="w-full py-20 md:py-32 bg-white relative overflow-hidden">
           {/* Decorative elements */}
           <svg
