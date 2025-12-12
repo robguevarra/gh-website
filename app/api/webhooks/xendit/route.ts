@@ -23,6 +23,7 @@ import {
   createNetworkPostback
 } from '@/lib/services/affiliate/conversion-service';
 import { sendAffiliateConversionNotification } from '@/lib/services/email/affiliate-notification-service';
+import { ADVENT_DAYS } from '@/lib/advent-config';
 
 // Define a type for the expected transaction data
 interface Transaction {
@@ -219,7 +220,7 @@ export async function POST(request: NextRequest) {
               externalId: data.external_id || null,
               paymentMethod: paymentMethod, // Pass payment method
             })
-            tx = loggedTx // Assign the newly logged transaction
+            tx = loggedTx as unknown as Transaction // Assign the newly logged transaction
             console.log("[Webhook] Transaction logged via logTransaction");
           } catch (err) {
             console.error("[Webhook] Failed to log transaction from webhook:", err)
@@ -825,12 +826,12 @@ export async function POST(request: NextRequest) {
               console.log(`[Webhook][ECOM] Starting Step 8 - Grant Google Drive permissions for order ${newOrderId}`);
               for (const item of cartItems) {
                 // Define product variable within the loop scope
-                let product: { id: string; title: string | null; google_drive_file_id: string | null; } | null = null;
+                let product: { id: string; title: string | null; google_drive_file_id: string | null; handle: string | null; } | null = null;
                 try {
                   // Fetch the shopify_product record to get the Drive File ID
                   const { data: fetchedProduct, error: productError } = await supabase
                     .from('shopify_products')
-                    .select('id, title, google_drive_file_id')
+                    .select('id, title, google_drive_file_id, handle')
                     .eq('id', item.productId) // Use productId from the item metadata
                     .maybeSingle(); // Use maybeSingle as product might not exist (handle defensively)
 
@@ -856,6 +857,34 @@ export async function POST(request: NextRequest) {
                     // Log if the product exists but has no associated Drive file ID
                     console.warn(`[Webhook][ECOM][Drive] No google_drive_file_id found for product ${product.title || item.productId}. Skipping permission grant.`);
                   }
+
+                  // --- Advent Email Logic ---
+                  const adventDayConfig = ADVENT_DAYS.find(day => day.shopifyHandle === product?.handle);
+                  if (adventDayConfig?.emailTemplate) {
+                    console.log(`[Webhook][ECOM] Found Advent configuration for product: ${product.handle}`);
+                    try {
+                      // Get First Name for personalization
+                      const metadata = tx.metadata as any || {};
+                      const firstName = (tx.metadata as any)?.firstName || 'Friend';
+
+                      await sendTransactionalEmail(
+                        adventDayConfig.emailTemplate,
+                        userEmail,
+                        {
+                          first_name: firstName,
+                          product_title: product.title,
+                          google_drive_link: fileId ? `https://drive.google.com/drive/folders/${fileId}` : undefined,
+                          access_instructions: 'Your Advent surprise has been unlocked! Access your files via the link below.',
+                          // Add other standarized variables if needed
+                        }
+                      );
+                      console.log(`[Webhook][ECOM] Sending Advent specific email: ${adventDayConfig.emailTemplate}`);
+                    } catch (adventEmailError) {
+                      console.error(`[Webhook][ECOM] Failed to send Advent specific email:`, adventEmailError);
+                      // Don't interrupt the flow
+                    }
+                  }
+
                 } catch (grantError: any) { // Catch specific error type if possible
                   // Log detailed error for permission granting failure
                   console.error(`[Webhook][ECOM][Drive] Error granting permission for product ${item.title || item.productId} (File: ${product?.google_drive_file_id || 'N/A'}) to ${userEmail}:`, grantError.message || grantError);

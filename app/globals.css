@@ -73,6 +73,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -84,6 +85,7 @@
     opacity: 0;
     transform: translateY(-8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -124,6 +126,7 @@
 
 /* Ensure cursor is always visible on mobile */
 @media (max-width: 767px) {
+
   body,
   a,
   button,
@@ -139,9 +142,11 @@
   0% {
     transform: translateY(0px);
   }
+
   50% {
     transform: translateY(-10px);
   }
+
   100% {
     transform: translateY(0px);
   }
@@ -191,6 +196,7 @@
     opacity: 0;
     transform: translateY(4px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -210,4 +216,3 @@
 [data-state="active"] {
   animation: slideIn 0.15s ease-out;
 }
-

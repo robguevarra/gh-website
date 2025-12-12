@@ -1,22 +1,22 @@
 'use server';
 
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { ProductData } from '@/app/dashboard/store/page'; // Reuse ProductData type
+import { ProductData } from '@/lib/stores/student-dashboard'; // Reuse ProductData type
 import { Database } from '@/types/supabase';
 import { revalidatePath } from 'next/cache'; // To potentially update wishlist views
 
 // Type definition for the raw data structure returned by Supabase query
 type ProductWithVariantPrice = Database['public']['Tables']['shopify_products']['Row'] & {
-    shopify_product_variants: { 
-      price: number | string | null;
-      compare_at_price?: number | string | null; 
+    shopify_product_variants: {
+        price: number | string | null;
+        compare_at_price?: number | string | null;
     }[];
-  };
+};
 
 // --- Helper function for transforming product data --- 
 function transformProductData(product: ProductWithVariantPrice): ProductData | null {
     const variant = product.shopify_product_variants?.[0];
-                
+
     if (!variant || variant.price === null || variant.price === undefined || isNaN(Number(variant.price))) {
         console.warn(`Product ${product.id} (${product.title}) skipped, missing variant or invalid price.`);
         return null;
@@ -29,12 +29,22 @@ function transformProductData(product: ProductWithVariantPrice): ProductData | n
             compareAtPrice = parsedCompareAtPrice;
         }
     }
-    
+
+    let images: string[] = [];
+    if (Array.isArray(product.image_urls)) {
+        images = product.image_urls.map((img: any) => {
+            if (typeof img === 'string') return img;
+            if (typeof img === 'object' && img !== null && 'src' in img) return img.src; // Handle Shopify image objects
+            return null;
+        }).filter((url): url is string => typeof url === 'string');
+    }
+
     return {
         id: product.id,
         title: product.title,
         handle: product.handle,
         featured_image_url: product.featured_image_url,
+        images,
         price: Number(variant.price),
         compare_at_price: compareAtPrice,
     };
@@ -47,12 +57,12 @@ function transformProductData(product: ProductWithVariantPrice): ProductData | n
  * @returns A promise resolving to an array of ProductData.
  */
 export async function getInitialStoreProducts(): Promise<ProductData[]> {
-  const supabase = await createServerSupabaseClient();
+    const supabase = await createServerSupabaseClient();
 
-  try {
-      const { data, error } = await supabase
-        .from('shopify_products')
-        .select(`
+    try {
+        const { data, error } = await supabase
+            .from('shopify_products')
+            .select(`
           id,
           title,
           handle,
@@ -62,31 +72,31 @@ export async function getInitialStoreProducts(): Promise<ProductData[]> {
             compare_at_price
           )
         `)
-        .or('status.eq.ACTIVE,status.eq.active')
-        .not('shopify_product_variants', 'is', null)
-        .limit(1, { foreignTable: 'shopify_product_variants' })
-        // Add ordering if desired, e.g., by creation date
-        .order('created_at', { ascending: false }) 
-        .returns<ProductWithVariantPrice[]>();
+            .or('status.eq.ACTIVE,status.eq.active')
+            .not('shopify_product_variants', 'is', null)
+            .limit(1, { foreignTable: 'shopify_product_variants' })
+            // Add ordering if desired, e.g., by creation date
+            .order('created_at', { ascending: false })
+            .returns<ProductWithVariantPrice[]>();
 
-      if (error) {
-        console.error('Error fetching initial store products:', error);
+        if (error) {
+            console.error('Error fetching initial store products:', error);
+            return [];
+        }
+        if (!data) {
+            return [];
+        }
+
+        // Transform data using the helper
+        const products: ProductData[] = data
+            .map(transformProductData)
+            .filter((product): product is ProductData => product !== null);
+
+        return products;
+    } catch (err) {
+        console.error('Unexpected error fetching initial products:', err);
         return [];
-      }
-      if (!data) {
-        return [];
-      }
-
-      // Transform data using the helper
-      const products: ProductData[] = data
-        .map(transformProductData)
-        .filter((product): product is ProductData => product !== null);
-
-      return products;
-  } catch (err) {
-      console.error('Unexpected error fetching initial products:', err);
-      return [];
-  }
+    }
 }
 
 /**
@@ -100,7 +110,7 @@ export async function searchProductsStore(query: string): Promise<ProductData[]>
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
         // If query is empty or invalid, maybe return all products or an empty array?
         // Returning empty for now, assuming search requires a term.
-        return []; 
+        return [];
     }
 
     const supabase = await createServerSupabaseClient();
@@ -149,9 +159,9 @@ export async function searchProductsStore(query: string): Promise<ProductData[]>
     } catch (err) {
         console.error('Unexpected error during product search:', err);
         // Depending on error handling strategy, you might re-throw or return empty
-        return []; 
+        return [];
     }
-} 
+}
 
 /**
  * Adds a product to the current user's wishlist.
@@ -302,12 +312,12 @@ export async function getProductReviews(productId: string): Promise<ProductRevie
             .eq('is_approved', true) // Only fetch approved reviews
             .order('created_at', { ascending: false })
             // Explicitly cast the return type here - this is generally correct
-            .returns<ProductReviewWithProfile[]>(); 
+            .returns<ProductReviewWithProfile[]>();
 
         if (error) {
             console.error('Error fetching product reviews:', error);
             // Return empty array on error
-            return []; 
+            return [];
         }
         // Add null check for data
         if (!data) {
@@ -396,5 +406,45 @@ export async function getWishlistDetails(): Promise<ProductData[]> {
     } catch (err) {
         console.error('Unexpected error fetching wishlist details:', err);
         return [];
+    }
+}
+
+/**
+ * Fetches product details publically for the Advent Calendar.
+ * Bypasses user authentication to allow public viewing.
+ */
+export async function getAdventProductByHandle(handle: string): Promise<ProductData | null> {
+    const supabase = await createServerSupabaseClient();
+
+    try {
+        const { data: product, error } = await supabase
+            .from('shopify_products')
+            .select(`
+                id,
+                title,
+                handle,
+                featured_image_url,
+                image_urls,
+                shopify_product_variants (
+                    price,
+                    compare_at_price
+                )
+            `)
+            .eq('handle', handle)
+            .maybeSingle();
+
+        if (error) {
+            console.error(`Error fetching advent product ${handle}:`, error);
+            return null;
+        }
+
+        if (!product) return null;
+
+        // reuse transformProductData which is local to this file
+        return transformProductData(product as any);
+
+    } catch (err) {
+        console.error('Unexpected error fetching advent product:', err);
+        return null;
     }
 } 

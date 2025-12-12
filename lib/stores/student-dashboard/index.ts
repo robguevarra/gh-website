@@ -47,6 +47,7 @@ export type ProductData = {
   title: string | null;
   handle: string | null;
   featured_image_url: string | null;
+  images?: string[] | null;
   price: number;
   compare_at_price?: number | null;
 };
@@ -229,231 +230,231 @@ export interface StudentDashboardStore {
 export const useStudentDashboardStore = create<StudentDashboardStore>()(
   // Apply performance monitoring middleware in development mode
   subscriptionTrackingMiddleware(
-  // performanceMiddleware( // Temporarily commented out
-  batchMiddleware(
-  // equalityMiddleware( // Temporarily commented out
-  persist(
-    (set, get) => ({
-      // Import actions from the actions module
-      ...createActions(set, get),
-      // User data
-      userId: null,
-      userProfile: null,
-      isLoadingProfile: false,
-      hasProfileError: false,
+    // performanceMiddleware( // Temporarily commented out
+    batchMiddleware(
+      // equalityMiddleware( // Temporarily commented out
+      persist(
+        (set, get) => ({
+          // Import actions from the actions module
+          ...createActions(set, get),
+          // User data
+          userId: null,
+          userProfile: null,
+          isLoadingProfile: false,
+          hasProfileError: false,
 
-      // Enrollment data
-      enrollments: [],
-      isLoadingEnrollments: false,
-      hasEnrollmentError: false,
-      lastEnrollmentsLoadTime: null,
+          // Enrollment data
+          enrollments: [],
+          isLoadingEnrollments: false,
+          hasEnrollmentError: false,
+          lastEnrollmentsLoadTime: null,
 
-      // Progress data
-      courseProgress: {},
-      moduleProgress: {},
-      lessonProgress: {},
-      isLoadingProgress: false,
-      hasProgressError: false,
-      lastProgressLoadTime: null,
-      continueLearningLesson: null,
-      isLoadingContinueLearningLesson: false,
-      lastContinueLearningLessonLoadTime: null,
+          // Progress data
+          courseProgress: {},
+          moduleProgress: {},
+          lessonProgress: {},
+          isLoadingProgress: false,
+          hasProgressError: false,
+          lastProgressLoadTime: null,
+          continueLearningLesson: null,
+          isLoadingContinueLearningLesson: false,
+          lastContinueLearningLessonLoadTime: null,
 
-      // Templates data
-      templates: [],
-      selectedTemplateId: null,
-      templateFilter: '',
-      templateSearchQuery: '',
-      isLoadingTemplates: false,
-      hasTemplatesError: false,
-      lastTemplatesLoadTime: null,
+          // Templates data
+          templates: [],
+          selectedTemplateId: null,
+          templateFilter: '',
+          templateSearchQuery: '',
+          isLoadingTemplates: false,
+          hasTemplatesError: false,
+          lastTemplatesLoadTime: null,
 
-      // Purchases data
-      purchases: [],
-      isLoadingPurchases: false,
-      hasPurchasesError: false,
-      lastPurchasesLoadTime: null,
+          // Purchases data
+          purchases: [],
+          isLoadingPurchases: false,
+          hasPurchasesError: false,
+          lastPurchasesLoadTime: null,
 
-      // Live classes data
-      liveClasses: [],
-      isLoadingLiveClasses: false,
-      hasLiveClassesError: false,
+          // Live classes data
+          liveClasses: [],
+          isLoadingLiveClasses: false,
+          hasLiveClassesError: false,
 
-      // Announcements data
-      announcements: [],
-      isLoadingAnnouncements: false,
-      hasAnnouncementsError: false,
-      lastAnnouncementsLoadTime: null,
+          // Announcements data
+          announcements: [],
+          isLoadingAnnouncements: false,
+          hasAnnouncementsError: false,
+          lastAnnouncementsLoadTime: null,
 
-      // UI state
-      showWelcomeModal: true,
-      showOnboarding: false,
-      showAnnouncement: true,
-      expandedSections: {
-        'progress': true,
-        'continue-learning': true,
-        'announcements': true,
-        'live-classes': true,
-        'support': true,
-        'templates': true,
-        'purchases': true,
-        'community': true,
-      },
-      expandedSection: 'all',
-
-      // Actions
-      setUserId: (userId) => set({ userId, isLoadingProfile: false }),
-      setUserProfile: (profile) => set({ userProfile: profile, isLoadingProfile: false }),
-
-      // Enrollment actions
-      setEnrollments: (enrollments) => set({ enrollments }),
-      setIsLoadingEnrollments: (isLoading) => set({ isLoadingEnrollments: isLoading }),
-      setHasEnrollmentError: (hasError) => set({ hasEnrollmentError: hasError }),
-
-      // Progress actions
-      setCourseProgress: (courseId, progress) =>
-        set((state) => ({
-          courseProgress: {
-            ...state.courseProgress,
-            [courseId]: progress
-          }
-        })),
-      setModuleProgress: (courseId, progress) =>
-        set((state) => ({
-          moduleProgress: {
-            ...state.moduleProgress,
-            [courseId]: progress
-          }
-        })),
-      setLessonProgress: (lessonId, progress) =>
-        set((state) => ({
-          lessonProgress: {
-            ...state.lessonProgress,
-            [lessonId]: progress
-          }
-        })),
-      setIsLoadingProgress: (isLoading) => set({ isLoadingProgress: isLoading }),
-      setHasProgressError: (hasError) => set({ hasProgressError: hasError }),
-
-      // Templates actions
-      setTemplates: (templates) => set({ templates }),
-      setSelectedTemplateId: (templateId) => set({ selectedTemplateId: templateId }),
-      setTemplateFilter: (filter) => set({ templateFilter: filter }),
-      setTemplateSearchQuery: (query) => set({ templateSearchQuery: query }),
-      setIsLoadingTemplates: (isLoading) => set({ isLoadingTemplates: isLoading }),
-      setHasTemplatesError: (hasError) => set({ hasTemplatesError: hasError }),
-
-      // Purchases actions
-      setPurchases: (purchases) => set({ purchases }),
-      setIsLoadingPurchases: (isLoading) => set({ isLoadingPurchases: isLoading }),
-      setHasPurchasesError: (hasError) => set({ hasPurchasesError: hasError }),
-
-      // Live classes actions
-      setLiveClasses: (classes: LiveClass[]) => set({ liveClasses: classes }),
-      setIsLoadingLiveClasses: (isLoading: boolean) => set({ isLoadingLiveClasses: isLoading }),
-      setHasLiveClassesError: (hasError: boolean) => set({ hasLiveClassesError: hasError }),
-
-      // Announcements actions
-      setAnnouncements: (announcements: Announcement[]) => set({ announcements, lastAnnouncementsLoadTime: Date.now() }),
-      setIsLoadingAnnouncements: (isLoading: boolean) => set({ isLoadingAnnouncements: isLoading }),
-      setHasAnnouncementsError: (hasError: boolean) => set({ hasAnnouncementsError: hasError }),
-
-      // UI actions
-      setShowWelcomeModal: (show) => set({ showWelcomeModal: show }),
-      setShowOnboarding: (show) => set({ showOnboarding: show }),
-      setShowAnnouncement: (show) => set({ showAnnouncement: show }),
-      toggleSection: (section) => {
-        // Update both expandedSection and expandedSections for compatibility
-        set(state => ({
-          expandedSection: state.expandedSection === section ? 'none' : section,
+          // UI state
+          showWelcomeModal: true,
+          showOnboarding: false,
+          showAnnouncement: true,
           expandedSections: {
-            ...state.expandedSections,
-            [section]: !state.expandedSections[section]
-          }
-        }));
-      },
+            'progress': true,
+            'continue-learning': true,
+            'announcements': true,
+            'live-classes': true,
+            'support': true,
+            'templates': true,
+            'purchases': true,
+            'community': true,
+          },
+          expandedSection: 'all',
 
-      // Utility functions
-      getFilteredTemplates: () => {
-        const { templates, templateFilter, templateSearchQuery } = get();
-        return templates.filter((template) => {
-          const matchesCategory = templateFilter === 'all' || template.category === templateFilter;
-          const matchesSearch = templateSearchQuery === '' ||
-            template.name.toLowerCase().includes(templateSearchQuery.toLowerCase());
-          return matchesCategory && matchesSearch;
-        });
-      },
+          // Actions
+          setUserId: (userId) => set({ userId, isLoadingProfile: false }),
+          setUserProfile: (profile) => set({ userProfile: profile, isLoadingProfile: false }),
 
-      getSelectedTemplate: () => {
-        const { templates, selectedTemplateId } = get();
-        return templates.find((template) => template.id === selectedTemplateId) ||
-          (templates.length > 0 ? templates[0] : null);
-      },
+          // Enrollment actions
+          setEnrollments: (enrollments) => set({ enrollments }),
+          setIsLoadingEnrollments: (isLoading) => set({ isLoadingEnrollments: isLoading }),
+          setHasEnrollmentError: (hasError) => set({ hasEnrollmentError: hasError }),
 
-      getContinueLearningLesson: () => {
-        const { enrollments, lessonProgress } = get();
-        if (enrollments.length === 0) return null;
+          // Progress actions
+          setCourseProgress: (courseId, progress) =>
+            set((state) => ({
+              courseProgress: {
+                ...state.courseProgress,
+                [courseId]: progress
+              }
+            })),
+          setModuleProgress: (courseId, progress) =>
+            set((state) => ({
+              moduleProgress: {
+                ...state.moduleProgress,
+                [courseId]: progress
+              }
+            })),
+          setLessonProgress: (lessonId, progress) =>
+            set((state) => ({
+              lessonProgress: {
+                ...state.lessonProgress,
+                [lessonId]: progress
+              }
+            })),
+          setIsLoadingProgress: (isLoading) => set({ isLoadingProgress: isLoading }),
+          setHasProgressError: (hasError) => set({ hasProgressError: hasError }),
 
-        // Find the most recently accessed lesson with incomplete progress
-        const lessonEntries = Object.entries(lessonProgress);
-        if (lessonEntries.length === 0) return null;
+          // Templates actions
+          setTemplates: (templates) => set({ templates }),
+          setSelectedTemplateId: (templateId) => set({ selectedTemplateId: templateId }),
+          setTemplateFilter: (filter) => set({ templateFilter: filter }),
+          setTemplateSearchQuery: (query) => set({ templateSearchQuery: query }),
+          setIsLoadingTemplates: (isLoading) => set({ isLoadingTemplates: isLoading }),
+          setHasTemplatesError: (hasError) => set({ hasTemplatesError: hasError }),
 
-        // Sort by progress (incomplete first) and last accessed time
-        const [lessonId, progress] = lessonEntries
-          .filter(([_, data]) => data.progress < 100)
-          .sort((a, b) => b[1].lastPosition - a[1].lastPosition)[0] || [null, null];
+          // Purchases actions
+          setPurchases: (purchases) => set({ purchases }),
+          setIsLoadingPurchases: (isLoading) => set({ isLoadingPurchases: isLoading }),
+          setHasPurchasesError: (hasError) => set({ hasPurchasesError: hasError }),
 
-        if (!lessonId || !progress) return null;
+          // Live classes actions
+          setLiveClasses: (classes: LiveClass[]) => set({ liveClasses: classes }),
+          setIsLoadingLiveClasses: (isLoading: boolean) => set({ isLoadingLiveClasses: isLoading }),
+          setHasLiveClassesError: (hasError: boolean) => set({ hasLiveClassesError: hasError }),
 
-        // For now return minimal info, this would be enhanced with actual lesson data
-        return {
-          courseId: enrollments[0].courseId, // This is simplified, would need to be mapped properly
-          lessonId,
-          title: "Continue your lesson", // This would be fetched from actual lesson data
-          progress: progress.progress
-        };
-      },
+          // Announcements actions
+          setAnnouncements: (announcements: Announcement[]) => set({ announcements, lastAnnouncementsLoadTime: Date.now() }),
+          setIsLoadingAnnouncements: (isLoading: boolean) => set({ isLoadingAnnouncements: isLoading }),
+          setHasAnnouncementsError: (hasError: boolean) => set({ hasAnnouncementsError: hasError }),
 
-      // ADDED: Store data initial state
-      storeProducts: [],
-      isLoadingStoreProducts: false, // Initialize as false
-      hasStoreProductsError: false,
-      lastStoreProductsLoadTime: null,
+          // UI actions
+          setShowWelcomeModal: (show) => set({ showWelcomeModal: show }),
+          setShowOnboarding: (show) => set({ showOnboarding: show }),
+          setShowAnnouncement: (show) => set({ showAnnouncement: show }),
+          toggleSection: (section) => {
+            // Update both expandedSection and expandedSections for compatibility
+            set(state => ({
+              expandedSection: state.expandedSection === section ? 'none' : section,
+              expandedSections: {
+                ...state.expandedSections,
+                [section]: !state.expandedSections[section]
+              }
+            }));
+          },
 
-      // ADDED: Collections data initial state
-      storeCollections: [],
-      isLoadingStoreCollections: false, // Initialize as false
-      hasStoreCollectionsError: false,
-      lastStoreCollectionsLoadTime: null,
+          // Utility functions
+          getFilteredTemplates: () => {
+            const { templates, templateFilter, templateSearchQuery } = get();
+            return templates.filter((template) => {
+              const matchesCategory = templateFilter === 'all' || template.category === templateFilter;
+              const matchesSearch = templateSearchQuery === '' ||
+                template.name.toLowerCase().includes(templateSearchQuery.toLowerCase());
+              return matchesCategory && matchesSearch;
+            });
+          },
 
-      // ADDED: Sale Products initial state
-      saleProducts: [],
-      isLoadingSaleProducts: false, // Initialize as false
-      hasSaleProductsError: false,
-      lastSaleProductsLoadTime: null,
+          getSelectedTemplate: () => {
+            const { templates, selectedTemplateId } = get();
+            return templates.find((template) => template.id === selectedTemplateId) ||
+              (templates.length > 0 ? templates[0] : null);
+          },
 
-      // User Context
-      userContext: null,
-      userContextLoading: false,
-      userContextError: null,
-      lastUserContextLoadTime: null,
-    }),
-    {
-      name: 'student-dashboard-storage',
-      partialize: (state) => ({
-        // Only persist non-sensitive and UI state
-        selectedTemplateId: state.selectedTemplateId,
-        templateFilter: state.templateFilter,
-        templateSearchQuery: state.templateSearchQuery,
-        showWelcomeModal: state.showWelcomeModal,
-        showOnboarding: state.showOnboarding,
-        showAnnouncement: state.showAnnouncement,
-        expandedSection: state.expandedSection,
-      }),
-    }
-  )
-  // ) // End equalityMiddleware
-  )
-  // ) // End performanceMiddleware
+          getContinueLearningLesson: () => {
+            const { enrollments, lessonProgress } = get();
+            if (enrollments.length === 0) return null;
+
+            // Find the most recently accessed lesson with incomplete progress
+            const lessonEntries = Object.entries(lessonProgress);
+            if (lessonEntries.length === 0) return null;
+
+            // Sort by progress (incomplete first) and last accessed time
+            const [lessonId, progress] = lessonEntries
+              .filter(([_, data]) => data.progress < 100)
+              .sort((a, b) => b[1].lastPosition - a[1].lastPosition)[0] || [null, null];
+
+            if (!lessonId || !progress) return null;
+
+            // For now return minimal info, this would be enhanced with actual lesson data
+            return {
+              courseId: enrollments[0].courseId, // This is simplified, would need to be mapped properly
+              lessonId,
+              title: "Continue your lesson", // This would be fetched from actual lesson data
+              progress: progress.progress
+            };
+          },
+
+          // ADDED: Store data initial state
+          storeProducts: [],
+          isLoadingStoreProducts: false, // Initialize as false
+          hasStoreProductsError: false,
+          lastStoreProductsLoadTime: null,
+
+          // ADDED: Collections data initial state
+          storeCollections: [],
+          isLoadingStoreCollections: false, // Initialize as false
+          hasStoreCollectionsError: false,
+          lastStoreCollectionsLoadTime: null,
+
+          // ADDED: Sale Products initial state
+          saleProducts: [],
+          isLoadingSaleProducts: false, // Initialize as false
+          hasSaleProductsError: false,
+          lastSaleProductsLoadTime: null,
+
+          // User Context
+          userContext: null,
+          userContextLoading: false,
+          userContextError: null,
+          lastUserContextLoadTime: null,
+        }),
+        {
+          name: 'student-dashboard-storage',
+          partialize: (state) => ({
+            // Only persist non-sensitive and UI state
+            selectedTemplateId: state.selectedTemplateId,
+            templateFilter: state.templateFilter,
+            templateSearchQuery: state.templateSearchQuery,
+            showWelcomeModal: state.showWelcomeModal,
+            showOnboarding: state.showOnboarding,
+            showAnnouncement: state.showAnnouncement,
+            expandedSection: state.expandedSection,
+          }),
+        }
+      )
+      // ) // End equalityMiddleware
+    )
+    // ) // End performanceMiddleware
   )
 );

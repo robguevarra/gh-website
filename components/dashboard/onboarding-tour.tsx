@@ -46,7 +46,7 @@ export function OnboardingTour({ onComplete, onSkip }: OnboardingTourProps) {
       content: "Connect with fellow students, share your progress, get inspiration, and build lasting relationships in our exclusive Facebook group.",
       position: "left" as const,
       icon: <Sparkles className="h-5 w-5" />,
-      highlight: "Join 3000+ entrepreneurs",
+      highlight: "Join 4000+ entrepreneurs",
     },
   ]
 
