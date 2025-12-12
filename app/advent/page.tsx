@@ -17,7 +17,13 @@ export default function AdventPage() {
                     <div className="absolute inset-0 pointer-events-none opacity-30">
                         {/* Subtle snowfall effect can be added here or via a separate component if desired. 
                              For now, keeping it clean with the site's texture feel. */}
-                        <div className="absolute top-0 left-0 w-full h-full bg-[url('/noise.png')] opacity-10" />
+                        {/* CSS-based noise texture using SVG filter for performance and no external assets */}
+                        <div
+                            className="absolute top-0 left-0 w-full h-full opacity-[0.15]"
+                            style={{
+                                backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`
+                            }}
+                        />
                     </div>
                     <Snowfall />
 
