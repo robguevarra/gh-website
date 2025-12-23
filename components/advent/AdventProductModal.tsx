@@ -158,19 +158,20 @@ export function AdventProductModal({ isOpen, onClose, dayConfig, onOpenGift }: A
                                     >
                                         {/* Product Image / Gallery */}
                                         <motion.div
-                                            className="relative w-full aspect-square max-w-[280px] rounded-2xl overflow-hidden shadow-2xl bg-white p-2"
+                                            className="w-full max-w-[280px] bg-white p-2 rounded-2xl shadow-xl"
                                             initial={{ y: 20 }}
                                             animate={{ y: 0 }}
                                             transition={{ delay: 0.2 }}
                                         >
-                                            <div className="relative w-full h-full rounded-xl overflow-hidden border border-slate-100 group">
+                                            {/* Main Image */}
+                                            <div className="relative w-full aspect-square rounded-xl overflow-hidden border border-slate-100 group mb-2 bg-slate-50">
                                                 {displayImages.length > 0 ? (
                                                     <>
                                                         <Image
                                                             src={displayImages[currentImageIndex]}
-                                                            alt={product.title}
+                                                            alt={product.title || 'Product Image'}
                                                             fill
-                                                            className="object-cover transition-transform duration-700 hover:scale-105 cursor-zoom-in"
+                                                            className="object-contain cursor-zoom-in"
                                                             onClick={() => setIsFullScreen(true)}
                                                         />
 
@@ -179,39 +180,54 @@ export function AdventProductModal({ isOpen, onClose, dayConfig, onOpenGift }: A
                                                             <Maximize2 className="w-4 h-4" />
                                                         </div>
 
-                                                        {/* Gallery Controls */}
+                                                        {/* Navigation Arrows for Main Image */}
                                                         {displayImages.length > 1 && (
                                                             <>
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); prevImage(); }}
-                                                                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 p-1 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                                                                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 p-1 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white text-slate-700"
                                                                 >
-                                                                    <ChevronLeft className="w-4 h-4 text-slate-700" />
+                                                                    <ChevronLeft className="w-4 h-4" />
                                                                 </button>
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); nextImage(); }}
-                                                                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 p-1 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                                                                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 p-1 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white text-slate-700"
                                                                 >
-                                                                    <ChevronRight className="w-4 h-4 text-slate-700" />
+                                                                    <ChevronRight className="w-4 h-4" />
                                                                 </button>
-                                                                {/* Dots */}
-                                                                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                                                                    {displayImages.map((_, idx) => (
-                                                                        <div
-                                                                            key={idx}
-                                                                            className={`w-1.5 h-1.5 rounded-full transition-colors ${idx === currentImageIndex ? 'bg-brand-purple' : 'bg-white/60'}`}
-                                                                        />
-                                                                    ))}
-                                                                </div>
                                                             </>
                                                         )}
                                                     </>
                                                 ) : (
-                                                    <div className="w-full h-full bg-slate-50 flex items-center justify-center text-slate-300">
+                                                    <div className="w-full h-full flex items-center justify-center text-slate-300">
                                                         <ShoppingBag className="w-12 h-12 opacity-20" />
                                                     </div>
                                                 )}
                                             </div>
+
+                                            {/* Thumbnail Strip */}
+                                            {displayImages.length > 1 && (
+                                                <div className="flex gap-2 overflow-x-auto pb-1 px-1 scrollbar-thin scrollbar-thumb-slate-200">
+                                                    {displayImages.map((img, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(idx); }}
+                                                            className={`relative w-12 h-12 flex-shrink-0 rounded-md overflow-hidden border-2 transition-all ${idx === currentImageIndex
+                                                                ? 'border-brand-purple ring-1 ring-brand-purple/30'
+                                                                : 'border-transparent opacity-70 hover:opacity-100 hover:border-slate-200'
+                                                                }`}
+                                                        >
+                                                            <Image
+                                                                src={img}
+                                                                alt={`Thumbnail ${idx + 1}`}
+                                                                fill
+                                                                className="object-cover"
+                                                                sizes="48px"
+                                                            />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </motion.div>
 
                                         {/* Product Info */}

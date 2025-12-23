@@ -48,6 +48,7 @@ export type ProductData = {
   handle: string | null;
   featured_image_url: string | null;
   images?: string[] | null;
+  description_html?: string | null;
   price: number;
   compare_at_price?: number | null;
 };

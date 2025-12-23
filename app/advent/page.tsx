@@ -5,6 +5,8 @@ import { motion } from 'framer-motion';
 import { PublicHeader } from '@/components/layout/public-header';
 import { PublicFooter } from '@/components/layout/public-footer';
 import { Snowfall } from '@/components/advent/Snowfall';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export default function AdventPage() {
     return (
@@ -15,8 +17,6 @@ export default function AdventPage() {
                 <section className="relative bg-[#f9f6f2] pt-32 pb-20 px-4 text-center overflow-hidden">
                     {/* Background Elements */}
                     <div className="absolute inset-0 pointer-events-none opacity-30">
-                        {/* Subtle snowfall effect can be added here or via a separate component if desired. 
-                             For now, keeping it clean with the site's texture feel. */}
                         {/* CSS-based noise texture using SVG filter for performance and no external assets */}
                         <div
                             className="absolute top-0 left-0 w-full h-full opacity-[0.15]"
@@ -48,6 +48,20 @@ export default function AdventPage() {
                 {/* Calendar Section */}
                 <section className="relative z-20 pb-32">
                     <AdventCalendar />
+
+                    {/* Footer/Note */}
+                    <div className="mt-12 text-center relative z-10">
+                        <p className="text-sm text-[#8d6e63]/60 italic">
+                            * Gifts expire 24 hours after reveal. Don't miss out!
+                        </p>
+                        <div className="mt-8">
+                            <Link href="/dashboard/store">
+                                <Button variant="outline" className="border-brand-purple text-brand-purple hover:bg-brand-purple hover:text-white transition-colors">
+                                    Visit Full Store
+                                </Button>
+                            </Link>
+                        </div>
+                    </div>
                 </section>
             </main>
             <PublicFooter />
