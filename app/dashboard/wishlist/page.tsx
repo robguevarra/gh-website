@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { getWishlistDetails, getWishlistedProductIds } from '@/app/actions/store-actions';
 import { ProductData } from '@/app/dashboard/store/page'; // Reuse ProductData type
 import { createServerSupabaseClient } from '@/lib/supabase/server'; // Needed for auth check
-import { getOwnedProductIds } from '@/app/actions/userActions'; // <-- Import action
+import { getOwnedProductIdsServer } from '@/app/actions/serverActions'; // <-- Import server action
 import StoreResultsManager from '@/components/store/StoreResultsManager';
 import LoadingSkeleton from '@/components/store/LoadingSkeleton';
 
@@ -32,7 +32,7 @@ export default async function WishlistPage() {
     const [wishlistItems, wishlistedIds, ownedProductIds] = await Promise.all([
         getWishlistDetails(),
         getWishlistedProductIds(),
-        getOwnedProductIds() // <-- Fetch owned IDs
+        getOwnedProductIdsServer() // <-- Fetch owned IDs using server action
     ]);
 
     return (
@@ -49,8 +49,8 @@ export default async function WishlistPage() {
             ) : (
                 <Suspense fallback={<LoadingSkeleton />}>
                     {/* Use StoreResultsManager with wishlist products to enable Quick View */}
-                    <StoreResultsManager 
-                        products={wishlistItems} 
+                    <StoreResultsManager
+                        products={wishlistItems}
                         isLoading={false}
                         searchTerm={null}
                         initialWishlistedIds={wishlistedIds}
