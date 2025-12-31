@@ -251,7 +251,7 @@ export default function ConfigurationPage() {
                         <CardHeader>
                             <CardTitle>Operational Hours</CardTitle>
                             <CardDescription>
-                                Define when the bot should tell users that human staff are unavailable.
+                                Define when the schedule of live classes.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -262,17 +262,17 @@ export default function ConfigurationPage() {
                                     onChange={(e) => setSchedule(e.target.value)}
                                     placeholder="e.g. Mon-Fri, 9AM - 5PM"
                                 />
-                                <p className="text-xs text-muted-foreground">Used by the bot to explain standard hours.</p>
+                                <p className="text-xs text-muted-foreground">Used by the bot to answer live classes schedule.</p>
                             </div>
 
                             <div className="space-y-2">
-                                <Label>Special Note (Holidays/Leaves)</Label>
+                                <Label>Special Note</Label>
                                 <Textarea
                                     value={scheduleNote}
                                     onChange={(e) => setScheduleNote(e.target.value)}
                                     placeholder="e.g. We are closed for Christmas from Dec 24-26."
                                 />
-                                <p className="text-xs text-muted-foreground">Added context for the bot during special events.</p>
+                                <p className="text-xs text-muted-foreground">Added context for the bot.</p>
                             </div>
 
                             <Button onClick={handleSaveSchedule} disabled={saving} className="mt-4">
