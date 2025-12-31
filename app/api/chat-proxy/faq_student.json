@@ -1,0 +1,50 @@
+[
+  {
+    "intent": "login_issue",
+    "triggers": [
+      "login",
+      "sign in",
+      "cant log",
+      "can't log",
+      "portal"
+    ],
+    "answer": "You can log in to the student portal right here: https://www.gracefulhomeschooling.com/auth/signin."
+  },
+  {
+    "intent": "reset_password",
+    "triggers": [
+      "password",
+      "reset",
+      "forgot"
+    ],
+    "answer": "To reset your password, just click this link: https://www.gracefulhomeschooling.com/auth/reset-password"
+  },
+  {
+    "intent": "missing_email",
+    "triggers": [
+      "confirmation email",
+      "no email",
+      "haven't received",
+      "24 hours"
+    ],
+    "answer": "Please send an email to help@gracefulhomeschooling.com so our admins can assist you properly. Just include name, email used for enrollment and screenshot (if possible)."
+  },
+  {
+    "intent": "community_access",
+    "triggers": [
+      "community",
+      "facebook",
+      "group",
+      "approval"
+    ],
+    "answer": "Please wait within 24-48 hours before our admins can approve your community application (weekends/holidays may take longer). Feel free to browse the student portal resources while you wait!"
+  },
+  {
+    "intent": "new_promo",
+    "triggers": [
+      "12 days of christmas",
+      "new promo"
+    ],
+    "answer": "Please email help@gracefulhomeschooling.com"
+  }
+]

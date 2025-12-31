@@ -14,7 +14,8 @@ import {
   ShoppingBag,
   Shield,
   UserCog, // Corrected icon name for Affiliates
-  Search
+  Search,
+  Bot
 } from 'lucide-react';
 
 const navigation = [
@@ -26,6 +27,7 @@ const navigation = [
   { name: 'Shop Integration', href: '/admin/shop', icon: ShoppingBag },
   { name: 'Security', href: '/admin/security', icon: Shield },
   { name: 'Email', href: '/admin/email', icon: Mail },
+  { name: 'Chatbot', href: '/admin/chatbot', icon: Bot },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
@@ -44,9 +46,9 @@ export default function AdminSidebar() {
         <nav className="mt-6 px-2">
           <div className="space-y-1">
             {navigation.map((item) => {
-              const isActive = pathname === item.href || 
+              const isActive = pathname === item.href ||
                 (item.href !== '/admin' && pathname?.startsWith(item.href));
-              
+
               return (
                 <Link
                   key={item.name}

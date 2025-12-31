@@ -66,3 +66,6 @@ full_dump.sql
 roles.sql
 schema.sql
 
+# Service Account
+manychat-service-account.json
+
