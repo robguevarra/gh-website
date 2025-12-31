@@ -251,7 +251,7 @@ export default function ConfigurationPage() {
                         <CardHeader>
                             <CardTitle>Operational Hours</CardTitle>
                             <CardDescription>
-                                Define when the schedule of live classes.
+                                Here is where we define the schedule of live classes.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
