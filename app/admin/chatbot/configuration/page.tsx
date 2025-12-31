@@ -234,7 +234,7 @@ export default function ConfigurationPage() {
             <div className="flex items-center justify-between">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Configuration</h2>
-                    <p className="text-muted-foreground">Changes usually take 5 minutes to reflect in the live bot (Cache TTL).</p>
+                    <p className="text-muted-foreground">Updates the bot immediately.</p>
                 </div>
             </div>
 
