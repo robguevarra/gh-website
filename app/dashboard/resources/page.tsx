@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, Search, Filter, Download, Eye, FileText, ExternalLink, 
-  ChevronRight, Folder, RotateCw, Plus, Table, FileSpreadsheet, Image } from "lucide-react"
+import {
+  ChevronLeft, Search, Filter, Download, Eye, FileText, ExternalLink,
+  ChevronRight, Folder, RotateCw, Plus, Table, FileSpreadsheet, Image
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -17,10 +19,9 @@ import { useGoogleDriveFiles } from "@/lib/hooks/use-google-drive"
 import { useAuth } from "@/context/auth-context"
 import type { DriveItem, BreadcrumbSegment } from '@/lib/google-drive/driveApiUtils'
 
-// Extend DriveItem interface with additional properties
 interface ExtendedDriveItem extends DriveItem {
   children?: number;
-  webViewLink?: string;
+  // webViewLink is now in DriveItem base interface
   owners?: Array<{ displayName: string; emailAddress?: string; }>;
 }
 
@@ -55,17 +56,17 @@ interface ResourceCardProps {
 const ResourceCard = ({ file, onNavigate, onPreview, onDownload, isSelected }: ResourceCardProps) => {
   const isFolder = file.mimeType?.includes('folder') || false;
   const Icon = getFileIcon(file.mimeType, isFolder);
-  
+
   // Determine resource type for display
   // Cast file to extended type
   const fileExt = file as ExtendedDriveItem;
-  
+
   const resourceType = isFolder ? 'Folder' :
     file.mimeType?.includes('pdf') ? 'PDF' :
-    file.mimeType?.includes('document') ? 'Doc' :
-    file.mimeType?.includes('spreadsheet') ? 'Sheet' :
-    file.mimeType?.includes('presentation') ? 'Slide' :
-    file.mimeType?.includes('image') ? 'Image' : 'File';
+      file.mimeType?.includes('document') ? 'Doc' :
+        file.mimeType?.includes('spreadsheet') ? 'Sheet' :
+          file.mimeType?.includes('presentation') ? 'Slide' :
+            file.mimeType?.includes('image') ? 'Image' : 'File';
 
   // Get formatted date for display
   const modifiedDate = formatDate(file.modifiedTime);
@@ -80,6 +81,10 @@ const ResourceCard = ({ file, onNavigate, onPreview, onDownload, isSelected }: R
     }
   };
 
+  const showThumbnail = !isFolder && file.thumbnailLink && (
+    file.mimeType?.includes('image') || file.mimeType?.includes('pdf')
+  );
+
   return (
     <Card
       className={`group flex flex-col h-full overflow-hidden transition-all duration-300 hover:shadow-md active:shadow-sm
@@ -93,33 +98,46 @@ const ResourceCard = ({ file, onNavigate, onPreview, onDownload, isSelected }: R
       <div className="p-4 flex flex-col h-full">
         {/* Resource Type Badge */}
         <div className="flex justify-between items-center mb-3">
-          <Badge 
-            variant="outline" 
+          <Badge
+            variant="outline"
             className={`text-xs font-normal px-2 py-0.5 
-              ${isFolder ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-200' : 
+              ${isFolder ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-yellow-200' :
                 resourceType === 'PDF' ? 'bg-red-50 text-red-700 border-red-200' :
-                resourceType === 'Doc' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                resourceType === 'Sheet' ? 'bg-green-50 text-green-700 border-green-200' :
-                resourceType === 'Slide' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                resourceType === 'Image' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                'bg-gray-100 text-gray-700 border-gray-200'}`}
+                  resourceType === 'Doc' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                    resourceType === 'Sheet' ? 'bg-green-50 text-green-700 border-green-200' :
+                      resourceType === 'Slide' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                        resourceType === 'Image' ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                          'bg-gray-100 text-gray-700 border-gray-200'}`}
           >
             {resourceType}
           </Badge>
-          
+
           {fileSize && !isFolder && (
             <span className="text-xs text-muted-foreground">{fileSize}</span>
           )}
         </div>
-        
-        {/* Icon and Title */}
+
+        {/* Icon and Title (and Thumbnail) */}
         <div className="flex items-start gap-3 mb-auto">
-          <div className={`p-2 rounded-md transition-all duration-300
-            ${isFolder 
-              ? 'bg-yellow-100 group-hover:bg-yellow-200 group-hover:scale-110' 
-              : 'bg-primary/10 group-hover:bg-primary/20 group-hover:scale-110'}`}
+          <div className={`rounded-md transition-all duration-300 flex-shrink-0
+            ${showThumbnail ? 'p-0 overflow-hidden w-12 h-12 border border-gray-100' : 'p-2'}
+            ${isFolder
+              ? 'bg-yellow-100 group-hover:bg-yellow-200 group-hover:scale-110'
+              : showThumbnail
+                ? 'bg-white'
+                : 'bg-primary/10 group-hover:bg-primary/20 group-hover:scale-110'}`}
           >
-            {Icon}
+            {showThumbnail ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={file.thumbnailLink!}
+                alt={file.name}
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              Icon
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-medium text-sm line-clamp-2 text-gray-800 group-hover:text-black transition-all duration-300">
@@ -154,9 +172,9 @@ const ResourceCard = ({ file, onNavigate, onPreview, onDownload, isSelected }: R
                 variant="ghost"
                 size="sm"
                 className="flex-1 text-xs h-8 bg-transparent hover:bg-primary/5 hover:text-primary transition-all duration-300"
-                onClick={(e) => { 
-                  e.stopPropagation(); 
-                  onDownload && onDownload(file); 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDownload && onDownload(file);
                 }}
               >
                 <Download className="mr-1.5 h-3.5 w-3.5" />
@@ -183,12 +201,12 @@ const ResourceCard = ({ file, onNavigate, onPreview, onDownload, isSelected }: R
 // Format dates in a user-friendly way
 const formatDate = (dateString?: string | null): string | undefined => {
   if (!dateString) return undefined;
-  
+
   const date = new Date(dateString);
   const now = new Date();
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  
+
   // Today
   if (date.toDateString() === now.toDateString()) {
     return `Today at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
@@ -196,7 +214,7 @@ const formatDate = (dateString?: string | null): string | undefined => {
   // Yesterday
   else if (date.toDateString() === yesterday.toDateString()) {
     return `Yesterday at ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
-  } 
+  }
   // This year
   else if (date.getFullYear() === now.getFullYear()) {
     return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -210,7 +228,7 @@ const formatDate = (dateString?: string | null): string | undefined => {
 // Format file size in human-readable format
 const formatFileSize = (sizeInBytes?: number): string | undefined => {
   if (!sizeInBytes) return undefined;
-  
+
   if (sizeInBytes < 1024) return `${sizeInBytes} B`;
   if (sizeInBytes < 1024 * 1024) return `${(sizeInBytes / 1024).toFixed(1)} KB`;
   if (sizeInBytes < 1024 * 1024 * 1024) return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -220,7 +238,7 @@ const formatFileSize = (sizeInBytes?: number): string | undefined => {
 export default function ResourcesPage() {
   const router = useRouter()
   const { user, isLoading: isLoadingAuth } = useAuth()
-  
+
   // Apply subtle background effects for a more sophisticated look
   const backgroundPattern = {
     backgroundImage: `radial-gradient(rgba(233, 227, 216, 0.3) 1px, transparent 0)`,
@@ -318,7 +336,7 @@ export default function ResourcesPage() {
 
     window.open(`https://drive.google.com/file/d/${file.id}/view`, "_blank")
   }, [])
-  
+
   // Close preview
   const handleClosePreview = useCallback(() => {
     setShowPreview(false)
@@ -336,17 +354,17 @@ export default function ResourcesPage() {
       // Otherwise show all folders
       return true
     })
-    
+
     // Filter files based on category and search
     const visibleFiles = files.filter(file => {
       // Apply category filter
       if (activeCategory !== 'all') {
         const fileCategory =
           file.mimeType?.includes('pdf') ? 'PDF' :
-          file.mimeType?.includes('document') ? 'Documents' :
-          file.mimeType?.includes('spreadsheet') ? 'Spreadsheets' :
-          file.mimeType?.includes('presentation') ? 'Presentations' :
-          'Other'
+            file.mimeType?.includes('document') ? 'Documents' :
+              file.mimeType?.includes('spreadsheet') ? 'Spreadsheets' :
+                file.mimeType?.includes('presentation') ? 'Presentations' :
+                  'Other'
 
         if (fileCategory !== activeCategory) return false
       }
@@ -362,7 +380,7 @@ export default function ResourcesPage() {
 
       return true
     })
-    
+
     // Return folders first, then files
     return [...visibleFolders, ...visibleFiles]
   }, [folders, files, activeCategory, searchTerm])
@@ -434,12 +452,12 @@ export default function ResourcesPage() {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { duration: 0.4 } }
   }
-  
+
   const slideUp = {
     hidden: { opacity: 0, y: 20 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
   }
-  
+
   const staggerChildren = {
     hidden: { opacity: 0 },
     visible: {
@@ -449,7 +467,7 @@ export default function ResourcesPage() {
       }
     }
   }
-  
+
   const itemVariant = {
     hidden: { opacity: 0, y: 10 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.3 } }
@@ -457,17 +475,17 @@ export default function ResourcesPage() {
 
   return (
     <div className="min-h-screen bg-[#f9f6f2]" style={backgroundPattern}>
-      <main className="container py-8 space-y-6">  
+      <main className="container py-8 space-y-6">
         {/* Header with navigation */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="mb-3 pl-0 text-muted-foreground hover:text-foreground transition-all group" 
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mb-3 pl-0 text-muted-foreground hover:text-foreground transition-all group"
             onClick={() => router.push('/dashboard')}
           >
             <ChevronLeft className="h-4 w-4 mr-1.5 group-hover:transform group-hover:-translate-x-0.5 transition-transform" />
@@ -486,9 +504,9 @@ export default function ResourcesPage() {
             <BreadcrumbList>
               <BreadcrumbItem>
                 <BreadcrumbLink asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     className="text-xs h-7 flex items-center gap-1 hover:bg-yellow-50/80"
                     onClick={navigateToRoot}
                   >
@@ -497,7 +515,7 @@ export default function ResourcesPage() {
                   </Button>
                 </BreadcrumbLink>
               </BreadcrumbItem>
-              
+
               {breadcrumbs.map((crumb, index) => (
                 <BreadcrumbItem key={crumb.id}>
                   <BreadcrumbSeparator>
@@ -509,9 +527,9 @@ export default function ResourcesPage() {
                         {crumb.name}
                       </span>
                     ) : (
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="text-xs h-7 hover:bg-yellow-50/80"
                         onClick={() => handleFolderNavigation(crumb.id)}
                       >
@@ -523,7 +541,7 @@ export default function ResourcesPage() {
               ))}
             </BreadcrumbList>
           </Breadcrumb>
-          
+
           {/* Refresh Button */}
           <Button
             variant="ghost"
@@ -568,7 +586,7 @@ export default function ResourcesPage() {
           // --- Loading State ---
           if (isLoading && items.length === 0) {
             return (
-              <motion.div 
+              <motion.div
                 initial="hidden"
                 animate="visible"
                 variants={fadeIn}
@@ -584,7 +602,7 @@ export default function ResourcesPage() {
           // --- Error State ---
           if (hasError) {
             return (
-              <motion.div 
+              <motion.div
                 initial="hidden"
                 animate="visible"
                 variants={fadeIn}
@@ -621,9 +639,9 @@ export default function ResourcesPage() {
                 <p className="text-muted-foreground max-w-md mx-auto mb-6">
                   {currentFolderId && searchTerm
                     ? "No matching resources found in this folder. Try adjusting your search term."
-                    : currentFolderId 
-                    ? "This folder is empty. Navigate to another folder or go back home."
-                    : "No resources are available in the library. Please check back later."}
+                    : currentFolderId
+                      ? "This folder is empty. Navigate to another folder or go back home."
+                      : "No resources are available in the library. Please check back later."}
                 </p>
                 {currentFolderId && (
                   <Button variant="outline" onClick={navigateToRoot}>
@@ -637,7 +655,7 @@ export default function ResourcesPage() {
 
           // --- Content State / Resource Grid ---
           return (
-            <motion.div 
+            <motion.div
               className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5 py-2"
               variants={staggerChildren}
               initial="hidden"
@@ -660,7 +678,7 @@ export default function ResourcesPage() {
 
         {/* Preview Modal/Section when a file is selected */}
         {selectedFile && showPreview && (
-          <motion.div 
+          <motion.div
             initial="hidden"
             animate="visible"
             variants={slideUp}
@@ -676,16 +694,16 @@ export default function ResourcesPage() {
                   <div className="flex items-center gap-2 mt-1">
                     <Badge variant="outline" className={`
                       ${selectedFile.mimeType?.includes('pdf') ? 'bg-red-50 text-red-700 border-red-200' :
-                      selectedFile.mimeType?.includes('document') ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                      selectedFile.mimeType?.includes('spreadsheet') ? 'bg-green-50 text-green-700 border-green-200' :
-                      selectedFile.mimeType?.includes('presentation') ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                      'bg-gray-100 text-gray-700'}
+                        selectedFile.mimeType?.includes('document') ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                          selectedFile.mimeType?.includes('spreadsheet') ? 'bg-green-50 text-green-700 border-green-200' :
+                            selectedFile.mimeType?.includes('presentation') ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                              'bg-gray-100 text-gray-700'}
                     `}>
                       {selectedFile.mimeType?.includes('pdf') ? 'PDF' :
-                      selectedFile.mimeType?.includes('document') ? 'Document' :
-                      selectedFile.mimeType?.includes('spreadsheet') ? 'Spreadsheet' :
-                      selectedFile.mimeType?.includes('presentation') ? 'Presentation' :
-                      'File'}
+                        selectedFile.mimeType?.includes('document') ? 'Document' :
+                          selectedFile.mimeType?.includes('spreadsheet') ? 'Spreadsheet' :
+                            selectedFile.mimeType?.includes('presentation') ? 'Presentation' :
+                              'File'}
                     </Badge>
                     {selectedFile.size && (
                       <span className="text-xs text-muted-foreground">
@@ -732,17 +750,17 @@ export default function ResourcesPage() {
                   fileId={selectedFile.id}
                   fileName={selectedFile.name || 'Untitled'}
                   fileType={selectedFile.mimeType?.includes('pdf') ? 'pdf' :
-                        selectedFile.mimeType?.includes('document') ? 'docx' :
-                        selectedFile.mimeType?.includes('spreadsheet') ? 'xlsx' :
+                    selectedFile.mimeType?.includes('document') ? 'docx' :
+                      selectedFile.mimeType?.includes('spreadsheet') ? 'xlsx' :
                         selectedFile.mimeType?.includes('presentation') ? 'pptx' :
-                        'file'}
+                          'file'}
                   height="600px"
                   onDownloadClick={() => handleFileDownload(selectedFile)}
                 />
               </div>
 
               {/* File details section */}
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
@@ -751,9 +769,9 @@ export default function ResourcesPage() {
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-medium">File Details</h4>
                   {(selectedFile as ExtendedDriveItem).webViewLink && (
-                    <a 
-                      href={(selectedFile as ExtendedDriveItem).webViewLink} 
-                      target="_blank" 
+                    <a
+                      href={(selectedFile as ExtendedDriveItem).webViewLink}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-primary hover:underline flex items-center"
                     >
@@ -762,7 +780,7 @@ export default function ResourcesPage() {
                     </a>
                   )}
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
                   <div className="bg-gray-50/70 p-3 rounded-lg">
                     <p className="text-muted-foreground mb-1 text-xs">File Name</p>
@@ -772,10 +790,10 @@ export default function ResourcesPage() {
                     <p className="text-muted-foreground mb-1 text-xs">File Type</p>
                     <p className="font-medium">
                       {selectedFile.mimeType?.includes('pdf') ? 'PDF Document' :
-                      selectedFile.mimeType?.includes('document') ? 'Google Document' :
-                      selectedFile.mimeType?.includes('spreadsheet') ? 'Google Spreadsheet' :
-                      selectedFile.mimeType?.includes('presentation') ? 'Google Presentation' :
-                      selectedFile.mimeType || 'Unknown'}
+                        selectedFile.mimeType?.includes('document') ? 'Google Document' :
+                          selectedFile.mimeType?.includes('spreadsheet') ? 'Google Spreadsheet' :
+                            selectedFile.mimeType?.includes('presentation') ? 'Google Presentation' :
+                              selectedFile.mimeType || 'Unknown'}
                     </p>
                   </div>
                   {selectedFile.modifiedTime && (

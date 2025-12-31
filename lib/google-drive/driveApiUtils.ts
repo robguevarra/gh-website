@@ -11,7 +11,8 @@ export interface DriveItem {
   size?: string | null;         // Optional: File size (usually string) - not present for folders
   description?: string | null;  // Optional: User-provided description
   createdTime?: string | null;  // Optional: Creation timestamp
-  // Add other relevant fields if needed (e.g., webViewLink, thumbnailLink)
+  thumbnailLink?: string | null; // Optional: Link to the file's thumbnail
+  webViewLink?: string | null;   // Optional: Link to open the file in the web
 }
 
 // Define the structure for breadcrumb segments
@@ -118,8 +119,8 @@ export async function getFolderContents(folderId: string | null): Promise<DriveI
 
     const response = await drive.files.list({
       q: `'${targetFolderId}' in parents and trashed=false`,
-      // Add size, description, createdTime to the requested fields
-      fields: 'files(id, name, mimeType, modifiedTime, size, description, createdTime)',
+      // Add size, description, createdTime, thumbnailLink, webViewLink to the requested fields
+      fields: 'files(id, name, mimeType, modifiedTime, size, description, createdTime, thumbnailLink, webViewLink)',
       orderBy: 'folder,name', // Sort by type (folders first), then by name
       pageSize: 1000, // Adjust page size as needed
     });
@@ -138,6 +139,8 @@ export async function getFolderContents(folderId: string | null): Promise<DriveI
       size: typeof file.size === 'undefined' ? null : file.size, // Explicit undefined check
       description: typeof file.description === 'undefined' ? null : file.description, // Explicit undefined check
       createdTime: typeof file.createdTime === 'undefined' ? null : file.createdTime, // Explicit undefined check
+      thumbnailLink: typeof file.thumbnailLink === 'undefined' ? null : file.thumbnailLink,
+      webViewLink: typeof file.webViewLink === 'undefined' ? null : file.webViewLink,
     }));
 
     // Already sorted by API using orderBy: 'folder,name'
@@ -206,7 +209,7 @@ export async function getFolderPath(
           // currentFolderId = file.parents[0]; // Assume single parent
           // Explicitly handle undefined case by assigning null
           currentFolderId = file.parents[0] ?? null;
-           // Check if the parent is the effective root, if so, add root and stop
+          // Check if the parent is the effective root, if so, add root and stop
           if (currentFolderId === effectiveRootId) {
             // Optional: Add the root folder itself if needed, depending on requirements
             // const rootResponse = await drive.files.get({ fileId: effectiveRootId, fields: 'id, name'});
@@ -284,7 +287,7 @@ export async function getFileMetadata(fileId: string): Promise<{ name: string; m
  * @throws {Error} If authentication fails, the file is not found, or the API call fails.
  */
 export async function getFileStream(fileId: string): Promise<NodeJS.ReadableStream> {
-   if (!fileId) {
+  if (!fileId) {
     throw new Error('File ID cannot be empty.');
   }
   try {
@@ -305,8 +308,8 @@ export async function getFileStream(fileId: string): Promise<NodeJS.ReadableStre
     return response.data as NodeJS.ReadableStream;
 
   } catch (error: any) {
-     // Add more specific error checking if needed (e.g., 404 Not Found)
-     // Log the specific Google API error if available
+    // Add more specific error checking if needed (e.g., 404 Not Found)
+    // Log the specific Google API error if available
     const googleError = error.response?.data || error.errors || error;
     console.error(`[Drive] Failed to download binary file content for ID ${fileId}.`, JSON.stringify(googleError, null, 2));
     throw new Error(`Failed to download file content from Google Drive. ${error.message}`);
@@ -356,7 +359,7 @@ export async function exportFileStream(
     // Provide a more specific error message if possible
     let message = `Failed to export file from Google Drive. ${error.message}`;
     if (googleError?.error?.message) {
-        message = `Failed to export file from Google Drive: ${googleError.error.message}`;
+      message = `Failed to export file from Google Drive: ${googleError.error.message}`;
     }
     throw new Error(message);
   }
@@ -391,7 +394,7 @@ export async function grantFilePermission(
   }
   // Very basic email format check
   if (!/\S+@\S+\.\S+/.test(userEmail)) {
-      throw new Error(`[grantFilePermission] Invalid user email format: ${userEmail}`);
+    throw new Error(`[grantFilePermission] Invalid user email format: ${userEmail}`);
   }
 
 

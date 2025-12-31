@@ -35,18 +35,24 @@ function getServiceAccount() {
 
 const serviceAccount = getServiceAccount();
 
-if (!serviceAccount) {
-    if (process.env.NODE_ENV === 'development') {
-        console.warn('⚠️ GOOGLE_APPLICATION_CREDENTIALS is not set and local file not found. Firestore features will fail.');
-    }
+let firebaseApp;
+
+// Only initialize if we have a valid service account object
+if (serviceAccount) {
+    firebaseApp = getApps().length === 0
+        ? initializeApp({
+            credential: cert(serviceAccount),
+            projectId: 'manychat-openai-integration'
+        })
+        : getApps()[0];
+} else {
+    // In production (Vercel Build), this might be missing initially.
+    // We shouldn't crash the build.
+    console.warn("⚠️ Firebase Admin not initialized: Missing Credential.");
 }
 
-// Singleton initialization
-const firebaseApp = getApps().length === 0
-    ? initializeApp({
-        credential: cert(serviceAccount),
-        projectId: 'manychat-openai-integration'
-    })
-    : getApps()[0];
-
-export const db = getFirestore(firebaseApp);
+// Export a robust DB accessor
+// If init failed, accessing db will throw, which is better than crashing on import
+export const db = firebaseApp ? getFirestore(firebaseApp) : {
+    collection: () => { throw new Error("Firestore not initialized. Check GOOGLE_APPLICATION_CREDENTIALS."); }
+} as any;
