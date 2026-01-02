@@ -35,15 +35,14 @@ export function PublicHeader({ onHoverChange }: PublicHeaderProps) {
     { href: '/', label: 'Home' },
     { href: '/p2p-order-form', label: 'Papers to Profits' },
     { href: '/canva-order', label: 'Get Ebook' },
-    { href: '/advent', label: '🔥 12 Days of Christmas' },
     { href: '/shop', label: 'Shop' }
   ]
 
   return (
     <header
       className={`sticky top-0 z-50 w-full transition-all duration-300 ${isScrolled
-          ? 'backdrop-blur-md supports-[backdrop-filter]:bg-[#f9f6f2]/80 shadow-sm'
-          : 'backdrop-blur-md supports-[backdrop-filter]:bg-[#f9f6f2]/60'
+        ? 'backdrop-blur-md supports-[backdrop-filter]:bg-[#f9f6f2]/80 shadow-sm'
+        : 'backdrop-blur-md supports-[backdrop-filter]:bg-[#f9f6f2]/60'
         }`}
     >
       <div className="container flex h-16 items-center justify-between">
