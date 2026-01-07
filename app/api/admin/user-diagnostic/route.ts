@@ -78,6 +78,26 @@ export async function POST(request: NextRequest) {
         .eq('email', searchEmail)
         .maybeSingle();
 
+      // **NEW: Fetch ecommerce orders and items for commercial license check**
+      let ecommerceOrdersResult: any = { data: [], error: null };
+      if (unifiedProfileResult.data?.id) {
+        ecommerceOrdersResult = await adminClient
+          .from('ecommerce_orders')
+          .select(`
+            *,
+            ecommerce_order_items (
+              *,
+              formatted_price:price_at_purchase,
+              shopify_products (
+                title,
+                featured_image_url
+              )
+            )
+          `)
+          .eq('user_id', unifiedProfileResult.data.id)
+          .order('created_at', { ascending: false });
+      }
+
       // Transform data to match UI expectations
       const userProfile = unifiedProfileResult.data ? {
         id: unifiedProfileResult.data.id,
@@ -106,9 +126,9 @@ export async function POST(request: NextRequest) {
       // **NEW: P2P ENROLLMENT DETECTION**
       const P2P_COURSE_ID = '7e386720-8839-4252-bd5f-09a33c3e1afb';
       const successStatuses = ['success', 'succeeded', 'paid', 'SUCCEEDED'];
-      
+
       // Check if user is already enrolled in P2P course
-      const hasP2PEnrollment = transformedEnrollments.some((enrollment: any) => 
+      const hasP2PEnrollment = transformedEnrollments.some((enrollment: any) =>
         enrollment.course_title?.toLowerCase().includes('papers to profits') ||
         enrollment.course_title?.toLowerCase().includes('p2p')
       );
@@ -116,7 +136,7 @@ export async function POST(request: NextRequest) {
       // Check for qualifying P2P transactions
       const qualifyingTransactions = (transactionsResult.data || []).filter((transaction: any) => {
         const isSuccessful = successStatuses.includes(transaction.status);
-        const isP2PRelated = 
+        const isP2PRelated =
           transaction.transaction_type?.includes('p2p') ||
           transaction.transaction_type?.includes('migration_remediation') ||
           transaction.metadata?.course?.includes('p2p') ||
@@ -132,7 +152,7 @@ export async function POST(request: NextRequest) {
           .select('Tag')
           .ilike('Email', searchEmail)
           .maybeSingle();
-        
+
         if (systemeioResult.data?.Tag) {
           const tags = systemeioResult.data.Tag.toLowerCase();
           hasSystemeioP2PRecord = tags.includes('imported') || tags.includes('paidp2p');
@@ -152,6 +172,7 @@ export async function POST(request: NextRequest) {
         transactions: transactionsResult.data || [],
         shopifyCustomers: shopifyCustomersResult.data || [],
         shopifyOrders: shopifyOrdersResult.data || [],
+        ecommerceOrders: ecommerceOrdersResult.data || [],
         enrollments: transformedEnrollments,
         attributionGaps: {
           unlinkedShopifyCustomers: unlinkedShopifyCustomers

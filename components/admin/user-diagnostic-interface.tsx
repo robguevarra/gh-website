@@ -1,20 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { 
-  Search, 
-  RefreshCw, 
-  Mail, 
-  User, 
-  AlertTriangle, 
-  ShoppingCart, 
-  GraduationCap, 
-  Link2, 
+import {
+  Search,
+  RefreshCw,
+  Mail,
+  User,
+  AlertTriangle,
+  ShoppingCart,
+  GraduationCap,
+  Link2,
   Info,
   UserPlus,
   Plus,
   CheckCircle,
-  Package
+  Package,
+  Loader2
 } from 'lucide-react';
 import { BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,10 +27,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { syncShopifyOrders } from '@/app/actions/admin-shopify-attribution';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AuthErrorMonitoringPanel } from '@/components/admin/auth-error-monitoring-panel';
 
 
 // Types for the diagnostic data
@@ -92,6 +93,7 @@ interface DiagnosticData {
   attributionGaps: {
     unlinkedShopifyCustomers: DiagnosticShopifyCustomer[];
   };
+  ecommerceOrders?: any[];
   p2pEnrollmentAnalysis?: {
     isEnrolledInP2P: boolean;
     shouldBeEnrolledInP2P: boolean;
@@ -134,7 +136,7 @@ export function UserDiagnosticInterface() {
   const [isLinkingShopify, setIsLinkingShopify] = useState(false);
   const [isUpdatingEbookContact, setIsUpdatingEbookContact] = useState(false);
   const [emailLoadingStates, setEmailLoadingStates] = useState<Record<string, boolean>>({});
-  
+
   // Ebook contact form states
   const [ebookContactForm, setEbookContactForm] = useState({
     email: '',
@@ -173,7 +175,7 @@ export function UserDiagnosticInterface() {
 
       const data = await response.json();
       setDiagnosticData(data);
-      
+
       if (!data.user && data.transactions.length === 0 && data.shopifyCustomers.length === 0) {
         toast.info('No user data found for this email address');
       } else {
@@ -211,15 +213,15 @@ export function UserDiagnosticInterface() {
       }
 
       toast.success(`Primary email updated successfully from ${searchEmail} to ${newPrimaryEmail.trim()}`);
-      
+
       // Update search email to the new email for continuity
       const updatedEmail = newPrimaryEmail.trim();
       setSearchEmail(updatedEmail);
-      
+
       // Close modal and reset form
       setEmailManagement({ isOpen: false, action: null });
       setNewPrimaryEmail('');
-      
+
       // Refresh diagnostic data with the new email
       setIsSearching(true);
       try {
@@ -242,7 +244,7 @@ export function UserDiagnosticInterface() {
       } finally {
         setIsSearching(false);
       }
-      
+
     } catch (error) {
       console.error('Error updating primary email:', error);
       toast.error('Failed to update primary email');
@@ -277,7 +279,7 @@ export function UserDiagnosticInterface() {
       toast.success(`Secondary email "${secondaryEmail.trim()}" added successfully`);
       setEmailManagement({ isOpen: false, action: null });
       setSecondaryEmail('');
-      
+
       // Refresh diagnostic data with current search email
       handleSearch();
     } catch (error) {
@@ -315,7 +317,7 @@ export function UserDiagnosticInterface() {
       toast.success(`Shopify customer "${emailManagement.targetShopifyCustomer.email}" linked successfully`);
       setEmailManagement({ isOpen: false, action: null, targetShopifyCustomer: undefined });
       setLinkingNotes('');
-      
+
       // Refresh diagnostic data with current search email
       handleSearch();
     } catch (error) {
@@ -336,7 +338,7 @@ export function UserDiagnosticInterface() {
     try {
       const currentEmail = diagnosticData.ebookContact.email;
       const updates: Record<string, any> = {};
-      
+
       if (ebookContactForm.email !== currentEmail) {
         updates.email = ebookContactForm.email.trim();
       }
@@ -374,20 +376,20 @@ export function UserDiagnosticInterface() {
       }
 
       toast.success('Ebook contact updated successfully');
-      
+
       // Update search email if email was changed
       if (updates.email) {
         setSearchEmail(updates.email);
         toast.info(`Search updated to new email: ${updates.email}`);
       }
-      
+
       // Close modal and reset form
       setEmailManagement({ isOpen: false, action: null });
       setEbookContactForm({ email: '', first_name: '', last_name: '', phone: '' });
-      
+
       // Refresh diagnostic data
       handleSearch();
-      
+
     } catch (error) {
       console.error('Error updating ebook contact:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to update ebook contact';
@@ -400,7 +402,7 @@ export function UserDiagnosticInterface() {
   const handleResendWelcomeEmail = async (transactionType: string) => {
     // Determine which email to use - prefer user email, fallback to ebook contact
     const targetEmail = diagnosticData?.user?.email || diagnosticData?.ebookContact?.email;
-    
+
     if (!targetEmail) {
       toast.error('No email found for welcome email resend');
       return;
@@ -409,7 +411,7 @@ export function UserDiagnosticInterface() {
     try {
       setEmailLoadingStates(prev => ({ ...prev, [transactionType]: true }));
       toast.info(`Resending ${transactionType} welcome email to ${targetEmail}`);
-      
+
       // Call the resend welcome email API
       const response = await fetch('/api/admin/email-management/resend-welcome', {
         method: 'POST',
@@ -494,7 +496,7 @@ export function UserDiagnosticInterface() {
       });
 
       console.log('📬 Response status:', response.status, response.statusText);
-      
+
       if (!response.ok) {
         const error = await response.json();
         console.error('❌ API Error response:', error);
@@ -504,11 +506,11 @@ export function UserDiagnosticInterface() {
       const result = await response.json();
       console.log('✅ Success response:', result);
       toast.success(`Successfully enrolled ${searchEmail} in P2P course`);
-      
+
       // Close manual enrollment dialog if it was open
       setShowManualEnrollmentDialog(false);
       setManualEnrollmentData({ firstName: '', lastName: '' });
-      
+
       // Refresh diagnostic data
       handleSearch();
     } catch (error) {
@@ -521,6 +523,7 @@ export function UserDiagnosticInterface() {
   };
 
   const [isLinkingUsers, setIsLinkingUsers] = useState(false);
+  const [isSyncingOrders, setIsSyncingOrders] = useState(false); // Added for Shopify order sync
 
   const handleLinkUsers = async (userIds: string[]) => {
     if (userIds.length < 2) {
@@ -559,8 +562,8 @@ export function UserDiagnosticInterface() {
   return (
     <div className="space-y-6">
       {/* Auth Error Monitoring Panel */}
-      <AuthErrorMonitoringPanel />
-      
+      {/* Auth Error Monitoring Panel removed */}
+
       {/* Search Interface */}
       <Card>
         <CardHeader>
@@ -633,7 +636,7 @@ export function UserDiagnosticInterface() {
                     <div>
                       <Label className="text-sm font-medium">Last Login</Label>
                       <p className="text-sm">
-                        {diagnosticData.user.last_login_at 
+                        {diagnosticData.user.last_login_at
                           ? formatDate(diagnosticData.user.last_login_at)
                           : 'Never'}
                       </p>
@@ -641,7 +644,7 @@ export function UserDiagnosticInterface() {
                     <div>
                       <Label className="text-sm font-medium">Secondary Emails</Label>
                       <p className="text-sm">
-                        {diagnosticData.user.admin_metadata?.secondary_emails?.length 
+                        {diagnosticData.user.admin_metadata?.secondary_emails?.length
                           ? diagnosticData.user.admin_metadata.secondary_emails.join(', ')
                           : 'None'}
                       </p>
@@ -651,13 +654,13 @@ export function UserDiagnosticInterface() {
                   {/* Email Management Actions */}
                   <Separator />
                   <div className="flex gap-2 flex-wrap">
-                    <Dialog 
-                      open={emailManagement.isOpen && emailManagement.action === 'update-primary'} 
+                    <Dialog
+                      open={emailManagement.isOpen && emailManagement.action === 'update-primary'}
                       onOpenChange={(open) => !open && setEmailManagement({ isOpen: false, action: null })}
                     >
                       <DialogTrigger asChild>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="text-xs sm:text-sm"
                           onClick={() => setEmailManagement({ isOpen: true, action: 'update-primary' })}
@@ -685,21 +688,21 @@ export function UserDiagnosticInterface() {
                             />
                           </div>
                           <div className="flex gap-2">
-                            <Button 
-                          onClick={handleUpdatePrimaryEmail}
-                          disabled={isUpdatingEmail}
-                        >
-                          {isUpdatingEmail ? (
-                            <>
-                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Updating...
-                            </>
-                          ) : (
-                            'Update Email'
-                          )}
-                        </Button>
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              onClick={handleUpdatePrimaryEmail}
+                              disabled={isUpdatingEmail}
+                            >
+                              {isUpdatingEmail ? (
+                                <>
+                                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                  Updating...
+                                </>
+                              ) : (
+                                'Update Email'
+                              )}
+                            </Button>
+                            <Button
+                              variant="outline"
                               onClick={() => setEmailManagement({ isOpen: false, action: null })}
                             >
                               Cancel
@@ -709,13 +712,13 @@ export function UserDiagnosticInterface() {
                       </DialogContent>
                     </Dialog>
 
-                    <Dialog 
-                      open={emailManagement.isOpen && emailManagement.action === 'add-secondary'} 
+                    <Dialog
+                      open={emailManagement.isOpen && emailManagement.action === 'add-secondary'}
                       onOpenChange={(open) => !open && setEmailManagement({ isOpen: false, action: null })}
                     >
                       <DialogTrigger asChild>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="text-xs sm:text-sm"
                           onClick={() => setEmailManagement({ isOpen: true, action: 'add-secondary' })}
@@ -743,21 +746,21 @@ export function UserDiagnosticInterface() {
                             />
                           </div>
                           <div className="flex gap-2">
-                            <Button 
-                          onClick={handleAddSecondaryEmail}
-                          disabled={isAddingSecondary}
-                        >
-                          {isAddingSecondary ? (
-                            <>
-                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Adding...
-                            </>
-                          ) : (
-                            'Add Email'
-                          )}
-                        </Button>
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              onClick={handleAddSecondaryEmail}
+                              disabled={isAddingSecondary}
+                            >
+                              {isAddingSecondary ? (
+                                <>
+                                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                  Adding...
+                                </>
+                              ) : (
+                                'Add Email'
+                              )}
+                            </Button>
+                            <Button
+                              variant="outline"
                               onClick={() => setEmailManagement({ isOpen: false, action: null })}
                             >
                               Cancel
@@ -767,11 +770,11 @@ export function UserDiagnosticInterface() {
                       </DialogContent>
                     </Dialog>
 
-                                         {/* Welcome Email Actions */}
-                     {diagnosticData.transactions?.length > 0 && (
+                    {/* Welcome Email Actions */}
+                    {diagnosticData.transactions?.length > 0 && (
                       <>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="text-xs sm:text-sm"
                           onClick={() => handleResendWelcomeEmail('P2P')}
@@ -790,8 +793,8 @@ export function UserDiagnosticInterface() {
                             </>
                           )}
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="text-xs sm:text-sm"
                           onClick={() => handleResendWelcomeEmail('Canva')}
@@ -810,8 +813,8 @@ export function UserDiagnosticInterface() {
                             </>
                           )}
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="text-xs sm:text-sm"
                           onClick={() => handleResendWelcomeEmail('Shopify')}
@@ -861,7 +864,7 @@ export function UserDiagnosticInterface() {
                 {/* Enrollment Status Banner */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 rounded-lg border-2 bg-muted/50 gap-3">
                   <div className="flex items-center gap-3">
-                    <Badge 
+                    <Badge
                       variant={diagnosticData.p2pEnrollmentAnalysis.isEnrolledInP2P ? 'default' : 'destructive'}
                       className="text-sm"
                     >
@@ -904,8 +907,8 @@ export function UserDiagnosticInterface() {
                             </div>
                           </div>
                           {diagnosticData.p2pEnrollmentAnalysis!.hasEnrollmentGap && (
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               onClick={() => handleP2PEnrollment('transaction', transaction.id)}
                               disabled={isEnrollingP2P}
                               className="shrink-0 w-full sm:w-auto"
@@ -937,8 +940,8 @@ export function UserDiagnosticInterface() {
                         </div>
                       </div>
                       {diagnosticData.p2pEnrollmentAnalysis.hasEnrollmentGap && (
-                        <Button 
-                          size="sm" 
+                        <Button
+                          size="sm"
                           onClick={() => handleP2PEnrollment('systemeio')}
                           disabled={isEnrollingP2P}
                           className="shrink-0 w-full sm:w-auto"
@@ -998,14 +1001,14 @@ export function UserDiagnosticInterface() {
                                 />
                               </div>
                               <div className="flex justify-end gap-3">
-                                <Button 
-                                  variant="outline" 
+                                <Button
+                                  variant="outline"
                                   onClick={() => setShowManualEnrollmentDialog(false)}
                                   disabled={isEnrollingP2P}
                                 >
                                   Cancel
                                 </Button>
-                                <Button 
+                                <Button
                                   onClick={() => handleP2PEnrollment('manual')}
                                   disabled={isEnrollingP2P || !manualEnrollmentData.firstName.trim()}
                                 >
@@ -1081,7 +1084,7 @@ export function UserDiagnosticInterface() {
                     <div>
                       <Label className="text-sm font-medium">Last Updated</Label>
                       <p className="text-sm">
-                        {diagnosticData.ebookContact.updated_at 
+                        {diagnosticData.ebookContact.updated_at
                           ? formatDate(diagnosticData.ebookContact.updated_at)
                           : 'Never'}
                       </p>
@@ -1091,8 +1094,8 @@ export function UserDiagnosticInterface() {
                   {/* Email Management Actions for Ebook Customers */}
                   <Separator />
                   <div className="flex gap-2 flex-wrap">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       size="sm"
                       onClick={() => handleResendWelcomeEmail('Canva')}
                       disabled={emailLoadingStates['Canva']}
@@ -1109,9 +1112,9 @@ export function UserDiagnosticInterface() {
                         </>
                       )}
                     </Button>
-                    
-                    <Dialog 
-                      open={emailManagement.isOpen && emailManagement.action === 'update-ebook-contact'} 
+
+                    <Dialog
+                      open={emailManagement.isOpen && emailManagement.action === 'update-ebook-contact'}
                       onOpenChange={(open) => {
                         if (!open) {
                           setEmailManagement({ isOpen: false, action: null });
@@ -1120,8 +1123,8 @@ export function UserDiagnosticInterface() {
                       }}
                     >
                       <DialogTrigger asChild>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => {
                             setEmailManagement({ isOpen: true, action: 'update-ebook-contact' });
@@ -1184,7 +1187,7 @@ export function UserDiagnosticInterface() {
                             />
                           </div>
                           <div className="flex gap-2">
-                            <Button 
+                            <Button
                               onClick={handleUpdateEbookContact}
                               disabled={isUpdatingEbookContact}
                             >
@@ -1197,8 +1200,8 @@ export function UserDiagnosticInterface() {
                                 'Update Contact'
                               )}
                             </Button>
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               onClick={() => {
                                 setEmailManagement({ isOpen: false, action: null });
                                 setEbookContactForm({ email: '', first_name: '', last_name: '', phone: '' });
@@ -1221,8 +1224,8 @@ export function UserDiagnosticInterface() {
             <div className="relative">
               <div className="overflow-x-auto scrollbar-hide">
                 <TabsList className="inline-flex h-12 items-center justify-start rounded-lg bg-muted p-1 text-muted-foreground min-w-full w-max gap-1">
-                  <TabsTrigger 
-                    value="transactions" 
+                  <TabsTrigger
+                    value="transactions"
                     className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
                   >
                     <ShoppingCart className="h-4 w-4 mr-2 shrink-0" />
@@ -1231,9 +1234,9 @@ export function UserDiagnosticInterface() {
                       {diagnosticData.transactions?.length || 0}
                     </span>
                   </TabsTrigger>
-                  
-                  <TabsTrigger 
-                    value="shopify" 
+
+                  <TabsTrigger
+                    value="shopify"
                     className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
                   >
                     <ShoppingCart className="h-4 w-4 mr-2 shrink-0" />
@@ -1242,9 +1245,9 @@ export function UserDiagnosticInterface() {
                       {diagnosticData.shopifyCustomers?.length || 0}
                     </span>
                   </TabsTrigger>
-                  
-                  <TabsTrigger 
-                    value="enrollments" 
+
+                  <TabsTrigger
+                    value="enrollments"
                     className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
                   >
                     <GraduationCap className="h-4 w-4 mr-2 shrink-0" />
@@ -1253,9 +1256,21 @@ export function UserDiagnosticInterface() {
                       {diagnosticData.enrollments?.length || 0}
                     </span>
                   </TabsTrigger>
-                  
-                  <TabsTrigger 
-                    value="attribution" 
+
+                  <TabsTrigger
+                    value="licenses"
+                    className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
+                  >
+                    <Package className="h-4 w-4 mr-2 shrink-0" />
+                    <span className="font-medium">Commercial Licenses</span>
+                    <span className="ml-2 px-1.5 py-0.5 text-xs bg-primary/10 text-primary rounded-full font-medium shrink-0">
+                      {/* Calculate count of all items across all ecommerce orders */}
+                      {diagnosticData.ecommerceOrders?.reduce((acc: number, order: any) => acc + (order.ecommerce_order_items?.length || 0), 0) || 0}
+                    </span>
+                  </TabsTrigger>
+
+                  <TabsTrigger
+                    value="attribution"
                     className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
                   >
                     <Link2 className="h-4 w-4 mr-2 shrink-0" />
@@ -1264,9 +1279,9 @@ export function UserDiagnosticInterface() {
                       {diagnosticData.attributionGaps?.unlinkedShopifyCustomers?.length || 0}
                     </span>
                   </TabsTrigger>
-                  
-                  <TabsTrigger 
-                    value="orders" 
+
+                  <TabsTrigger
+                    value="orders"
                     className="inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium ring-offset-background transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm hover:bg-background/50 min-w-fit"
                   >
                     <Package className="h-4 w-4 mr-2 shrink-0" />
@@ -1277,7 +1292,7 @@ export function UserDiagnosticInterface() {
                   </TabsTrigger>
                 </TabsList>
               </div>
-              
+
               {/* Scroll indicator gradients */}
               <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-background to-transparent pointer-events-none opacity-60" />
               <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-background to-transparent pointer-events-none opacity-60" />
@@ -1289,21 +1304,21 @@ export function UserDiagnosticInterface() {
                   <CardTitle>Direct Transactions</CardTitle>
                   <CardDescription>P2P payments and other direct transactions</CardDescription>
                 </CardHeader>
-                                 <CardContent>
-                   {diagnosticData.transactions?.length > 0 ? (
-                     <div className="space-y-3">
-                       {diagnosticData.transactions.map((transaction) => (
+                <CardContent>
+                  {diagnosticData.transactions?.length > 0 ? (
+                    <div className="space-y-3">
+                      {diagnosticData.transactions.map((transaction) => (
                         <div key={transaction.id} className="border rounded-lg p-3">
                           <div className="flex justify-between items-start">
                             <div>
                               <h4 className="font-medium">
-                             {transaction.metadata?.item_name || 
-                              transaction.metadata?.product_name || 
-                              transaction.transaction_type || 
-                              'Unknown Transaction'}
-                           </h4>
-                                                              <p className="text-sm text-muted-foreground">
-                                  {transaction.payment_method || 'Unknown Method'} • {formatDate(transaction.created_at)}
+                                {transaction.metadata?.item_name ||
+                                  transaction.metadata?.product_name ||
+                                  transaction.transaction_type ||
+                                  'Unknown Transaction'}
+                              </h4>
+                              <p className="text-sm text-muted-foreground">
+                                {transaction.payment_method || 'Unknown Method'} • {formatDate(transaction.created_at)}
                               </p>
                             </div>
                             <div className="text-right">
@@ -1329,10 +1344,10 @@ export function UserDiagnosticInterface() {
                   <CardTitle>Shopify Customers</CardTitle>
                   <CardDescription>Customer records from Shopify</CardDescription>
                 </CardHeader>
-                                 <CardContent>
-                   {diagnosticData.shopifyCustomers?.length > 0 ? (
-                     <div className="space-y-3">
-                       {diagnosticData.shopifyCustomers.map((customer) => (
+                <CardContent>
+                  {diagnosticData.shopifyCustomers?.length > 0 ? (
+                    <div className="space-y-3">
+                      {diagnosticData.shopifyCustomers.map((customer) => (
                         <div key={customer.id} className="border rounded-lg p-3">
                           <div className="flex justify-between items-start">
                             <div>
@@ -1370,10 +1385,10 @@ export function UserDiagnosticInterface() {
                   <CardTitle>Course Enrollments</CardTitle>
                   <CardDescription>Current course enrollments and progress</CardDescription>
                 </CardHeader>
-                                 <CardContent>
-                   {diagnosticData.enrollments?.length > 0 ? (
-                     <div className="space-y-3">
-                       {diagnosticData.enrollments.map((enrollment) => (
+                <CardContent>
+                  {diagnosticData.enrollments?.length > 0 ? (
+                    <div className="space-y-3">
+                      {diagnosticData.enrollments.map((enrollment) => (
                         <div key={enrollment.id} className="border rounded-lg p-3">
                           <div className="flex justify-between items-start">
                             <div>
@@ -1402,10 +1417,10 @@ export function UserDiagnosticInterface() {
                   <CardTitle>Attribution Gaps</CardTitle>
                   <CardDescription>Unlinked Shopify customers that can be attributed to this user</CardDescription>
                 </CardHeader>
-                                 <CardContent>
-                   {diagnosticData.attributionGaps?.unlinkedShopifyCustomers?.length > 0 ? (
-                     <div className="space-y-3">
-                       {diagnosticData.attributionGaps.unlinkedShopifyCustomers.map((customer) => (
+                <CardContent>
+                  {diagnosticData.attributionGaps?.unlinkedShopifyCustomers?.length > 0 ? (
+                    <div className="space-y-3">
+                      {diagnosticData.attributionGaps.unlinkedShopifyCustomers.map((customer) => (
                         <div key={customer.id} className="border rounded-lg p-3">
                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div className="flex-1 min-w-0">
@@ -1420,18 +1435,18 @@ export function UserDiagnosticInterface() {
                               </p>
                             </div>
                             <div className="flex gap-2 w-full sm:w-auto">
-                              <Dialog 
-                                open={emailManagement.isOpen && emailManagement.action === 'link-shopify' && emailManagement.targetShopifyCustomer?.id === customer.id} 
+                              <Dialog
+                                open={emailManagement.isOpen && emailManagement.action === 'link-shopify' && emailManagement.targetShopifyCustomer?.id === customer.id}
                                 onOpenChange={(open) => !open && setEmailManagement({ isOpen: false, action: null, targetShopifyCustomer: undefined })}
                               >
                                 <DialogTrigger asChild>
-                                  <Button 
+                                  <Button
                                     size="sm"
                                     className="w-full sm:w-auto"
-                                    onClick={() => setEmailManagement({ 
-                                      isOpen: true, 
-                                      action: 'link-shopify', 
-                                      targetShopifyCustomer: customer 
+                                    onClick={() => setEmailManagement({
+                                      isOpen: true,
+                                      action: 'link-shopify',
+                                      targetShopifyCustomer: customer
                                     })}
                                   >
                                     <Link2 className="h-4 w-4 mr-2" />
@@ -1464,21 +1479,21 @@ export function UserDiagnosticInterface() {
                                       />
                                     </div>
                                     <div className="flex gap-2">
-                                      <Button 
-                          onClick={handleLinkShopifyCustomer}
-                          disabled={isLinkingShopify}
-                        >
-                          {isLinkingShopify ? (
-                            <>
-                              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Linking...
-                            </>
-                          ) : (
-                            'Link Customer'
-                          )}
-                        </Button>
-                                      <Button 
-                                        variant="outline" 
+                                      <Button
+                                        onClick={handleLinkShopifyCustomer}
+                                        disabled={isLinkingShopify}
+                                      >
+                                        {isLinkingShopify ? (
+                                          <>
+                                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                            Linking...
+                                          </>
+                                        ) : (
+                                          'Link Customer'
+                                        )}
+                                      </Button>
+                                      <Button
+                                        variant="outline"
                                         onClick={() => setEmailManagement({ isOpen: false, action: null, targetShopifyCustomer: undefined })}
                                       >
                                         Cancel
@@ -1504,16 +1519,109 @@ export function UserDiagnosticInterface() {
               </Card>
             </TabsContent>
 
+            <TabsContent value="licenses" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Commercial Licenses</CardTitle>
+                  <CardDescription>Active commercial licenses owned by user</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const allItems = diagnosticData.ecommerceOrders?.flatMap((order: any) =>
+                      (order.ecommerce_order_items || [])
+                        .map((item: any) => ({
+                          ...item,
+                          order_date: order.created_at,
+                          order_status: order.order_status,
+                          source: order.payment_method
+                        }))
+                    ) || [];
+
+                    if (allItems.length === 0) {
+                      return (
+                        <Alert>
+                          <Info className="h-4 w-4" />
+                          <AlertDescription>No items found.</AlertDescription>
+                        </Alert>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-3">
+                        {allItems.map((item: any, i: number) => (
+                          <div key={`${item.id}-${i}`} className="border rounded-lg p-3 flex justify-between items-center bg-emerald-50/50 border-emerald-100">
+                            <div>
+                              <h4 className="font-medium text-emerald-900">{item.product_snapshot?.title || item.shopify_products?.title || 'Unknown Item'}</h4>
+                              <div className="flex gap-2 text-sm text-emerald-700">
+                                <span>Purchased: {formatDate(item.order_date)}</span>
+                                <span>•</span>
+                                <span>Source: {item.source}</span>
+                              </div>
+                            </div>
+                            <Badge className="bg-emerald-600 hover:bg-emerald-700">
+                              Active
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             <TabsContent value="orders" className="space-y-4">
               <Card>
                 <CardHeader>
-                  <CardTitle>Shopify Orders</CardTitle>
-                  <CardDescription>Order history from Shopify</CardDescription>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle>Shopify Orders</CardTitle>
+                      <CardDescription>Order history from Shopify</CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        if (!diagnosticData.user?.id) return;
+                        setIsSyncingOrders(true);
+                        try {
+                          const result = await syncShopifyOrders(diagnosticData.user.id);
+                          if (result.success) {
+                            toast.success(result.message);
+                            handleSearch();
+                          } else {
+                            toast.error(`Sync failed: ${result.message}`);
+                          }
+                          if (result.errors && result.errors.length > 0) {
+                            console.error('Sync errors:', result.errors);
+                            toast.warning('Some orders failed to sync. Check console.');
+                          }
+                        } catch (err: any) {
+                          toast.error(`Error: ${err.message}`);
+                        } finally {
+                          setIsSyncingOrders(false);
+                        }
+                      }}
+                      disabled={isSyncingOrders || !diagnosticData.user?.id}
+                    >
+                      {isSyncingOrders ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Syncing...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Sync Old Shopify Orders
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </CardHeader>
-                                 <CardContent>
-                   {diagnosticData.shopifyOrders?.length > 0 ? (
-                     <div className="space-y-3">
-                       {diagnosticData.shopifyOrders.map((order, index) => (
+                <CardContent>
+                  {diagnosticData.shopifyOrders?.length > 0 ? (
+                    <div className="space-y-3">
+                      {diagnosticData.shopifyOrders.map((order, index) => (
                         <div key={order.id || index} className="border rounded-lg p-3">
                           <div className="flex justify-between items-start">
                             <div>
