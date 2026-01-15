@@ -64,15 +64,15 @@ export const createActions = (
 
       if (error || !user) {
         console.error('Error getting authenticated user:', error);
-        set({ 
+        set({
           isLoadingProfile: false,
-          hasProfileError: true 
+          hasProfileError: true
         });
         return;
       }
 
       // Set the user ID in the store immediately to allow early rendering with minimal data
-      set({ 
+      set({
         userId: user.id,
         // Initialize a minimal profile with email-based fallbacks immediately
         // This ensures we always have something to display even if queries time out
@@ -83,17 +83,17 @@ export const createActions = (
           joinedDate: new Date(user.created_at).toLocaleDateString()
         }
       });
-      
+
       // Get user profile data with timeout protection
       const supabase = getBrowserClient();
-      
+
       // Log the user ID to help with debugging
       console.log('Attempting to find profile for user ID:', user.id);
-      
+
       // First try direct email match which is more reliable than UUID matching
       // This handles cases where the ID format might differ between auth and profile tables
       let userEmailPromise;
-      
+
       if (user.email) {
         userEmailPromise = supabase
           .from('unified_profiles')
@@ -105,25 +105,25 @@ export const createActions = (
         userEmailPromise = Promise.resolve({ data: null, error: new Error('No email available') });
         console.warn('No email available for user, skipping email match');
       }
-      
+
       // Race the query against a timeout
       const userEmailResult = await Promise.race([
         userEmailPromise,
         timeout(3000) // 3 second timeout
       ]);
-      
+
       // Handle possible timeout or success with email query
       if ('timedOut' in userEmailResult) {
         console.warn('unified_profiles email query timed out, trying ID match');
       } else {
         const { data: emailProfile, error: emailError } = userEmailResult;
-        
+
         if (!emailError && emailProfile) {
           // Found profile by email, use this data
           const firstName = emailProfile.first_name || '';
           const lastName = emailProfile.last_name || '';
           const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-          
+
           // Update profile with unified_profiles data
           set({
             userProfile: {
@@ -133,17 +133,17 @@ export const createActions = (
               joinedDate: new Date(user.created_at).toLocaleDateString()
             }
           });
-          
+
           console.log('Loaded profile from unified_profiles (email match):', fullName || 'Name not found');
-          
+
           // Successfully found by email, skip the ID match attempt
           return;
         }
-        
+
         // If we reach here, email match failed, try ID match as backup
         console.log('Email match failed, trying ID match:', user.id);
       }
-      
+
       // Try unified_profiles with case-insensitive UUID match as backup
       // Convert ID to lowercase to handle case sensitivity issues
       const unifiedProfilePromise = supabase
@@ -151,30 +151,30 @@ export const createActions = (
         .select('id, first_name, last_name, phone, email')
         .filter('id', 'ilike', user.id.toLowerCase()) // Use ilike for case-insensitive matching
         .maybeSingle();
-        
+
       // Race the query against a timeout
       const unifiedProfileResult = await Promise.race([
         unifiedProfilePromise,
         timeout(3000) // 3 second timeout
       ]);
-      
+
       // Handle possible timeout
       if ('timedOut' in unifiedProfileResult) {
         console.warn('unified_profiles ID query timed out, using fallback data');
         // We don't need to set anything here since we already set the fallback profile
       } else {
         const { data: unifiedProfile, error: unifiedError } = unifiedProfileResult;
-        
+
         if (unifiedError) {
           console.error('Error fetching unified profile:', unifiedError);
         }
-        
+
         if (!unifiedError && unifiedProfile) {
           // Format name with proper validation
           const firstName = unifiedProfile.first_name || '';
           const lastName = unifiedProfile.last_name || '';
           const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-          
+
           // Update profile with unified_profiles data
           set({
             userProfile: {
@@ -184,7 +184,7 @@ export const createActions = (
               joinedDate: new Date(user.created_at).toLocaleDateString()
             }
           });
-          
+
           console.log('Loaded profile from unified_profiles (ID match):', fullName || 'Name not found');
         } else {
           // Fall back to profiles table with timeout protection
@@ -193,25 +193,25 @@ export const createActions = (
             .select('first_name, last_name, avatar_url')
             .eq('id', user.id)
             .maybeSingle();
-          
+
           // Race the profiles query against a timeout
           const profileResult = await Promise.race([
             profilePromise,
             timeout(3000) // 3 second timeout
           ]);
-          
+
           if ('timedOut' in profileResult) {
             console.warn('profiles query timed out, using fallback data');
             // We already have fallback data set, so no action needed
           } else {
             const { data: profile, error: profileError } = profileResult;
-            
+
             if (!profileError && profile) {
               // Format name with proper validation
               const firstName = profile.first_name || '';
               const lastName = profile.last_name || '';
               const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-              
+
               // Update profile with profiles table data
               set({
                 userProfile: {
@@ -221,7 +221,7 @@ export const createActions = (
                   joinedDate: new Date(user.created_at).toLocaleDateString()
                 }
               });
-              
+
               console.log('Loaded profile from profiles table:', fullName || 'Name not found');
             } else {
               console.log('No profile found in either table, using email fallback');
@@ -229,7 +229,7 @@ export const createActions = (
           }
         }
       }
-      
+
       // Always mark loading as complete, regardless of what data we found
       set({ isLoadingProfile: false });
 
@@ -296,9 +296,9 @@ export const createActions = (
         store.loadStoreCollections(force),
         store.loadPurchases(userId, force)
       ];
-      
+
       await Promise.all(promises);
-      
+
     } catch (error) {
       console.error('[Store Action] loadUserDashboardData: Error loading dashboard data:', error);
       set({
@@ -321,10 +321,10 @@ export const createActions = (
 
     set({ isLoadingEnrollments: true });
 
-    
+
     try {
       const supabase = getBrowserClient();
-      
+
       // Direct query for the specific enrollment we need
       const { data: enrollment, error } = await supabase
         .from('enrollments')
@@ -335,42 +335,42 @@ export const createActions = (
         .eq('user_id', userId)
         .eq('course_id', courseId)
         .single();
-        
+
       if (error) {
         console.error('Error fetching specific enrollment:', error);
         set({ isLoadingEnrollments: false, hasEnrollmentError: true });
         return;
       }
-      
+
       if (!enrollment) {
         console.log(`No enrollment found for user ${userId} and course ${courseId}`);
         set({ isLoadingEnrollments: false });
         return;
       }
-      
+
       // Get modules for this course
       const { data: modulesData, error: modulesError } = await supabase
         .from('modules')
         .select('*')
         .eq('course_id', courseId)
         .order('position', { ascending: true });
-      
+
       if (modulesError) {
         console.error('Error fetching modules:', modulesError);
       }
-      
+
       let lessonsData: any[] = [];
       if (modulesData && modulesData.length > 0) {
 
-        
+
         const moduleIds = modulesData.map(module => module.id);
-        
+
         const { data: lessons, error: lessonsError } = await supabase
           .from('lessons')
           .select('*')
           .in('module_id', moduleIds)
           .order('position', { ascending: true });
-          
+
         if (lessonsError) {
           console.error('Error fetching lessons:', lessonsError);
         } else if (lessons) {
@@ -378,10 +378,10 @@ export const createActions = (
 
         }
       }
-      
+
       // Build the course structure
       const courseObject = enrollment.courses;
-      
+
       // Get modules for this course
       const courseModules = modulesData ? modulesData
         .map(module => {
@@ -389,23 +389,23 @@ export const createActions = (
           const moduleLessons = lessonsData
             .filter(lesson => lesson.module_id === module.id)
             .sort((a, b) => (a.position || 0) - (b.position || 0));
-              
+
           return {
             ...module,
             lessons: moduleLessons
           };
         })
         .sort((a, b) => (a.position || 0) - (b.position || 0)) : [];
-      
+
       // Create the course data with full structure
-      const courseData = courseObject && typeof courseObject === 'object' 
+      const courseData = courseObject && typeof courseObject === 'object'
         ? {
-            id: courseObject.id,
-            title: courseObject.title,
-            description: courseObject.description ?? '',
-            slug: courseObject.slug,
-            modules: courseModules,
-          }
+          id: courseObject.id,
+          title: courseObject.title,
+          description: courseObject.description ?? '',
+          slug: courseObject.slug,
+          modules: courseModules,
+        }
         : undefined;
 
       // Create a single formatted enrollment - following EXACT UserEnrollment interface
@@ -424,20 +424,20 @@ export const createActions = (
 
       // Get existing enrollments
       const existingEnrollments = get().enrollments || [];
-      
+
       // Replace any existing enrollment for this course or add as new
       const updatedEnrollments = [
         ...existingEnrollments.filter(e => e.courseId !== courseId),
         formattedEnrollment
       ];
-      
+
       // Update the store
       set({
         enrollments: updatedEnrollments,
         isLoadingEnrollments: false,
         lastEnrollmentsLoadTime: Date.now(),
       });
-      
+
       return formattedEnrollment;
     } catch (err) {
       console.error('Error in loadSpecificEnrollment:', err);
@@ -454,10 +454,10 @@ export const createActions = (
     // Check if data is fresh and user hasn't changed
     const state = get();
     const now = Date.now();
-    if (!force && 
-        state.userId === userId && 
-        state.lastEnrollmentsLoadTime && 
-        (now - state.lastEnrollmentsLoadTime < STALE_THRESHOLD)) {
+    if (!force &&
+      state.userId === userId &&
+      state.lastEnrollmentsLoadTime &&
+      (now - state.lastEnrollmentsLoadTime < STALE_THRESHOLD)) {
       // Data is fresh, no need to fetch
       return;
     }
@@ -479,7 +479,7 @@ export const createActions = (
       const supabase = getBrowserClient();
 
       // STEP 1: Fetch user enrollments with related course data - with specific user filter
-  
+
       const { data: enrollments, error } = await supabase
         .from('enrollments')
         .select(`
@@ -511,37 +511,37 @@ export const createActions = (
 
       // STEP 2: For each enrolled course, fetch the course modules
       let formattedEnrollments: UserEnrollment[] = [];
-      
+
       if (enrollments && enrollments.length > 0) {
 
-        
+
         // Get all course IDs from enrollments
         const courseIds = enrollments
           .map(enrollment => enrollment.course_id)
           .filter(id => id); // Filter out any null/undefined
-        
+
         // Fetch modules for all enrolled courses
         const { data: modulesData, error: modulesError } = await supabase
           .from('modules')
           .select('*')
           .in('course_id', courseIds);
-        
+
         if (modulesError) {
           console.error('Error fetching modules:', modulesError);
         }
-        
+
         // STEP 3: Fetch lessons for all modules
         let lessonsData: any[] = [];
         if (modulesData && modulesData.length > 0) {
 
-          
+
           const moduleIds = modulesData.map(module => module.id);
-          
+
           const { data: lessons, error: lessonsError } = await supabase
             .from('lessons')
             .select('*')
             .in('module_id', moduleIds);
-            
+
           if (lessonsError) {
             console.error('Error fetching lessons:', lessonsError);
           } else if (lessons) {
@@ -549,12 +549,12 @@ export const createActions = (
 
           }
         }
-        
+
         // Now build the full course structure with modules and lessons
         formattedEnrollments = enrollments.map(enrollment => {
           // Get course data from the enrollment
           const courseObject = enrollment.courses;
-          
+
           // Get modules for this course
           const courseModules = modulesData ? modulesData
             .filter(module => module.course_id === enrollment.course_id)
@@ -563,23 +563,23 @@ export const createActions = (
               const moduleLessons = lessonsData
                 .filter(lesson => lesson.module_id === module.id)
                 .sort((a, b) => (a.order || 0) - (b.order || 0));
-                
+
               return {
                 ...module,
                 lessons: moduleLessons
               };
             })
             .sort((a, b) => (a.position || 0) - (b.position || 0)) : [];
-          
+
           // Create the course data with full structure
-          const courseData = courseObject && typeof courseObject === 'object' 
+          const courseData = courseObject && typeof courseObject === 'object'
             ? {
-                id: courseObject.id,
-                title: courseObject.title,
-                description: courseObject.description ?? '',
-                slug: courseObject.slug,
-                modules: courseModules,
-              }
+              id: courseObject.id,
+              title: courseObject.title,
+              description: courseObject.description ?? '',
+              slug: courseObject.slug,
+              modules: courseModules,
+            }
             : undefined;
 
           return {
@@ -622,10 +622,10 @@ export const createActions = (
     // Staleness check
     const state = get();
     const now = Date.now();
-    if (!force && 
-        state.userId === userId && 
-        state.lastProgressLoadTime && 
-        (now - state.lastProgressLoadTime < STALE_THRESHOLD)) {
+    if (!force &&
+      state.userId === userId &&
+      state.lastProgressLoadTime &&
+      (now - state.lastProgressLoadTime < STALE_THRESHOLD)) {
       return;
     }
 
@@ -686,7 +686,7 @@ export const createActions = (
         .from('course_progress')
         .select('course_id, progress_percentage')
         .eq('user_id', userId);
-        
+
       if (dbCourseProgressError) throw dbCourseProgressError;
 
       // --- 3. Map Fetched Data to State --- 
@@ -701,7 +701,7 @@ export const createActions = (
           };
         });
       }
-      
+
       const courseProgressMap: Record<string, UICourseProgress> = {};
       const moduleProgressMap: Record<string, UIModuleProgress[]> = {}; // Will be populated alongside courseProgressMap
 
@@ -715,21 +715,21 @@ export const createActions = (
         if (course.modules) {
           course.modules.forEach((module: any) => { // Use 'any' temporarily or define type
             if (!module || !module.lessons) return; // Skip if module or lessons are null
-            
+
             const moduleLessons = module.lessons || [];
             const moduleTotalLessons = moduleLessons.length;
             if (moduleTotalLessons === 0) return; // Skip empty modules
 
             totalLessons += moduleTotalLessons;
-            
+
             // Calculate completed lessons for this module based *only* on lessonProgressMap
             const moduleCompletedLessons = moduleLessons.reduce((count: number, lesson: any) => {
               const lessonProgress = lessonProgressMap[lesson.id];
               return count + (lessonProgress?.status === 'completed' ? 1 : 0);
             }, 0);
-            
+
             completedLessons += moduleCompletedLessons;
-            
+
             // Calculate module progress percentage based on completed count
             const moduleProgressPercent = moduleTotalLessons > 0 ? (moduleCompletedLessons / moduleTotalLessons) * 100 : 0;
 
@@ -742,7 +742,7 @@ export const createActions = (
             });
           });
         }
-        
+
         // Get the authoritative progress percentage from course_progress table
         const dbCourseProgress = dbCourseProgressData?.find(p => p.course_id === course.id);
         const authoritativeProgressPercent = dbCourseProgress?.progress_percentage ?? 0;
@@ -815,11 +815,11 @@ export const createActions = (
     // Check if data is fresh and user hasn't changed
     const state = get();
     const now = Date.now();
-    if (!force && 
-        state.userId === userId && 
-        state.lastContinueLearningLessonLoadTime && 
-        (now - state.lastContinueLearningLessonLoadTime < STALE_THRESHOLD)) {
-       // Data is fresh, no need to fetch
+    if (!force &&
+      state.userId === userId &&
+      state.lastContinueLearningLessonLoadTime &&
+      (now - state.lastContinueLearningLessonLoadTime < STALE_THRESHOLD)) {
+      // Data is fresh, no need to fetch
       return;
     }
 
@@ -874,8 +874,8 @@ export const createActions = (
 
       // Add defensive checks for the data structure
       if (recentLesson?.lesson?.module?.course_id &&
-          recentLesson.lesson.id &&
-          recentLesson.lesson.title) {
+        recentLesson.lesson.id &&
+        recentLesson.lesson.title) {
 
         // Create continue learning data with proper type safety
         const continueLearningData: ContinueLearningLesson = {
@@ -1026,7 +1026,7 @@ export const createActions = (
       if (upsertError) {
         console.error('Error updating progress in database:', upsertError);
         // Rollback optimistic update on error
-        set({ lessonProgress: previousLessonProgress }); 
+        set({ lessonProgress: previousLessonProgress });
         throw upsertError; // Re-throw error after rollback
       }
 
@@ -1039,8 +1039,8 @@ export const createActions = (
       console.error('Error updating lesson progress:', error);
       // Ensure state is reverted if not already done by upsert catch
       if (JSON.stringify(get().lessonProgress[lessonId]) !== JSON.stringify(previousLessonState)) {
-          console.log('Rollback: Restoring previous lesson progress state due to error.');
-          set({ lessonProgress: previousLessonProgress });
+        console.log('Rollback: Restoring previous lesson progress state due to error.');
+        set({ lessonProgress: previousLessonProgress });
       }
       set({ hasProgressError: true });
     }
@@ -1071,7 +1071,7 @@ export const createActions = (
     try {
       // --- FETCHING LOGIC IMPLEMENTED --- 
       const supabase = getBrowserClient();
-      
+
       // Type for the raw query result including nested variant price
       type ProductWithVariantPrice = Database['public']['Tables']['shopify_products']['Row'] & {
         shopify_product_variants: {
@@ -1079,7 +1079,7 @@ export const createActions = (
           compare_at_price?: number | string | null;
         }[];
       };
-      
+
       let queryBuilder = supabase
         .from('shopify_products')
         .select(`
@@ -1094,6 +1094,7 @@ export const createActions = (
           )
         `)
         .or('status.eq.ACTIVE,status.eq.active')
+        .eq('vendor', 'Graceful Publications') // Filter by vendor: Student Store shows Publications
         .not('shopify_product_variants', 'is', null)
         .limit(1, { foreignTable: 'shopify_product_variants' }); // Fetch only one variant (assuming the primary one)
 
@@ -1132,13 +1133,13 @@ export const createActions = (
       }
 
       // --- LOGGING QUERY EXECUTION ---
-      
+
       // --- END LOGGING ---
 
       const { data, error } = await queryBuilder.returns<ProductWithVariantPrice[]>();
 
       // --- LOGGING RAW RESULTS ---
-      
+
       // --- END LOGGING ---
 
       if (error) {
@@ -1153,7 +1154,7 @@ export const createActions = (
           isLoadingStoreProducts: false,
           lastStoreProductsLoadTime: Date.now(),
         });
-        return; 
+        return;
       }
 
       // Transform data to ProductData format
@@ -1293,7 +1294,7 @@ export const createActions = (
     try {
       // --- FETCHING LOGIC IMPLEMENTED (from original SaleSection) ---
       const supabase = getBrowserClient();
-      
+
       // Type for the raw query result including nested variant price
       type ProductWithVariantPrice = Database['public']['Tables']['shopify_products']['Row'] & {
         shopify_product_variants: {
@@ -1302,7 +1303,7 @@ export const createActions = (
           compare_at_price?: number | string | null;
         }[];
       };
-      
+
       // Step 1: Find products with *any* variant having compare_at_price > price
       // We select the whole product and variants data here to avoid a second query
       const { data: potentialSaleProducts, error: fetchError } = await supabase
@@ -1321,7 +1322,7 @@ export const createActions = (
         .or('status.eq.ACTIVE,status.eq.active')
         .not('shopify_product_variants', 'is', null) // Ensure variants exist
         .not('shopify_product_variants.compare_at_price', 'is', null); // Ensure compare_at_price exists
-        // We filter for compare_at_price > price in the mapping step
+      // We filter for compare_at_price > price in the mapping step
 
       if (fetchError) {
         console.error('[Store Action] Error fetching potential sale products:', fetchError);
@@ -1329,14 +1330,14 @@ export const createActions = (
       }
 
       if (!potentialSaleProducts) {
-         console.warn('[Store Action] No potential sale products found, setting empty array.');
-         set({ saleProducts: [], isLoadingSaleProducts: false, lastSaleProductsLoadTime: Date.now() });
-         return;
+        console.warn('[Store Action] No potential sale products found, setting empty array.');
+        set({ saleProducts: [], isLoadingSaleProducts: false, lastSaleProductsLoadTime: Date.now() });
+        return;
       }
 
       // Step 2: Process and transform data
       const products: ProductData[] = [];
-      
+
       for (const product of potentialSaleProducts as ProductWithVariantPrice[]) {
         if (!product.shopify_product_variants || product.shopify_product_variants.length === 0) {
           continue; // Skip products with no variants
@@ -1347,7 +1348,7 @@ export const createActions = (
 
         for (const variant of product.shopify_product_variants) {
           if (variant.price === null || variant.price === undefined || isNaN(Number(variant.price)) ||
-              variant.compare_at_price === null || variant.compare_at_price === undefined || isNaN(Number(variant.compare_at_price))) {
+            variant.compare_at_price === null || variant.compare_at_price === undefined || isNaN(Number(variant.compare_at_price))) {
             continue; // Skip invalid variants
           }
 
@@ -1377,7 +1378,7 @@ export const createActions = (
           });
         }
       }
-      
+
       // Step 3: Sort by discount percentage (highest first)
       products.sort((a, b) => {
         // Ensure prices exist for sorting
@@ -1390,7 +1391,7 @@ export const createActions = (
 
         const discountA = (compareA - priceA) / compareA;
         const discountB = (compareB - priceB) / compareB;
-        
+
         return discountB - discountA; // Descending order of discount
       });
       // ----------------------------------
@@ -1415,26 +1416,26 @@ export const createActions = (
    */
   loadPurchases: async (userId: string, force = false) => {
     const { lastPurchasesLoadTime, purchases, isLoadingPurchases } = get() as StudentDashboardStore;
-    
+
     // Prevent simultaneous calls
     if (isLoadingPurchases) {
       return;
     }
-    
+
     if (!force && purchases.length > 0 && lastPurchasesLoadTime && Date.now() - lastPurchasesLoadTime < STALE_THRESHOLD) {
       return;
     }
-    
+
     // trigger loading state
     set({ isLoadingPurchases: true, hasPurchasesError: false });
-    
+
     try {
       const data = await fetchPurchaseHistory(userId);
-      
+
       const purchasesToSet = data ?? [];
       set({ purchases: purchasesToSet });
       set({ lastPurchasesLoadTime: Date.now() });
-      
+
     } catch (error) {
       console.error('[Store Action] loadPurchases error:', error);
       set({ hasPurchasesError: true });
@@ -1457,9 +1458,9 @@ export const createActions = (
 
   // Progress setters
   // Note: These might need adjustments based on how progress is structured (objects vs arrays)
-  setCourseProgress: (courseId: string, progress: UICourseProgress) => set(state => ({ courseProgress: { ...state.courseProgress, [courseId]: progress }})), 
-  setModuleProgress: (courseId: string, progress: UIModuleProgress[]) => set(state => ({ moduleProgress: { ...state.moduleProgress, [courseId]: progress }})),
-  setLessonProgress: (lessonId: string, progress: UILessonProgress) => set(state => ({ lessonProgress: { ...state.lessonProgress, [lessonId]: progress }})),
+  setCourseProgress: (courseId: string, progress: UICourseProgress) => set(state => ({ courseProgress: { ...state.courseProgress, [courseId]: progress } })),
+  setModuleProgress: (courseId: string, progress: UIModuleProgress[]) => set(state => ({ moduleProgress: { ...state.moduleProgress, [courseId]: progress } })),
+  setLessonProgress: (lessonId: string, progress: UILessonProgress) => set(state => ({ lessonProgress: { ...state.lessonProgress, [lessonId]: progress } })),
   setContinueLearningLesson: (lesson: ContinueLearningLesson | null) => set({ continueLearningLesson: lesson, lastContinueLearningLessonLoadTime: Date.now() }),
   setIsLoadingProgress: (isLoading: boolean) => set({ isLoadingProgress: isLoading }),
   setHasProgressError: (hasError: boolean) => set({ hasProgressError: hasError }),
@@ -1504,36 +1505,36 @@ export const createActions = (
    */
   loadAnnouncements: async (page = 1, limit = 10, filter: { type?: string } = {}, force = false) => {
     const { announcements, lastAnnouncementsLoadTime } = get();
-    
+
     // Check if we have data and it's not stale, unless force refresh is requested
-    if (!force && announcements.length > 0 && lastAnnouncementsLoadTime && 
-        Date.now() - lastAnnouncementsLoadTime < STALE_THRESHOLD) {
+    if (!force && announcements.length > 0 && lastAnnouncementsLoadTime &&
+      Date.now() - lastAnnouncementsLoadTime < STALE_THRESHOLD) {
       return;
     }
-    
+
     set({ isLoadingAnnouncements: true, hasAnnouncementsError: false });
-    
+
     try {
       // Build query parameters
       const params = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
       });
-      
+
       // Add type filter if provided
       if (filter.type) {
         params.append('type', filter.type);
       }
-      
+
       // Fetch announcements from API
       const response = await fetch(`/api/announcements?${params.toString()}`);
-      
+
       if (!response.ok) {
         throw new Error(`Failed to fetch announcements: ${response.status}`);
       }
-      
+
       const data = await response.json();
-      
+
       // Update state with fetched announcements
       set({
         announcements: data.data || [],

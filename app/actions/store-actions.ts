@@ -79,6 +79,7 @@ export async function getInitialStoreProducts(): Promise<ProductData[]> {
           )
         `)
             .or('status.eq.ACTIVE,status.eq.active')
+            .eq('vendor', 'Graceful Resources') // Filter by vendor
             .not('shopify_product_variants', 'is', null)
             .limit(1, { foreignTable: 'shopify_product_variants' })
             // Add ordering if desired, e.g., by creation date
@@ -140,6 +141,7 @@ export async function searchProductsStore(query: string): Promise<ProductData[]>
                 )
             `)
             .or('status.eq.ACTIVE,status.eq.active')
+            .eq('vendor', 'Graceful Resources') // Filter by vendor
             // Search title OR description_html
             .or(`title.ilike.${searchTerm},description_html.ilike.${searchTerm}`)
             .not('shopify_product_variants', 'is', null)

@@ -1305,6 +1305,10 @@ export async function POST(request: NextRequest) {
             // --- PUBLIC_SALE TRANSACTION LOGIC ---
             const { handlePublicSaleTransaction } = await import('@/lib/webhooks/public-sale-handler');
             await handlePublicSaleTransaction(tx, supabase);
+          } else if (tx.transaction_type === "PUBLIC_STORE_SALE") {
+            // --- PUBLIC_STORE_SALE TRANSACTION LOGIC (Guest Store) ---
+            const { handlePublicStoreSale } = await import('@/lib/webhooks/public-store-handler');
+            await handlePublicStoreSale(tx, supabase);
           } else {
             // Log if transaction type is unknown or not handled
             console.warn(`[Webhook] Unhandled transaction_type encountered: ${tx.transaction_type} for transaction ID: ${tx.id}`);

@@ -16,13 +16,13 @@ export const metadata: Metadata = {
     canonical: "https://gracefulhomeschooling.com/",
   },
   keywords: [
-    "homeschooling", "Filipino homeschooling", "homeschool resources", "printable planners", "paper crafts business", "work from home", "Emigrace Guevarra", "online courses","kumita habang nasa bahay"
+    "homeschooling", "Filipino homeschooling", "homeschool resources", "printable planners", "paper crafts business", "work from home", "Emigrace Guevarra", "online courses", "kumita habang nasa bahay"
   ],
   authors: [{ name: "Emigrace Guevarra" }],
   openGraph: {
     title: "Graceful Homeschooling – Homeschool Resources, Business Courses, Printables & Community",
     description:
-      "Business Courses, printables and community support to help Filipino parents create a joyful homeschooling experience.",
+      "Business Courses, printables and community support to help Filipino parents start their home-based printing business.",
     url: "https://gracefulhomeschooling.com/",
     type: "website",
     siteName: "Graceful Homeschooling",

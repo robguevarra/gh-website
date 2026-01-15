@@ -15,62 +15,67 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ProductData } from '@/lib/stores/student-dashboard'; // CORRECT import source
-import { useCartStore } from '@/stores/cartStore'; 
-import { 
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
-import LicenseTerms, { getLicenseTypeFromTitle, LicenseType } from './LicenseTerms';
-import { formatPriceDisplayPHP } from '@/lib/utils/formatting';
+import { CartItem, useCartStore } from '@/stores/cartStore';
+import { Badge } from '@/components/ui/badge';
 import { addToWishlist, removeFromWishlist } from '@/app/actions/store-actions';
+import LicenseTerms from './LicenseTerms';
+import type { LicenseType } from './LicenseTerms';
+import { formatPriceDisplayPHP } from '@/lib/utils/formatting';
+
+// Local helper to avoid import cycle/undefined issues
+const getLicenseTypeFromTitle = (title: string | null): LicenseType => {
+  if (!title) return 'UNKNOWN';
+  if (title.includes('(CUR)')) return 'CUR';
+  if (title.includes('(PLR)')) return 'PLR';
+  return 'BUNDLE';
+};
+
+// Helper to get badge text
+const getLicenseBadgeText = (type: LicenseType) => {
+  switch (type) {
+    case 'CUR': return 'Commercial Use Rights';
+    case 'PLR': return 'Private Label Rights';
+    case 'BUNDLE': return 'Mixed License Bundle';
+    default: return 'Commercial License';
+  }
+};
 
 interface ProductCardProps {
   product: ProductData;
   isInitiallyWishlisted: boolean;
   onOpenQuickView: (product: ProductData) => void;
   ownedProductIds: string[];
+  baseUrl?: string;
+  onAddToCart?: (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => void;
 }
 
-// Helper to format currency
-// const formatPrice = (price: number | null): string => {
-//   if (price === null) return 'N/A';
-//   return new Intl.NumberFormat('en-US', {
-//     style: 'currency',
-//     currency: 'USD', // TODO: Make currency dynamic if needed
-//   }).format(price);
-// };
+// ... (helpers)
 
-// Helper to format license label text
-const getLicenseBadgeText = (licenseType: LicenseType): string => {
-  switch(licenseType) {
-    case 'CUR': return 'CUR License';
-    case 'PLR': return 'PLR License';
-    case 'BUNDLE': return 'Mixed License';
-    default: return 'Commercial License';
-  }
-};
-
-const ProductCard: React.FC<ProductCardProps> = ({ 
-  product, 
-  isInitiallyWishlisted, 
+const ProductCard: React.FC<ProductCardProps> = ({
+  product,
+  isInitiallyWishlisted,
   onOpenQuickView,
-  ownedProductIds
+  ownedProductIds,
+  baseUrl = '/dashboard/store',
+  onAddToCart,
 }) => {
   // State for loading when adding to cart
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   // State for wishlist status and transition
   const [isWishlisted, setIsWishlisted] = useState(isInitiallyWishlisted);
   const [isWishlistPending, startWishlistTransition] = useTransition();
-  
-  // Get addItem action from cart store
-  const addItem = useCartStore((state) => state.addItem); 
-  
+
+  // Get default addItem action from cart store
+  const defaultAddItem = useCartStore((state) => state.addItem);
+
+  // Use the passed onAddToCart or fallback to default
+  const addItem = onAddToCart || defaultAddItem;
+
+  // ... (rest of component)
+
   // Use toast for feedback
   const { toast } = useToast();
-  
+
   // Determine license type from title
   const licenseType = getLicenseTypeFromTitle(product.title);
 
@@ -84,8 +89,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
   const handleAddToCart = () => {
     // Prevent adding if owned (belt-and-suspenders check)
     if (isOwned) {
-        toast({ title: "Already Owned", description: "You already own this product.", variant: "destructive" });
-        return;
+      toast({ title: "Already Owned", description: "You already own this product.", variant: "destructive" });
+      return;
     }
     // Set loading state
     setIsAddingToCart(true);
@@ -96,7 +101,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
     // Call the addItem action from the cart store
     addItem({
       productId: product.id,
-      title: product.title || 'Untitled Product', 
+      title: product.title || 'Untitled Product',
       price: numericPrice, // Use the extracted numeric price
       imageUrl: product.featured_image_url || '',
     });
@@ -163,14 +168,14 @@ const ProductCard: React.FC<ProductCardProps> = ({
       <CardHeader className="p-0 group relative">
         {/* Enhanced Sale Badge conditionally */}
         {isOnSale && (
-          <Badge 
-            variant="destructive" 
+          <Badge
+            variant="destructive"
             className="absolute top-2 right-2 z-10 px-2.5 py-1 text-xs font-semibold shadow-sm animate-pulse"
           >
             Sale
           </Badge>
         )}
-        <Link href={`/dashboard/store/product/${product.handle}`} className="block">
+        <Link href={`${baseUrl}/product/${product.handle}`} className="block">
           <div className="aspect-video relative w-full overflow-hidden">
             {product.featured_image_url ? (
               <>
@@ -183,7 +188,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
                   className="transition-transform duration-500 group-hover:scale-105"
                 />
                 {/* Quick preview overlay - trigger callback */}
-                <div 
+                <div
                   className="absolute inset-0 bg-black/0 transition-colors duration-300 flex items-center justify-center opacity-0 cursor-pointer hover:bg-black/30 hover:opacity-100 md:group-hover:bg-black/30 md:group-hover:opacity-100 touch:bg-black/20 touch:opacity-100"
                   // TEMPORARILY REMOVED onClick to test navigation
                   /*
@@ -196,9 +201,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
                   role="button"
                   aria-label={`Quick view ${cleanTitle}`}
                 >
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     className="gap-1.5 pointer-events-none opacity-90 group-hover:opacity-100 touch:opacity-100" // Prevent button intercepting click
                   >
                     <Eye className="h-3.5 w-3.5" />
@@ -214,43 +219,43 @@ const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         </Link>
       </CardHeader>
-      
+
       <CardContent className="p-4 flex-grow flex flex-col">
         <div className="flex justify-between items-start mb-1">
-          <Link href={`/dashboard/store/product/${product.handle}`} className="block flex-1 mr-2">
+          <Link href={`${baseUrl}/product/${product.handle}`} className="block flex-1 mr-2">
             <CardTitle className="text-lg font-semibold line-clamp-2 hover:text-primary transition-colors">
               {cleanTitle}
             </CardTitle>
           </Link>
-          
+
           {/* Wishlist Button */}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className={`h-8 w-8 ml-1 shrink-0 group ${isWishlistPending ? 'opacity-50 cursor-not-allowed' : ''}`} 
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 ml-1 shrink-0 group ${isWishlistPending ? 'opacity-50 cursor-not-allowed' : ''}`}
             onClick={handleWishlistToggle}
             disabled={isWishlistPending}
             aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
           >
-            <Heart 
+            <Heart
               className={`h-5 w-5 transition-all ${isWishlisted ? 'text-red-500 fill-red-500' : 'text-muted-foreground group-hover:text-red-500'}`}
             />
           </Button>
         </div>
-        
+
         {/* License type badge */}
         <div className="mt-1 mb-2">
           <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary">
             {getLicenseBadgeText(licenseType)}
           </span>
         </div>
-        
+
         {/* Add license terms component in minimal mode */}
         <div className="mt-1 mb-3">
           <LicenseTerms minimal variant="hover" licenseType={licenseType} />
         </div>
       </CardContent>
-      
+
       {/* Enhanced Sale Pricing Display */}
       <CardFooter className={`p-4 flex justify-between items-center rounded-b-lg border-t ${isOnSale ? 'bg-rose-50/50 border-rose-100' : 'bg-neutral-50 border-neutral-100'}`}>
         {(() => {
@@ -278,20 +283,20 @@ const ProductCard: React.FC<ProductCardProps> = ({
               )}
               {/* Display the final price */}
               <span className={`text-lg font-semibold ${isOnSale ? 'text-rose-700' : 'text-neutral-800'}`}>
-                {formattedPrice || 'N/A'} { /* Fallback if formatting fails */ }
+                {formattedPrice || 'N/A'} { /* Fallback if formatting fails */}
               </span>
             </div>
           );
         })()}
-        
+
         {/* Conditional Add to Cart Button / Owned Indicator */}
         {isOwned ? (
           <Badge variant="secondary" className="px-3 py-1.5 text-sm bg-green-100 text-green-800 border-green-200">
             Purchased
           </Badge>
         ) : (
-          <Button 
-            onClick={handleAddToCart} 
+          <Button
+            onClick={handleAddToCart}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
             disabled={isAddingToCart}
           >

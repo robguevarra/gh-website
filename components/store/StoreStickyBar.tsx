@@ -11,11 +11,10 @@ import { debounce } from 'lodash-es';
 
 // Define props if we need to receive info from parent, e.g., initial collection
 interface StoreStickyBarProps {
-  // We don't pass the handler down directly anymore
-  // onCollectionSelect: (collectionHandle: string) => void;
+    isPublic?: boolean;
 }
 
-const StoreStickyBar: React.FC<StoreStickyBarProps> = () => {
+const StoreStickyBar: React.FC<StoreStickyBarProps> = ({ isPublic = false }) => {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
@@ -42,7 +41,7 @@ const StoreStickyBar: React.FC<StoreStickyBarProps> = () => {
         } else {
             current.delete("q");
         }
-        
+
         // Update or delete 'collection'
         if (params.collection && params.collection !== 'all') {
             current.set("collection", params.collection);
@@ -62,8 +61,8 @@ const StoreStickyBar: React.FC<StoreStickyBarProps> = () => {
     const debouncedUpdateSearchQuery = useCallback(
         debounce((query: string) => {
             // When search is used, clear the collection filter
-            updateUrlParams({ q: query, collection: null }); 
-        }, 300), 
+            updateUrlParams({ q: query, collection: null });
+        }, 300),
         [updateUrlParams] // Dependency on the main URL updater
     );
 
@@ -89,7 +88,7 @@ const StoreStickyBar: React.FC<StoreStickyBarProps> = () => {
     }, [updateUrlParams, debouncedUpdateSearchQuery]);
 
     return (
-        <div className="sticky top-16 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-40 border-b">
+        <div className="sticky top-[3.5rem] bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 z-30 border-b">
             <div className="container mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-4">
                 {/* Search Area */}
                 <div className="relative w-full sm:w-auto sm:flex-1 order-2 sm:order-1">
@@ -104,10 +103,10 @@ const StoreStickyBar: React.FC<StoreStickyBarProps> = () => {
                     />
                     {/* Clear Button - Changed condition to clear both */}
                     {(searchTerm || currentCollection) && !isPending && (
-                        <Button 
+                        <Button
                             variant="ghost"
                             size="icon"
-                            className="absolute right-10 top-1/2 transform -translate-y-1/2 h-7 w-7 rounded-full text-muted-foreground hover:text-foreground" 
+                            className="absolute right-10 top-1/2 transform -translate-y-1/2 h-7 w-7 rounded-full text-muted-foreground hover:text-foreground"
                             onClick={handleClearFilters} // Use the combined clear handler
                             aria-label="Clear filters"
                         >
@@ -121,19 +120,21 @@ const StoreStickyBar: React.FC<StoreStickyBarProps> = () => {
                 </div>
 
                 {/* Navigation/Actions Area */}
-                <div className="flex items-center gap-4 order-1 sm:order-2 flex-shrink-0">
-                    <Button variant="link" asChild className="p-0 h-auto text-muted-foreground hover:text-primary transition-colors">
-                        <Link href="/dashboard/wishlist" aria-label="View Wishlist">
-                            Wishlist
-                        </Link>
-                    </Button>
-                    <Button variant="link" asChild className="p-0 h-auto text-muted-foreground hover:text-primary transition-colors">
-                        <Link href="/dashboard/purchase-history" aria-label="View Purchase History">
-                            Purchases
-                        </Link>
-                    </Button>
-                    <CartIndicator />
-                </div>
+                {!isPublic && (
+                    <div className="flex items-center gap-4 order-1 sm:order-2 flex-shrink-0">
+                        <Button variant="link" asChild className="p-0 h-auto text-muted-foreground hover:text-primary transition-colors">
+                            <Link href="/dashboard/wishlist" aria-label="View Wishlist">
+                                Wishlist
+                            </Link>
+                        </Button>
+                        <Button variant="link" asChild className="p-0 h-auto text-muted-foreground hover:text-primary transition-colors">
+                            <Link href="/dashboard/purchase-history" aria-label="View Purchase History">
+                                Purchases
+                            </Link>
+                        </Button>
+                        <CartIndicator />
+                    </div>
+                )}
             </div>
         </div>
     );

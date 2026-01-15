@@ -1,230 +1,88 @@
-'use client'
+import React, { Suspense } from 'react';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import StoreResultsManager from '@/components/store/StoreResultsManager';
+import StoreStickyBar from '@/components/store/StoreStickyBar';
+import { ProductData } from '@/lib/stores/student-dashboard';
+import LoadingSkeleton from '@/components/store/LoadingSkeleton';
+import { ShopHero } from '@/components/shop/ShopHero';
+import { searchProductsStore } from '@/app/actions/store-actions';
 
-import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronRight, Mail, Bell, Package, Sparkles, Heart, Gift } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { PublicHeader } from '@/components/layout/public-header'
-import { PublicFooter } from '@/components/layout/public-footer'
+// --- DATA FETCHING ---
+async function getInitialProducts() {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from('shopify_products')
+    .select(`
+      *,
+      shopify_product_variants (
+        id,
+        price,
+        compare_at_price
+      )
+    `)
+    .or('status.eq.ACTIVE,status.eq.active')
+    .order('created_at', { ascending: false });
 
-// Animation variants following design context timing (150-300ms)
-const fadeInUp = {
-  initial: { opacity: 0, y: 30 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.3, ease: "easeOut" }
-}
-
-const staggerContainer = {
-  animate: {
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.2
-    }
+  if (error) {
+    console.error('Error fetching products:', error);
+    return [];
   }
+
+  // Transform data to match ProductData type if needed, similar to store-actions logic
+  // However, since we are mimicking the dashboard behavior, maybe we should just use 
+  // the same action from store-actions if possible?
+  // getInitialStoreProducts() exists in store-actions. Let's use that instead of re-implementing!
+  // But wait, the existing code here had a direct query. 
+  // To ensure consistency, I'll stick to what was here but just return data casted.
+  // Actually, using the action is safer for type transformation.
+  // I will check if getInitialStoreProducts is exported. Yes, viewed in Step 412.
+  return data as unknown as ProductData[];
 }
 
-const fadeInScale = {
-  initial: { opacity: 0, scale: 0.9 },
-  animate: { opacity: 1, scale: 1 },
-  transition: { duration: 0.3, ease: "easeOut" }
-}
+import { getInitialStoreProducts } from '@/app/actions/store-actions';
 
-export default function ShopComingSoon() {
-  const [email, setEmail] = useState('')
-  const [isSubmitted, setIsSubmitted] = useState(false)
-  const [isLoaded, setIsLoaded] = useState(false)
+export const dynamic = 'force-dynamic';
 
-  useEffect(() => {
-    setIsLoaded(true)
-  }, [])
+export default async function ShopPage(props: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const searchParams = await props.searchParams;
+  const searchTerm = typeof searchParams.q === 'string' ? searchParams.q : '';
 
-  const handleNotifySubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (email) {
-      setIsSubmitted(true)
-      setEmail('')
-      // TODO: Integrate with email service
-      setTimeout(() => setIsSubmitted(false), 3000)
-    }
+  // 1. Fetch data based on search or initial load
+  let products: ProductData[] = [];
+
+  if (searchTerm) {
+    products = await searchProductsStore(searchTerm);
+  } else {
+    products = await getInitialStoreProducts();
   }
+
+  // For guests, owned products is alway empty
+  const ownedProductIds: string[] = [];
+  const wishlistedIds: string[] = [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <PublicHeader />
-      
-      {/* Floating Background Elements - Using design context colors */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-10 w-40 h-40 bg-secondary/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-60 h-60 bg-accent/10 rounded-full blur-3xl" />
+    <div className="relative min-h-screen pb-20 bg-background">
+      {/* Hero Section */}
+      <ShopHero />
+
+      {/* Sticky Search/Filter Bar */}
+      <Suspense fallback={<div className="h-16 w-full bg-muted/20 animate-pulse" />}>
+        <StoreStickyBar isPublic={true} />
+      </Suspense>
+
+      <div className="container mx-auto px-4 py-8">
+        <StoreResultsManager
+          products={products}
+          ownedProductIds={ownedProductIds}
+          baseUrl="/shop" // Important: navigation base URL
+          isLoading={false}
+          searchTerm={searchTerm}
+          initialWishlistedIds={wishlistedIds}
+          cartStoreType="public"
+        />
       </div>
-
-      <main className="relative">
-        <div className="container mx-auto px-6 py-20">
-          <motion.div
-            className="max-w-4xl mx-auto text-center"
-            variants={staggerContainer}
-            initial="initial"
-            animate={isLoaded ? "animate" : "initial"}
-          >
-            {/* Coming Soon Badge */}
-            <motion.div variants={fadeInUp} className="mb-8">
-              <Badge 
-                variant="outline" 
-                className="mb-4 bg-white/50 backdrop-blur-sm border-primary/20 text-primary px-6 py-2 text-sm font-medium"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                Coming Soon
-              </Badge>
-            </motion.div>
-
-            {/* Main Heading - Using Playfair Display from design context */}
-            <motion.h1 
-              variants={fadeInUp}
-              className="font-serif text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-primary via-primary to-secondary bg-clip-text text-transparent leading-tight"
-            >
-              Graceful Homeschooling Resources
-            </motion.h1>
-
-            {/* Subtitle - Using Inter from design context */}
-            <motion.p 
-              variants={fadeInUp}
-              className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto leading-relaxed"
-            >
-              We're crafting something special for the homeschooling community. Get ready for curated resources, tools, and materials to support your graceful journey.
-            </motion.p>
-
-            {/* Feature Preview Cards */}
-            <motion.div 
-              variants={fadeInUp}
-              className="grid md:grid-cols-3 gap-6 mb-12 max-w-5xl mx-auto"
-            >
-              {[
-                {
-                  icon: Package,
-                  title: "Curated Resources",
-                  description: "Handpicked educational materials and tools for every homeschooling family"
-                },
-                {
-                  icon: Heart,
-                  title: "Community Favorites",
-                  description: "Products recommended and loved by our Graceful Homeschooling community"
-                },
-                {
-                  icon: Gift,
-                  title: "Exclusive Bundles",
-                  description: "Special collections and bundles available only to our community members"
-                }
-              ].map((feature, index) => (
-                <motion.div
-                  key={feature.title}
-                  variants={fadeInScale}
-                  className="bg-card/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-border/50 hover:shadow-xl hover:border-primary/20 transition-all duration-300 group"
-                >
-                  <div className="bg-primary/10 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:bg-primary/20 transition-colors duration-300">
-                    <feature.icon className="h-8 w-8 text-primary" />
-                  </div>
-                  <h3 className="font-semibold text-lg mb-2 text-foreground">{feature.title}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
-                </motion.div>
-              ))}
-            </motion.div>
-
-            {/* Notify Me Form */}
-            <motion.div 
-              variants={fadeInUp}
-              className="bg-card/90 backdrop-blur-sm rounded-2xl p-8 shadow-lg border border-border/50 max-w-md mx-auto"
-            >
-              <div className="text-center mb-6">
-                <Bell className="h-12 w-12 text-primary mx-auto mb-4" />
-                <h2 className="font-serif text-2xl font-bold text-foreground mb-2">Get Notified</h2>
-                <p className="text-muted-foreground">Be the first to know when we launch</p>
-              </div>
-
-              <AnimatePresence mode="wait">
-                {!isSubmitted ? (
-                  <motion.form
-                    key="form"
-                    initial={{ opacity: 1 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.2 }}
-                    onSubmit={handleNotifySubmit}
-                    className="space-y-4"
-                  >
-                    <div className="flex flex-col sm:flex-row gap-3">
-                      <Input
-                        type="email"
-                        placeholder="Enter your email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        className="flex-1 bg-background/50 border-border/50 focus:border-primary/50 focus:ring-primary/20"
-                      />
-                      <Button 
-                        type="submit" 
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-all duration-200 group"
-                      >
-                        <Mail className="h-4 w-4 mr-2 group-hover:scale-110 transition-transform duration-200" />
-                        Notify Me
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      We'll only send you updates about the shop launch. No spam, ever.
-                    </p>
-                  </motion.form>
-                ) : (
-                  <motion.div
-                    key="success"
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.3, ease: "easeOut" }}
-                    className="text-center py-4"
-                  >
-                    <div className="bg-green-100 text-green-800 p-4 rounded-lg">
-                      <Sparkles className="h-6 w-6 mx-auto mb-2" />
-                      <p className="font-medium">You're on the list!</p>
-                      <p className="text-sm mt-1">We'll notify you as soon as the shop opens.</p>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
-
-            {/* Call to Action */}
-            <motion.div variants={fadeInUp} className="mt-12">
-              <p className="text-muted-foreground mb-6">
-                In the meantime, explore our current offerings
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
-                  variant="outline" 
-                  className="border-primary text-primary hover:bg-primary/10 group"
-                  asChild
-                >
-                  <a href="/p2p-order-form">
-                    Papers to Profits Course
-                    <ChevronRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
-                  </a>
-                </Button>
-                <Button 
-                  variant="outline" 
-                  className="border-secondary text-secondary hover:bg-secondary/10 group"
-                  asChild
-                >
-                  <a href="/canva-order">
-                    Free Canva Ebook
-                    <ChevronRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
-                  </a>
-                </Button>
-              </div>
-            </motion.div>
-          </motion.div>
-        </div>
-      </main>
-      
-      <PublicFooter />
     </div>
-  )
-} 
+  );
+}

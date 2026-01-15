@@ -6,17 +6,24 @@ import React, { useState, useEffect, useCallback } from 'react';
 import ProductList from './ProductList';
 import LoadingSkeleton from './LoadingSkeleton';
 import QuickViewModal from './QuickViewModal';
-import { ProductData } from '@/app/dashboard/store/page';
+import { ProductData } from '@/lib/stores/student-dashboard';
 // Removed search action import - data comes via props
 // Removed debounce import
 
+import { usePublicCartStore } from '@/stores/publicCartStore';
+import { useCartStore } from '@/stores/cartStore'; // Still needed for type? Or dashboard case?
+// Actually, StoreResultsManager is client side. Can we pass the handler?
+// No, the handler comes from a hook. Hooks can only be called in components.
+// So StoreResultsManager needs to use the hook.
+
 interface StoreResultsManagerProps {
-  // Accept fetched products/results and loading state from the parent page
   products: ProductData[];
-  isLoading: boolean; 
-  searchTerm: string | null; // Receive current search term for empty state message
+  isLoading: boolean;
+  searchTerm: string | null;
   initialWishlistedIds: string[];
   ownedProductIds: string[];
+  baseUrl?: string;
+  cartStoreType?: 'student' | 'public'; // 'student' is default
 }
 
 const StoreResultsManager: React.FC<StoreResultsManagerProps> = ({
@@ -25,11 +32,25 @@ const StoreResultsManager: React.FC<StoreResultsManagerProps> = ({
   searchTerm,
   initialWishlistedIds,
   ownedProductIds,
+  baseUrl,
+  cartStoreType = 'student'
 }) => {
   // State for interactions within this component
   const [wishlistedIds, setWishlistedIds] = useState<Set<string>>(new Set(initialWishlistedIds));
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const [selectedProductForQuickView, setSelectedProductForQuickView] = useState<ProductData | null>(null);
+
+  // Determine which cart action to use
+  // We can't conditionally call hooks, so we call both? No.
+  // We can wrap the selector?
+  // Or just get the addItem function from the appropriate store.
+  // Since we are in a component, we can use the hooks.
+
+  const publicAddItem = usePublicCartStore(state => state.addItem);
+  const studentAddItem = useCartStore(state => state.addItem);
+
+  // Select the correct handler based on prop
+  const onAddToCart = cartStoreType === 'public' ? publicAddItem : studentAddItem;
 
   // Update wishlist state if initial IDs change
   useEffect(() => {
@@ -43,11 +64,8 @@ const StoreResultsManager: React.FC<StoreResultsManagerProps> = ({
   }, []);
 
   return (
-    // Removed the outer sticky div and the search/actions bar
-    // This component now just returns the results area + modal
     <>
-      {/* Product Listing Area - Rendered based on props from page */}
-      <div className="container mx-auto px-4 pb-12"> {/* Removed pt-6, adjusted pb */}
+      <div className="container mx-auto px-4 pb-12">
         {isLoading ? (
           <LoadingSkeleton />
         ) : products.length > 0 ? (
@@ -56,20 +74,20 @@ const StoreResultsManager: React.FC<StoreResultsManagerProps> = ({
             wishlistedIds={wishlistedIds}
             onOpenQuickView={handleOpenQuickView}
             ownedProductIds={ownedProductIds}
+            baseUrl={baseUrl}
+            onAddToCart={onAddToCart} // Pass the selected handler
           />
         ) : (
           <div className="text-center text-muted-foreground py-10">
-            {/* Display message based on whether a search term was present */}
             {searchTerm ? (
-                <p>No designs found matching "{searchTerm}".</p>
+              <p>No designs found matching "{searchTerm}".</p>
             ) : (
-                <p>No designs available at the moment.</p> // Default empty message
+              <p>No designs available at the moment.</p>
             )}
           </div>
         )}
       </div>
 
-      {/* Quick View Modal */}
       <QuickViewModal
         product={selectedProductForQuickView}
         isOpen={isQuickViewOpen}

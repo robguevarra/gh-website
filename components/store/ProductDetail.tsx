@@ -40,44 +40,47 @@ interface ProductDetailProps {
   relatedProducts: any[]; // Type this more strictly as needed
   reviews: ProductReviewWithProfile[]; // Add reviews prop
   ownedProductIds: string[]; // <-- Add owned IDs prop
+  baseUrl?: string;
 }
 
-const ProductDetail: React.FC<ProductDetailProps> = ({ 
-    product, 
-    relatedProducts, 
-    reviews, 
-    ownedProductIds // <-- Destructure prop
+const ProductDetail: React.FC<ProductDetailProps> = ({
+  product,
+  relatedProducts,
+  reviews,
+  ownedProductIds,
+  baseUrl = '/dashboard/store'
 }) => {
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  
+
   const addItem = useCartStore((state) => state.addItem);
   const { toast } = useToast();
 
   // Determine if the user owns this product
   const isOwned = ownedProductIds.includes(product.id);
 
+  // ... (lines 60-111 unchanged)
   const variant = product.shopify_product_variants?.[0];
   const price = variant?.price || null;
   const compareAtPrice = (variant as any)?.compare_at_price || null;
-  
+
   let displayImages: string[] = [];
-  
+
   if (product.image_urls && Array.isArray(product.image_urls)) {
     displayImages = product.image_urls.map(img => img.url);
   } else if (product.featured_image_url) {
     displayImages = [product.featured_image_url];
   }
-  
+
   const selectedImage = displayImages[selectedImageIndex] || '';
 
   const productType = product.product_type || '';
   const tags = product.tags || [];
-  
+
   const licenseType = getLicenseTypeFromTitle(product.title);
 
   const getLicenseBadgeText = () => {
-    switch(licenseType) {
+    switch (licenseType) {
       case 'CUR': return 'Commercial Use Rights';
       case 'PLR': return 'Private Label Rights';
       case 'BUNDLE': return 'Mixed License Bundle';
@@ -88,13 +91,13 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const handleAddToCart = () => {
     // Prevent adding if owned
     if (isOwned) {
-        toast({ title: "Already Owned", description: "You already own this product.", variant: "destructive" });
-        return;
+      toast({ title: "Already Owned", description: "You already own this product.", variant: "destructive" });
+      return;
     }
     setIsAddingToCart(true);
-    
+
     const numericPrice = typeof price === 'number' ? price : 0;
-    
+
     addItem({
       productId: product.id,
       title: product.title || 'Untitled Product',
@@ -113,7 +116,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   return (
     <div className="container mx-auto py-8">
       <div className="mb-8">
-        <Link href="/dashboard/store" className="inline-flex items-center text-primary hover:text-primary/80 transition-colors">
+        <Link href={baseUrl} className="inline-flex items-center text-primary hover:text-primary/80 transition-colors">
           <ChevronLeft className="h-4 w-4 mr-1" />
           Back to Store
         </Link>
@@ -123,7 +126,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
         <div className="space-y-4">
           <div className="relative aspect-square bg-muted/20 rounded-lg overflow-hidden">
             {selectedImage ? (
-              <Image 
+              <Image
                 src={selectedImage}
                 alt={product.title || 'Product image'}
                 fill
@@ -145,14 +148,13 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 <button
                   key={index}
                   onClick={() => setSelectedImageIndex(index)}
-                  className={`relative w-20 h-20 shrink-0 rounded border-2 overflow-hidden transition-all ${
-                    selectedImageIndex === index 
-                      ? 'border-primary' 
-                      : 'border-transparent hover:border-primary/50'
-                  }`}
+                  className={`relative w-20 h-20 shrink-0 rounded border-2 overflow-hidden transition-all ${selectedImageIndex === index
+                    ? 'border-primary'
+                    : 'border-transparent hover:border-primary/50'
+                    }`}
                   aria-label={`View image ${index + 1}`}
                 >
-                  <Image 
+                  <Image
                     src={image}
                     alt={`${product.title || 'Product'} thumbnail ${index + 1}`}
                     fill
@@ -170,14 +172,14 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             <h1 className="text-3xl font-serif font-bold text-primary">
               {product.title?.replace(/ \((CUR|PLR)\)/, '') || 'Untitled Product'}
             </h1>
-            
+
             <div className="flex items-center">
               {(() => {
                 const { formattedPrice, formattedCompareAtPrice } = formatPriceDisplayPHP({
-                  price: price, 
-                  compareAtPrice: compareAtPrice 
+                  price: price,
+                  compareAtPrice: compareAtPrice
                 });
-                
+
                 return (
                   <div className="flex items-baseline gap-3">
                     {formattedCompareAtPrice && (
@@ -189,14 +191,14 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                   </div>
                 );
               })()}
-              
+
               <span className="ml-3 inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
                 {getLicenseBadgeText()}
               </span>
             </div>
 
             {product.description_html && (
-              <div 
+              <div
                 className="prose prose-sm max-w-none"
                 dangerouslySetInnerHTML={{ __html: product.description_html }}
               />
@@ -217,8 +219,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                     {tags
                       .filter(tag => !tag.startsWith('access:'))
                       .map((tag, index) => (
-                        <span 
-                          key={index} 
+                        <span
+                          key={index}
                           className="inline-block px-2 py-0.5 rounded-full bg-muted text-xs"
                         >
                           {tag}
@@ -237,22 +239,22 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             <div className="mt-auto pt-4">
               {/* Conditional Add to Cart Button / Owned Indicator */}
               {isOwned ? (
-                  <Badge variant="secondary" className="w-full justify-center px-3 py-3 text-base bg-green-100 text-green-800 border-green-200">
-                    Purchased
-                  </Badge>
+                <Badge variant="secondary" className="w-full justify-center px-3 py-3 text-base bg-green-100 text-green-800 border-green-200">
+                  Purchased
+                </Badge>
               ) : (
-                  <Button 
-                    onClick={handleAddToCart} 
-                    className="w-full py-6 text-lg bg-primary hover:bg-primary/90"
-                    disabled={isAddingToCart}
-                  >
-                    {isAddingToCart ? (
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    ) : (
-                      <ShoppingCart className="mr-2 h-5 w-5" />
-                    )}
-                    Add to Cart
-                  </Button>
+                <Button
+                  onClick={handleAddToCart}
+                  className="w-full py-6 text-lg bg-primary hover:bg-primary/90"
+                  disabled={isAddingToCart}
+                >
+                  {isAddingToCart ? (
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  ) : (
+                    <ShoppingCart className="mr-2 h-5 w-5" />
+                  )}
+                  Add to Cart
+                </Button>
               )}
             </div>
           </div>
@@ -260,7 +262,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
       </div>
 
       {relatedProducts.length > 0 && (
-        <RelatedDesigns products={relatedProducts} />
+        <RelatedDesigns products={relatedProducts} baseUrl={baseUrl} />
       )}
 
       {/* Reviews Section - FIXING PROFILE ACCESS */}
@@ -282,16 +284,16 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                 <div className="flex-grow">
                   <div className="flex justify-between items-center mb-1">
                     <span className="font-medium">
-                        {review.unified_profiles?.first_name || 'Anonymous'} {review.unified_profiles?.last_name || ''}
+                      {review.unified_profiles?.first_name || 'Anonymous'} {review.unified_profiles?.last_name || ''}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                        {new Date(review.created_at).toLocaleDateString()}
+                      {new Date(review.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                   {/* Render Stars based on rating */}
+                  {/* Render Stars based on rating */}
                   <div className="flex items-center gap-1 mb-2">
                     {[...Array(5)].map((_, i) => (
-                        <Star key={i} className={`h-4 w-4 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`} />
+                      <Star key={i} className={`h-4 w-4 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`} />
                     ))}
                   </div>
                   {review.comment && <p className="text-sm text-muted-foreground">{review.comment}</p>}
