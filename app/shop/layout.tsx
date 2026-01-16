@@ -3,6 +3,7 @@ import { PublicHeader } from '@/components/layout/public-header';
 import { PublicFooter } from '@/components/layout/public-footer';
 import PublicCartView from '@/components/shop/PublicCartView';
 import PublicCartIndicator from '@/components/shop/PublicCartIndicator';
+import ShopCountdownOverlay from '@/components/shop/ShopCountdownOverlay';
 
 export default function ShopLayout({
     children,
@@ -12,8 +13,10 @@ export default function ShopLayout({
     return (
         <div className="min-h-screen flex flex-col bg-background relative">
             <PublicHeader />
-            <main className="flex-1">
+            <main className="flex-1 relative">
                 {children}
+                {/* Launch Countdown Overlay */}
+                <ShopCountdownOverlay />
             </main>
             <PublicFooter />
 
