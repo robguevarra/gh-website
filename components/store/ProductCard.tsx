@@ -9,10 +9,9 @@ import { Loader2, Eye, Heart } from 'lucide-react';
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { ProductData } from '@/lib/stores/student-dashboard'; // CORRECT import source
 import { CartItem, useCartStore } from '@/stores/cartStore';
@@ -47,9 +46,8 @@ interface ProductCardProps {
   ownedProductIds: string[];
   baseUrl?: string;
   onAddToCart?: (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => void;
+  isPublic?: boolean; // Added isPublic
 }
-
-// ... (helpers)
 
 const ProductCard: React.FC<ProductCardProps> = ({
   product,
@@ -58,6 +56,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   ownedProductIds,
   baseUrl = '/dashboard/store',
   onAddToCart,
+  isPublic = false, // Default to false
 }) => {
   // State for loading when adding to cart
   const [isAddingToCart, setIsAddingToCart] = useState(false);
@@ -70,8 +69,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   // Use the passed onAddToCart or fallback to default
   const addItem = onAddToCart || defaultAddItem;
-
-  // ... (rest of component)
 
   // Use toast for feedback
   const { toast } = useToast();
@@ -190,14 +187,6 @@ const ProductCard: React.FC<ProductCardProps> = ({
                 {/* Quick preview overlay - trigger callback */}
                 <div
                   className="absolute inset-0 bg-black/0 transition-colors duration-300 flex items-center justify-center opacity-0 cursor-pointer hover:bg-black/30 hover:opacity-100 md:group-hover:bg-black/30 md:group-hover:opacity-100 touch:bg-black/20 touch:opacity-100"
-                  // TEMPORARILY REMOVED onClick to test navigation
-                  /*
-                  onClick={(e) => {
-                    e.preventDefault(); // Prevent Link navigation
-                    e.stopPropagation(); // Prevent event bubbling
-                    onOpenQuickView(product); // Call the passed handler
-                  }}
-                  */
                   role="button"
                   aria-label={`Quick view ${cleanTitle}`}
                 >
@@ -246,13 +235,13 @@ const ProductCard: React.FC<ProductCardProps> = ({
         {/* License type badge */}
         <div className="mt-1 mb-2">
           <span className="inline-block px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary">
-            {getLicenseBadgeText(licenseType)}
+            {isPublic ? 'Commercial License' : getLicenseBadgeText(licenseType)}
           </span>
         </div>
 
         {/* Add license terms component in minimal mode */}
         <div className="mt-1 mb-3">
-          <LicenseTerms minimal variant="hover" licenseType={licenseType} />
+          <LicenseTerms minimal variant="hover" licenseType={licenseType} isPublic={isPublic} />
         </div>
       </CardContent>
 
@@ -309,4 +298,4 @@ const ProductCard: React.FC<ProductCardProps> = ({
   );
 };
 
-export default ProductCard; 
+export default ProductCard;

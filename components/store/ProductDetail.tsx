@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { ChevronLeft, Loader2, ShoppingCart } from 'lucide-react';
 import { useCartStore } from '@/stores/cartStore';
+import { usePublicCartStore } from '@/stores/publicCartStore'; // Import public store
 import LicenseTerms, { getLicenseTypeFromTitle } from './LicenseTerms';
 import RelatedDesigns from './RelatedDesigns';
 import { formatPriceDisplayPHP } from '@/lib/utils/formatting';
@@ -41,6 +42,7 @@ interface ProductDetailProps {
   reviews: ProductReviewWithProfile[]; // Add reviews prop
   ownedProductIds: string[]; // <-- Add owned IDs prop
   baseUrl?: string;
+  isPublic?: boolean; // Added isPublic prop
 }
 
 const ProductDetail: React.FC<ProductDetailProps> = ({
@@ -48,12 +50,17 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   relatedProducts,
   reviews,
   ownedProductIds,
-  baseUrl = '/dashboard/store'
+  baseUrl = '/dashboard/store',
+  isPublic = false
 }) => {
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
 
-  const addItem = useCartStore((state) => state.addItem);
+  // Select the appropriate store based on isPublic prop
+  const addItemAuth = useCartStore((state) => state.addItem);
+  const addItemPublic = usePublicCartStore((state) => state.addItem);
+  const addItem = isPublic ? addItemPublic : addItemAuth;
+
   const { toast } = useToast();
 
   // Determine if the user owns this product
@@ -233,7 +240,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             </div>
 
             <div className="bg-muted/30 p-4 rounded-lg border">
-              <LicenseTerms variant="inline" licenseType={licenseType} />
+              <LicenseTerms variant="inline" licenseType={licenseType} isPublic={isPublic} />
             </div>
 
             <div className="mt-auto pt-4">
@@ -265,7 +272,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
         <RelatedDesigns products={relatedProducts} baseUrl={baseUrl} />
       )}
 
-      {/* Reviews Section - FIXING PROFILE ACCESS */}
+      {/* Reviews Section - TEMPORARILY DISABLED
       <div className="mt-12">
         <h2 className="text-2xl font-semibold mb-6">Customer Reviews</h2>
         {reviews.length > 0 ? (
@@ -273,8 +280,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
             {reviews.map((review) => (
               <div key={review.id} className="flex items-start gap-4 border-b pb-6 last:border-b-0">
                 <Avatar>
-                  {/* Access profile data via the nested unified_profiles object */}
-                  {/* Note: avatar_url is not included in the ProductReviewWithProfile type */}
                   <AvatarImage src={undefined} alt={review.unified_profiles?.first_name || 'User'} />
                   <AvatarFallback>
                     {review.unified_profiles?.first_name?.charAt(0) || 'U'}
@@ -290,7 +295,6 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
                       {new Date(review.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  {/* Render Stars based on rating */}
                   <div className="flex items-center gap-1 mb-2">
                     {[...Array(5)].map((_, i) => (
                       <Star key={i} className={`h-4 w-4 ${i < review.rating ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`} />
@@ -304,8 +308,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
         ) : (
           <p className="text-muted-foreground text-center py-6 border rounded-lg">No reviews yet for this product.</p>
         )}
-        {/* TODO: Add Review Submission Form Here (Blocked by Phase 5-3) */}
       </div>
+      */}
     </div>
   );
 };

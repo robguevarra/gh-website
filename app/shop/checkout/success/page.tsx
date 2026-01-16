@@ -1,10 +1,18 @@
+'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { CheckCircle2 } from 'lucide-react';
+import { usePublicCartStore } from '@/stores/publicCartStore';
 
 export default function CheckoutSuccessPage() {
+    const clearCart = usePublicCartStore((state) => state.clearCart);
+
+    useEffect(() => {
+        clearCart();
+    }, [clearCart]);
+
     return (
         <div className="container mx-auto px-4 py-20 max-w-lg text-center">
             <div className="flex justify-center mb-6">

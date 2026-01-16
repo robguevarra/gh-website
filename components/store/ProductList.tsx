@@ -13,9 +13,10 @@ interface ProductListProps {
   ownedProductIds: string[];
   baseUrl?: string;
   onAddToCart?: (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => void;
+  isPublic?: boolean; // Added prop
 }
 
-const ProductList: React.FC<ProductListProps> = ({ products, wishlistedIds, onOpenQuickView, ownedProductIds, baseUrl, onAddToCart }) => {
+const ProductList: React.FC<ProductListProps> = ({ products, wishlistedIds, onOpenQuickView, ownedProductIds, baseUrl, onAddToCart, isPublic }) => {
   if (!products || products.length === 0) {
     // This case should ideally be handled by the parent component (StorePage)
     // but added here for robustness.
@@ -33,6 +34,7 @@ const ProductList: React.FC<ProductListProps> = ({ products, wishlistedIds, onOp
           ownedProductIds={ownedProductIds} // <-- Pass prop down to ProductCard
           baseUrl={baseUrl}
           onAddToCart={onAddToCart}
+          isPublic={isPublic}
         />
       ))}
     </div>

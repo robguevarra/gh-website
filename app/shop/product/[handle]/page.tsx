@@ -54,6 +54,7 @@ async function getRelatedProducts(productId: string, tags: string[]): Promise<Pr
         .select('id, title, handle, featured_image_url, image_urls, status, shopify_product_variants(id, price)') // Optimized select
         .neq('id', productId)
         .or('status.eq.ACTIVE,status.eq.active')
+        .eq('vendor', 'Graceful Resources')
         .limit(4);
 
     if (error || !data) {
@@ -95,6 +96,7 @@ export default async function PublicProductPage({ params }: { params: { handle: 
             reviews={reviews}
             ownedProductIds={[]} // Guests don't own products
             baseUrl="/shop" // Important for navigation
+            isPublic={true}
         />
     );
 }

@@ -51,6 +51,7 @@ const StoreResultsManager: React.FC<StoreResultsManagerProps> = ({
 
   // Select the correct handler based on prop
   const onAddToCart = cartStoreType === 'public' ? publicAddItem : studentAddItem;
+  const isPublic = cartStoreType === 'public';
 
   // Update wishlist state if initial IDs change
   useEffect(() => {
@@ -76,6 +77,7 @@ const StoreResultsManager: React.FC<StoreResultsManagerProps> = ({
             ownedProductIds={ownedProductIds}
             baseUrl={baseUrl}
             onAddToCart={onAddToCart} // Pass the selected handler
+            isPublic={isPublic} // Pass isPublic
           />
         ) : (
           <div className="text-center text-muted-foreground py-10">
