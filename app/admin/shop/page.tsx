@@ -17,7 +17,7 @@ export const metadata: Metadata = {
  */
 async function getShopifyProducts() {
   const supabase = await createServerSupabaseClient();
-  
+
   const { data, error } = await supabase
     .from('shopify_products')
     .select(`
@@ -29,15 +29,16 @@ async function getShopifyProducts() {
       product_type,
       featured_image_url,
       google_drive_file_id,
-      tags
+      tags,
+      vendor
     `)
     .order('title');
-  
+
   if (error) {
     console.error('Error fetching products:', error);
     throw new Error(`Failed to fetch products: ${error.message}`);
   }
-  
+
   return data || [];
 }
 
@@ -68,13 +69,13 @@ export default function ShopAdminPage() {
           Manage Shopify product integrations and Google Drive mappings
         </p>
       </div>
-      
+
       <Tabs defaultValue="drive-mapping" className="w-full">
         <TabsList>
           <TabsTrigger value="drive-mapping">Google Drive Mapping</TabsTrigger>
           <TabsTrigger value="settings">Shop Settings</TabsTrigger>
         </TabsList>
-        
+
         <TabsContent value="drive-mapping" className="space-y-4">
           <div className="bg-muted/50 p-4 rounded-lg border mb-6">
             <h2 className="font-medium mb-2">Google Drive Mapping Instructions</h2>
@@ -88,12 +89,12 @@ export default function ShopAdminPage() {
               <li>Click Save to update the mapping</li>
             </ol>
           </div>
-          
+
           <Suspense fallback={<ProductDriveMappingSkeleton />}>
             <ProductsData />
           </Suspense>
         </TabsContent>
-        
+
         <TabsContent value="settings">
           <div className="bg-muted/50 p-4 rounded-lg border">
             <h2 className="font-medium">Shop Settings</h2>

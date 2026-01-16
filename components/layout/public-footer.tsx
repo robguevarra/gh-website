@@ -53,6 +53,7 @@ export function PublicFooter({ className = "" }: PublicFooterProps) {
                 { name: "Home", href: "/" },
                 { name: "Papers to Profits", href: "/p2p-order-form" },
                 { name: "Shop", href: "/shop" },
+                { name: "Track Order", href: "/shop/orders" },
                 { name: "Login", href: "/auth/signin" }
               ].map((link) => (
                 <li key={link.name}>
