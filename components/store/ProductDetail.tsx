@@ -87,6 +87,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({
   const licenseType = getLicenseTypeFromTitle(product.title);
 
   const getLicenseBadgeText = () => {
+    if (isPublic) return 'Commercial License';
+
     switch (licenseType) {
       case 'CUR': return 'Commercial Use Rights';
       case 'PLR': return 'Private Label Rights';

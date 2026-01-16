@@ -6,6 +6,7 @@ import { ProductData } from '@/lib/stores/student-dashboard';
 import LoadingSkeleton from '@/components/store/LoadingSkeleton';
 import { ShopHero } from '@/components/shop/ShopHero';
 import { searchProductsStore } from '@/app/actions/store-actions';
+import LicenseTerms from '@/components/store/LicenseTerms';
 
 // --- DATA FETCHING ---
 async function getInitialProducts() {
@@ -82,6 +83,11 @@ export default async function ShopPage(props: {
           initialWishlistedIds={wishlistedIds}
           cartStoreType="public"
         />
+
+        {/* License Terms Section */}
+        <div className="mt-16 max-w-4xl mx-auto">
+          <LicenseTerms variant="inline" isPublic={true} />
+        </div>
       </div>
     </div>
   );

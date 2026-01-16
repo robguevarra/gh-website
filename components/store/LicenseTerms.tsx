@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Check, X, Info } from 'lucide-react';
+import { Check, X, Info, ShieldCheck } from 'lucide-react';
 import {
   HoverCard,
   HoverCardContent,
@@ -27,17 +27,13 @@ interface LicenseTermsProps {
   variant?: 'hover' | 'popover' | 'inline';
   licenseType?: LicenseType;
   className?: string;
-  isPublic?: boolean; // Added prop
+  isPublic?: boolean;
 }
 
-// ... existing helper function ...
 export const getLicenseTypeFromTitle = (title: string | null): LicenseType => {
   if (!title) return 'UNKNOWN';
-
   if (title.includes('(CUR)')) return 'CUR';
   if (title.includes('(PLR)')) return 'PLR';
-
-  // If no specific license indicator is found, assume it's a bundle
   return 'BUNDLE';
 };
 
@@ -49,31 +45,78 @@ const LicenseTerms: React.FC<LicenseTermsProps> = ({
   isPublic = false
 }) => {
 
-  // Public License Content
-  const publicLicenseContent = (
-    <div className="space-y-4">
+  // UPDATED Public License Content
+  const publicLicenseContent = minimal ? (
+    // Condensed Version (for Hover/Popover)
+    <div className="space-y-3">
       <div>
-        <h3 className="font-semibold text-primary text-base">LICENSE AGREEMENT</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          This template from Graceful Homeschooling may be used to create physical end-products for sale.
+        <h3 className="font-semibold text-primary text-base flex items-center gap-2">
+          <ShieldCheck className="h-4 w-4" />
+          License Overview
+        </h3>
+        <p className="text-sm text-muted-foreground mb-3">
+          Commercial usage is allowed for physical end-products.
         </p>
 
-        <ul className="space-y-3 text-sm">
+        <ul className="space-y-2 text-sm">
           <li className="flex items-start">
             <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-            <span>You may use these digital files for personal projects, educational materials, and commercial projects.</span>
+            <span>Produce & sell <strong>physical</strong> end-products.</span>
           </li>
           <li className="flex items-start">
             <Check className="h-4 w-4 text-green-500 mt-0.5 mr-2 flex-shrink-0" />
-            <span>You are allowed to print and sell the physical products for profit.</span>
+            <span>Use for personal or business projects.</span>
           </li>
           <li className="flex items-start">
             <X className="h-4 w-4 text-destructive mt-0.5 mr-2 flex-shrink-0" />
-            <span>However, you may <strong>NOT</strong> resell, distribute, or share the digital files in any form.</span>
+            <span><strong>No reselling</strong> or sharing digital files.</span>
+          </li>
+          <li className="flex items-start">
+            <X className="h-4 w-4 text-destructive mt-0.5 mr-2 flex-shrink-0" />
+            <span>Canva links must remain private.</span>
           </li>
         </ul>
+        <div className="mt-3 pt-3 border-t">
+          <p className="text-xs text-muted-foreground italic">See full terms on project page.</p>
+        </div>
+      </div>
+    </div>
+  ) : (
+    // Full Version (for Inline/Details)
+    <div className="grid gap-6 md:grid-cols-2 text-sm text-foreground">
 
-        <p className="text-sm font-semibold mt-4 text-primary">COMMERCIAL USE: FOR PHYSICAL END-PRODUCTS ONLY.</p>
+      {/* Friendly Reminder */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-amber-600 font-medium text-base">
+          <ShieldCheck className="h-5 w-5" />
+          <span>A Friendly Reminder</span>
+        </div>
+        <p className="leading-relaxed text-muted-foreground">
+          To keep things fair and protect the work that went into creating these files, please remember:
+        </p>
+        <ul className="space-y-2 list-disc pl-4 marker:text-amber-400 text-muted-foreground">
+          <li>These files are for your personal or business use to produce physical-end products, but they may not be shared, resold, gifted, or passed on in their original form.</li>
+          <li>The illustrations, templates, and Canva links are not to be sold on their own.</li>
+          <li>Please don’t upload them to freebie sites, marketplaces, or file-sharing platforms.</li>
+          <li>The artwork should not be claimed as your own original creation.</li>
+        </ul>
+      </div>
+
+      {/* Important Things */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2 text-indigo-600 font-medium text-base">
+          <Info className="h-5 w-5" />
+          <span>A Few Important Things to Know</span>
+        </div>
+        <ul className="space-y-2 list-disc pl-4 marker:text-indigo-400 text-muted-foreground">
+          <li>This is a digital product, so no physical copy will be sent to you.</li>
+          <li>Because the files are delivered instantly, all sales are final.</li>
+          <li>Once access is given, we’re unable to offer refunds, exchanges, or cancellations.</li>
+          <li>You’ll need your own Canva Pro account to open and edit the Canva files.</li>
+        </ul>
+        <p className="pt-4 italic text-muted-foreground/80">
+          Thank you so much for respecting these guidelines and for supporting our creative work, we’re excited to see what you create with these! ✨
+        </p>
       </div>
     </div>
   );
@@ -217,7 +260,7 @@ const LicenseTerms: React.FC<LicenseTermsProps> = ({
 
   // Determine which license content to display
   const getLicenseContent = () => {
-    if (isPublic) return publicLicenseContent; // Override for public products
+    if (isPublic) return publicLicenseContent;
 
     switch (licenseType) {
       case 'CUR':
@@ -227,14 +270,14 @@ const LicenseTerms: React.FC<LicenseTermsProps> = ({
       case 'BUNDLE':
         return bundleLicenseContent;
       default:
-        return curLicenseContent; // Default to CUR as a fallback
+        return curLicenseContent;
     }
   };
 
   // Different display variants
   if (variant === 'inline') {
     return (
-      <div className="bg-muted/30 p-4 rounded-lg border">
+      <div className={`rounded-xl border ${isPublic ? 'border-dashed bg-muted/30 p-8' : 'border-border bg-muted/30 p-4'} ${className}`}>
         {getLicenseContent()}
       </div>
     );
@@ -260,16 +303,13 @@ const LicenseTerms: React.FC<LicenseTermsProps> = ({
   const [isTouch, setIsTouch] = useState(false);
 
   useEffect(() => {
-    // Simple detection for touch devices
     const touchDevice = ('ontouchstart' in window) ||
       (navigator.maxTouchPoints > 0) ||
-      // Modern browsers use maxTouchPoints
       (typeof window !== 'undefined' && 'matchMedia' in window &&
         window.matchMedia('(hover: none), (pointer: coarse)').matches);
     setIsTouch(touchDevice);
   }, []);
 
-  // Use Popover for touch devices (better mobile UX) and HoverCard for desktop
   if (isTouch) {
     return (
       <Popover>
@@ -293,7 +333,6 @@ const LicenseTerms: React.FC<LicenseTermsProps> = ({
       </Popover>
     );
   } else {
-    // Default hover card display for non-touch devices
     return (
       <HoverCard>
         <HoverCardTrigger asChild>
@@ -318,4 +357,4 @@ const LicenseTerms: React.FC<LicenseTermsProps> = ({
   }
 };
 
-export default LicenseTerms; 
+export default LicenseTerms;

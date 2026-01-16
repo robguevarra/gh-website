@@ -27,14 +27,7 @@ interface RelatedDesignsProps {
   baseUrl?: string;
 }
 
-// Helper to format currency
-const formatPrice = (price: number | null): string => {
-  if (price === null) return 'N/A';
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(price);
-};
+import { formatCurrencyPHP } from '@/lib/utils/formatting';
 
 const RelatedDesigns: React.FC<RelatedDesignsProps> = ({ products, baseUrl = '/dashboard/store' }) => {
   if (!products || products.length === 0) {
@@ -84,7 +77,7 @@ const RelatedDesigns: React.FC<RelatedDesignsProps> = ({ products, baseUrl = '/d
                     {product.title || 'Untitled Product'}
                   </h3>
                   <p className="mt-2 font-semibold text-primary">
-                    {formatPrice(price)}
+                    {formatCurrencyPHP(price)}
                   </p>
                 </CardContent>
               </Link>
