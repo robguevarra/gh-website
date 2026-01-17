@@ -10,7 +10,11 @@ const VISITOR_ID_KEY = 'gh_visitor_id';
 const SESSION_ID_KEY = 'gh_session_id';
 const HEARTBEAT_INTERVAL = 10000; // 10 seconds
 
-export function PageTracker() {
+interface PageTrackerProps {
+    metadata?: Record<string, any>;
+}
+
+export function PageTracker({ metadata }: PageTrackerProps = {}) {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const initialized = useRef(false);
@@ -79,6 +83,7 @@ export function PageTracker() {
                     deviceType,
                     browser,
                     os,
+                    metadata,
                 });
 
                 if (response.success && response.id) {

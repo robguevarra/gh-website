@@ -11,17 +11,82 @@ export async function middleware(request: NextRequest) {
       headers: request.headers,
     },
   })
-  
+
+  // --- A/B Testing Logic for /p2p-order-form ---
+  // This must run early to handle rewrites before other processing
+  const pathname = request.nextUrl.pathname;
+  if (pathname === '/p2p-order-form') {
+    const abStatus = process.env.NEXT_PUBLIC_AB_TEST_STATUS || 'RUNNING';
+
+    // CASE 1: Test is FORCE STOPPED -> Variant A
+    if (abStatus === 'STOPPED_A') {
+      // Do nothing, default A
+    }
+    // CASE 2: Test is FORCE STOPPED -> Variant B
+    else if (abStatus === 'STOPPED_B') {
+      const url = request.nextUrl.clone();
+      url.pathname = '/p2p-order-form/b';
+      return NextResponse.rewrite(url);
+    }
+    // CASE 3: Test is RUNNING (Default)
+    else {
+      // Check for existing assignment
+      let variant = request.cookies.get('ab-test-variant')?.value;
+
+      // If no cookie, assign one
+      if (!variant) {
+        variant = Math.random() < 0.5 ? 'A' : 'B';
+
+        // We must set the cookie on both request (for downstream) and response (for browser)
+        // Note: We can't set request cookie easily on a rewrite, but we can set it on the response
+        response.cookies.set({
+          name: 'ab-test-variant',
+          value: variant,
+          path: '/',
+          maxAge: 60 * 60 * 24 * 30, // 30 days
+          httpOnly: false, // Accessible to client tracking scripts
+        });
+      }
+
+      // Apply Routing
+      if (variant === 'B') {
+        const url = request.nextUrl.clone();
+        url.pathname = '/p2p-order-form/b';
+        // Use rewrite to keep URL the same but serve B content
+        // We need to return this rewrite, but we also need to attach the cookie to it
+        const rewriteResponse = NextResponse.rewrite(url);
+
+        // Copy headers from original response (which might have other needed headers)
+        rewriteResponse.headers.forEach((v, k) => response.headers.set(k, v));
+
+        // IMPORTANT: If we generated a new cookie, attach it to the rewritten response
+        if (!request.cookies.get('ab-test-variant')) {
+          rewriteResponse.cookies.set({
+            name: 'ab-test-variant',
+            value: variant,
+            path: '/',
+            maxAge: 60 * 60 * 24 * 30,
+            httpOnly: false,
+          });
+        }
+
+        // Continue with the rewritten response as the base for further middleware
+        response = rewriteResponse;
+      }
+    }
+  }
+  // --- End A/B Testing Logic ---
+
   // Skip security middleware for webhook endpoints (they need to accept external requests)
   const isWebhookEndpoint = request.nextUrl.pathname.startsWith('/api/webhooks/') ||
-                           request.nextUrl.pathname.startsWith('/api/cron/')
-  
+    request.nextUrl.pathname.startsWith('/api/cron/')
+
   if (!isWebhookEndpoint) {
     // Check if this page needs Facebook embeds
-    const needsFacebookEmbeds = request.nextUrl.pathname === '/' || 
-                               request.nextUrl.pathname === '/canva-ebook' ||
-                               request.nextUrl.pathname === '/p2p-order-form';
-    
+    const needsFacebookEmbeds = request.nextUrl.pathname === '/' ||
+      request.nextUrl.pathname === '/canva-ebook' ||
+      request.nextUrl.pathname === '/p2p-order-form';
+
     if (needsFacebookEmbeds) {
       // Apply Facebook-friendly security headers
       response = await facebookFriendlySecurityMiddleware(request, response)
@@ -110,15 +175,15 @@ export async function middleware(request: NextRequest) {
 
   // Check for special auth routes that shouldn't be redirected
   const isPasswordResetFlow = request.nextUrl.pathname.startsWith('/auth/update-password')
-  
+
   // Apply rate limiting to authentication endpoints
-  const isLoginRoute = request.nextUrl.pathname.startsWith('/auth/signin') || 
-                      request.nextUrl.pathname.startsWith('/api/auth/login')
-  const isSignupRoute = request.nextUrl.pathname.startsWith('/auth/signup') || 
-                       request.nextUrl.pathname.startsWith('/api/auth/signup')
-  const isPasswordResetRoute = request.nextUrl.pathname.startsWith('/auth/reset-password') || 
-                              request.nextUrl.pathname.startsWith('/api/auth/reset-password')
-  
+  const isLoginRoute = request.nextUrl.pathname.startsWith('/auth/signin') ||
+    request.nextUrl.pathname.startsWith('/api/auth/login')
+  const isSignupRoute = request.nextUrl.pathname.startsWith('/auth/signup') ||
+    request.nextUrl.pathname.startsWith('/api/auth/signup')
+  const isPasswordResetRoute = request.nextUrl.pathname.startsWith('/auth/reset-password') ||
+    request.nextUrl.pathname.startsWith('/api/auth/reset-password')
+
   // Apply appropriate rate limiting based on the route
   if (isLoginRoute && request.method !== 'GET') {
     response = await applyRateLimiting(request, response, 'login')
@@ -222,13 +287,13 @@ export async function middleware(request: NextRequest) {
   // Apply session security headers to response
   const sessionExpiryTime = user ? Math.floor(Date.now() / 1000) + 3600 : 0; // 1 hour from now or 0 if no user
   response.headers.set('x-session-expiry', sessionExpiryTime.toString());
-  
+
   // Add session activity timestamp to track user activity
   response.headers.set('x-session-activity', Date.now().toString());
-  
+
   // Add auth status header for client components to detect auth state changes
   response.headers.set('x-auth-status', user ? 'authenticated' : 'unauthenticated');
-  
+
   // Apply any final security measures before returning the response
   return response
 }

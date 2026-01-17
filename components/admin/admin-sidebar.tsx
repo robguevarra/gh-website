@@ -15,7 +15,8 @@ import {
   Shield,
   UserCog, // Corrected icon name for Affiliates
   Search,
-  Bot
+  Bot,
+  Split
 } from 'lucide-react';
 
 const navigation = [
@@ -28,6 +29,7 @@ const navigation = [
   { name: 'Security', href: '/admin/security', icon: Shield },
   { name: 'Email', href: '/admin/email', icon: Mail },
   { name: 'Chatbot', href: '/admin/chatbot', icon: Bot },
+  { name: 'A/B Testing', href: '/admin/ab-testing', icon: Split },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
