@@ -8,10 +8,10 @@ import { useSearchParams } from 'next/navigation';
 import { useRouter } from "next/navigation"
 import { format } from 'date-fns'; // Added for date formatting
 
-import { 
-  hasSeenWelcomeModal, 
-  markWelcomeModalShown, 
-  hasSeenOnboardingTour, 
+import {
+  hasSeenWelcomeModal,
+  markWelcomeModalShown,
+  hasSeenOnboardingTour,
   markOnboardingTourShown,
   getDashboardUIPreferences
 } from '@/lib/utils/user-preferences'
@@ -265,7 +265,7 @@ export default function StudentDashboard() {
         }
         const responseData = await response.json(); // Get the full response object
         const announcementsArray: Announcement[] = responseData.data || []; // Extract the array from the 'data' property
-        
+
         setLiveAnnouncements(announcementsArray);
         setCurrentAnnouncementIndex(0); // Reset to first announcement
         if (announcementsArray.length > 0) {
@@ -290,12 +290,12 @@ export default function StudentDashboard() {
       setShowPortalSwitcher(true);
     }
   }, [searchParams]);
-  
+
   // Carousel effect for announcements
   useEffect(() => {
     // Only set up carousel if there are multiple announcements
     if (liveAnnouncements.length <= 1) return;
-    
+
     // Set up interval to rotate announcements every 8 seconds
     const carouselInterval = setInterval(() => {
       setCurrentAnnouncementIndex(prevIndex => {
@@ -303,7 +303,7 @@ export default function StudentDashboard() {
         return (prevIndex + 1) % liveAnnouncements.length;
       });
     }, 8000); // 8 seconds
-    
+
     // Clean up interval on component unmount
     return () => clearInterval(carouselInterval);
   }, [liveAnnouncements.length]);
@@ -330,7 +330,7 @@ export default function StudentDashboard() {
         zoomLink: ann.link_url || '#',
       }));
   }, [liveAnnouncements]);
-  
+
   // Get the earliest upcoming live class
   const nextLiveClass = useMemo(() => {
     return upcomingLiveClasses.length > 0 ? upcomingLiveClasses[0] : null;
@@ -339,14 +339,14 @@ export default function StudentDashboard() {
   const handlePortalChoice = (path: string) => {
     setShowPortalSwitcher(false);
     // Use replace to remove query param from history and avoid back button issues
-    router.replace(path, { scroll: false }); 
+    router.replace(path, { scroll: false });
   };
 
   // If portal switcher is active, render it and nothing else for the dashboard
   if (showPortalSwitcher) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
@@ -358,14 +358,14 @@ export default function StudentDashboard() {
             Welcome! You have access to multiple areas. Please select where you'd like to go:
           </p>
           <div className="space-y-3 sm:space-y-4">
-            <Button 
+            <Button
               onClick={() => handlePortalChoice('/dashboard')}
               className="w-full bg-brand-primary hover:bg-brand-primary-dark text-primary-foreground text-base sm:text-lg py-3 h-auto"
             >
               <Users className="mr-2 h-5 w-5" /> Student Dashboard
             </Button>
-            <Button 
-              onClick={() => router.push('/affiliate-portal')} 
+            <Button
+              onClick={() => router.push('/affiliate-portal')}
               variant="outline"
               className="w-full text-base sm:text-lg py-3 h-auto border-brand-secondary text-brand-secondary hover:bg-brand-secondary/10"
             >
@@ -394,25 +394,25 @@ export default function StudentDashboard() {
     const minutes = Math.floor(totalSeconds / 60);
     const hours = Math.floor(minutes / 60);
     const remainingMinutes = minutes % 60;
-    
+
     return `${hours}h ${remainingMinutes}m`;
   }, []);
-  
+
   // Original function - kept for compatibility but not used now
   const calculateTimeSpent = useCallback((progress: ExtendedCourseProgress | null): string => {
     if (!progress) return "0h 0m";
-    
+
     // Use the actual duration from lesson metadata if available
     // Fall back to an estimate based on completed lessons if totalDurationSeconds isn't available yet
     let totalSeconds = 0;
-    
+
     if (typeof progress.totalDurationSeconds === 'number') {
       totalSeconds = progress.totalDurationSeconds;
     } else {
       // Fall back to an estimate based on average lesson duration (still better than fixed 15min)
       totalSeconds = (progress.completedLessonsCount || 0) * (60 * 15); // 15 minutes per lesson in seconds
     }
-    
+
     return formatTimeSpent(totalSeconds);
   }, [formatTimeSpent])
 
@@ -462,13 +462,13 @@ export default function StudentDashboard() {
     // Calculate total lessons from the course data if available
     let totalLessonsCount = 0;
     let totalDurationSeconds = 0;
-    
+
     // Map to store all completed lessons by ID for quick lookup
     const completedLessonIds = new Set();
-    
+
     // Get completed lesson IDs from the progress data
     const lessonProgress = (rawCourseProgress as any)?.lessonProgress;
-    
+
     if (lessonProgress) {
       Object.entries(lessonProgress).forEach(([lessonId, statusData]) => {
         // Handle both string status and object with status property
@@ -476,29 +476,29 @@ export default function StudentDashboard() {
         if (typeof statusData === 'string') {
           status = statusData;
         } else if (statusData && typeof statusData === 'object') {
-          status = (statusData as {status?: string}).status;
+          status = (statusData as { status?: string }).status;
         }
-        
+
         if (status === 'completed') {
           completedLessonIds.add(lessonId);
         }
       });
     }
-    
+
     // Process course structure to count lessons and sum durations
-    
+
     if (course?.modules) {
       course.modules.forEach(module => {
         if (module.lessons) {
           totalLessonsCount += module.lessons.length;
-          
+
           // Sum up durations for completed lessons
           module.lessons.forEach((lesson: CourseLesson) => {
             // Only count completed lessons
             if (completedLessonIds.has(lesson.id)) {
               // Get duration from different sources with proper priority
               let lessonDuration = 0;
-              
+
               if (typeof lesson.videoDuration === 'number') {
                 // Video duration from Vimeo is in seconds
                 lessonDuration = lesson.videoDuration;
@@ -515,7 +515,7 @@ export default function StudentDashboard() {
                 // Fallback to basic duration property
                 lessonDuration = lesson.duration;
               }
-              
+
               // Add to total
               totalDurationSeconds += lessonDuration;
             }
@@ -523,7 +523,7 @@ export default function StudentDashboard() {
         }
       });
     }
-    
+
 
     if (!rawCourseProgress) {
       // If no progress data from store, return a default object
@@ -544,20 +544,20 @@ export default function StudentDashboard() {
       // Use the calculated total if available, otherwise fall back to the stored value
       totalLessonsCount: totalLessonsCount || rawCourseProgress.totalLessonsCount || 0,
       // Add the total duration in seconds
-      totalDurationSeconds, 
+      totalDurationSeconds,
     } as ExtendedCourseProgress;
   }, [courseProgress, courseId, enrollments]);
 
   // Directly access the lesson progress data from store for accurate calculations
   const lessonProgressData = useStudentDashboardStore(state => state.lessonProgress || {});
-  
+
   // Create a formatted version for the UI components - memoized
   const formattedCourseProgress = useMemo(() => {
     // Calculate both total course duration and completed lesson duration
     let totalCourseDurationSeconds = 0; // Total duration of ALL lessons
     let completedDurationSeconds = 0;   // Duration of only completed lessons
     const completedLessonIds = new Set<string>();
-    
+
     // First identify completed lessons from the progress data
     Object.entries(lessonProgressData).forEach(([lessonId, progressData]) => {
       // Check if the lesson is marked as completed
@@ -565,15 +565,15 @@ export default function StudentDashboard() {
         completedLessonIds.add(lessonId);
       }
     });
-    
-    
+
+
     // Now calculate duration for both total course and completed lessons
     if (enrollments?.[0]?.course?.modules) {
       enrollments[0].course.modules.forEach(module => {
         if (module.lessons) {
           module.lessons.forEach((lesson: any) => {
             let lessonDuration = 0;
-            
+
             // Extract lesson duration from different sources with proper priority
             if (typeof lesson.videoDuration === 'number') {
               // Video duration from Vimeo is in seconds
@@ -591,10 +591,10 @@ export default function StudentDashboard() {
               // Fallback to basic duration property
               lessonDuration = lesson.duration;
             }
-            
+
             // Add to total course duration (all lessons)
             totalCourseDurationSeconds += lessonDuration;
-            
+
             // Only add to completed duration if the lesson is completed
             if (completedLessonIds.has(lesson.id)) {
               completedDurationSeconds += lessonDuration;
@@ -603,7 +603,7 @@ export default function StudentDashboard() {
         }
       });
     }
-    
+
     // Format course progress data for UI components
     return {
       title: enrollments?.[0]?.course?.title || "Papers to Profits",
@@ -711,12 +711,12 @@ export default function StudentDashboard() {
   }, [continueLearningLesson, isLoadingContinueLearningLesson, firstLesson, firstModule])
 
   // Get purchase data from the store using the hook
-  const { 
-    purchases, 
-    isLoadingPurchases, 
+  const {
+    purchases,
+    isLoadingPurchases,
     hasPurchasesError
   } = usePurchasesData()
-  
+
   // Transform the store purchase type to the format expected by PurchasesSection
   const mapStorePurchasesToUIFormat = useCallback((storePurchases: StorePurchase[]): Purchase[] => {
     return storePurchases.map(purchase => {
@@ -734,17 +734,17 @@ export default function StudentDashboard() {
           image_url: item.image_url,
           google_drive_file_id: item.google_drive_file_id,
           source: item.source,
-          
+
           // Include UI-specific properties
           name: item.title || 'Product',
           price: item.price_at_purchase,
           image: item.image_url || `/placeholder.svg?height=60&width=60&text=${item.title?.charAt(0) || 'P'}`,
           googleDriveId: item.google_drive_file_id || null
         };
-        
+
         return mappedItem as PurchaseItem; // Type assertion to ensure compatibility
       });
-      
+
       // Return properly typed Purchase object with type assertion to ensure compatibility
       const result = {
         // Include required Purchase properties
@@ -756,17 +756,17 @@ export default function StudentDashboard() {
         currency: purchase.currency,
         source: purchase.source,
         items: mappedItems,
-        
+
         // Include UI-specific properties
-        date: new Date(purchase.created_at).toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
+        date: new Date(purchase.created_at).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
         }),
         status: purchase.order_status || 'completed',
         total: purchase.total_amount ? purchase.total_amount * 100 : 0
       };
-      
+
       return result as Purchase; // Final type assertion
     });
   }, [])
@@ -822,10 +822,10 @@ export default function StudentDashboard() {
   // Load user interface preferences from localStorage
   useEffect(() => {
     if (typeof window === 'undefined' || preferencesLoadedRef.current) return
-    
+
     // Only load preferences once
     preferencesLoadedRef.current = true
-    
+
     const preferences = getDashboardUIPreferences()
     setShowWelcomeModal(preferences.showWelcomeModal)
     setShowOnboardingTour(preferences.showOnboarding)
@@ -835,7 +835,7 @@ export default function StudentDashboard() {
     setShowOnboardingTour(false)
     markOnboardingTourShown()
   }
-  
+
   const handleOnboardingSkip = () => {
     markOnboardingTourShown()
   }
@@ -844,24 +844,26 @@ export default function StudentDashboard() {
   useEffect(() => {
     const checkAffiliateStatus = async () => {
       if (!user?.id) return;
-      
+
       try {
         const response = await fetch(`/api/student/affiliate-status?userId=${user.id}`);
         if (response.ok) {
           const data = await response.json();
           setIsAffiliate(data.isAffiliate);
           setAffiliateStatus(data.status);
-          
-          // Auto-show wizard for approved affiliates (unless permanently dismissed)
-          // Check dismissal status BEFORE showing the wizard to prevent phantom load
+
+          // Auto-show wizard logic REMOVED to prevent intrusive popups
+          // The wizard now only opens on explicit user action (clicking "Apply Now")
+          /* 
           if (data.isAffiliate && data.status === 'active') {
-            const isWizardDismissed = typeof window !== 'undefined' && 
-              localStorage.getItem('gh_affiliate_wizard_dismissed') === 'true';
-            
-            if (!isWizardDismissed) {
-              setShowAffiliateWizard(true);
-            }
-          }
+             const isWizardDismissed = typeof window !== 'undefined' && 
+               localStorage.getItem('gh_affiliate_wizard_dismissed') === 'true';
+             
+             if (!isWizardDismissed) {
+               setShowAffiliateWizard(true);
+             }
+           }
+           */
         }
       } catch (error) {
         console.error('Error checking affiliate status:', error);
@@ -876,10 +878,10 @@ export default function StudentDashboard() {
     }
   }, [user?.id]);
 
-  // Force banner to show for all users - no debug logs needed
+  // Force banner to show logic REMOVED to respect user dismissal
   useEffect(() => {
-    // Clear any dismissed state to ensure banner shows for all users
-    sessionStorage.removeItem('isAffiliateBannerDismissed');
+    // We strictly respect local/session storage now.
+    // sessionStorage.removeItem('isAffiliateBannerDismissed');
     setIsAffiliateBannerDismissed(false);
   }, []);
 
@@ -887,18 +889,18 @@ export default function StudentDashboard() {
   const shouldShowAffiliateBanner = useMemo(() => {
     // Don't show if temporarily dismissed for this session
     if (isAffiliateBannerDismissed) return false;
-    
+
     // CRITICAL: Don't show banner until affiliate status has been loaded to prevent phantom text
     if (!affiliateStatusLoaded) return false;
-    
+
     // For approved affiliates, check if permanently dismissed
     if (isAffiliate && affiliateStatus === 'active') {
       // Use direct localStorage check to prevent phantom loads
-      const isPermanentlyDismissed = typeof window !== 'undefined' && 
+      const isPermanentlyDismissed = typeof window !== 'undefined' &&
         localStorage.getItem('gh_affiliate_congratulations_dismissed') === 'true';
       return !isPermanentlyDismissed;
     }
-    
+
     // For non-affiliates or pending, show the banner (unless temporarily dismissed)
     return (!isAffiliate || affiliateStatus === 'pending');
   }, [isAffiliateBannerDismissed, isAffiliate, affiliateStatus, affiliateStatusLoaded]);
@@ -914,7 +916,7 @@ export default function StudentDashboard() {
         onClose={() => {
           setShowWelcomeModal(false)
           markWelcomeModalShown()
-          
+
           // Only show onboarding tour if user hasn't seen it before
           if (!hasSeenOnboardingTour()) {
             setShowOnboardingTour(true)
@@ -976,12 +978,12 @@ export default function StudentDashboard() {
                                 {format(new Date(liveAnnouncements[currentAnnouncementIndex].publish_date), 'MMMM d, yyyy')}
                               </span>
                             )}
-                            
+
                           </div>
                           {liveAnnouncements.length > 1 && (
                             <div className="flex items-center gap-1">
                               {liveAnnouncements.map((_, index) => (
-                                <button 
+                                <button
                                   key={index}
                                   onClick={() => setCurrentAnnouncementIndex(index)}
                                   className={`w-1.5 h-1.5 rounded-full transition-all ${index === currentAnnouncementIndex ? 'bg-brand-purple scale-125' : 'bg-brand-purple/30'}`}
@@ -1011,87 +1013,95 @@ export default function StudentDashboard() {
           {shouldShowAffiliateBanner && (
             <motion.div
               className="mb-6"
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
             >
-              <div className="bg-gradient-to-r from-brand-purple to-brand-pink rounded-xl p-6 text-white shadow-lg relative">
-                {/* Dismiss button */}
-                <button
-                  onClick={() => {
-                    if (isAffiliate && affiliateStatus === 'active') {
-                      // For approved affiliates, permanently dismiss
-                      markAffiliateCongratulationsDismissed();
+              <div className={`
+                rounded-lg p-4 shadow-sm border relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-4
+                ${isAffiliate && affiliateStatus === 'active'
+                  ? 'bg-gradient-to-r from-brand-purple/5 to-brand-pink/5 border-brand-purple/20'
+                  : affiliateStatus === 'pending'
+                    ? 'bg-amber-50 border-amber-200'
+                    : 'bg-white border-dashed border-gray-300 hover:border-brand-purple/40 transition-colors'
+                }
+              `}>
+                {/* Content */}
+                <div className="flex items-center gap-3 flex-1">
+                  <div className={`
+                    p-2 rounded-full flex-shrink-0
+                    ${isAffiliate && affiliateStatus === 'active'
+                      ? 'bg-brand-purple/10 text-brand-purple'
+                      : affiliateStatus === 'pending'
+                        ? 'bg-amber-100 text-amber-600'
+                        : 'bg-gray-100 text-gray-500'
                     }
-                    // Always dismiss for this session
-                    setIsAffiliateBannerDismissed(true);
-                  }}
-                  className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
-                  aria-label="Dismiss banner"
-                >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                
-                <div className="flex items-center justify-between pr-8">
-                  <div className="flex-1">
+                  `}>
                     {isAffiliate && affiliateStatus === 'active' ? (
-                      <>
-                        <h3 className="text-lg font-bold mb-2 font-serif">🎉 Congratulations! You're an Affiliate!</h3>
-                        <p className="text-white/90 mb-0 leading-relaxed">
-                          You're earning 25% commission on referrals. Access your affiliate portal from your profile dropdown to track performance and get marketing materials.
-                        </p>
-                      </>
+                      <Sparkles className="h-5 w-5" />
                     ) : affiliateStatus === 'pending' ? (
-                      <>
-                        <h3 className="text-lg font-bold mb-2 font-serif">Application Under Review</h3>
-                        <p className="text-white/90 mb-0 leading-relaxed">
-                          Your affiliate application is being reviewed. We'll notify you once it's approved. Thank you for your patience!
-                        </p>
-                      </>
+                      <Clock className="h-5 w-5" />
                     ) : (
-                      <>
-                        <h3 className="text-lg font-bold mb-2 font-serif">Join Our Affiliate Program!</h3>
-                        <p className="text-white/90 mb-0 leading-relaxed">
-                          Earn 25% commission by sharing Graceful Homeschooling with others. As a student, you get special access to our affiliate program.
-                        </p>
-                      </>
+                      <Users className="h-5 w-5" />
                     )}
                   </div>
-                  <div className="flex flex-col gap-2">
-                    {isAffiliate && affiliateStatus === 'active' ? (
-                      <>
-                        <Button
-                          onClick={() => window.open('/affiliate-portal', '_blank')}
-                          className="bg-white text-brand-purple hover:bg-gray-100 font-semibold transition-colors duration-200 shadow-sm"
-                        >
-                          View Portal
-                        </Button>
-                        <Button
-                          onClick={() => window.open('https://facebook.com/groups/gracefulhomeschooling-affiliates', '_blank')}
-                          variant="outline"
-                          className="bg-white/10 border-white/30 text-white hover:bg-white/20 text-sm transition-colors duration-200 backdrop-blur-sm"
-                        >
-                          Join Facebook Group
-                        </Button>
-                      </>
-                    ) : affiliateStatus === 'pending' ? (
-                      <Button
-                        disabled
-                        className="bg-white/20 text-white/60 font-semibold cursor-not-allowed border border-white/20"
-                      >
-                        Pending Review
-                      </Button>
-                    ) : (
-                      <Button
-                        onClick={() => setShowAffiliateWizard(true)}
-                        className="bg-white text-brand-purple hover:bg-gray-100 font-semibold transition-colors duration-200 shadow-sm"
-                      >
-                        Apply Now
-                      </Button>
-                    )}
+
+                  <div>
+                    <h3 className="font-semibold text-sm text-gray-900">
+                      {isAffiliate && affiliateStatus === 'active'
+                        ? "You're an active Affiliate!"
+                        : affiliateStatus === 'pending'
+                          ? "Application Under Review"
+                          : "Join the Partner Program"
+                      }
+                    </h3>
+                    <p className="text-xs text-gray-600 line-clamp-1 sm:line-clamp-none">
+                      {isAffiliate && affiliateStatus === 'active'
+                        ? "Earn 25% commission. Access your portal to track earnings."
+                        : affiliateStatus === 'pending'
+                          ? "We're reviewing your application. You'll be notified soon."
+                          : "Earn 25% commission referring other homeschooling families."
+                      }
+                    </p>
                   </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {isAffiliate && affiliateStatus === 'active' ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open('/affiliate-portal', '_blank')}
+                      className="h-8 text-xs border-brand-purple/20 text-brand-purple hover:bg-brand-purple/5"
+                    >
+                      Open Portal
+                    </Button>
+                  ) : affiliateStatus === 'pending' ? (
+                    <span className="text-xs font-medium text-amber-600 bg-amber-100 px-2 py-1 rounded">
+                      Pending
+                    </span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => setShowAffiliateWizard(true)}
+                      className="h-8 text-xs bg-brand-purple hover:bg-brand-purple/90 text-white"
+                    >
+                      Apply Now
+                    </Button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      if (isAffiliate && affiliateStatus === 'active') {
+                        markAffiliateCongratulationsDismissed();
+                      }
+                      setIsAffiliateBannerDismissed(true);
+                    }}
+                    className="ml-1 text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-black/5 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -1145,9 +1155,9 @@ export default function StudentDashboard() {
                   )}
                 </div>
                 {nextLiveClass?.zoomLink && nextLiveClass.zoomLink !== '#' && (
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     className="px-2 h-8 text-brand-blue hover:text-brand-blue/80 hover:bg-brand-blue/10"
                     onClick={() => window.open(nextLiveClass.zoomLink, '_blank')}
                   >
@@ -1172,122 +1182,122 @@ export default function StudentDashboard() {
             </motion.div>
           </motion.div>
 
-      {/* Course Progress Section */}
-      <ErrorBoundary componentName="Course Progress Section">
-        <div className="mt-8">
-          <CourseProgressSection
-          courseProgress={{
-            ...formattedCourseProgress,
-            // Ensure courseId is always the latest value
-            courseId: enrollments?.[0]?.course?.id || formattedCourseProgress.courseId || ''
-          }}
-          recentLessons={recentLessons}
-          upcomingClasses={upcomingLiveClasses} // Use the new live data
-          isSectionExpanded={isSectionExpanded}
-          toggleSection={toggleSection}
-        />
-        </div>
-      </ErrorBoundary>
-
-      {/* Templates Library Section */}
-      <ErrorBoundary componentName="Templates Library Section">
-        <div className="mt-8">
-          <TemplatesLibrarySection
-            isSectionExpanded={isSectionExpanded}
-            toggleSection={toggleSection}
-            onTemplateSelect={(file) => {
-              setPreviewFile(file)
-              setIsPreviewOpen(true)
-            }}
-            isPreviewOpen={isPreviewOpen}
-            setIsPreviewOpen={setIsPreviewOpen}
-          />
-        </div>
-      </ErrorBoundary>
-
-      {/* Two-column layout for Recent Purchases and Live Classes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-        {/* Recent Purchases from Shopify */}
-        <ErrorBoundary componentName="Purchases Section">
-          <div>
-            {user?.id ? (
-              <PurchasesSection
-                userId={user.id}
-                viewAllUrl="/dashboard/purchase-history"
+          {/* Course Progress Section */}
+          <ErrorBoundary componentName="Course Progress Section">
+            <div className="mt-8">
+              <CourseProgressSection
+                courseProgress={{
+                  ...formattedCourseProgress,
+                  // Ensure courseId is always the latest value
+                  courseId: enrollments?.[0]?.course?.id || formattedCourseProgress.courseId || ''
+                }}
+                recentLessons={recentLessons}
+                upcomingClasses={upcomingLiveClasses} // Use the new live data
+                isSectionExpanded={isSectionExpanded}
+                toggleSection={toggleSection}
               />
-            ) : (
-              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                <div className="animate-pulse">
-                  <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
-                  <div className="space-y-3">
-                    <div className="h-4 bg-gray-200 rounded"></div>
-                    <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+            </div>
+          </ErrorBoundary>
+
+          {/* Templates Library Section */}
+          <ErrorBoundary componentName="Templates Library Section">
+            <div className="mt-8">
+              <TemplatesLibrarySection
+                isSectionExpanded={isSectionExpanded}
+                toggleSection={toggleSection}
+                onTemplateSelect={(file) => {
+                  setPreviewFile(file)
+                  setIsPreviewOpen(true)
+                }}
+                isPreviewOpen={isPreviewOpen}
+                setIsPreviewOpen={setIsPreviewOpen}
+              />
+            </div>
+          </ErrorBoundary>
+
+          {/* Two-column layout for Recent Purchases and Live Classes */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+            {/* Recent Purchases from Shopify */}
+            <ErrorBoundary componentName="Purchases Section">
+              <div>
+                {user?.id ? (
+                  <PurchasesSection
+                    userId={user.id}
+                    viewAllUrl="/dashboard/purchase-history"
+                  />
+                ) : (
+                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                    <div className="animate-pulse">
+                      <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                      <div className="space-y-3">
+                        <div className="h-4 bg-gray-200 rounded"></div>
+                        <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
-            )}
-          </div>
-        </ErrorBoundary>
+            </ErrorBoundary>
 
-        {/* Live Classes */}
-        <ErrorBoundary componentName="Live Classes Section">
-          <div>
-            <LiveClassesSection
-              upcomingClasses={upcomingLiveClasses} // Use the new live data
-              isSectionExpanded={isSectionExpanded}
-              toggleSection={toggleSection}
-            />
+            {/* Live Classes */}
+            <ErrorBoundary componentName="Live Classes Section">
+              <div>
+                <LiveClassesSection
+                  upcomingClasses={upcomingLiveClasses} // Use the new live data
+                  isSectionExpanded={isSectionExpanded}
+                  toggleSection={toggleSection}
+                />
+              </div>
+            </ErrorBoundary>
           </div>
-        </ErrorBoundary>
-      </div>
 
-      {/* Support and Community */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
-        {/* Support Section */}
-        <ErrorBoundary componentName="Support Section">
-          <div>
-            <SupportSection
-              faqs={[
-                {
-                  id: "templates-access",
-                  question: "How do I access all the templates?",
-                  answer: "You can access all templates in the Templates Library section of your dashboard. Click on any template to preview it, then download or use it directly."
-                },
-                {
-                  id: "course-modules",
-                  question: "When will the next course module be available?",
-                  answer: "New course modules are typically released every two weeks. You'll receive an email notification when new content becomes available."
-                },
-                {
-                  id: "technical-issues",
-                  question: "I'm having technical issues with the course videos",
-                  answer: "If you're experiencing video playback issues, try clearing your browser cache, using a different browser, or checking your internet connection. For persistent problems, please contact our support team."
-                },
-                {
-                  id: "payment-questions",
-                  question: "How do I update my payment method?",
-                  answer: "To update your payment method, go to your Account Settings page, select the 'Billing' tab, and click 'Update Payment Method'."
-                }
-              ]}
-              isSectionExpanded={isSectionExpanded}
-              toggleSection={toggleSection}
-            />
-          </div>
-        </ErrorBoundary>
+          {/* Support and Community */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8">
+            {/* Support Section */}
+            <ErrorBoundary componentName="Support Section">
+              <div>
+                <SupportSection
+                  faqs={[
+                    {
+                      id: "templates-access",
+                      question: "How do I access all the templates?",
+                      answer: "You can access all templates in the Templates Library section of your dashboard. Click on any template to preview it, then download or use it directly."
+                    },
+                    {
+                      id: "course-modules",
+                      question: "When will the next course module be available?",
+                      answer: "New course modules are typically released every two weeks. You'll receive an email notification when new content becomes available."
+                    },
+                    {
+                      id: "technical-issues",
+                      question: "I'm having technical issues with the course videos",
+                      answer: "If you're experiencing video playback issues, try clearing your browser cache, using a different browser, or checking your internet connection. For persistent problems, please contact our support team."
+                    },
+                    {
+                      id: "payment-questions",
+                      question: "How do I update my payment method?",
+                      answer: "To update your payment method, go to your Account Settings page, select the 'Billing' tab, and click 'Update Payment Method'."
+                    }
+                  ]}
+                  isSectionExpanded={isSectionExpanded}
+                  toggleSection={toggleSection}
+                />
+              </div>
+            </ErrorBoundary>
 
-        {/* Community Section */}
-        <ErrorBoundary componentName="Community Section">
-          <div>
-            <CommunitySection
-              communityPosts={communityPosts}
-              isSectionExpanded={isSectionExpanded}
-              toggleSection={toggleSection}
-            />
+            {/* Community Section */}
+            <ErrorBoundary componentName="Community Section">
+              <div>
+                <CommunitySection
+                  communityPosts={communityPosts}
+                  isSectionExpanded={isSectionExpanded}
+                  toggleSection={toggleSection}
+                />
+              </div>
+            </ErrorBoundary>
           </div>
-        </ErrorBoundary>
-      </div>
-    </div>
-  </main>
+        </div>
+      </main>
 
       {/* Affiliate Application Wizard */}
       {showAffiliateWizard && affiliateStatusLoaded && (
@@ -1296,6 +1306,6 @@ export default function StudentDashboard() {
           onClose={() => setShowAffiliateWizard(false)}
         />
       )}
-</div>
+    </div>
   )
 }
