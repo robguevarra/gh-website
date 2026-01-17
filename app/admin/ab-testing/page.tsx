@@ -54,14 +54,14 @@ async function getABTestStats() {
         .from("transactions")
         .select("amount")
         .eq('metadata->>variant', 'A')
-        .eq('status', 'completed')
+        .in('status', ['paid', 'completed'])
     // Assuming 'completed' is the success status. Adjust if needed (e.g. 'paid').
 
     const { data: salesBData } = await supabase
         .from("transactions")
         .select("amount")
         .eq('metadata->>variant', 'B')
-        .eq('status', 'completed')
+        .in('status', ['paid', 'completed'])
 
     // Calculate Aggregates
     const visitorsCountA = pvA?.length || 0
