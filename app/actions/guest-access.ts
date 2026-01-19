@@ -71,45 +71,18 @@ export async function getGuestOrders(email: string) {
     const supabase = getAdminClient();
     const cleanEmail = email.toLowerCase().trim();
 
-    // 1. Get Profile ID
-    const { data: profile } = await supabase
-        .from('unified_profiles')
-        .select('id')
-        .eq('email', cleanEmail)
-        .maybeSingle();
-
-    let orders: any[] = [];
-    const processedOrderIds = new Set();
-
-    // 2. Fetch Ecommerce Orders (Modern)
-    if (profile) {
-        const { data: ecomOrders } = await supabase
-            .from('ecommerce_orders')
-            .select(`
-                id, total_amount, currency, created_at, order_status, order_number
-            `)
-            .eq('unified_profile_id', profile.id)
-            .order('created_at', { ascending: false });
-
-        if (ecomOrders) {
-            ecomOrders.forEach(o => {
-                orders.push(o);
-                processedOrderIds.add(o.id);
-            });
-        }
-    }
-
-    // 3. Fallback: Search Transactions directly
+    // Search Transactions directly for PUBLIC_STORE_SALE only
     const { data: rawTransactions } = await supabase
         .from('transactions')
         .select('id, created_at, status, metadata, external_id')
         .eq('contact_email', cleanEmail)
-        .eq('status', 'paid');
+        .eq('status', 'paid')
+        .eq('transaction_type', 'PUBLIC_STORE_SALE');
+
+    const orders: any[] = [];
 
     if (rawTransactions) {
         for (const tx of rawTransactions) {
-            if (processedOrderIds.has(tx.id)) continue;
-
             let total = 0;
             const meta: any = tx.metadata || {};
 
@@ -129,7 +102,7 @@ export async function getGuestOrders(email: string) {
                 currency: 'PHP',
                 created_at: tx.created_at || new Date().toISOString(),
                 order_status: tx.status,
-                order_number: orderNum, // Return clean ID here
+                order_number: orderNum,
                 is_transaction_only: true
             });
         }
@@ -215,7 +188,7 @@ export async function resendOrderConfirmation(orderId: string, email: string) {
             const variables = {
                 first_name: profile.first_name || 'Customer',
                 email: cleanEmail,
-                order_number: order.order_number || order.id.slice(0, 8).toUpperCase(),
+                order_number: (order as any).order_number || order.id.slice(0, 8).toUpperCase(),
                 currency: '₱',
                 total_amount: order.total_amount?.toFixed(2) || '0.00',
                 order_items: formatOrderItemsForEmail(items),
@@ -247,7 +220,7 @@ export async function resendOrderConfirmation(orderId: string, email: string) {
                 productId: item.productId,
                 imageUrl: item.image || item.imageUrl
             }));
-            total = items.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+            total = items.reduce((acc: number, i: any) => acc + (i.price * i.quantity), 0);
         }
 
         items = await enrichItems(items);
