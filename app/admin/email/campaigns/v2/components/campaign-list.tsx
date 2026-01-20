@@ -25,7 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Loader2, Plus, Edit, Trash2, Send, Calendar } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -43,22 +43,22 @@ const ITEMS_PER_PAGE = 10;
 export function CampaignList() {
   const router = useRouter();
   const { toast } = useToast();
-  const { 
-    campaigns, 
-    totalCampaigns, 
-    campaignsLoading, 
-    campaignsError, 
-    fetchCampaigns, 
-    deleteCampaign 
+  const {
+    campaigns,
+    totalCampaigns,
+    campaignsLoading,
+    campaignsError,
+    fetchCampaigns,
+    deleteCampaign
   } = useCampaignStore();
-  
+
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [campaignToDelete, setCampaignToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+
   const totalPages = Math.ceil(totalCampaigns / ITEMS_PER_PAGE);
-  
+
   useEffect(() => {
     fetchCampaigns({
       status: statusFilter,
@@ -66,19 +66,19 @@ export function CampaignList() {
       offset: (currentPage - 1) * ITEMS_PER_PAGE
     });
   }, [fetchCampaigns, currentPage, statusFilter]);
-  
+
   const handleStatusChange = (value: string) => {
     setStatusFilter(value === 'all' ? undefined : value);
     setCurrentPage(1); // Reset to first page when filter changes
   };
-  
+
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
-  
+
   const handleDeleteCampaign = async () => {
     if (!campaignToDelete) return;
-    
+
     setIsDeleting(true);
     try {
       await deleteCampaign(campaignToDelete);
@@ -97,7 +97,7 @@ export function CampaignList() {
       setIsDeleting(false);
     }
   };
-  
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'draft':
@@ -114,7 +114,7 @@ export function CampaignList() {
         return <span className={badgeStyles.draft + ' px-2 py-1 rounded-full text-xs'}>{status}</span>;
     }
   };
-  
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleString();
@@ -138,7 +138,7 @@ export function CampaignList() {
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={() => router.push('/admin/email/campaigns/create')}>
+          <Button onClick={() => router.push('/admin/email/wizard')}>
             <Plus className="mr-2 h-4 w-4" />
             New Campaign
           </Button>
@@ -196,7 +196,7 @@ export function CampaignList() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          
+
                           {campaign.status === 'draft' && (
                             <Button
                               variant="outline"
@@ -206,7 +206,7 @@ export function CampaignList() {
                               <Calendar className="h-4 w-4" />
                             </Button>
                           )}
-                          
+
                           {(campaign.status === 'draft' || campaign.status === 'scheduled') && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -253,7 +253,7 @@ export function CampaignList() {
                 </TableBody>
               </Table>
             </div>
-            
+
             {totalPages > 1 && (
               <div className="mt-4">
                 <Pagination>
@@ -264,7 +264,7 @@ export function CampaignList() {
                         disabled={currentPage === 1}
                       />
                     </PaginationItem>
-                    
+
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                       <PaginationItem key={page}>
                         <PaginationLink
@@ -275,7 +275,7 @@ export function CampaignList() {
                         </PaginationLink>
                       </PaginationItem>
                     ))}
-                    
+
                     <PaginationItem>
                       <PaginationNext
                         onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}

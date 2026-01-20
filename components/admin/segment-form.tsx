@@ -53,13 +53,13 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
   const { createSegment, updateSegment } = useSegmentStore();
   const { tags, fetchTags } = useTagStore();
   const { toast } = useToast();
-  
+
   // State for segment rules
   const [operator, setOperator] = useState<OperatorType>(segment?.rules?.operator || 'AND');
   const [selectedTags, setSelectedTags] = useState<TagCondition[]>(
     segment?.rules?.conditions?.filter(c => c.type === 'tag') as TagCondition[] || []
   );
-  
+
   // Initialize form
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -68,12 +68,34 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
       description: segment?.description || '',
     },
   });
-  
+
   // Fetch tags on mount
   useEffect(() => {
     fetchTags();
   }, [fetchTags]);
-  
+
+  // Reset form when segment prop changes
+  useEffect(() => {
+    if (segment) {
+      form.reset({
+        name: segment.name,
+        description: segment.description || '',
+      });
+      setOperator(segment.rules?.operator || 'AND');
+      setSelectedTags(
+        segment.rules?.conditions?.filter(c => c.type === 'tag') as TagCondition[] || []
+      );
+    } else {
+      // Reset to empty if switching to create mode
+      form.reset({
+        name: '',
+        description: '',
+      });
+      setOperator('AND');
+      setSelectedTags([]);
+    }
+  }, [segment, form]);
+
   // Handle form submission
   const onSubmit = async (values: FormValues) => {
     // Construct the segment rules
@@ -81,10 +103,10 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
       operator,
       conditions: selectedTags,
     };
-    
+
     try {
       let result;
-      
+
       if (segment) {
         // Update existing segment
         result = await updateSegment(segment.id, {
@@ -98,13 +120,13 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
           rules,
         });
       }
-      
+
       if (result) {
         toast({
           title: segment ? 'Segment updated' : 'Segment created',
           description: `Successfully ${segment ? 'updated' : 'created'} segment "${values.name}"`,
         });
-        
+
         if (onSuccess) {
           onSuccess(result);
         }
@@ -124,28 +146,28 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
       });
     }
   };
-  
+
   // Handle adding a tag to the segment
   const addTag = (tagId: string) => {
     // Check if tag is already selected
     if (selectedTags.some(tag => tag.tagId === tagId)) {
       return;
     }
-    
+
     // Add the tag
     setSelectedTags([...selectedTags, { type: 'tag', tagId }]);
   };
-  
+
   // Handle removing a tag from the segment
   const removeTag = (tagId: string) => {
     setSelectedTags(selectedTags.filter(tag => tag.tagId !== tagId));
   };
-  
+
   // Find tag by ID
   const getTagById = (tagId: string) => {
     return tags.find(tag => tag.id === tagId);
   };
-  
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -170,7 +192,7 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
                 </FormItem>
               )}
             />
-            
+
             <FormField
               control={form.control}
               name="description"
@@ -190,10 +212,10 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
                 </FormItem>
               )}
             />
-            
+
             <div className="space-y-4">
               <FormLabel>Segment Rules</FormLabel>
-              
+
               <div className="flex items-center space-x-2 mb-4">
                 <span>Match users with</span>
                 <Select
@@ -210,7 +232,7 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
                 </Select>
                 <span>of the following tags:</span>
               </div>
-              
+
               <div className="border rounded-md p-4">
                 <Tabs defaultValue="selected">
                   <TabsList className="mb-4">
@@ -221,7 +243,7 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
                       Available Tags ({tags.length})
                     </TabsTrigger>
                   </TabsList>
-                  
+
                   <TabsContent value="selected">
                     {selectedTags.length === 0 ? (
                       <div className="text-center py-4 text-muted-foreground">
@@ -249,7 +271,7 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
                       </div>
                     )}
                   </TabsContent>
-                  
+
                   <TabsContent value="available">
                     {tags.length === 0 ? (
                       <div className="text-center py-4 text-muted-foreground">
@@ -287,14 +309,14 @@ export function SegmentForm({ segment, onSuccess, onCancel }: SegmentFormProps) 
                   </TabsContent>
                 </Tabs>
               </div>
-              
+
               {selectedTags.length === 0 && (
                 <p className="text-sm text-destructive">
                   Please select at least one tag for this segment.
                 </p>
               )}
             </div>
-            
+
             <div className="flex justify-end space-x-2">
               {onCancel && (
                 <Button

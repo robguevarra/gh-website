@@ -7,15 +7,15 @@ import {
 import type { SegmentUpdate } from '@/lib/supabase/data-access/segments';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     segmentId: string;
-  };
+  }>;
 }
 
 // GET /api/admin/segments/[segmentId] - Get a specific segment
 export async function GET(request: Request, { params }: RouteParams) {
   try {
-    const { segmentId } = params;
+    const { segmentId } = await params;
     if (!segmentId) {
       return NextResponse.json({ error: 'Segment ID is required' }, { status: 400 });
     }
@@ -37,7 +37,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 // PATCH /api/admin/segments/[segmentId] - Update a segment
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
-    const { segmentId } = params;
+    const { segmentId } = await params;
     if (!segmentId) {
       return NextResponse.json({ error: 'Segment ID is required' }, { status: 400 });
     }
@@ -52,7 +52,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (rules !== undefined) updates.rules = rules;
 
     if (Object.keys(updates).length === 0) {
-        return NextResponse.json({ error: 'No update fields provided' }, { status: 400 });
+      return NextResponse.json({ error: 'No update fields provided' }, { status: 400 });
     }
 
     const updatedSegment = await updateSegment(segmentId, updates);
@@ -63,7 +63,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   } catch (error) {
     console.error(`Error in PATCH /api/admin/segments/[segmentId]:`, error);
     if (error instanceof SyntaxError) {
-        return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
     return NextResponse.json(
       { error: 'Internal Server Error' },
@@ -75,7 +75,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 // DELETE /api/admin/segments/[segmentId] - Delete a segment
 export async function DELETE(request: Request, { params }: RouteParams) {
   try {
-    const { segmentId } = params;
+    const { segmentId } = await params;
     if (!segmentId) {
       return NextResponse.json({ error: 'Segment ID is required' }, { status: 400 });
     }

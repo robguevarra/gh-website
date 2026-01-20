@@ -26,9 +26,10 @@ import { Users, Search, Tag, Edit, Trash2, Eye } from 'lucide-react';
 interface SegmentListProps {
   onEdit?: (segment: Segment) => void;
   onPreview?: (segment: Segment, preview: SegmentPreviewResult) => void;
+  hideHeader?: boolean;
 }
 
-export function SegmentList({ onEdit, onPreview }: SegmentListProps) {
+export function SegmentList({ onEdit, onPreview, hideHeader = false }: SegmentListProps) {
   const { segments, isLoadingSegments, segmentsError, fetchSegments, deleteSegment, fetchSegmentPreview, segmentPreview, isLoadingPreview } = useSegmentStore();
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,7 +42,7 @@ export function SegmentList({ onEdit, onPreview }: SegmentListProps) {
   }, [fetchSegments]);
 
   // Filter segments based on search term
-  const filteredSegments = segments.filter(segment => 
+  const filteredSegments = segments.filter(segment =>
     segment.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (segment.description && segment.description.toLowerCase().includes(searchTerm.toLowerCase()))
   );
@@ -75,16 +76,52 @@ export function SegmentList({ onEdit, onPreview }: SegmentListProps) {
 
   return (
     <div className="space-y-6">
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold">User Segments</h2>
+          <div className="relative w-64">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search segments..."
+              className="pl-8"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* When header is hidden, show search bar standalone if needed or rely on parent? 
+          For now, let's keep search accessible even if header title is hidden, 
+          OR assume the parent handles search. 
+          Actually, the plan said "hideHeader". The search bar is useful.
+          Let's adjust: If hideHeader is true, maybe we just want to hide the title but keep search?
+          The instruction implies hiding the whole block. 
+          Let's verify usage. In StudioAudience check if I want search.
+          Yes, I usually want search.
+          Let's change logic: If hideHeader, just render search bar? 
+          Or maybe split them. 
+          For saftey/simplicity towards the prompt "hideHeader", I will assume it hides the H2.
+          Let's keep the Search bar visible if hideHeader is true, but maybe styled differently?
+          
+          Actually, looking at the code, it's a flex container.
+          Let's JUST hide the H2 if hideHeader is true.
+      */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">User Segments</h2>
-        <div className="relative w-64">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search segments..."
-            className="pl-8"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        {!hideHeader && <h2 className="text-2xl font-bold">User Segments</h2>}
+        <div className={hideHeader ? "w-full" : "relative w-64"}>
+          {/* If header hidden, maybe search should be full width or just aligned? 
+               Let's keep it simple. Only hide H2.
+           */}
+          <div className="relative w-full max-w-sm ml-auto">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search segments..."
+              className="pl-8"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 

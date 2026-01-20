@@ -3,15 +3,15 @@ import { NextResponse } from 'next/server';
 import { getCachedSegmentPreview } from '@/lib/segmentation/engine';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     segmentId: string;
-  };
+  }>;
 }
 
 // GET /api/admin/segments/[segmentId]/preview - Get a preview of users matching a segment
 export async function GET(request: Request, { params }: RouteParams) {
   try {
-    const { segmentId } = params;
+    const { segmentId } = await params;
     if (!segmentId) {
       return NextResponse.json({ error: 'Segment ID is required' }, { status: 400 });
     }
@@ -23,7 +23,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 
     // Get the segment preview
     const preview = await getCachedSegmentPreview(segmentId, limit, offset);
-    
+
     return NextResponse.json({ data: preview });
   } catch (error) {
     console.error(`Error in GET /api/admin/segments/[segmentId]/preview:`, error);

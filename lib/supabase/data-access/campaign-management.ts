@@ -40,9 +40,10 @@ export interface EmailCampaign {
   campaign_design_json?: any | null;    // Design JSON from Unlayer
   segment_rules?: SegmentRules; // Rules for advanced audience segmentation
   priority?: number; // Added priority
+  campaign_analytics?: CampaignAnalytics | CampaignAnalytics[]; // Joined relation
 }
 
-export type EmailCampaignInsert = Omit<EmailCampaign, 'id' | 'created_at' | 'updated_at'> & { id?: string };
+export type EmailCampaignInsert = Omit<EmailCampaign, 'id' | 'created_at' | 'updated_at' | 'campaign_analytics'> & { id?: string };
 export type EmailCampaignUpdate = Partial<EmailCampaignInsert>;
 
 export interface CampaignSegment {
@@ -125,20 +126,20 @@ export interface UserSegment {
 export const createCampaign = async (campaign: EmailCampaignInsert) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
-  
+
   const { segment_rules, ...restOfCampaign } = campaign;
   const campaignDataForSupabase: any = { ...restOfCampaign };
 
   if (campaign.hasOwnProperty('segment_rules')) {
     campaignDataForSupabase.segment_rules = segment_rules as unknown as Json;
   }
-  
+
   const { data, error } = await admin
     .from('email_campaigns')
     .insert(campaignDataForSupabase)
     .select()
     .single();
-    
+
   if (error) throw error;
   return data;
 };
@@ -149,13 +150,13 @@ export const createCampaign = async (campaign: EmailCampaignInsert) => {
 export const getCampaignById = async (id: string) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
-  
+
   const { data: campaignData, error } = await admin
     .from('email_campaigns')
     .select('*')
     .eq('id', id)
     .single<EmailCampaign>(); // Specify the return type for better type safety
-    
+
   if (error) {
     // Handle case where campaign is not found more gracefully if needed
     if (error.code === 'PGRST116') { // PostgREST error for 'Fetched zero rows'
@@ -171,9 +172,9 @@ export const getCampaignById = async (id: string) => {
   // If campaign_design_json is missing and there's a template_id,
   // try to fetch the design from the original template.
   if (
-    (!campaignData.campaign_design_json || 
-     (typeof campaignData.campaign_design_json === 'object' && 
-      Object.keys(campaignData.campaign_design_json).length === 0)) && 
+    (!campaignData.campaign_design_json ||
+      (typeof campaignData.campaign_design_json === 'object' &&
+        Object.keys(campaignData.campaign_design_json).length === 0)) &&
     campaignData.template_id
   ) {
     try {
@@ -190,37 +191,37 @@ export const getCampaignById = async (id: string) => {
       // For now, we'll log and continue, returning the campaign without the fallback design
     }
   }
-    
+
   return campaignData;
 };
 
 /**
  * Get all campaigns with optional filtering
  */
-export const getCampaigns = async ({ 
-  status, 
-  limit = 50, 
-  offset = 0 
-}: { 
-  status?: string; 
-  limit?: number; 
+export const getCampaigns = async ({
+  status,
+  limit = 50,
+  offset = 0
+}: {
+  status?: string;
+  limit?: number;
   offset?: number;
 }) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
-  
+
   let query = admin
     .from('email_campaigns')
-    .select('*', { count: 'exact' });
-    
+    .select('*, campaign_analytics(*)', { count: 'exact' });
+
   if (status) {
     query = query.eq('status', status);
   }
-  
+
   const { data, error, count } = await query
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
-    
+
   if (error) throw error;
   return { data, count };
 };
@@ -231,21 +232,21 @@ export const getCampaigns = async ({
 export const updateCampaign = async (id: string, updates: EmailCampaignUpdate) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
-  
+
   const { segment_rules, ...restOfUpdates } = updates;
   const updateDataForSupabase: any = { ...restOfUpdates };
 
   if (updates.hasOwnProperty('segment_rules')) {
     updateDataForSupabase.segment_rules = segment_rules as unknown as Json;
   }
-  
+
   const { data, error } = await admin
     .from('email_campaigns')
     .update(updateDataForSupabase)
     .eq('id', id)
     .select()
     .single();
-    
+
   if (error) throw error;
   return data;
 };
@@ -256,12 +257,12 @@ export const updateCampaign = async (id: string, updates: EmailCampaignUpdate) =
 export const deleteCampaign = async (id: string) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
-  
+
   const { error } = await admin
     .from('email_campaigns')
     .delete()
     .eq('id', id);
-    
+
   if (error) throw error;
   return true;
 };
@@ -272,17 +273,17 @@ export const deleteCampaign = async (id: string) => {
 export const scheduleCampaign = async (id: string, scheduledAt: string) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
-  
+
   const { data, error } = await admin
     .from('email_campaigns')
-    .update({ 
-      status: 'scheduled', 
-      scheduled_at: scheduledAt 
+    .update({
+      status: 'scheduled',
+      scheduled_at: scheduledAt
     })
     .eq('id', id)
     .select()
     .single();
-    
+
   if (error) throw error;
   return data;
 };
@@ -294,18 +295,18 @@ export const scheduleCampaign = async (id: string, scheduledAt: string) => {
  */
 export const getSegmentById = async (id: string) => {
   const supabase = getAdminClient(); // Use admin client to bypass RLS
-  
+
   const { data, error } = await supabase
     .from('segments')
     .select('*')
     .eq('id', id)
     .single();
-    
+
   if (error) {
     console.error('[getSegmentById] Error fetching segment:', JSON.stringify(error, null, 2));
     throw error;
   }
-  
+
   return data;
 };
 
@@ -316,24 +317,24 @@ export const getSegmentById = async (id: string) => {
  */
 export const addCampaignSegment = async (campaignSegment: CampaignSegmentInsert) => {
   const supabase = getAdminClient(); // Use admin client for this operation
-  
+
   // Log the input to the function
-  console.log('[addCampaignSegment] Attempting to add:', JSON.stringify(campaignSegment, null, 2)); 
+  console.log('[addCampaignSegment] Attempting to add:', JSON.stringify(campaignSegment, null, 2));
 
   const { data, error } = await supabase
     .from('campaign_segments')
     .insert(campaignSegment)
     .select()
     .single();
-    
+
   if (error) {
     // Log the full Supabase error object
-    console.error('[addCampaignSegment] Supabase error:', JSON.stringify(error, null, 2)); 
+    console.error('[addCampaignSegment] Supabase error:', JSON.stringify(error, null, 2));
     throw error;
   }
 
   // Log the successful result
-  console.log('[addCampaignSegment] Successfully added:', JSON.stringify(data, null, 2)); 
+  console.log('[addCampaignSegment] Successfully added:', JSON.stringify(data, null, 2));
   return data;
 };
 
@@ -342,7 +343,7 @@ export const addCampaignSegment = async (campaignSegment: CampaignSegmentInsert)
  */
 export const getCampaignSegments = async (campaignId: string) => {
   const supabase = getAdminClient(); // Use admin client
-  
+
   const { data, error } = await supabase
     .from('campaign_segments')
     .select(`
@@ -350,7 +351,7 @@ export const getCampaignSegments = async (campaignId: string) => {
       segment:segments(*)
     `)
     .eq('campaign_id', campaignId);
-    
+
   if (error) throw error;
   return data;
 };
@@ -360,7 +361,7 @@ export const getCampaignSegments = async (campaignId: string) => {
  */
 export const removeCampaignSegment = async (campaignId: string, segmentId: string) => {
   const supabase = getAdminClient(); // Use admin client
-  
+
   console.log('[removeCampaignSegment] Attempting to remove:', { campaignId, segmentId });
 
   const { error } = await supabase
@@ -368,7 +369,7 @@ export const removeCampaignSegment = async (campaignId: string, segmentId: strin
     .delete()
     .eq('campaign_id', campaignId)
     .eq('segment_id', segmentId);
-    
+
   if (error) {
     console.error('[removeCampaignSegment] Supabase error:', JSON.stringify(error, null, 2));
     throw error;
@@ -385,7 +386,7 @@ export const removeCampaignSegment = async (campaignId: string, segmentId: strin
 export const createCampaignTemplate = async (template: CampaignTemplateInsert) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
-  
+
   try {
     // First check if an active template already exists for this campaign
     const { data: existingTemplates } = await admin
@@ -393,26 +394,26 @@ export const createCampaignTemplate = async (template: CampaignTemplateInsert) =
       .select('*')
       .eq('campaign_id', template.campaign_id)
       .eq('is_active', true);
-    
+
     // If an active template exists, return it instead of creating a new one
     if (existingTemplates && existingTemplates.length > 0) {
       console.log(`Active template already exists for campaign ${template.campaign_id}, using existing template`);
       return existingTemplates[0];
     }
-    
+
     // Insert the new template
     const { data, error } = await admin
       .from('campaign_templates')
       .insert(template)
       .select();
-    
+
     if (error) throw error;
-    
+
     // Check if we have data and return the first item
     if (!data || data.length === 0) {
       throw new Error('Failed to create campaign template - no data returned');
     }
-    
+
     return data[0];
   } catch (error) {
     console.error('Error in createCampaignTemplate:', error);
@@ -425,13 +426,13 @@ export const createCampaignTemplate = async (template: CampaignTemplateInsert) =
  */
 export const getCampaignTemplates = async (campaignId: string) => {
   const supabase = createClient();
-  
+
   const { data, error } = await supabase
     .from('campaign_templates')
     .select('*')
     .eq('campaign_id', campaignId)
     .order('version', { ascending: false });
-    
+
   if (error) throw error;
   return data;
 };
@@ -442,17 +443,17 @@ export const getCampaignTemplates = async (campaignId: string) => {
 export const getActiveCampaignTemplate = async (campaignId: string) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
-  
+
   try {
     console.log(`Looking for active template for campaign ${campaignId}`);
-    
+
     const { data, error } = await admin
       .from('campaign_templates')
       .select('*')
       .eq('campaign_id', campaignId)
       .eq('is_active', true)
       .single();
-    
+
     if (error) {
       if (error.code === 'PGRST116') { // PostgREST error for 'Fetched zero rows'
         console.log(`No active template found for campaign ${campaignId}`);
@@ -460,7 +461,7 @@ export const getActiveCampaignTemplate = async (campaignId: string) => {
       }
       throw error;
     }
-    
+
     console.log(`Found active template ${data.id} for campaign ${campaignId}`);
     return data;
   } catch (error) {
@@ -475,38 +476,38 @@ export const getActiveCampaignTemplate = async (campaignId: string) => {
 export const setActiveTemplate = async (templateId: string, campaignId: string) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
-  
+
   try {
     console.log(`Setting template ${templateId} as active for campaign ${campaignId}`);
-    
+
     // First, set all templates for this campaign as inactive
     const { error: deactivateError } = await admin
       .from('campaign_templates')
       .update({ is_active: false })
       .eq('campaign_id', campaignId);
-    
+
     if (deactivateError) {
       console.error('Error deactivating templates:', deactivateError);
       throw deactivateError;
     }
-    
+
     // Then set the specified template as active
     const { data, error: activateError } = await admin
       .from('campaign_templates')
       .update({ is_active: true })
       .eq('id', templateId)
       .select();
-    
+
     if (activateError) {
       console.error('Error activating template:', activateError);
       throw activateError;
     }
-    
+
     if (!data || data.length === 0) {
       console.error(`No template found with ID ${templateId}`);
       throw new Error(`Template with ID ${templateId} not found`);
     }
-    
+
     console.log(`Successfully set template ${templateId} as active`);
     return data[0];
   } catch (error) {
@@ -520,38 +521,38 @@ export const setActiveTemplate = async (templateId: string, campaignId: string) 
 /**
  * Get recipients for a campaign
  */
-export const getCampaignRecipients = async (campaignId: string, { 
-  limit = 50, 
-  offset = 0 
-}: { 
-  limit?: number; 
+export const getCampaignRecipients = async (campaignId: string, {
+  limit = 50,
+  offset = 0
+}: {
+  limit?: number;
   offset?: number;
 }) => {
   const supabase = createClient();
-  
+
   // First get the recipient records
   const { data: recipientData, error: recipientError, count } = await supabase
     .from('campaign_recipients')
     .select('id, user_id', { count: 'exact' })
     .eq('campaign_id', campaignId)
     .range(offset, offset + limit - 1);
-    
+
   if (recipientError) throw recipientError;
-  
+
   if (!recipientData || recipientData.length === 0) {
     return { data: [], count: 0 };
   }
-  
+
   // Then fetch the user details for those recipients
   const userIds = recipientData.map(recipient => recipient.user_id);
-  
+
   const { data: userData, error: userError } = await supabase
     .from('users')
     .select('id, email, first_name, last_name')
     .in('id', userIds);
-    
+
   if (userError) throw userError;
-  
+
   // Combine the data
   const data = recipientData.map(recipient => {
     const user = userData?.find(u => u.id === recipient.user_id);
@@ -560,7 +561,7 @@ export const getCampaignRecipients = async (campaignId: string, {
       user: user || { id: recipient.user_id, email: 'unknown@example.com' }
     };
   });
-  
+
   return { data, count };
 };
 
@@ -604,12 +605,12 @@ export const populateCampaignRecipientsFromRules = async (campaignId: string, ad
   // resolvedAudienceResponse should be { data: string[] | null, error: any } from the Edge Function itself
   if (resolvedAudienceResponse && resolvedAudienceResponse.error) {
     console.error(`[populateCampaignRecipientsFromRules] Edge function 'resolve-audience-from-rules' returned an error:`, resolvedAudienceResponse.error);
-    const errMessage = typeof resolvedAudienceResponse.error === 'string' 
-      ? resolvedAudienceResponse.error 
+    const errMessage = typeof resolvedAudienceResponse.error === 'string'
+      ? resolvedAudienceResponse.error
       : (resolvedAudienceResponse.error as Error).message || JSON.stringify(resolvedAudienceResponse.error);
     throw new Error(`Audience resolution Edge Function failed: ${errMessage}`);
   }
-  
+
   const userIds = resolvedAudienceResponse?.data as string[] | null;
 
   if (!userIds || userIds.length === 0) {
@@ -629,8 +630,8 @@ export const populateCampaignRecipientsFromRules = async (campaignId: string, ad
   const { error: upsertError, count } = await adminSupabaseClient
     .from('campaign_recipients')
     .upsert(recipientsToInsert, {
-      onConflict: 'campaign_id,user_id', 
-      ignoreDuplicates: true 
+      onConflict: 'campaign_id,user_id',
+      ignoreDuplicates: true
     });
 
   if (upsertError) {
@@ -641,7 +642,7 @@ export const populateCampaignRecipientsFromRules = async (campaignId: string, ad
   console.log(`[populateCampaignRecipientsFromRules] Successfully upserted recipients for campaign: ${campaignId}. Upsert operation returned count: ${count}.`);
   // Note: `count` from upsert with ignoreDuplicates:true might be the number of rows processed/matched, not strictly new rows.
   // Returning the length of userIds that were intended for insert is a clearer indication of the resolved audience size.
-  return { count: userIds.length }; 
+  return { count: userIds.length };
 };
 
 /**
@@ -650,7 +651,7 @@ export const populateCampaignRecipientsFromRules = async (campaignId: string, ad
 export const getCampaignAnalytics = async (campaignId: string) => {
   // Use admin client to bypass RLS policies for admin operations
   const admin = getAdminClient();
-  
+
   try {
     // First check if the campaign_analytics table exists
     const { data, error } = await admin
@@ -658,18 +659,18 @@ export const getCampaignAnalytics = async (campaignId: string) => {
       .select('*')
       .eq('campaign_id', campaignId)
       .single();
-      
+
     if (error) {
       // If analytics don't exist yet, create default empty analytics
       if (error.code === 'PGRST116') {
         return recalculateCampaignAnalytics(campaignId);
       }
-      
+
       // If table doesn't exist or other error, return default analytics
       console.error('Error fetching campaign analytics:', error);
       return createDefaultAnalytics(campaignId);
     }
-    
+
     return data;
   } catch (error) {
     console.error('Error in getCampaignAnalytics:', error);
@@ -708,29 +709,29 @@ const createDefaultAnalytics = (campaignId: string): CampaignAnalytics => {
  */
 export const recalculateCampaignAnalytics = async (campaignId: string) => {
   const admin = getAdminClient();
-  
+
   // Get recipient count
   const { count: recipientCount, error: recipientError } = await admin
     .from('campaign_recipients')
     .select('*', { count: 'exact', head: true })
     .eq('campaign_id', campaignId);
-    
+
   if (recipientError) throw recipientError;
-  
+
   // Get sent count
   const { count: sentCount, error: sentError } = await admin
     .from('campaign_recipients')
     .select('*', { count: 'exact', head: true })
     .eq('campaign_id', campaignId)
     .not('sent_at', 'is', null);
-    
+
   if (sentError) throw sentError;
-  
+
   // Get email event counts by type using separate queries for each event type
   // This is a workaround since we can't use .group() with the Supabase JS client
   const eventTypes = ['open', 'click', 'unsubscribe', 'bounce', 'complaint', 'delivery'];
   const eventCounts = [];
-  
+
   // Run separate count queries for each event type
   for (const eventType of eventTypes) {
     const { count, error } = await admin
@@ -738,12 +739,12 @@ export const recalculateCampaignAnalytics = async (campaignId: string) => {
       .select('*', { count: 'exact', head: true })
       .eq('campaign_id', campaignId)
       .eq('event_type', eventType);
-      
+
     if (error) {
       console.error(`Error counting ${eventType} events:`, error);
       continue;
     }
-    
+
     if (count && count > 0) {
       eventCounts.push({
         event_type: eventType,
@@ -751,16 +752,16 @@ export const recalculateCampaignAnalytics = async (campaignId: string) => {
       });
     }
   }
-  
+
   const eventError = null;
-    
+
   if (eventError) throw eventError;
-  
+
   interface EventCount {
     event_type: string;
     count: string;
   }
-  
+
   // Process event counts
   const counts = {
     opened: 0,
@@ -770,7 +771,7 @@ export const recalculateCampaignAnalytics = async (campaignId: string) => {
     complained: 0,
     delivered: 0
   };
-  
+
   if (eventCounts && eventCounts.length > 0) {
     eventCounts.forEach((item: EventCount) => {
       switch (item.event_type) {
@@ -795,20 +796,48 @@ export const recalculateCampaignAnalytics = async (campaignId: string) => {
       }
     });
   }
-  
+
   // Calculate rates
-  const openRate = sentCount ? (counts.opened / sentCount) * 100 : 0;
-  const clickRate = counts.opened ? (counts.clicked / counts.opened) * 100 : 0;
-  const bounceRate = sentCount ? (counts.bounced / sentCount) * 100 : 0;
-  
+  let calculatedSentCount = sentCount || 0;
+
+  // Robustness fallback: If campaign_recipients is empty but we have delivery/bounce events,
+  // infer the sent count from the events to avoid 0% rates.
+  if (calculatedSentCount === 0 && (counts.delivered > 0 || counts.bounced > 0)) {
+    calculatedSentCount = counts.delivered + counts.bounced;
+    console.warn(`[recalculateCampaignAnalytics] Sent count is 0 but events exist. Inferred sent count: ${calculatedSentCount}`);
+  }
+
+  // Use inferred count if recipientCount is also 0
+  let calculatedRecipientCount = recipientCount || 0;
+  if (calculatedRecipientCount === 0 && calculatedSentCount > 0) {
+    calculatedRecipientCount = calculatedSentCount;
+  }
+
+  const openRate = calculatedSentCount ? (counts.opened / calculatedSentCount) * 100 : 0;
+  // Click rate is usually based on Delivered or Sent, or per Open. 
+  // Standard ESPs often use Click / Delivered or Click / Sent. 
+  // Code previously used Click / Open? Line 802: `counts.clicked / counts.opened`.
+  // Industry standard is often Click-Through Rate (CTR) = Click / Delivered (or Sent).
+  // Click-to-Open Rate (CTOR) = Click / Open.
+  // User image says "Click Rate". Standard usually means CTR. 
+  // But let's stick to existing logic OR improve it?
+  // Existing: `const clickRate = counts.opened ? (counts.clicked / counts.opened) * 100 : 0;`
+  // This is CTOR. If I look at the image "0% Click Rate (486 clicks)". 
+  // If Opens = 1519. 486/1519 = 32%.
+  // If calculatedSentCount = 5416. 486/5416 = 8.9%.
+  // The user might expect CTR.
+  // Use Sent for now to be safe/standard for "Click Rate".
+  const clickRate = calculatedSentCount ? (counts.clicked / calculatedSentCount) * 100 : 0;
+  const bounceRate = calculatedSentCount ? (counts.bounced / calculatedSentCount) * 100 : 0;
+
   try {
     // Update analytics
     const { data, error } = await admin
       .from('campaign_analytics')
       .upsert({
         campaign_id: campaignId,
-        total_recipients: recipientCount || 0,
-        total_sent: sentCount || 0,
+        total_recipients: calculatedRecipientCount,
+        total_sent: calculatedSentCount,
         total_delivered: counts.delivered,
         total_opens: counts.opened,
         total_clicks: counts.clicked,
@@ -819,17 +848,17 @@ export const recalculateCampaignAnalytics = async (campaignId: string) => {
         click_rate: clickRate,
         bounce_rate: bounceRate,
         last_calculated_at: new Date().toISOString()
-      }, { 
-        onConflict: 'campaign_id' 
+      }, {
+        onConflict: 'campaign_id'
       })
       .select()
       .single();
-      
+
     if (error) {
       console.error('Error upserting campaign analytics:', error);
       return createDefaultAnalytics(campaignId);
     }
-    
+
     return data;
   } catch (error) {
     console.error('Error in recalculateCampaignAnalytics:', error);
@@ -844,18 +873,18 @@ export const recalculateCampaignAnalytics = async (campaignId: string) => {
  */
 export const sendCampaignTest = async (campaignId: string, testEmails: string[]) => {
   const supabase = createClient();
-  
+
   // Get the campaign details
   const { data: campaign } = await supabase
     .from('email_campaigns')
     .select('*')
     .eq('id', campaignId)
     .single();
-  
+
   if (!campaign) {
     throw new Error('Campaign not found');
   }
-  
+
   // Get the active template
   const { data: template } = await supabase
     .from('campaign_templates')
@@ -863,11 +892,11 @@ export const sendCampaignTest = async (campaignId: string, testEmails: string[])
     .eq('campaign_id', campaignId)
     .eq('is_active', true)
     .single();
-  
+
   if (!template) {
     throw new Error('No active template found for campaign');
   }
-  
+
   // Call the email sending API endpoint
   const response = await fetch('/api/admin/campaigns/test-send', {
     method: 'POST',
@@ -880,12 +909,12 @@ export const sendCampaignTest = async (campaignId: string, testEmails: string[])
       testEmails,
     }),
   });
-  
+
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.message || 'Failed to send test email');
   }
-  
+
   return await response.json();
 };
 
@@ -921,9 +950,9 @@ export const triggerCampaignSend = async (campaignId: string) => {
   console.log(`[triggerCampaignSend] Campaign ${campaignId} status successfully updated to 'sending'.`);
 
   // Return the result of the status update
-  return { 
-    success: true, 
-    message: `Campaign ${campaignId} status updated to 'sending'.`, 
-    data: updatedCampaign 
+  return {
+    success: true,
+    message: `Campaign ${campaignId} status updated to 'sending'.`,
+    data: updatedCampaign
   };
 };

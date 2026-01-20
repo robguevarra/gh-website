@@ -492,6 +492,7 @@ export const createActions = (
           )
         `)
         .eq('user_id', userId)
+        .eq('status', 'active')
         // Use enrolled_at for sorting since created_at doesn't exist
         .order('enrolled_at', { ascending: false });
 

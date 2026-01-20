@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { CampaignList } from './components/campaign-list';
+import { CampaignList } from './v2/components/campaign-list';
 
 export const metadata: Metadata = {
   title: 'Email Campaigns | Graceful Homeschooling Admin',
@@ -15,7 +15,7 @@ export default function CampaignsPage() {
           Create, schedule, and monitor email campaigns for your audience.
         </p>
       </div>
-      
+
       <CampaignList />
     </div>
   );

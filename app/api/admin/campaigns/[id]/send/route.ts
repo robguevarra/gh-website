@@ -10,9 +10,9 @@ import { getAdminClient } from '@/lib/supabase/admin';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: campaignId } = params;
+  const { id: campaignId } = await params;
   console.log(`[SEND] Starting send process for campaign ${campaignId}`);
 
   try {
@@ -40,6 +40,37 @@ export async function POST(
       );
     }
 
+    // Check for Scheduling payload
+    // If request body has 'scheduledAt', this is a schedule operation
+    let scheduledAt: string | null = null;
+    try {
+      const body = await request.json();
+      if (body.scheduledAt) {
+        scheduledAt = body.scheduledAt;
+      }
+    } catch (e) {
+      // Body reading might fail if empty, which is fine for normal "send now" requests
+    }
+
+    if (scheduledAt) {
+      // SCHEDULING MODE
+      console.log(`[SCHEDULE] Scheduling campaign ${campaignId} for ${scheduledAt}`);
+
+      // Update status to scheduled
+      await updateCampaign(campaignId, {
+        status: 'scheduled',
+        status_message: 'Waiting for scheduled time',
+        scheduled_at: scheduledAt
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Campaign scheduled for ${scheduledAt}`,
+        details: { scheduledAt }
+      });
+    }
+
+    // IMMEDIATE SEND MODE
     // Update status to sending
     await updateCampaign(campaignId, { status: 'sending', status_message: 'Starting send process...' });
     console.log(`[SEND] Campaign ${campaignId} status updated to sending`);
@@ -58,7 +89,7 @@ export async function POST(
     // This replaces the slow fetch-and-insert loop with a single database operation
     let successCount = 0;
     try {
-      const { data, error } = await adminClient.rpc('queue_campaign_emails', {
+      const { data, error } = await adminClient.rpc('queue_campaign_emails' as any, {
         p_campaign_id: campaignId,
         p_segment_ids: segmentIds
       });
@@ -95,16 +126,19 @@ export async function POST(
     console.log(`[SEND] Campaign status updated to sent`);
 
     // 5. Trigger Processing
-    console.log(`[SEND] Triggering immediate email processing...`);
+    // We MUST trigger the batch processor explicitly.
+    // The DB webhooks on 'email_jobs' will skip 'broadcast' types to prevent 
+    // spinning up 10k functions for 10k recipients.
+    console.log(`[SEND] Triggering batch email processing...`);
     try {
       const { data: processResponse, error: processError } = await adminClient.functions.invoke(
-        'process-email-queue',
-        { body: { triggered_by: 'immediate_send' } }
+        'email-worker',
+        { body: { type: 'process_queue' } }
       );
       if (processError) {
-        console.warn(`[SEND] Warning: Failed to trigger immediate email processing:`, processError);
+        console.warn(`[SEND] Warning: Failed to trigger batch processing:`, processError);
       } else {
-        console.log(`[SEND] Email processing triggered:`, processResponse);
+        console.log(`[SEND] Batch processing triggered:`, processResponse);
       }
     } catch (triggerError) {
       console.warn(`[SEND] Warning: Exception when triggering email processing:`, triggerError);

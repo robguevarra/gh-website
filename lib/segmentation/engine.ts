@@ -30,7 +30,7 @@ export interface SegmentPreviewResult {
 
 /**
  * Builds a Supabase query to find users matching the segment rules.
- * This function recursively processes the rules and conditions.
+ * Uses application-side logic to resolve complex filtering (avoiding deep subquery syntax issues).
  */
 export async function getUsersBySegmentRules(
   rules: SegmentRules,
@@ -38,147 +38,201 @@ export async function getUsersBySegmentRules(
   offset: number = 0
 ): Promise<SegmentPreviewResult> {
   const supabase = await createServerSupabaseClient();
-  
-  // Start with a query builder for the users table
-  let query = supabase.from('users').select('id, email, name');
-  
-  // Apply the filters based on the segment rules
-  query = applyRulesToQuery(query, rules);
-  
-  // Get the total count first (without limit/offset)
-  let countQuery = supabase.from('users').select('id', { count: 'exact', head: true });
-  countQuery = applyRulesToQuery(countQuery, rules);
-  const { count, error: countError } = await countQuery;
-  
-  if (countError) {
-    console.error('Error getting segment user count:', countError);
+
+  // 1. Resolve the matching User IDs based on the rules
+  const matchingIds = await resolveUserIdsFromRules(rules, supabase);
+
+  // If matchingIds is empty array, it means NO users match
+  if (matchingIds !== null && matchingIds.length === 0) {
     return { count: 0, sampleUsers: [] };
   }
-  
-  // Now get the sample users with pagination
-  const { data: users, error } = await query
-    .limit(limit)
-    .offset(offset)
-    .order('email', { ascending: true });
-  
-  if (error) {
-    console.error('Error getting segment users:', error);
-    return { count: count || 0, sampleUsers: [] };
+
+  // 2. Optimization: If we have IDs, we can't just pass 6000+ IDs to .in() because of URL length limits (414).
+  // We must batch the fetching of profiles if we have a list of IDs.
+
+  // If matchingIds is null, it means "All Users", so standard pagination works.
+  if (matchingIds === null) {
+    let query = supabase.from('unified_profiles').select('id, email, first_name, last_name');
+    let countQuery = supabase.from('unified_profiles').select('id', { count: 'exact', head: true });
+
+    const { count, error: countError } = await countQuery;
+    if (countError) {
+      console.error('Error getting total count:', countError);
+      return { count: 0, sampleUsers: [] };
+    }
+
+    const { data: users, error } = await query
+      .range(offset, offset + limit - 1)
+      .order('email', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching users:', error);
+      return { count: count || 0, sampleUsers: [] };
+    }
+
+    return {
+      count: count || 0,
+      sampleUsers: (users || []).map((u: any) => ({
+        id: u.id,
+        email: u.email,
+        name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'No Name'
+      }))
+    };
   }
-  
+
+  // 3. Batched ID handling
+  // If we have a specific list of IDs (e.g. 6368 IDs), we know the TOTAL count immediately.
+  const totalCount = matchingIds.length;
+
+  // For the sample users, we only need to fetch the specific slice for the requested page.
+  // slice(offset, offset + limit)
+  const slicedIds = matchingIds.slice(offset, offset + limit);
+
+  if (slicedIds.length === 0) {
+    return { count: totalCount, sampleUsers: [] };
+  }
+
+  // Fetch only the profiles for this slice
+  const { data: users, error } = await supabase
+    .from('unified_profiles')
+    .select('id, email, first_name, last_name')
+    .in('id', slicedIds)
+    .order('email', { ascending: true }); // Ordering might be per-batch, but acceptable for preview.
+
+  if (error) {
+    console.error('Error fetching batched profiles:', error);
+    return { count: totalCount, sampleUsers: [] };
+  }
+
   return {
-    count: count || 0,
-    sampleUsers: users || [],
+    count: totalCount,
+    sampleUsers: (users || []).map((u: any) => ({
+      id: u.id,
+      email: u.email,
+      name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'No Name'
+    })),
   };
 }
 
 /**
- * Applies segment rules to a Supabase query.
- * This is a recursive function that handles nested conditions.
+ * Recursively resolves User IDs matching the rules.
+ * Returns:
+ * - string[] : The list of matching user IDs
+ * - null : Indicates "All Users" (no filter)
  */
-function applyRulesToQuery(query: any, rules: SegmentRules): any {
+async function resolveUserIdsFromRules(rules: SegmentRules, supabase: any): Promise<string[] | null> {
   const { operator, conditions } = rules;
-  
-  // Base case: no conditions
+
   if (!conditions || conditions.length === 0) {
-    return query;
+    return null; // All users
   }
-  
-  // Process each condition based on the operator
+
+  // Resolve all child conditions
+  const results = await Promise.all(conditions.map(c => resolveCondition(c, supabase)));
+
+  // Filter out nulls (which mean "all users") for logic processing
+  // Note: Handling "All Users" in sets is tricky.
+  // AND with "All" -> intersection is just the others.
+  // OR with "All" -> union is "All".
+
   if (operator === 'AND') {
-    // For AND, we apply all conditions directly to the query
-    conditions.forEach(condition => {
-      query = applyConditionToQuery(query, condition);
-    });
-    return query;
-  } else if (operator === 'OR') {
-    // For OR, we need to use the .or() method with a function
-    return query.or(buildOrConditions(conditions));
-  } else if (operator === 'NOT') {
-    // For NOT, we negate each condition
-    // This is a bit trickier and depends on the specific condition
-    // For simplicity, we'll just handle the first condition as a NOT
-    if (conditions.length > 0) {
-      return applyNotConditionToQuery(query, conditions[0]);
+    // Intersection
+    // If any result is empty array, total is empty.
+    // If all are null, return null.
+
+    let currentIds: string[] | null = null;
+    let first = true;
+
+    for (const res of results) {
+      if (res === null) continue; // "All users" doesn't restrict intersection
+
+      if (first) {
+        currentIds = res;
+        first = false;
+      } else {
+        // Intersect currentIds with res
+        // Optimally use Set
+        const setRes = new Set(res);
+        currentIds = (currentIds || []).filter(id => setRes.has(id));
+      }
     }
-    return query;
+
+    // If we went through all and never found a restriction (all were null), return null
+    if (first) return null;
+
+    return currentIds || [];
   }
-  
-  return query;
+
+  if (operator === 'OR') {
+    // Union
+    // If ANY result is null (All Users), then the result is All Users.
+    if (results.includes(null)) return null;
+
+    // Combine all arrays
+    const allIds = results.flat() as string[];
+    return Array.from(new Set(allIds));
+  }
+
+  return null;
 }
 
-/**
- * Applies a single condition to a query.
- */
-function applyConditionToQuery(query: any, condition: Condition): any {
+async function resolveCondition(condition: Condition, supabase: any): Promise<string[] | null> {
   if (condition.type === 'tag') {
-    // For tag conditions, we check if the user has the specified tag
-    return query.in(
-      'id',
-      supabase
-        .from('user_tags')
-        .select('user_id')
-        .eq('tag_id', condition.tagId)
-    );
+    // Validation: If no tag selected, return empty (no match)
+    if (!condition.tagId) return [];
+
+    // Fetch all users with this tag using batching
+    return await fetchAllUserIdsForTag(condition.tagId, supabase);
+
   } else if (condition.type === 'group') {
-    // For group conditions, we recursively apply the nested rules
-    const nestedRules: SegmentRules = {
+    return resolveUserIdsFromRules({
       operator: condition.operator,
-      conditions: condition.conditions,
-    };
-    return applyRulesToQuery(query, nestedRules);
+      conditions: condition.conditions
+    }, supabase);
   }
-  
-  return query;
+  return null;
 }
 
 /**
- * Builds an array of OR conditions for the .or() method.
+ * Helper to fetch ALL user IDs for a tag, handling pagination/limits.
  */
-function buildOrConditions(conditions: Condition[]): string {
-  // This is a simplified version - in a real implementation,
-  // you would build a more complex OR condition string
-  const orConditions = conditions.map(condition => {
-    if (condition.type === 'tag') {
-      return `id.in.(${buildTagSubquery(condition.tagId)})`;
-    }
-    // For group conditions in an OR, we'd need a more complex approach
-    // This is a placeholder
-    return '';
-  }).filter(Boolean);
-  
-  return orConditions.join(',');
-}
+async function fetchAllUserIdsForTag(tagId: string, supabase: any): Promise<string[]> {
+  let allIds: string[] = [];
+  const BATCH_SIZE = 1000;
+  let offset = 0;
+  let hasMore = true;
 
-/**
- * Builds a subquery string for tag conditions.
- */
-function buildTagSubquery(tagId: string): string {
-  return `select user_id from user_tags where tag_id = '${tagId}'`;
-}
-
-/**
- * Applies a NOT condition to a query.
- */
-function applyNotConditionToQuery(query: any, condition: Condition): any {
-  if (condition.type === 'tag') {
-    // For NOT tag conditions, we check if the user does NOT have the specified tag
-    return query.not(
-      'id',
-      'in',
-      supabase
+  try {
+    while (hasMore) {
+      const { data, error } = await supabase
         .from('user_tags')
         .select('user_id')
-        .eq('tag_id', condition.tagId)
-    );
-  } else if (condition.type === 'group') {
-    // For NOT group conditions, we negate the entire group
-    // This is complex and would require a custom implementation
-    // For simplicity, we'll just return the query unchanged
-    return query;
+        .eq('tag_id', tagId)
+        .range(offset, offset + BATCH_SIZE - 1);
+
+      if (error) {
+        console.error(`Error fetching user_tags batch (offset ${offset}):`, error);
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        const ids = data.map((r: any) => r.user_id);
+        allIds = allIds.concat(ids);
+
+        if (data.length < BATCH_SIZE) {
+          hasMore = false;
+        } else {
+          offset += BATCH_SIZE;
+        }
+      } else {
+        hasMore = false;
+      }
+    }
+    return allIds;
+  } catch (e) {
+    console.error("Critical error fetching tag users:", e);
+    return [];
   }
-  
-  return query;
 }
 
 /**
@@ -190,19 +244,19 @@ export async function getSegmentPreview(
   offset: number = 0
 ): Promise<SegmentPreviewResult> {
   const supabase = await createServerSupabaseClient();
-  
+
   // Get the segment rules
   const { data: segment, error } = await supabase
     .from('segments')
     .select('rules')
     .eq('id', segmentId)
     .single();
-  
+
   if (error || !segment) {
     console.error('Error getting segment for preview:', error);
     return { count: 0, sampleUsers: [] };
   }
-  
+
   // Get users matching the rules
   return getUsersBySegmentRules(segment.rules as SegmentRules, limit, offset);
 }
@@ -224,20 +278,20 @@ export async function getCachedSegmentPreview(
 ): Promise<SegmentPreviewResult> {
   const cacheKey = `${segmentId}:${limit}:${offset}`;
   const cachedResult = previewCache[cacheKey];
-  
+
   // Check if we have a valid cached result
   if (cachedResult && Date.now() - cachedResult.timestamp < CACHE_TTL_MS) {
     return cachedResult.result;
   }
-  
+
   // Generate a new preview
   const result = await getSegmentPreview(segmentId, limit, offset);
-  
+
   // Cache the result
   previewCache[cacheKey] = {
     result,
     timestamp: Date.now(),
   };
-  
+
   return result;
 }

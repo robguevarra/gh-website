@@ -27,7 +27,7 @@ const navigation = [
   { name: 'Affiliates', href: '/admin/affiliates', icon: UserCog }, // Corrected icon name  { name: 'Email Campaigns', href: '/admin/email', icon: Mail },
   { name: 'Shop Integration', href: '/admin/shop', icon: ShoppingBag },
   { name: 'Security', href: '/admin/security', icon: Shield },
-  { name: 'Email', href: '/admin/email', icon: Mail },
+  { name: 'Email Studio', href: '/admin/email-studio', icon: Mail },
   { name: 'Chatbot', href: '/admin/chatbot', icon: Bot },
   { name: 'A/B Testing', href: '/admin/ab-testing', icon: Split },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
