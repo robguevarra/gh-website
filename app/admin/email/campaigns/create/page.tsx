@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CampaignForm } from '../components/campaign-form';
+import { CampaignForm } from '@/app/admin/email/campaigns/v2/components/campaign-form';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 
@@ -16,16 +16,16 @@ export default function CreateCampaignPage() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
         const response = await fetch('/api/admin/email-templates');
-        
+
         if (!response.ok) {
           throw new Error('Failed to fetch email templates');
         }
-        
+
         const data = await response.json();
         setTemplates(data.templates || []);
       } catch (error: any) {
@@ -34,10 +34,10 @@ export default function CreateCampaignPage() {
         setIsLoading(false);
       }
     };
-    
+
     fetchTemplates();
   }, []);
-  
+
   const handleSuccess = (campaignId: string) => {
     router.push(`/admin/email/campaigns/${campaignId}`);
   };
@@ -45,15 +45,15 @@ export default function CreateCampaignPage() {
   return (
     <div className="container py-6 space-y-6">
       <div className="flex items-center">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           onClick={() => router.push('/admin/email/campaigns')}
           className="mr-4"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Campaigns
         </Button>
-        
+
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Create Campaign</h1>
           <p className="text-muted-foreground">
@@ -61,7 +61,7 @@ export default function CreateCampaignPage() {
           </p>
         </div>
       </div>
-      
+
       {isLoading ? (
         <div className="flex justify-center py-8">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -80,9 +80,9 @@ export default function CreateCampaignPage() {
           </Button>
         </div>
       ) : (
-        <CampaignForm 
-          templates={templates} 
-          onSuccess={handleSuccess} 
+        <CampaignForm
+          templates={templates}
+          onSuccess={handleSuccess}
         />
       )}
     </div>

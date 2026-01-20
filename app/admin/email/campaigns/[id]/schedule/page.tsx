@@ -1,6 +1,6 @@
 'use client';
 
-import { CampaignScheduler } from '../../components/campaign-scheduler';
+import { CampaignScheduler } from '@/app/admin/email/campaigns/v2/components/campaign-scheduler';
 
 interface ScheduleCampaignPageProps {
   params: {
