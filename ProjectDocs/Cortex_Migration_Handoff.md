@@ -172,5 +172,48 @@ Located at: `app/admin/email/wizard/steps/step-review.tsx`
     *   Fixed `Route "/api/admin/..." used params.x. params should be awaited` error.
     *   Updated all dynamic routes (`[id]`, `[segmentId]`) to await `params` before access.
 2.  **Segment Saving**:
-    *   Fixed `AudienceDashboard` to correctly handle "Save" behavior when editing an existing segment (previously defaulted to "Create New").
 
+## 8. Phase 4: Scaling & Analytics Fixes (Jan 20, 2026 Late PM)
+
+### Issue 1: Large Audience Timeouts ("The 1000+ Issue")
+**Symptoms:**
+*   Campaigns with >1,000 recipients failed to send or sent partially.
+*   Admin UI received `504 Gateway Timeout` or `statement timeout` errors.
+*   Supabase logs showed `pgrst` errors complaining about query execution time.
+
+**Root Causes:**
+1.  **RPC Timeout**: The `queue_campaign_emails` RPC attempted to insert 6,000+ rows in a single transaction. While efficient, this exceeded the default Supabase statement timeout (simulated or real) when complex joins were involved.
+2.  **Fetch Limit**: The default Supabase client (`supabase-js`) enforces a 1,000-row limit on `select()` queries unless explicit pagination is used. Our audience resolver was silently truncating lists at 1,000.
+3.  **Vercel Hop Limits**: The Next.js API route itself timed out (max 10s on specific plans) while waiting for the database to confirm the massive insert.
+
+**The Fix:**
+We completely refactored the sending pipeline (`app/api/admin/campaigns/[id]/send/route.ts`) to be **Stream-Based and Batched**:
+1.  **Paginated Fetching**: Implemented a `while(hasMore)` loop using `.range(start, end)` to fetch all generic user IDs in chunks of 1,000, ensuring 100% of the audience is retrieved regardless of size.
+2.  **Application-Side Batching**: instead of sending 6,000 users to the DB at once, the API now chunks them into batches of 1,000 and calls `queue_emails_for_users` (new optimized RPC) for each batch.
+    *   *Result:* 6 small, fast transactions instead of 1 massive, slow one.
+3.  **Streaming Response (NDJSON)**: Converted the API response to `ReadableStream`.
+    *   The UI now receives real-time progress updates (`{"type":"progress", "message":"Queueing batch 1 of 6..."}`).
+    *   This prevents Vercel timeouts because the server sends "heartbeat" bytes immediately and continuously, keeping the connection alive.
+
+---
+
+### Issue 2: Zero Campaign Stats
+**Symptoms:**
+*   After successfully sending a campaign (confirmed via Inbox), the dashboard showed:
+    *   `Total Recipients: 0`
+    *   `Open Rate: 0%`
+    *   `Click Rate: 0%`
+*   Stats would only update randomly if a user interacted with an email.
+
+**Root Cause:**
+The analytics engine (`recalculateCampaignAnalytics`) was querying the **Legacy** table `campaign_recipients` (V1) to count total recipients.
+*   Our new V2 system writes to `email_jobs`.
+*   Therefore, `campaign_recipients` was empty, returning `count: 0`.
+*   Additionally, the sending API forgot to initialize the stats row immediately after queuing.
+
+**The Fix:**
+1.  **Updated Logic**: Modified `recalculateCampaignAnalytics` in user-land code (`campaign-management.ts`) to count rows from `email_jobs` (for recipients) and `email_jobs where status='completed'` (for sent counts).
+2.  **Immediate Initialization**: The `send/route.ts` API now explicitly calls `recalculateCampaignAnalytics(id)` immediately after the last batch is queued.
+    *   *Result:* Dashboard shows "Total Recipients: 6,142" instantly after the progress bar finishes.
+
+---
