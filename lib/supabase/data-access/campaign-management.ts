@@ -710,20 +710,20 @@ const createDefaultAnalytics = (campaignId: string): CampaignAnalytics => {
 export const recalculateCampaignAnalytics = async (campaignId: string) => {
   const admin = getAdminClient();
 
-  // Get recipient count
+  // Get recipient count (V2: count email_jobs)
   const { count: recipientCount, error: recipientError } = await admin
-    .from('campaign_recipients')
+    .from('email_jobs')
     .select('*', { count: 'exact', head: true })
     .eq('campaign_id', campaignId);
 
   if (recipientError) throw recipientError;
 
-  // Get sent count
+  // Get sent count (V2: count email_jobs with status='completed')
   const { count: sentCount, error: sentError } = await admin
-    .from('campaign_recipients')
+    .from('email_jobs')
     .select('*', { count: 'exact', head: true })
     .eq('campaign_id', campaignId)
-    .not('sent_at', 'is', null);
+    .eq('status', 'completed');
 
   if (sentError) throw sentError;
 

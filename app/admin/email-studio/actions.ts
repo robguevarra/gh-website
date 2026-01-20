@@ -70,6 +70,12 @@ export async function getTemplate(id: string) {
     }
 }
 
+// Helper to strip HTML
+function stripHtml(html: string) {
+    if (!html) return ''
+    return html.replace(/<[^>]*>?/gm, '')
+}
+
 export async function createTemplate(data: { name: string, category: string, design: any, html: string, subject?: string }) {
     try {
         const supabase = await createServerSupabaseClient()
@@ -81,6 +87,7 @@ export async function createTemplate(data: { name: string, category: string, des
                 category: data.category,
                 design: data.design,
                 html_content: data.html,
+                text_content: stripHtml(data.html), // Generate plain text
                 subject: data.subject || data.name,
                 version: 1,
                 active: true,
@@ -111,7 +118,10 @@ export async function updateTemplate(id: string, data: { name?: string, design?:
         }
         if (data.name) updateData.name = data.name
         if (data.design) updateData.design = data.design
-        if (data.html) updateData.html_content = data.html
+        if (data.html) {
+            updateData.html_content = data.html
+            updateData.text_content = stripHtml(data.html) // Update plain text too
+        }
         if (data.subject) updateData.subject = data.subject
 
         const { data: template, error } = await supabase

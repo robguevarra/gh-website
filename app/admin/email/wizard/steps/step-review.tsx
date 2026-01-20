@@ -15,6 +15,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
 
+import { Progress } from "@/components/ui/progress"
+
 interface StepReviewProps {
     campaignId?: string | null
 }
@@ -57,8 +59,15 @@ export function StepReview({ campaignId: propId }: StepReviewProps) {
         }
     }
 
+
+    const [sendingProgress, setSendingProgress] = useState(0)
+    const [sendingStatus, setSendingStatus] = useState("")
+
     const handleSendOrSchedule = async (isScheduled: boolean = false) => {
         setIsSending(true)
+        setSendingProgress(0)
+        setSendingStatus("Initializing...")
+
         try {
             let targetId = campaignId
 
@@ -99,7 +108,6 @@ export function StepReview({ campaignId: propId }: StepReviewProps) {
                     setIsSending(false)
                     return
                 }
-                // Merge Date + Time
                 const [hours, minutes] = time.split(':').map(Number)
                 const scheduledAt = new Date(date)
                 scheduledAt.setHours(hours, minutes, 0, 0)
@@ -109,12 +117,10 @@ export function StepReview({ campaignId: propId }: StepReviewProps) {
                     setIsSending(false)
                     return
                 }
-
                 payload.scheduledAt = scheduledAt.toISOString()
             }
 
             // Send/Schedule API Call
-            // We use the same 'send' endpoint, but passing a 'scheduledAt' body property will treat it as a schedule
             const res = await fetch(`/api/admin/campaigns/${targetId}/send`, {
                 method: 'POST',
                 body: JSON.stringify(payload)
@@ -125,13 +131,54 @@ export function StepReview({ campaignId: propId }: StepReviewProps) {
                 throw new Error(err.error || 'Failed to process campaign')
             }
 
-            const data = await res.json()
+            // HANDLE STREAMING RESPONSE (NDJSON)
+            const reader = res.body?.getReader()
+            if (!reader) throw new Error('Failed to read streaming response')
 
+            const decoder = new TextDecoder()
+            let buffer = ''
+            let finalQueued = 0
+
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split('\n')
+
+                // Process all complete lines
+                buffer = lines.pop() || ''
+
+                for (const line of lines) {
+                    if (!line.trim()) continue
+                    try {
+                        const event = JSON.parse(line)
+                        console.log('Stream Event:', event)
+
+                        if (event.type === 'start') {
+                            setSendingStatus(`Starting... (0/${event.total})`)
+                        } else if (event.type === 'progress') {
+                            const percent = Math.round((event.current / event.total) * 100)
+                            setSendingProgress(percent)
+                            setSendingStatus(event.message || `Processing... ${percent}%`)
+                        } else if (event.type === 'complete') {
+                            finalQueued = event.queued
+                            setSendingProgress(100)
+                        } else if (event.type === 'error') {
+                            throw new Error(event.message)
+                        }
+                    } catch (parseErr) {
+                        console.warn('Failed to parse progress update', parseErr)
+                    }
+                }
+            }
+
+            // Handle Success
             if (isScheduled) {
                 toast.success(`Campaign Scheduled for ${format(new Date(payload.scheduledAt), 'PPP p')}`)
-                handleFinish() // Redirect immediately for scheduled
+                handleFinish()
             } else {
-                setQueuedCount(data.details?.queuedCount || 0)
+                setQueuedCount(finalQueued)
                 setIsSuccess(true)
                 toast.success('Campaign Sent Successfully!')
             }
@@ -145,7 +192,6 @@ export function StepReview({ campaignId: propId }: StepReviewProps) {
             setIsSending(false)
         }
     }
-
     // Success View
     if (isSuccess) {
         return (
@@ -240,24 +286,28 @@ export function StepReview({ campaignId: propId }: StepReviewProps) {
                     <Card className="bg-muted/30">
                         <CardContent className="pt-6">
                             <div className="flex flex-col gap-3">
-                                <Button
-                                    className="w-full bg-green-600 hover:bg-green-700"
-                                    size="lg"
-                                    onClick={() => handleSendOrSchedule(false)}
-                                    disabled={isSending}
-                                >
-                                    {isSending ? (
-                                        <>
+                                {isSending ? (
+                                    <div className="space-y-2">
+                                        <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                            <span>{sendingStatus}</span>
+                                            <span>{sendingProgress}%</span>
+                                        </div>
+                                        <Progress value={sendingProgress} className="h-2 w-full" />
+                                        <Button disabled className="w-full mt-2" size="lg">
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                             Processing...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Mail className="mr-2 h-4 w-4" />
-                                            Send Broadcast Now
-                                        </>
-                                    )}
-                                </Button>
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <Button
+                                        className="w-full bg-green-600 hover:bg-green-700"
+                                        size="lg"
+                                        onClick={() => handleSendOrSchedule(false)}
+                                    >
+                                        <Mail className="mr-2 h-4 w-4" />
+                                        Send Broadcast Now
+                                    </Button>
+                                )}
 
                                 <Popover>
                                     <PopoverTrigger asChild>
@@ -326,8 +376,8 @@ export function StepReview({ campaignId: propId }: StepReviewProps) {
                         </CardHeader>
                         <CardContent className="flex-1 min-h-[500px] bg-slate-100 p-4 flex items-center justify-center rounded-b-lg overflow-hidden">
                             {/* Note: In a real implementation, we'd use state to switch the container size based on the Tab value selected. 
-                                 For simplicity here, I'll rely on the iframe responding or mock the toggle if I had state.
-                                 Let's add state for tabs. */}
+                                     For simplicity here, I'll rely on the iframe responding or mock the toggle if I had state.
+                                     Let's add state for tabs. */}
                             <PreviewFrame htmlContent={htmlContent} />
                         </CardContent>
                     </Card>

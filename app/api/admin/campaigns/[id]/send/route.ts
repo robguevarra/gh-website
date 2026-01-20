@@ -4,7 +4,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getCampaignById, updateCampaign } from '@/lib/supabase/data-access/campaign-management';
+import {
+  getCampaignById,
+  updateCampaign,
+  recalculateCampaignAnalytics
+} from '@/lib/supabase/data-access/campaign-management';
 import { validateAdminAccess, handleServerError, handleNotFound } from '@/lib/supabase/route-handler';
 import { getAdminClient } from '@/lib/supabase/admin';
 
@@ -85,79 +89,145 @@ export async function POST(
     const segmentIds = campaign.segment_rules.include.segmentIds;
     console.log(`[SEND] Queueing emails for segments: ${segmentIds.join(', ')}`);
 
-    // 3. Bulk Queue via RPC
-    // This replaces the slow fetch-and-insert loop with a single database operation
-    let successCount = 0;
-    try {
-      const { data, error } = await adminClient.rpc('queue_campaign_emails' as any, {
-        p_campaign_id: campaignId,
-        p_segment_ids: segmentIds
-      });
+    // 3. Bulk Queue via RPC - STREAMING RESPONSE
+    // We use a ReadableStream to stream progress back to the client
+    const encoder = new TextEncoder();
 
-      if (error) {
-        throw new Error(`RPC call failed: ${error.message}`);
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const BATCH_SIZE = 1000;
+          let totalQueued = 0;
+
+          // 1. Resolve Audience (Paginated Fetch)
+          const allUserIds: string[] = [];
+          const PAGE_SIZE = 1000;
+          let page = 0;
+          let hasMore = true;
+
+          while (hasMore) {
+            const { data: userIdsData, error: userFetchError } = await adminClient
+              .from('user_segments')
+              .select('user_id')
+              .in('segment_id', segmentIds)
+              .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+            if (userFetchError) throw new Error(`Failed to fetch audience: ${userFetchError.message}`);
+
+            if (userIdsData && userIdsData.length > 0) {
+              const newIds = userIdsData.map(u => u.user_id);
+              allUserIds.push(...newIds);
+
+              if (userIdsData.length < PAGE_SIZE) {
+                hasMore = false;
+              } else {
+                page++;
+              }
+
+              // Optional: Emit progress for fetching phase if it takes too long
+              if (page % 5 === 0) {
+                controller.enqueue(encoder.encode(JSON.stringify({
+                  type: 'progress',
+                  current: 0,
+                  total: 0,
+                  message: `Fetching audience... (${allUserIds.length} found so far)`
+                }) + '\n'));
+              }
+            } else {
+              hasMore = false;
+            }
+          }
+
+          const uniqueUserIds = Array.from(new Set(allUserIds));
+          const totalRecipients = uniqueUserIds.length;
+
+          console.log(`[Campaign Send] Found ${totalRecipients} unique recipients.`);
+
+          if (totalRecipients === 0) {
+            controller.enqueue(encoder.encode(JSON.stringify({ type: 'error', message: 'No recipients found' }) + '\n'));
+            controller.close();
+            return;
+          }
+
+          // Initial Progress Update
+          controller.enqueue(encoder.encode(JSON.stringify({
+            type: 'start',
+            total: totalRecipients
+          }) + '\n'));
+
+          // 2. Process in Batches
+          for (let i = 0; i < totalRecipients; i += BATCH_SIZE) {
+            const batch = uniqueUserIds.slice(i, i + BATCH_SIZE);
+
+            // Log & Stream Progress
+            const progressMsg = `Queueing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(totalRecipients / BATCH_SIZE)}...`;
+            console.log(`[Campaign Send] ${progressMsg}`);
+
+            controller.enqueue(encoder.encode(JSON.stringify({
+              type: 'progress',
+              current: i,
+              total: totalRecipients,
+              message: progressMsg
+            }) + '\n'));
+
+            // @ts-ignore
+            const { error: batchError } = await adminClient.rpc('queue_emails_for_users', {
+              p_campaign_id: campaign.id,
+              p_user_ids: batch
+            });
+
+            if (batchError) {
+              throw new Error(`Batch insertion failed: ${batchError.message}`);
+            }
+            totalQueued += batch.length;
+          }
+
+          // Final Success Update
+          controller.enqueue(encoder.encode(JSON.stringify({
+            type: 'complete',
+            queued: totalQueued
+          }) + '\n'));
+
+          // Legacy Logic: Update Status & Trigger Worker
+          await updateCampaign(campaignId, {
+            status: 'sent',
+            status_message: `Successfully queued ${totalQueued} recipients`
+          });
+
+          // Initialize Campaign Analytics (Set total_recipients)
+          // We call recalculate to ensure the 'total_recipients' matches the actual jobs created
+          try {
+            await recalculateCampaignAnalytics(campaignId);
+            console.log(`[SEND] Initialized analytics for campaign ${campaignId}`);
+          } catch (analyticsError) {
+            console.error(`[SEND] Failed to initialize analytics:`, analyticsError);
+            // Don't fail the request, just log it
+          }
+
+          // Trigger Worker (Fire and Forget)
+          adminClient.functions.invoke('email-worker', { body: { type: 'process_queue' } }).catch(e => console.error(e));
+
+        } catch (error: any) {
+          console.error('[Stream Error]', error);
+          controller.enqueue(encoder.encode(JSON.stringify({ type: 'error', message: error.message }) + '\n'));
+        } finally {
+          controller.close();
+        }
       }
-
-      successCount = data as number;
-      console.log(`[SEND] Successfully queued ${successCount} emails via RPC`);
-
-    } catch (rpcError: any) {
-      console.error(`[SEND] Error queueing emails via RPC:`, rpcError);
-      await updateCampaign(campaignId, { status: 'error', status_message: `Failed to queue emails: ${rpcError.message}` });
-      return NextResponse.json({ error: 'Failed to queue emails' }, { status: 500 });
-    }
-
-    if (successCount === 0) {
-      console.warn(`[SEND] No new recipients queued (0 matches or all duplicates)`);
-      // Check if we should mark as sent (if duplicates existed) or draft (if no users)
-      // For now, let's mark as sent with a note, or revert to draft if truly empty.
-      // But "sent" with 0 count is confusing. Let's check if it was due to duplicates.
-      // Actually, for simplicity, if 0 queued, we can say "No new recipients found".
-      // We'll revert to draft so they can try again or check segments.
-      await updateCampaign(campaignId, { status: 'draft', status_message: 'Send aborted: No new recipients found' });
-      return NextResponse.json({ message: 'No new recipients found (check segments or duplicates)' }, { status: 200 });
-    }
-
-    // 4. Update Status
-    await updateCampaign(campaignId, {
-      status: 'sent',
-      status_message: `Successfully queued ${successCount} recipients`
     });
-    console.log(`[SEND] Campaign status updated to sent`);
 
-    // 5. Trigger Processing
-    // We MUST trigger the batch processor explicitly.
-    // The DB webhooks on 'email_jobs' will skip 'broadcast' types to prevent 
-    // spinning up 10k functions for 10k recipients.
-    console.log(`[SEND] Triggering batch email processing...`);
-    try {
-      const { data: processResponse, error: processError } = await adminClient.functions.invoke(
-        'email-worker',
-        { body: { type: 'process_queue' } }
-      );
-      if (processError) {
-        console.warn(`[SEND] Warning: Failed to trigger batch processing:`, processError);
-      } else {
-        console.log(`[SEND] Batch processing triggered:`, processResponse);
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'application/x-ndjson',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
       }
-    } catch (triggerError) {
-      console.warn(`[SEND] Warning: Exception when triggering email processing:`, triggerError);
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: `Campaign sent! ${successCount} emails queued.`,
-      details: { queuedCount: successCount }
     });
 
   } catch (error: any) {
     console.error(`[SEND] Unhandled error in campaign send route:`, error);
-    // Revert status on error
-    try {
-      await updateCampaign(campaignId, { status: 'error', status_message: `Internal Error: ${error.message}` });
-    } catch (revertError) {
-      console.error(`[SEND] Failed to update campaign status to error:`, revertError);
-    }
     return handleServerError(error, 'Failed to send campaign');
   }
 }
+
+

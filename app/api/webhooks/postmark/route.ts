@@ -105,40 +105,52 @@ export async function POST(req: NextRequest) {
       console.error('[Postmark Webhook] Missing or invalid RecordType:', event);
       return NextResponse.json({ error: 'Invalid RecordType' }, { status: 400 });
     }
-    
+
     console.info(`[Postmark Webhook] Received ${eventType} event`, {
       message_id: event.MessageID,
       // event, // Avoid logging full event if too large or sensitive, MessageID is key
     });
 
-    // Attempt to link event to email_queue entry via MessageID
+    // Attempt to link event to email_jobs (New System) or email_queue (Legacy) via MessageID
     if (event.MessageID) {
-      const { data: queueEntry, error: queueError } = await supabase
-        .from('email_queue')
+      // 1. Try email_jobs (Active System)
+      const { data: job, error: jobError } = await supabase
+        .from('email_jobs')
         .select('id, campaign_id, recipient_email')
-        .eq('provider_message_id', event.MessageID)
+        .eq('provider_id', event.MessageID) // Note: email_jobs uses 'provider_id'
         .single();
-      
-      if (queueError) {
-        console.warn('[Postmark Webhook] Error fetching from email_queue by MessageID:', {
-          messageId: event.MessageID,
-          error: queueError.message,
-        });
-      } else if (queueEntry) {
+
+      if (job) {
         linkedEmailInfo = {
-          email_id: queueEntry.id,
-          campaign_id: queueEntry.campaign_id,
-          recipient_email: queueEntry.recipient_email,
+          email_id: job.id,
+          campaign_id: job.campaign_id,
+          recipient_email: job.recipient_email,
         };
-        console.info('[Postmark Webhook] Linked event to email_queue item', { messageId: event.MessageID, emailQueueId: queueEntry.id, campaignId: queueEntry.campaign_id });
+        console.info('[Postmark Webhook] Linked event to email_jobs item (V2)', { messageId: event.MessageID, emailJobId: job.id });
       } else {
-        console.warn('[Postmark Webhook] No email_queue entry found for MessageID:', { messageId: event.MessageID });
+        // 2. Fallback to email_queue (Legacy)
+        const { data: queueEntry, error: queueError } = await supabase
+          .from('email_queue')
+          .select('id, campaign_id, recipient_email')
+          .eq('provider_message_id', event.MessageID)
+          .single();
+
+        if (queueEntry) {
+          linkedEmailInfo = {
+            email_id: queueEntry.id,
+            campaign_id: queueEntry.campaign_id,
+            recipient_email: queueEntry.recipient_email,
+          };
+          console.info('[Postmark Webhook] Linked event to email_queue item (V1)', { messageId: event.MessageID, emailQueueId: queueEntry.id });
+        } else {
+          console.warn('[Postmark Webhook] No email_jobs or email_queue entry found for MessageID:', { messageId: event.MessageID });
+        }
       }
     }
 
     // Store the processed event (linked or unlinked)
     await processAndStoreEmailEvent({ event, linkedEmailInfo, supabase });
-    
+
     // Handle event-specific logic only if we have campaign_id for analytics updates
     if (linkedEmailInfo?.campaign_id) {
       const campaignIdForAnalytics = linkedEmailInfo.campaign_id;
@@ -152,12 +164,12 @@ export async function POST(req: NextRequest) {
           metricToIncrement = 'bounces';
           if (linkedEmailInfo.recipient_email) {
             // Flag user as bounced
-            const { error:BounceError } = await supabase
+            const { error: BounceError } = await supabase
               .from('unified_profiles')
               .update({ email_bounced: true, email_last_bounce_at: new Date().toISOString() })
               .eq('email', linkedEmailInfo.recipient_email);
             if (BounceError) console.error('[Postmark Webhook] Error updating unified_profile for bounce:', BounceError);
-            else console.info('Marked user as bounced:', {email: linkedEmailInfo.recipient_email});
+            else console.info('Marked user as bounced:', { email: linkedEmailInfo.recipient_email });
           }
           break;
         case 'Open':
@@ -168,21 +180,21 @@ export async function POST(req: NextRequest) {
           break;
         case 'SpamComplaint':
           metricToIncrement = 'spam_complaints';
-           if (linkedEmailInfo.recipient_email) {
+          if (linkedEmailInfo.recipient_email) {
             // Consider more severe action for spam complaints, e.g., unsubscribe, add to blocklist
-            const { error:SpamError } = await supabase
+            const { error: SpamError } = await supabase
               .from('unified_profiles')
               .update({ email_spam_complained: true, email_last_spam_at: new Date().toISOString() }) // Assuming these columns exist
               .eq('email', linkedEmailInfo.recipient_email);
             if (SpamError) console.error('[Postmark Webhook] Error updating unified_profile for spam complaint:', SpamError);
-            else console.info('Marked user for spam complaint:', {email: linkedEmailInfo.recipient_email});
+            else console.info('Marked user for spam complaint:', { email: linkedEmailInfo.recipient_email });
           }
           break;
         case 'SubscriptionChange': // Postmark uses this for their own unsubscribe links
           // This might indicate an unsubscribe. Confirm Postmark payload details.
           // If it is an unsubscribe, then metricToIncrement = 'unsubscribes';
           // And update user preferences / unified_profile similar to bounce/spam.
-          console.info('[Postmark Webhook] Received SubscriptionChange. Payload:', event); 
+          console.info('[Postmark Webhook] Received SubscriptionChange. Payload:', event);
           // Example: if (event.SuppressSending) { metricToIncrement = 'unsubscribes'; ... }
           break;
         // Inbound is not typically for campaign analytics
@@ -206,7 +218,7 @@ export async function POST(req: NextRequest) {
         }
       }
     } else if (eventType !== 'Inbound' && eventType !== 'SubscriptionChange') {
-        console.warn('[Postmark Webhook] Cannot update campaign analytics as event was not linked to a campaign_id', { messageId: event.MessageID, eventType });
+      console.warn('[Postmark Webhook] Cannot update campaign analytics as event was not linked to a campaign_id', { messageId: event.MessageID, eventType });
     }
 
     return NextResponse.json({ ok: true });
