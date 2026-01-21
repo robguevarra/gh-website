@@ -1,8 +1,9 @@
 'use client'
 
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
     getDirectoryFinancials,
+    syncShopifyOrdersAction,
 } from "../actions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,10 +11,11 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { format } from "date-fns"
-import { ShoppingBag, CreditCard, GraduationCap, ArrowUpRight, Package, Info } from "lucide-react"
+import { ShoppingBag, CreditCard, GraduationCap, ArrowUpRight, Package, Info, RefreshCw } from "lucide-react"
 
 interface UserPurchasesProps {
     email: string
+    userId?: string
 }
 
 import { resendOrderConfirmation } from "@/app/actions/guest-access"
@@ -23,7 +25,8 @@ import { Loader2, Send, Check } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 
-export function UserPurchases({ email }: UserPurchasesProps) {
+export function UserPurchases({ email, userId }: UserPurchasesProps) {
+    const queryClient = useQueryClient()
     const { data, isLoading } = useQuery({
         queryKey: ['financials', email],
         queryFn: () => getDirectoryFinancials(email),
@@ -32,6 +35,25 @@ export function UserPurchases({ email }: UserPurchasesProps) {
 
     const [resendingId, setResendingId] = useState<string | null>(null);
     const [sentId, setSentId] = useState<string | null>(null);
+    const [isSyncingShopify, setIsSyncingShopify] = useState(false);
+
+    const handleSyncShopify = async () => {
+        if (!userId) return;
+        setIsSyncingShopify(true);
+        try {
+            const res = await syncShopifyOrdersAction(userId);
+            if (res.success) {
+                toast.success(res.message);
+                queryClient.invalidateQueries({ queryKey: ['financials', email] });
+            } else {
+                toast.error(res.error || "Failed to sync orders");
+            }
+        } catch (e) {
+            toast.error("Error syncing orders");
+        } finally {
+            setIsSyncingShopify(false);
+        }
+    }
 
     const handleResend = async (item: any) => {
         const orderId = item.transaction_id || item.id;
@@ -246,6 +268,21 @@ export function UserPurchases({ email }: UserPurchasesProps) {
 
                 {/* Shopify Tab */}
                 <TabsContent value="shopify" className="mt-4">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-muted-foreground">Recent Orders</span>
+                        {userId && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => handleSyncShopify()}
+                                disabled={isSyncingShopify}
+                            >
+                                <RefreshCw className={cn("mr-2 h-3.5 w-3.5", isSyncingShopify && "animate-spin")} />
+                                Sync Orders
+                            </Button>
+                        )}
+                    </div>
                     <ScrollArea className="h-[300px] rounded-md border p-4">
                         {data.shopifyOrders.length > 0 ? (
                             <div className="space-y-4">

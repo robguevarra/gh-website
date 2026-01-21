@@ -15,12 +15,39 @@ import { VisuallyHidden } from "@/components/ui/visually-hidden"
 import { UserCommunications } from "./user-communications"
 import { UserPurchases } from "./user-purchases"
 import { UserActions } from "./user-actions"
+import { UserTagManager } from "./user-tag-manager"
+import { ChevronRight, ChevronDown } from "lucide-react"
+import { useState } from "react"
+import { cn } from "@/lib/utils"
 
 interface UserDrawerProps {
     contactid: string | null
     type: 'customer' | 'lead' | null
     open: boolean
     onOpenChange: (open: boolean) => void
+}
+
+function MetadataViewer({ metadata }: { metadata: any }) {
+    const [expanded, setExpanded] = useState(false);
+
+    if (!metadata || Object.keys(metadata).length === 0) return null;
+
+    return (
+        <div className="mt-1">
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className="flex items-center text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+                {expanded ? <ChevronDown className="h-3 w-3 mr-1" /> : <ChevronRight className="h-3 w-3 mr-1" />}
+                {expanded ? "Hide Details" : "Show Details"}
+            </button>
+            {expanded && (
+                <div className="mt-1 bg-muted/40 p-2 rounded text-[10px] font-mono overflow-x-auto border">
+                    <pre>{JSON.stringify(metadata, null, 2)}</pre>
+                </div>
+            )}
+        </div>
+    )
 }
 
 export function UserDrawer({ contactid, type, open, onOpenChange }: UserDrawerProps) {
@@ -62,10 +89,14 @@ export function UserDrawer({ contactid, type, open, onOpenChange }: UserDrawerPr
                             <DialogDescription className="text-base select-all">
                                 {contact.email}
                             </DialogDescription>
-                            <div className="flex flex-wrap gap-2 pt-2">
+                            <div className="flex flex-wrap items-center gap-2 pt-2">
                                 {contact.tags?.map(tag => (
                                     <Badge key={tag} variant="outline">{tag}</Badge>
                                 ))}
+                                <UserTagManager
+                                    userId={contact.id}
+                                    userName={`${contact.first_name ?? ''} ${contact.last_name ?? ''}`.trim()}
+                                />
                             </div>
                         </DialogHeader>
 
@@ -93,12 +124,7 @@ export function UserDrawer({ contactid, type, open, onOpenChange }: UserDrawerPr
                                                     <span className="text-xs text-muted-foreground">
                                                         {formatDistanceToNow(new Date(activity.occurred_at), { addSuffix: true })}
                                                     </span>
-                                                    {/* Simple generic metadata display for now */}
-                                                    {activity.metadata && Object.keys(activity.metadata as object).length > 0 && (
-                                                        <pre className="text-[10px] bg-muted p-2 rounded mt-1 overflow-x-auto whitespace-pre-wrap">
-                                                            {JSON.stringify(activity.metadata, null, 2)}
-                                                        </pre>
-                                                    )}
+                                                    <MetadataViewer metadata={activity.metadata} />
                                                 </div>
                                             ))}
                                         </div>
@@ -118,7 +144,7 @@ export function UserDrawer({ contactid, type, open, onOpenChange }: UserDrawerPr
                             {/* Purchases Tab */}
                             <TabsContent value="purchases" className="mt-4 h-[500px]">
                                 <ScrollArea className="h-full pr-4">
-                                    <UserPurchases email={contact.email} />
+                                    <UserPurchases email={contact.email} userId={contact.id} />
                                 </ScrollArea>
                             </TabsContent>
 

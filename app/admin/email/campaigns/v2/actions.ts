@@ -11,7 +11,7 @@ export async function createCampaign(formData: {
     preview_text: string
     audience: AudienceSelection
 }) {
-    const supabase = createClient()
+    const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {

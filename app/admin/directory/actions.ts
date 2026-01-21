@@ -26,55 +26,71 @@ export interface ContactDetail extends DirectoryContact {
     activities: CrmActivity[]
 }
 
+// Import Tag DA for the new actions
+// Import Tag DA for the new actions
+import { getTags, getTagTypes, assignTagsToUsers, removeTagsFromUsers, getUsersForTag, getTagsForUser, createTag, updateTag, deleteTag } from '@/lib/supabase/data-access/tags'
+
 export async function searchDirectory(
     query: string = '',
-    filters: { type?: 'customer' | 'lead' | 'all'; status?: string } = { type: 'all' },
+    filters: {
+        type?: 'customer' | 'lead' | 'all';
+        status?: string;
+        smartListId?: string;
+        tagId?: string;
+        dateRange?: { from?: Date; to?: Date }
+    } = { type: 'all' },
     page: number = 1,
     pageSize: number = 20
 ) {
     const supabase = await createServerSupabaseClient()
 
-    // Start building the query
-    let dbQuery = supabase
-        .from('view_directory_contacts')
-        .select('*', { count: 'exact' })
+    try {
+        // @ts-ignore - RPC not yet in types
+        const { data, error } = await supabase.rpc('search_directory', {
+            p_query: query,
+            p_type: filters.type || 'all',
+            p_status: filters.status || 'all',
+            p_smart_list_id: (filters.smartListId && filters.smartListId !== 'all') ? filters.smartListId : null,
+            p_tag_id: (filters.tagId && filters.tagId !== 'all') ? filters.tagId : null,
+            p_start_date: filters.dateRange?.from ? filters.dateRange.from.toISOString() : null,
+            p_end_date: filters.dateRange?.to ? filters.dateRange.to.toISOString() : null,
+            p_page: page,
+            p_page_size: pageSize
+        })
 
-    // Apply Search (Search Filters)
-    if (query) {
-        dbQuery = dbQuery.or(`email.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
-    }
-
-    // Apply Type Filter
-    if (filters.type && filters.type !== 'all') {
-        dbQuery = dbQuery.eq('type', filters.type)
-    }
-
-    // Apply Status Filter
-    if (filters.status) {
-        dbQuery = dbQuery.eq('status', filters.status)
-    }
-
-    // Pagination
-    const from = (page - 1) * pageSize
-    const to = from + pageSize - 1
-
-    dbQuery = dbQuery.range(from, to).order('created_at', { ascending: false })
-
-    const { data, error, count } = await dbQuery
-
-    if (error) {
-        console.error('Error fetching directory contacts:', error)
-        throw new Error('Failed to fetch contacts')
-    }
-
-    return {
-        data: data as unknown as DirectoryContact[],
-        metadata: {
-            total: count || 0,
-            page,
-            pageSize,
-            totalPages: count ? Math.ceil(count / pageSize) : 0
+        if (error) {
+            console.error('Error fetching directory contacts (RPC):', error)
+            throw new Error('Failed to fetch contacts')
         }
+
+        const rows = (data as any[]) || []
+        const count = rows.length > 0 ? rows[0].total_count : 0
+
+        // Map RPC result to DirectoryContact
+        const mappedData: DirectoryContact[] = rows.map((r: any) => ({
+            id: r.id,
+            email: r.email,
+            type: r.type,
+            first_name: r.first_name,
+            last_name: r.last_name,
+            tags: r.tags,
+            status: r.status,
+            created_at: r.created_at
+        }))
+
+        return {
+            data: mappedData,
+            metadata: {
+                total: typeof count === 'number' ? count : 0, // Should be number, but RPC might return string for bigint
+                page,
+                pageSize,
+                totalPages: Math.ceil((Number(count) || 0) / pageSize)
+            }
+        }
+
+    } catch (e) {
+        console.error('Search Directory Exception:', e)
+        throw e
     }
 }
 
@@ -119,6 +135,7 @@ export async function getContactDetails(id: string, type: 'customer' | 'lead'): 
 
 import { getContactFinancials, FinancialSummary } from '@/lib/admin/financials'
 import { getContactEmailHistory, EmailHistorySummary } from '@/lib/admin/email-history'
+import { syncShopifyOrders as syncShopifyOrdersLogic } from '@/app/actions/admin-shopify-attribution'
 
 export async function getDirectoryFinancials(email: string): Promise<FinancialSummary> {
     return await getContactFinancials(email)
@@ -651,4 +668,156 @@ export async function getSmartLists(): Promise<SmartList[]> {
     }
 
     return data as SmartList[]
+}
+
+// -- Tag Management Actions (Phase 3.5) --
+
+export async function getAllTagsAction() {
+    const adminCheck = await checkAdminAccess()
+    if (!adminCheck.isAdmin) throw new Error('Unauthorized')
+
+    // Fetch tags and types parallel
+    try {
+        const [tags, types] = await Promise.all([
+            getTags(),
+            getTagTypes()
+        ])
+        return { tags, types }
+    } catch (error) {
+        console.error('Error fetching tags:', error)
+        return { tags: [], types: [] }
+    }
+}
+
+export async function assignTagToUserAction(userId: string, tagIds: string[]): Promise<ActionResponse> {
+    const adminCheck = await checkAdminAccess()
+    if (!adminCheck.isAdmin) return { success: false, error: 'Unauthorized' }
+
+    if (!tagIds.length) return { success: true, message: 'No tags selected' }
+
+    try {
+        await assignTagsToUsers({ tagIds, userIds: [userId] })
+        return { success: true, message: 'Tags assigned successfully' }
+    } catch (error: any) {
+        console.error('Error assigning tags:', error)
+        return { success: false, error: error.message }
+    }
+}
+
+export async function removeTagFromUserAction(userId: string, tagIds: string[]): Promise<ActionResponse> {
+    const adminCheck = await checkAdminAccess()
+    if (!adminCheck.isAdmin) return { success: false, error: 'Unauthorized' }
+
+    if (!tagIds.length) return { success: true, message: 'No tags selected' }
+
+    try {
+        await removeTagsFromUsers({ tagIds, userIds: [userId] })
+        return { success: true, message: 'Tags removed successfully' }
+    } catch (error: any) {
+        console.error('Error removing tags:', error)
+        return { success: false, error: error.message }
+    }
+}
+
+
+export async function createTagAction(name: string, description?: string): Promise<ActionResponse> {
+    const adminCheck = await checkAdminAccess()
+    if (!adminCheck.isAdmin) return { success: false, error: 'Unauthorized' }
+
+    if (!name) return { success: false, error: 'Tag name is required' }
+
+    try {
+        await createTag({ name, metadata: description ? { description } : {} })
+        return { success: true, message: 'Tag created successfully' }
+    } catch (error: any) {
+        console.error('Error creating tag:', error)
+        return { success: false, error: error.message }
+    }
+}
+
+export async function updateTagAction(id: string, name: string, description?: string): Promise<ActionResponse> {
+    const adminCheck = await checkAdminAccess()
+    if (!adminCheck.isAdmin) return { success: false, error: 'Unauthorized' }
+
+    try {
+        await updateTag(id, { name, metadata: description ? { description } : {} })
+        return { success: true, message: 'Tag updated successfully' }
+    } catch (error: any) {
+        console.error('Error updating tag:', error)
+        return { success: false, error: error.message }
+    }
+}
+
+export async function deleteTagAction(id: string): Promise<ActionResponse> {
+    const adminCheck = await checkAdminAccess()
+    if (!adminCheck.isAdmin) return { success: false, error: 'Unauthorized' }
+
+    try {
+        await deleteTag(id)
+        return { success: true, message: 'Tag deleted successfully' }
+    } catch (error: any) {
+        console.error('Error deleting tag:', error)
+        return { success: false, error: error.message }
+    }
+}
+
+// -- Sync Actions --
+
+export async function syncShopifyOrdersAction(unifiedProfileId: string): Promise<ActionResponse> {
+    const adminCheck = await checkAdminAccess()
+    if (!adminCheck.isAdmin) return { success: false, error: 'Unauthorized' }
+
+    try {
+        const result = await syncShopifyOrdersLogic(unifiedProfileId)
+        if (result.success) {
+            return { success: true, message: result.message }
+        } else {
+            return { success: false, error: result.message }
+        }
+    } catch (e: any) {
+        return { success: false, error: e.message }
+    }
+}
+
+export async function getUserTagsAction(userId: string) {
+    const adminCheck = await checkAdminAccess()
+    if (!adminCheck.isAdmin) throw new Error('Unauthorized')
+
+    try {
+        const tags = await getTagsForUser(userId)
+        return tags
+    } catch (error) {
+        console.error('Error fetching user tags:', error)
+        return []
+    }
+}
+
+export async function bulkAssignTagsAction(userIds: string[], tagIds: string[]): Promise<ActionResponse> {
+    const adminCheck = await checkAdminAccess()
+    if (!adminCheck.isAdmin) return { success: false, error: 'Unauthorized' }
+
+    if (!tagIds.length || !userIds.length) return { success: true, message: 'No tags or users selected' }
+
+    try {
+        await assignTagsToUsers({ tagIds, userIds })
+        return { success: true, message: `Tags assigned to ${userIds.length} users successfully` }
+    } catch (error: any) {
+        console.error('Error assigning tags in bulk:', error)
+        return { success: false, error: error.message }
+    }
+}
+
+export async function bulkRemoveTagsAction(userIds: string[], tagIds: string[]): Promise<ActionResponse> {
+    const adminCheck = await checkAdminAccess()
+    if (!adminCheck.isAdmin) return { success: false, error: 'Unauthorized' }
+
+    if (!tagIds.length || !userIds.length) return { success: true, message: 'No tags or users selected' }
+
+    try {
+        await removeTagsFromUsers({ tagIds, userIds })
+        return { success: true, message: `Tags removed from ${userIds.length} users successfully` }
+    } catch (error: any) {
+        console.error('Error removing tags in bulk:', error)
+        return { success: false, error: error.message }
+    }
 }

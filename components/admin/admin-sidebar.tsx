@@ -21,10 +21,11 @@ import {
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'User Directory', href: '/admin/directory', icon: Users },
   { name: 'User Diagnostic', href: '/admin/user-diagnostic', icon: Search },
   { name: 'Courses', href: '/admin/courses', icon: BookOpen },
   { name: 'Affiliates', href: '/admin/affiliates', icon: UserCog }, // Corrected icon name  { name: 'Email Campaigns', href: '/admin/email', icon: Mail },
+  // { name: 'Tag Management', href: '/admin/tag-management', icon: Tag }, // Integrated into Directory
   { name: 'Shop Integration', href: '/admin/shop', icon: ShoppingBag },
   { name: 'Security', href: '/admin/security', icon: Shield },
   { name: 'Email Studio', href: '/admin/email-studio', icon: Mail },

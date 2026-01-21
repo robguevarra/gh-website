@@ -21,9 +21,10 @@ export interface Tag {
   metadata?: Record<string, any>;
   created_at: string;
   updated_at: string;
-  tag_type?: Pick<TagType, 'id' | 'name'>; 
-  user_count?: number; 
-  user_tags?: { count: number }[]; 
+  is_system: boolean;
+  tag_type?: Pick<TagType, 'id' | 'name'>;
+  user_count?: number;
+  user_tags?: { count: number }[];
 }
 
 export interface UserTag {
@@ -91,10 +92,10 @@ export async function getTags(params?: GetTagsParams): Promise<Tag[]> {
     console.error('Supabase error in getTags:', error);
     throw new Error(`Failed to fetch tags: ${error.message}`);
   }
-  
+
   const processedData = (data || []).map(tag => {
     const count = tag.user_tags && tag.user_tags.length > 0 ? tag.user_tags[0].count : 0;
-    const { user_tags, ...restOfTag } = tag; 
+    const { user_tags, ...restOfTag } = tag;
     return { ...restOfTag, user_count: count as number };
   });
 
@@ -110,6 +111,15 @@ export async function createTag(tag: Pick<Tag, 'name' | 'parent_id' | 'type_id' 
 
 export async function updateTag(id: string, updates: Partial<Tag>): Promise<Tag> {
   const supabase = await createServerSupabaseClient();
+
+  // Check if system tag
+  if (updates.name || updates.type_id || updates.parent_id) {
+    const { data: existing } = await supabase.from('tags').select('is_system').eq('id', id).single();
+    if (existing?.is_system) {
+      throw new Error('Cannot edit system tags');
+    }
+  }
+
   const { data, error } = await supabase.from('tags').update(updates).eq('id', id).select().single();
   if (error) throw error;
   return data as Tag;
@@ -117,6 +127,13 @@ export async function updateTag(id: string, updates: Partial<Tag>): Promise<Tag>
 
 export async function deleteTag(id: string): Promise<void> {
   const supabase = await createServerSupabaseClient();
+
+  // Check if system tag
+  const { data: existing } = await supabase.from('tags').select('is_system').eq('id', id).single();
+  if (existing?.is_system) {
+    throw new Error('Cannot delete system tags');
+  }
+
   const { error } = await supabase.from('tags').delete().eq('id', id);
   if (error) throw error;
 }
@@ -135,9 +152,9 @@ export async function getTagsForUser(userId: string): Promise<Tag[]> {
     `)
     .eq('user_id', userId)
     .order('assigned_at', { ascending: false }); // Most recent first
-  
+
   if (error) throw error;
-  
+
   // Transform the data to include assignment metadata on the tag
   return (data || []).map((row: any) => ({
     ...row.tag,
@@ -158,6 +175,13 @@ export async function getUsersForTag(tagId: string, limit = 1000, offset = 0): P
 
 export async function assignTagsToUsers({ tagIds, userIds }: { tagIds: string[]; userIds: string[] }): Promise<void> {
   const supabase = await createServerSupabaseClient();
+
+  // Check for system tags
+  const { data: systemTags } = await supabase.from('tags').select('id, name').eq('is_system', true).in('id', tagIds);
+  if (systemTags && systemTags.length > 0) {
+    throw new Error(`Cannot manually assign system tags: ${systemTags.map(t => t.name).join(', ')}`);
+  }
+
   const rows = userIds.flatMap(user_id => tagIds.map(tag_id => ({ user_id, tag_id })));
   if (rows.length === 0) return;
   const { error } = await supabase.from('user_tags').upsert(rows, { onConflict: 'user_id,tag_id' });
@@ -166,6 +190,13 @@ export async function assignTagsToUsers({ tagIds, userIds }: { tagIds: string[];
 
 export async function removeTagsFromUsers({ tagIds, userIds }: { tagIds: string[]; userIds: string[] }): Promise<void> {
   const supabase = await createServerSupabaseClient();
+
+  // Check for system tags
+  const { data: systemTags } = await supabase.from('tags').select('id, name').eq('is_system', true).in('id', tagIds);
+  if (systemTags && systemTags.length > 0) {
+    throw new Error(`Cannot manually remove system tags: ${systemTags.map(t => t.name).join(', ')}`);
+  }
+
   for (const tag_id of tagIds) {
     const { error } = await supabase.from('user_tags').delete().in('user_id', userIds).eq('tag_id', tag_id);
     if (error) throw error;
