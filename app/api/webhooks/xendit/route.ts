@@ -675,6 +675,25 @@ export async function POST(request: NextRequest) {
               // --- End Upgrade Ebook Buyer ---
             }
 
+            // --- Trigger Automation: Checkout Completed ---
+            try {
+              const { trackEvent } = await import('@/app/actions/tracking');
+              await trackEvent({
+                email: tx.contact_email || '',
+                contactId: currentUserId || undefined,
+                eventType: 'checkout.completed',
+                metadata: {
+                  transaction_id: tx.id,
+                  product_type: 'P2P',
+                  amount: tx.amount,
+                  marketing_opt_in: (tx.metadata as any)?.marketing_opt_in
+                }
+              });
+              console.log("[Webhook][P2P] Tracked checkout.completed event");
+            } catch (trackError) {
+              console.error("[Webhook][P2P] Failed to track checkout.completed:", trackError);
+            }
+
           } else if (tx.transaction_type === 'SHOPIFY_ECOM') {
             // --- SHOPIFY E-COMMERCE TRANSACTION LOGIC ---
             console.log(`[Webhook][ECOM] Processing SHOPIFY_ECOM transaction: ${tx.id}`);

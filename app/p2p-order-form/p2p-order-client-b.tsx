@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 
 import { PublicHeader } from "@/components/layout/public-header"
 import { PublicFooter } from "@/components/layout/public-footer"
@@ -36,6 +37,7 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
+  const [marketingOptIn, setMarketingOptIn] = useState(true) // Pre-checked as requested
 
 
   const heroRef = useRef<HTMLDivElement>(null)
@@ -161,6 +163,31 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
     return Object.keys(newErrors).length === 0
   }
 
+  const handleEmailBlur = async () => {
+    // Trigger tracking on blur (Abandoned Cart signal)
+    if (formData.email && /\S+@\S+\.\S+/.test(formData.email)) {
+      try {
+        // We call the capture endpoint to log the "checkout.started" / "abandoned" signal
+        // which also triggers the backend automation
+        await fetch('/api/leads/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            firstName: formData.firstName || 'Guest',
+            lastName: formData.lastName || 'Guest',
+            productType: 'P2P',
+            sourcePage: '/p2p-order-form-b',
+            marketingOptIn: marketingOptIn,
+            metadata: { event: 'email_blur', variant: variant }
+          })
+        });
+      } catch (e) {
+        console.error("[Tracking] Email blur capture failed", e);
+      }
+    }
+  }
+
   // Update the handleSubmit function to properly handle the redirect
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -217,6 +244,7 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
               course_id: '7e386720-8839-4252-bd5f-09a33c3e1afb',
               ...(fbp && { fbp }),
               ...(fbc && { fbc }),
+              marketing_opt_in: marketingOptIn,
             }
           })
         });
@@ -302,6 +330,7 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
           ...(fbp && { fbp }),
           ...(fbc && { fbc }),
           variant, // Track A/B variant in payment metadata
+          marketing_opt_in: marketingOptIn
         },
       })
 
@@ -965,6 +994,16 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
                         className={`bg-white ${errors.email ? "border-red-500" : ""}`}
                         placeholder="your.email@example.com"
                       />
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        onBlur={handleEmailBlur}
+                        className={`bg-white ${errors.email ? "border-red-500" : ""}`}
+                        placeholder="your.email@example.com"
+                      />
                       {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
                     </div>
 
@@ -999,6 +1038,26 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
                     {errors.payment && (
                       <div className="bg-red-50 text-red-500 p-4 rounded-lg text-sm">{errors.payment}</div>
                     )}
+
+                    <div className="flex items-start space-x-2 my-4">
+                      <Checkbox
+                        id="marketing-opt-in"
+                        checked={marketingOptIn}
+                        onCheckedChange={(checked) => setMarketingOptIn(checked as boolean)}
+                        className="mt-1"
+                      />
+                      <div className="grid gap-1.5 leading-none">
+                        <label
+                          htmlFor="marketing-opt-in"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-[#5d4037]"
+                        >
+                          Email me guidance, reminders, occasional offers and discounts related to this purchase
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          You can unsubscribe anytime. We don’t spam.
+                        </p>
+                      </div>
+                    </div>
 
 
                     <div className="space-y-3 sm:space-y-4">

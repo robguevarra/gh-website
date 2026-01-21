@@ -14,6 +14,7 @@ export interface LeadCaptureRequest {
   utmMedium?: string
   utmCampaign?: string
   metadata?: Record<string, any>
+  marketingOptIn?: boolean
 }
 
 export interface LeadCaptureResponse {
@@ -30,13 +31,13 @@ export interface LeadCaptureResponse {
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body: LeadCaptureRequest = await request.json()
-    
+
     // Validate required fields
     if (!body.email || !body.firstName || !body.productType || !body.sourcePage) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Missing required fields: email, firstName, productType, sourcePage' 
+        {
+          success: false,
+          error: 'Missing required fields: email, firstName, productType, sourcePage'
         },
         { status: 400 }
       )
@@ -46,9 +47,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(body.email)) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Invalid email format' 
+        {
+          success: false,
+          error: 'Invalid email format'
         },
         { status: 400 }
       )
@@ -57,9 +58,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Validate product type
     if (!['P2P', 'Canva', 'SHOPIFY_ECOM'].includes(body.productType)) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Invalid product type. Must be P2P, Canva, or SHOPIFY_ECOM' 
+        {
+          success: false,
+          error: 'Invalid product type. Must be P2P, Canva, or SHOPIFY_ECOM'
         },
         { status: 400 }
       )
@@ -107,7 +108,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       utm_campaign: body.utmCampaign || null,
       metadata: body.metadata || {},
       submitted_at: new Date().toISOString(),
-      last_activity_at: new Date().toISOString()
+      last_activity_at: new Date().toISOString(),
+      email_marketing_subscribed: body.marketingOptIn || false
     }
 
     const { data: newLead, error: insertError } = await (supabase as any)
@@ -119,9 +121,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (insertError) {
       console.error('[Lead] Error creating lead:', insertError)
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Failed to capture lead information' 
+        {
+          success: false,
+          error: 'Failed to capture lead information'
         },
         { status: 500 }
       )
@@ -134,6 +136,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       sourcePage: body.sourcePage
     })
 
+    // --- Server-Side Event Tracking ---
+    // This logs the "checkout.abandoned" (initially) event and triggers automations
+    // We do this securely on the server side.
+    try {
+      const { trackEvent } = await import('@/app/actions/tracking');
+      await trackEvent({
+        email: body.email,
+        contactId: newLead.id,
+        eventType: 'checkout.started', // or checkout.abandoned depending on flow
+        metadata: {
+          source: body.sourcePage,
+          product_type: body.productType,
+          amount: body.amount,
+          marketing_opt_in: body.marketingOptIn
+        }
+      });
+
+      // Also track conversion if paid? No, this is capture before payment.
+      // We'll track 'checkout.abandoned' effectively by starting the flow.
+      // If they purchase, the purchase event will cancel this flow (if configured).
+
+    } catch (trackError) {
+      console.error('[Lead] Error tracking event:', trackError);
+      // Don't fail the request just because tracking failed
+    }
+
     return NextResponse.json({
       success: true,
       leadId: newLead.id
@@ -142,9 +170,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     console.error('[Lead] Error in lead capture API:', error)
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Internal server error' 
+      {
+        success: false,
+        error: 'Internal server error'
       },
       { status: 500 }
     )
@@ -161,28 +189,28 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
 
     if (!leadId || !status) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Missing required fields: leadId, status' 
+        {
+          success: false,
+          error: 'Missing required fields: leadId, status'
         },
         { status: 400 }
       )
     }
 
     const validStatuses = [
-      'form_submitted', 
-      'payment_initiated', 
-      'payment_completed', 
-      'payment_failed', 
-      'payment_abandoned', 
+      'form_submitted',
+      'payment_initiated',
+      'payment_completed',
+      'payment_failed',
+      'payment_abandoned',
       'lead_nurture'
     ]
 
     if (!validStatuses.includes(status)) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+        {
+          success: false,
+          error: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
         },
         { status: 400 }
       )
@@ -211,9 +239,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
     if (updateError) {
       console.error('[Lead] Error updating lead status:', updateError)
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Failed to update lead status' 
+        {
+          success: false,
+          error: 'Failed to update lead status'
         },
         { status: 500 }
       )
@@ -228,9 +256,9 @@ export async function PATCH(request: NextRequest): Promise<NextResponse> {
   } catch (error) {
     console.error('[Lead] Error in lead status update API:', error)
     return NextResponse.json(
-      { 
-        success: false, 
-        error: 'Internal server error' 
+      {
+        success: false,
+        error: 'Internal server error'
       },
       { status: 500 }
     )

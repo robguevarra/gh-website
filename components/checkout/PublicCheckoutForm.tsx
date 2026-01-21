@@ -12,6 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from 'next/link';
 
 export default function PublicCheckoutForm() {
@@ -24,6 +25,7 @@ export default function PublicCheckoutForm() {
     const [emailError, setEmailError] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
+    const [marketingOptIn, setMarketingOptIn] = useState(true);
 
     // totalPrice is already a number from selector
     // const totalPrice = getTotalPrice(); // REMOVED
@@ -31,6 +33,29 @@ export default function PublicCheckoutForm() {
     const validateEmail = (email: string) => {
         const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return re.test(email);
+    };
+
+    const handleEmailBlur = async () => {
+        if (email && validateEmail(email)) {
+            try {
+                // Capture lead early (abandoned cart)
+                await fetch('/api/leads/capture', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: email,
+                        firstName: email.split('@')[0], // Best guess for guest
+                        lastName: '',
+                        productType: 'PublicShop',
+                        sourcePage: '/shop/checkout',
+                        marketingOptIn: marketingOptIn,
+                        metadata: { event: 'email_blur' }
+                    })
+                });
+            } catch (e) {
+                console.error("[Tracking] Email blur capture failed", e);
+            }
+        }
     };
 
     const handlePayment = async () => {
@@ -49,7 +74,7 @@ export default function PublicCheckoutForm() {
 
         startTransition(async () => {
             try {
-                const result = await createPublicXenditPayment(items, email);
+                const result = await createPublicXenditPayment(items, email, marketingOptIn);
 
                 if (result.success && result.invoiceUrl) {
                     window.location.href = result.invoiceUrl;
@@ -107,11 +132,32 @@ export default function PublicCheckoutForm() {
                         }}
                         className={emailError ? 'border-red-500' : ''}
                         disabled={isPending}
+                        onBlur={handleEmailBlur}
                     />
                     {emailError && <p className="text-sm text-red-500">{emailError}</p>}
                     <p className="text-xs text-muted-foreground">
                         We'll send your order confirmation and digital downloads to this email.
                     </p>
+
+                    <div className="flex items-start space-x-2 pt-2">
+                        <Checkbox
+                            id="marketing-opt-in"
+                            checked={marketingOptIn}
+                            onCheckedChange={(checked) => setMarketingOptIn(checked as boolean)}
+                            className="mt-1"
+                        />
+                        <div className="grid gap-1.5 leading-none">
+                            <label
+                                htmlFor="marketing-opt-in"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-foreground"
+                            >
+                                Email me guidance, reminders, occasional offers and discounts related to this purchase
+                            </label>
+                            <p className="text-xs text-muted-foreground">
+                                You can unsubscribe anytime. We don’t spam.
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
                 <Separator />

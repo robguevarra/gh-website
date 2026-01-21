@@ -72,7 +72,8 @@ async function logPublicStorePendingTransaction({
  */
 export async function createPublicXenditPayment(
     cartItems: CartItem[],
-    guestEmail: string
+    guestEmail: string,
+    marketingOptIn: boolean = false
 ): Promise<ActionResult> {
     // 1. Basic Validation
     if (!cartItems || cartItems.length === 0) {
@@ -190,6 +191,7 @@ export async function createPublicXenditPayment(
             fbc,
             ip_address: ip,
             user_agent: userAgent,
+            marketing_opt_in: marketingOptIn
         };
 
         // 6. Log Transaction (Service Role)
