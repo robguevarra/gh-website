@@ -15,7 +15,6 @@ import { DateRange } from "react-day-picker"
 export default function DirectoryPage() {
     const [search, setSearch] = useState('')
     const [typeFilter, setTypeFilter] = useState<'all' | 'customer' | 'lead'>('all')
-    const [statusFilter, setStatusFilter] = useState<string>('all')
     const [smartListFilter, setSmartListFilter] = useState<string>('all')
     const [tagFilter, setTagFilter] = useState<string>('all')
     const [dateRangeFilter, setDateRangeFilter] = useState<DateRange | undefined>(undefined)
@@ -44,12 +43,11 @@ export default function DirectoryPage() {
 
     // React Query for data fetching
     const { data, isLoading } = useQuery({
-        queryKey: ['directory', debouncedSearch, typeFilter, statusFilter, smartListFilter, tagFilter, dateRangeFilter, page],
+        queryKey: ['directory', debouncedSearch, typeFilter, smartListFilter, tagFilter, dateRangeFilter, page],
         queryFn: () => searchDirectory(
             debouncedSearch,
             {
                 type: typeFilter,
-                status: statusFilter,
                 smartListId: smartListFilter,
                 tagId: tagFilter,
                 dateRange: dateRangeFilter
@@ -86,8 +84,6 @@ export default function DirectoryPage() {
                 onSearchChange={handleSearchChange}
                 typeFilter={typeFilter}
                 onTypeFilterChange={handleFilterChange(setTypeFilter)}
-                statusFilter={statusFilter}
-                onStatusFilterChange={handleFilterChange(setStatusFilter)}
                 smartLists={smartLists}
                 smartListFilter={smartListFilter}
                 onSmartListFilterChange={handleFilterChange(setSmartListFilter)}

@@ -10,8 +10,6 @@ interface DirectoryHeaderProps {
     onSearchChange: (value: string) => void
     typeFilter: 'all' | 'customer' | 'lead'
     onTypeFilterChange: (value: 'all' | 'customer' | 'lead') => void
-    statusFilter: string
-    onStatusFilterChange: (value: string) => void
     smartLists: SmartList[]
     smartListFilter: string
     onSmartListFilterChange: (value: string) => void
@@ -28,8 +26,6 @@ export function DirectoryHeader({
     onSearchChange,
     typeFilter,
     onTypeFilterChange,
-    statusFilter,
-    onStatusFilterChange,
     smartLists,
     smartListFilter,
     onSmartListFilterChange,
@@ -72,37 +68,25 @@ export function DirectoryHeader({
                         </SelectContent>
                     </Select>
 
-                    <Select
-                        value={statusFilter}
-                        onValueChange={onStatusFilterChange}
-                    >
-                        <SelectTrigger className="h-9 w-[150px]">
-                            <SelectValue placeholder="Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">Any Status</SelectItem>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="blocked">Blocked</SelectItem>
-                            <SelectItem value="archived">Archived</SelectItem>
-                        </SelectContent>
-                    </Select>
 
-                    <Select
-                        value={smartListFilter}
-                        onValueChange={onSmartListFilterChange}
-                    >
-                        <SelectTrigger className="h-9 w-[200px]">
-                            <SelectValue placeholder="Filter by Smart List" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Contacts</SelectItem>
-                            {smartLists.map(list => (
-                                <SelectItem key={list.id} value={list.id}>
-                                    {list.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    {smartLists.length > 0 && (
+                        <Select
+                            value={smartListFilter}
+                            onValueChange={onSmartListFilterChange}
+                        >
+                            <SelectTrigger className="h-9 w-[200px]">
+                                <SelectValue placeholder="Filter by Smart List" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Contacts</SelectItem>
+                                {smartLists.map(list => (
+                                    <SelectItem key={list.id} value={list.id}>
+                                        {list.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
 
                     <Select
                         value={tagFilter}
