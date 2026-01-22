@@ -3,6 +3,8 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import type { Database } from '@/types/supabase'; // Assuming supabase types are in 'types/supabase.ts'
 
+export const runtime = 'edge'; // Enable Edge Runtime for lower latency and cost
+
 export async function GET(request: Request) {
   // Ensure environment variables are available
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -35,7 +37,7 @@ export async function GET(request: Request) {
           try {
             currentCookieStore.set(name, '', { ...options, maxAge: -1 });
           } catch (error) {
-             console.warn(`User context API: Could not remove cookie '${name}' in GET handler. This might indicate an attempt to remove a cookie in a read-only context or an issue with session refresh.`, error);
+            console.warn(`User context API: Could not remove cookie '${name}' in GET handler. This might indicate an attempt to remove a cookie in a read-only context or an issue with session refresh.`, error);
           }
         },
       },
@@ -68,8 +70,8 @@ export async function GET(request: Request) {
     }
 
     if (!profile) {
-        // This case should ideally be covered by profileError.code === 'PGRST116'
-        return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+      // This case should ideally be covered by profileError.code === 'PGRST116'
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
     const responsePayload = {
