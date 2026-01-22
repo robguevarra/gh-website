@@ -985,15 +985,7 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
                       <Label htmlFor="email" className="text-[#5d4037]">
                         Email
                       </Label>
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        className={`bg-white ${errors.email ? "border-red-500" : ""}`}
-                        placeholder="your.email@example.com"
-                      />
+
                       <Input
                         id="email"
                         name="email"

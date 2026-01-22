@@ -342,13 +342,28 @@ export async function saveFunnelGraph(funnelId: string, automationId: string, gr
     try {
         const supabase = await createServerSupabaseClient()
 
-        // 1. Save the Graph itself to the automation
+        // 1. Extract Trigger Type from Graph
+        // The Funnel Builder uses a node with actionType = 'trigger' and sets data.event
+        // Or sometimes the node type itself is 'trigger'. We need to be robust.
+        const triggerNode = graph.nodes.find((n: any) =>
+            n.type === 'trigger' || n.data?.actionType === 'trigger' || n.data?.type === 'trigger'
+        )
+        // Default to checkout.started if finding it is hard, or look specifically for properties
+        const triggerType = triggerNode?.data?.event || triggerNode?.data?.triggerType
+
+        // 2. Save the Graph itself to the automation AND update trigger_type
+        const updatePayload: any = {
+            graph: graph,
+            updated_at: new Date().toISOString()
+        }
+
+        if (triggerType) {
+            updatePayload.trigger_type = triggerType
+        }
+
         const { error: autoError } = await supabase
             .from('email_automations')
-            .update({
-                graph: graph,
-                updated_at: new Date().toISOString()
-            })
+            .update(updatePayload)
             .eq('id', automationId)
 
         if (autoError) throw autoError
