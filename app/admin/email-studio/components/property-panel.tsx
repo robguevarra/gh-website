@@ -223,8 +223,16 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                                 <Input
                                     type="number"
                                     min="1"
-                                    value={(node.data.delayValue as number) || 1}
-                                    onChange={(e) => handleChange('delayValue', parseInt(e.target.value))}
+                                    value={(node.data.delayValue as number | undefined) ?? ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value
+                                        if (val === '') {
+                                            handleChange('delayValue', undefined)
+                                        } else {
+                                            const num = parseInt(val)
+                                            if (!isNaN(num)) handleChange('delayValue', num)
+                                        }
+                                    }}
                                 />
                             </div>
                             <div className="w-1/3">
@@ -276,8 +284,16 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                                 <Input
                                     type="number"
                                     min="1"
-                                    value={(node.data.delayValue as number) || 1}
-                                    onChange={(e) => handleChange('delayValue', parseInt(e.target.value))}
+                                    value={(node.data.delayValue as number | undefined) ?? ''}
+                                    onChange={(e) => {
+                                        const val = e.target.value
+                                        if (val === '') {
+                                            handleChange('delayValue', undefined)
+                                        } else {
+                                            const num = parseInt(val)
+                                            if (!isNaN(num)) handleChange('delayValue', num)
+                                        }
+                                    }}
                                     className="flex-1"
                                 />
                                 <Select
@@ -358,6 +374,6 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                     Delete Node
                 </Button>
             </div>
-        </aside>
+        </aside >
     )
 }

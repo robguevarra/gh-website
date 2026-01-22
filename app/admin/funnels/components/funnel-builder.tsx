@@ -162,15 +162,29 @@ export function FunnelBuilder({ funnelId, automationId, initialGraph, steps }: F
                 }
             }
 
+            // Default Data Configuration
+            const defaultData: any = {
+                label,
+                actionType,
+                metrics: { entered: 0, completed: 0, converted: 0, revenue: 0 }
+            }
+
+            // Inject Type-Specific Defaults
+            if (actionType === 'delay') {
+                defaultData.delayValue = 1
+                defaultData.delayUnit = 'days'
+                defaultData.label = 'Wait 1 Day' // Update label to reflect default
+            } else if (actionType === 'email') {
+                defaultData.subject = 'New Message'
+            } else if (actionType === 'tag') {
+                defaultData.tagName = '' // Force user to select
+            }
+
             const newNode: Node = {
                 id: crypto.randomUUID(),
                 type: 'funnelNode',
                 position,
-                data: {
-                    label,
-                    actionType,
-                    metrics: { entered: 0, completed: 0, converted: 0, revenue: 0 } // Init metrics
-                },
+                data: defaultData,
             }
 
             setNodes((nds) => nds.concat(newNode))
@@ -180,7 +194,25 @@ export function FunnelBuilder({ funnelId, automationId, initialGraph, steps }: F
 
     const handleSave = async () => {
         setIsSaving(true)
-        const graph = { nodes, edges }
+
+        // Sanitize Nodes before saving to ensure defaults are enforced
+        const cleanNodes = nodes.map((node) => {
+            const data = { ...node.data }
+
+            // Enforce Delay Defaults
+            if (data.actionType === 'delay') {
+                if (!data.delayValue) data.delayValue = 1
+                if (!data.delayUnit) data.delayUnit = 'days'
+            }
+
+            return { ...node, data }
+        })
+
+        // Optimize: Only update state if something changed (avoid flicker)
+        // But for safety, we sync state so UI reflects the saved data
+        setNodes(cleanNodes)
+
+        const graph = { nodes: cleanNodes, edges }
 
         // Use specialized save action that syncs to email_funnel_steps
         const { error } = await saveFunnelGraph(funnelId, automationId, graph)
