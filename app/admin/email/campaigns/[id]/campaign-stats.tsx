@@ -30,6 +30,7 @@ export function CampaignStats({ campaignId, onBack, onEdit, onDuplicate }: Campa
         fetchCampaignAnalytics
     } = useCampaignStore()
 
+    const [isRetrying, setIsRetrying] = useState(false)
     const [isDuplicating, setIsDuplicating] = useState(false)
 
     useEffect(() => {
@@ -60,6 +61,34 @@ export function CampaignStats({ campaignId, onBack, onEdit, onDuplicate }: Campa
                 variant: "destructive"
             })
             setIsDuplicating(false)
+        }
+    }
+
+    const { retryFailedJobs } = useCampaignStore()
+
+    const handleRetry = async () => {
+        setIsRetrying(true)
+        try {
+            const result = await retryFailedJobs(campaignId)
+            if (result.retried > 0) {
+                toast({
+                    title: "Retrying Failed Jobs",
+                    description: `Queued ${result.retried} failed jobs for retry.`,
+                })
+            } else {
+                toast({
+                    title: "No Failed Jobs",
+                    description: "No jobs with 'failed' status were found.",
+                })
+            }
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "Failed to retry jobs",
+                variant: "destructive"
+            })
+        } finally {
+            setIsRetrying(false)
         }
     }
 
@@ -94,7 +123,7 @@ export function CampaignStats({ campaignId, onBack, onEdit, onDuplicate }: Campa
     const isScheduled = currentCampaign.status === 'scheduled'
 
     // Calculate rates
-    const recipientCount = campaignAnalytics?.total_sent || 0
+    const recipientCount = campaignAnalytics?.total_recipients || 0
     const openCount = campaignAnalytics?.total_opens || 0
     const clickCount = campaignAnalytics?.total_clicks || 0
 
@@ -142,10 +171,16 @@ export function CampaignStats({ campaignId, onBack, onEdit, onDuplicate }: Campa
                         )}
 
                         {isSent && (
-                            <Button onClick={handleDuplicate} disabled={isDuplicating} className="gap-2 bg-zinc-900 hover:bg-zinc-800 text-white shadow-sm">
-                                {isDuplicating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
-                                Duplicate & Resend
-                            </Button>
+                            <>
+                                <Button onClick={handleRetry} disabled={isRetrying} variant="outline" className="gap-2 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-500">
+                                    {isRetrying ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
+                                    Retry Failed
+                                </Button>
+                                <Button onClick={handleDuplicate} disabled={isDuplicating} className="gap-2 bg-zinc-900 hover:bg-zinc-800 text-white shadow-sm">
+                                    {isDuplicating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                                    Duplicate & Resend
+                                </Button>
+                            </>
                         )}
                     </div>
                 </div>

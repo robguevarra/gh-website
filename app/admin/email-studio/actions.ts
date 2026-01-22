@@ -267,3 +267,19 @@ export async function getCampaigns() {
         return { campaigns: [], error: error.message }
     }
 }
+
+export async function getTags() {
+    try {
+        const supabase = await createServerSupabaseClient()
+        const { data, error } = await supabase
+            .from('tags')
+            .select('id, name')
+            .order('name', { ascending: true })
+
+        if (error) throw error
+        return { tags: data, error: null }
+    } catch (error: any) {
+        console.error('Error fetching tags:', error)
+        return { tags: [], error: error.message }
+    }
+}

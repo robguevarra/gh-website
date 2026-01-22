@@ -510,7 +510,8 @@ export async function POST(request: NextRequest) {
                             // Assign the tag to the user
                             await assignTagsToUsers({
                               tagIds: [p2pTag.id],
-                              userIds: [currentUserId]
+                              userIds: [currentUserId],
+                              allowSystemTags: true
                             });
 
                             console.log(`[Webhook][P2P] Successfully tagged user ${currentUserId} with 'P2P Enrolled'`);
@@ -1211,6 +1212,26 @@ export async function POST(request: NextRequest) {
             }
             // --- End Step 9 ---
 
+            // --- Trigger Automation: Checkout Completed (ECOM) ---
+            try {
+              const { trackEvent } = await import('@/app/actions/tracking');
+              await trackEvent({
+                email: tx.contact_email || '',
+                contactId: currentUserId || undefined,
+                eventType: 'checkout.completed',
+                metadata: {
+                  transaction_id: tx.id,
+                  product_type: 'SHOPIFY_ECOM',
+                  amount: tx.amount,
+                  marketing_opt_in: (tx.metadata as any)?.marketing_opt_in,
+                  order_id: newOrderId // specific to ecom
+                }
+              });
+              console.log("[Webhook][ECOM] Tracked checkout.completed event");
+            } catch (trackError) {
+              console.error("[Webhook][ECOM] Failed to track checkout.completed:", trackError);
+            }
+
           } else if (tx.transaction_type === "Canva") {
             // --- CANVA EBOOK TRANSACTION LOGIC ---
             console.log(`[Webhook][Canva] Processing Canva transaction: ${tx.id}`);
@@ -1319,6 +1340,25 @@ export async function POST(request: NextRequest) {
               }
             } catch (err) {
               console.error("[Webhook][Canva] Failed to store ebook contact info:", err)
+            }
+
+            // --- Trigger Automation: Checkout Completed (Canva) ---
+            try {
+              const { trackEvent } = await import('@/app/actions/tracking');
+              await trackEvent({
+                email: tx.contact_email || '',
+                contactId: tx.user_id || undefined,
+                eventType: 'checkout.completed',
+                metadata: {
+                  transaction_id: tx.id,
+                  product_type: 'Canva',
+                  amount: tx.amount,
+                  marketing_opt_in: (tx.metadata as any)?.marketing_opt_in
+                }
+              });
+              console.log("[Webhook][Canva] Tracked checkout.completed event");
+            } catch (trackError) {
+              console.error("[Webhook][Canva] Failed to track checkout.completed:", trackError);
             }
           } else if (tx.transaction_type === "PUBLIC_SALE") {
             // --- PUBLIC_SALE TRANSACTION LOGIC ---

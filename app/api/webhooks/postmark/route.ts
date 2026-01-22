@@ -112,6 +112,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Attempt to link event to email_jobs (New System) or email_queue (Legacy) via MessageID
+    // Attempt to link event to email_jobs (New System) or email_queue (Legacy) via MessageID
     if (event.MessageID) {
       // 1. Try email_jobs (Active System)
       const { data: job, error: jobError } = await supabase
@@ -145,6 +146,25 @@ export async function POST(req: NextRequest) {
         } else {
           console.warn('[Postmark Webhook] No email_jobs or email_queue entry found for MessageID:', { messageId: event.MessageID });
         }
+      }
+    }
+
+    // 3. [NEW] Check Metadata for Shadow Campaign ID (Automation Engine V4)
+    // If the email was sent by the Automation Walker, it might have campaign_id in metadata.
+    const metadata = event.Metadata || {};
+    if (metadata.campaign_id) {
+      console.info(`[Postmark Webhook] Found Shadow Campaign ID in metadata: ${metadata.campaign_id}`);
+
+      // If we haven't linked it yet (likely for automations which bypass email_jobs), use metadata.
+      if (!linkedEmailInfo) {
+        linkedEmailInfo = {
+          email_id: metadata.execution_id || 'automation-execution',
+          campaign_id: metadata.campaign_id,
+          recipient_email: event.Recipient // Postmark provides this
+        };
+      } else {
+        // Update campaign_id just in case, though usually metadata matches job if both exist.
+        linkedEmailInfo.campaign_id = metadata.campaign_id;
       }
     }
 
@@ -215,6 +235,65 @@ export async function POST(req: NextRequest) {
           console.error('[Postmark Webhook] Error calling increment_campaign_metric RPC:', rpcError);
         } else {
           console.info(`[Postmark Webhook] Incremented ${metricToIncrement} for campaign ${campaignIdForAnalytics}`);
+        }
+      }
+
+      // --- Trigger Automation Engine (Click & Open Events via Metadata) ---
+      // For Automations, we injected `metadata: { execution_id, automation_id }`
+      // Postmark returns this in `event.Metadata`.
+      // We must track both 'Open' and 'Click' for the engine to know about them (e.g. for "Wait Until Open")
+
+      const automationMetadata = event.Metadata || {}
+      if (automationMetadata.execution_id) {
+        console.info(`[Postmark Webhook] Found Automation Metadata:`, automationMetadata)
+
+        if (eventType === 'Open' || eventType === 'Click') {
+          try {
+            const { trackEvent } = await import('@/app/actions/tracking');
+            // Map Postmark RecordType to our event types
+            const automationEventType = eventType === 'Open' ? 'email_opened' : 'email_clicked'
+
+            await trackEvent({
+              email: linkedEmailInfo?.recipient_email || event.Recipient || '',
+              contactId: userIdToStore || undefined,
+              eventType: automationEventType,
+              metadata: {
+                ...automationMetadata, // Pass through the automation context (execution_id, etc)
+                message_id: event.MessageID,
+                url: event.OriginalLink // Only for Clicks
+              }
+            });
+            console.info(`[Postmark Webhook] Tracked '${automationEventType}' for Automation Execution ${automationMetadata.execution_id}`);
+          } catch (trackErr) {
+            console.error(`[Postmark Webhook] Failed to track automation event:`, trackErr);
+          }
+        }
+      }
+
+      // --- Trigger Automation Engine (Legacy/Campaign Click Events) ---
+      // If it's a Click, we want to fire an event so the engine can check "Wait Until Click" or "Trigger on Click"
+      // Only do this if we haven't already handled it via the new Metadata logic above.
+      // We rely on linkedEmailInfo OR raw event.Recipient.
+      if (!automationMetadata.execution_id && eventType === 'Click') {
+        const targetEmail = linkedEmailInfo?.recipient_email || event.Recipient;
+
+        if (targetEmail) {
+          try {
+            const { trackEvent } = await import('@/app/actions/tracking');
+            await trackEvent({
+              email: targetEmail,
+              contactId: userIdToStore || undefined,
+              eventType: 'email_clicked',
+              metadata: {
+                campaign_id: campaignIdForAnalytics || automationMetadata.campaign_id, // Try metadata fallback
+                message_id: event.MessageID,
+                url: event.OriginalLink
+              }
+            });
+            console.info(`[Postmark Webhook] Tracked 'email_clicked' event for ${targetEmail}`);
+          } catch (trackErr) {
+            console.error(`[Postmark Webhook] Failed to track email_clicked:`, trackErr);
+          }
         }
       }
     } else if (eventType !== 'Inbound' && eventType !== 'SubscriptionChange') {

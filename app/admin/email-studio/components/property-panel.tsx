@@ -21,9 +21,10 @@ interface PropertyPanelProps {
     onDelete: (id: string) => void
     templates?: any[]
     campaigns?: any[]
+    tags?: any[]
 }
 
-export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [], campaigns = [] }: PropertyPanelProps) {
+export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [], campaigns = [], tags = [] }: PropertyPanelProps) {
     if (!node) return null
 
     const handleChange = (key: string, value: any) => {
@@ -67,18 +68,14 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                                 </SelectTrigger>
                                 <SelectContent>
                                     <div className="text-xs font-semibold text-slate-500 px-2 py-1.5 uppercase tracking-wider">Commerce</div>
-                                    <SelectItem value="checkout_abandoned">Checkout Abandoned</SelectItem>
-                                    <SelectItem value="order_placed">Order Placed</SelectItem>
-                                    <SelectItem value="product_viewed">Product Viewed</SelectItem>
+                                    <SelectItem value="checkout.started">Checkout Started (Abandoned)</SelectItem>
+                                    <SelectItem value="checkout.completed">Checkout Completed (Purchase)</SelectItem>
 
                                     <div className="text-xs font-semibold text-slate-500 px-2 py-1.5 uppercase tracking-wider border-t mt-1 pt-2">Engagement</div>
-                                    <SelectItem value="user_signup">User Signup</SelectItem>
-                                    <SelectItem value="form_submitted">Form Submitted</SelectItem>
                                     <SelectItem value="email_clicked">Campaign Clicked</SelectItem>
 
                                     <div className="text-xs font-semibold text-slate-500 px-2 py-1.5 uppercase tracking-wider border-t mt-1 pt-2">System</div>
                                     <SelectItem value="tag_added">Tag Added</SelectItem>
-                                    <SelectItem value="custom">Custom Event...</SelectItem>
                                 </SelectContent>
                             </Select>
 
@@ -86,12 +83,23 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                             {node.data.event === 'tag_added' && (
                                 <div className="mt-2 animate-in fade-in slide-in-from-top-1">
                                     <Label className="text-xs">Which Tag?</Label>
-                                    <Input
-                                        placeholder="e.g. vip_customer"
-                                        value={(node.data.filterTag as string) || ''}
-                                        onChange={(e) => handleChange('filterTag', e.target.value)}
-                                    />
-                                    <p className="text-[10px] text-muted-foreground mt-1">Leave empty to run for ANY tag.</p>
+                                    <Select
+                                        value={(node.data.filterTag as string) || 'any'}
+                                        onValueChange={(val) => handleChange('filterTag', val)}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select tag..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="any">Any Tag</SelectItem>
+                                            {tags.map((t) => (
+                                                <SelectItem key={t.id} value={t.name}>
+                                                    {t.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-[10px] text-muted-foreground mt-1">Run only for specific tags.</p>
                                 </div>
                             )}
 
@@ -118,21 +126,32 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                                 </div>
                             )}
 
-                            {node.data.event === 'custom' && (
-                                <div className="mt-2 animate-in fade-in slide-in-from-top-1">
-                                    <Label className="text-xs">Custom Event Name</Label>
-                                    <Input
-                                        placeholder="e.g. my_custom_event"
-                                        value={(node.data.customEventName as string) || ''}
-                                        onChange={(e) => handleChange('customEventName', e.target.value)}
-                                    />
-                                </div>
-                            )}
-
                             <p className="text-xs text-muted-foreground mt-2">
                                 This automation starts when this event occurs.
                             </p>
                         </div>
+
+                        {/* Product Type Filter - Separated Block */}
+                        {(node.data.event === 'checkout.started' || node.data.event === 'checkout.completed') && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 border-t pt-4">
+                                <Label>Product Type</Label>
+                                <Select
+                                    value={(node.data.filterProductType as string) || 'any'}
+                                    onValueChange={(val) => handleChange('filterProductType', val)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Any Product" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="any">Any Product</SelectItem>
+                                        <SelectItem value="P2P">P2P Course</SelectItem>
+                                        <SelectItem value="Canva">Canva Ebook</SelectItem>
+                                        <SelectItem value="SHOPIFY_ECOM">Public Shop</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-xs text-muted-foreground">Run only for specific product types.</p>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -177,11 +196,21 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label>Tag Name</Label>
-                            <Input
-                                placeholder="e.g. vip_customer"
+                            <Select
                                 value={(node.data.tagName as string) || ''}
-                                onChange={(e) => handleChange('tagName', e.target.value)}
-                            />
+                                onValueChange={(val) => handleChange('tagName', val)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select tag..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {tags.map((t) => (
+                                        <SelectItem key={t.id} value={t.name}>
+                                            {t.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
                 )}
@@ -208,6 +237,7 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="minutes">Mins</SelectItem>
                                         <SelectItem value="hours">Hours</SelectItem>
                                         <SelectItem value="days">Days</SelectItem>
                                     </SelectContent>
@@ -258,6 +288,7 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
+                                        <SelectItem value="minutes">Mins</SelectItem>
                                         <SelectItem value="hours">Hours</SelectItem>
                                         <SelectItem value="days">Days</SelectItem>
                                     </SelectContent>

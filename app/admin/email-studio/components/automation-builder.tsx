@@ -34,7 +34,7 @@ const initialNodes: Node[] = [
     {
         id: '1',
         type: 'trigger',
-        data: { label: 'Trigger: Checkout Abandoned', event: 'checkout_abandoned' },
+        data: { label: 'Trigger: Checkout Abandoned', event: 'checkout.started' },
         position: { x: 250, y: 50 },
     },
 ]
@@ -42,7 +42,7 @@ const initialNodes: Node[] = [
 const initialEdges: Edge[] = []
 
 import { toast } from 'sonner'
-import { saveAutomationGraph, getTemplates, getCampaigns } from '../actions'
+import { saveAutomationGraph, getTemplates, getCampaigns, getTags } from '../actions'
 
 interface AutomationBuilderProps {
     automationId: string
@@ -56,6 +56,7 @@ export function AutomationBuilder({ automationId, initialGraph }: AutomationBuil
     const [isSaving, setIsSaving] = useState(false)
     const [templates, setTemplates] = useState<any[]>([])
     const [campaigns, setCampaigns] = useState<any[]>([])
+    const [tags, setTags] = useState<any[]>([])
     const router = useRouter()
 
     useEffect(() => {
@@ -65,6 +66,9 @@ export function AutomationBuilder({ automationId, initialGraph }: AutomationBuil
 
             const { campaigns } = await getCampaigns()
             if (campaigns) setCampaigns(campaigns)
+
+            const { tags } = await getTags()
+            if (tags) setTags(tags)
         }
         fetchData()
     }, [])
@@ -181,8 +185,8 @@ export function AutomationBuilder({ automationId, initialGraph }: AutomationBuil
 
             <div className="flex-1 flex overflow-hidden border rounded-lg bg-slate-50 relative">
                 {/* Sidebar Palette */}
-                <aside className="w-64 bg-white border-r p-4 flex flex-col gap-4 z-10">
-                    <div className="font-semibold text-sm text-slate-500 uppercase tracking-wider">Nodes</div>
+                <aside className="w-64 bg-white border-r p-4 flex flex-col gap-4 z-10 overflow-y-auto">
+                    <div className="font-semibold text-sm text-slate-500 uppercase tracking-wider mb-2">Triggers</div>
 
                     <div
                         className="p-3 bg-emerald-50 border border-emerald-200 rounded cursor-grab flex items-center gap-2 hover:shadow-md transition-shadow"
@@ -196,6 +200,23 @@ export function AutomationBuilder({ automationId, initialGraph }: AutomationBuil
                         <div className="bg-emerald-500 w-2 h-2 rounded-full" />
                         <span className="text-sm font-medium">Trigger</span>
                     </div>
+
+                    <div className="font-semibold text-sm text-slate-500 uppercase tracking-wider mb-2 mt-4">Conditions</div>
+
+                    <div
+                        className="p-3 bg-orange-50 border border-orange-200 rounded cursor-grab flex items-center gap-2 hover:shadow-md transition-shadow"
+                        onDragStart={(event) => {
+                            event.dataTransfer.setData('application/reactflow', 'condition')
+                            event.dataTransfer.setData('application/reactflow/label', 'Condition (If/Else)')
+                            event.dataTransfer.effectAllowed = 'move'
+                        }}
+                        draggable
+                    >
+                        <div className="bg-orange-500 w-2 h-2 rounded-full" />
+                        <span className="text-sm font-medium">Condition</span>
+                    </div>
+
+                    <div className="font-semibold text-sm text-slate-500 uppercase tracking-wider mb-2 mt-4">Actions</div>
 
                     <div
                         className="p-3 bg-blue-50 border border-blue-200 rounded cursor-grab flex items-center gap-2 hover:shadow-md transition-shadow"
@@ -223,19 +244,6 @@ export function AutomationBuilder({ automationId, initialGraph }: AutomationBuil
                     >
                         <div className="bg-pink-500 w-2 h-2 rounded-full" />
                         <span className="text-sm font-medium">Add Tag</span>
-                    </div>
-
-                    <div
-                        className="p-3 bg-orange-50 border border-orange-200 rounded cursor-grab flex items-center gap-2 hover:shadow-md transition-shadow"
-                        onDragStart={(event) => {
-                            event.dataTransfer.setData('application/reactflow', 'condition')
-                            event.dataTransfer.setData('application/reactflow/label', 'Condition (If/Else)')
-                            event.dataTransfer.effectAllowed = 'move'
-                        }}
-                        draggable
-                    >
-                        <div className="bg-orange-500 w-2 h-2 rounded-full" />
-                        <span className="text-sm font-medium">Condition</span>
                     </div>
 
                     <div
@@ -296,6 +304,7 @@ export function AutomationBuilder({ automationId, initialGraph }: AutomationBuil
                                     onDelete={handleNodeDelete}
                                     templates={templates}
                                     campaigns={campaigns}
+                                    tags={tags}
                                 />
                             )}
                         </div>

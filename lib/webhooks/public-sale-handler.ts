@@ -118,7 +118,8 @@ export async function handlePublicSaleTransaction(tx: Transaction, supabase: Sup
             // Assign the tag to the user
             await assignTagsToUsers({
               tagIds: [productTag.id],
-              userIds: [tx.user_id]
+              userIds: [tx.user_id],
+              allowSystemTags: true
             });
 
             console.log(`[Webhook][PublicSale] Successfully tagged user ${tx.user_id} with '${tagName}'`);

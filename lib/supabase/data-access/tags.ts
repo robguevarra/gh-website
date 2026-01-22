@@ -173,28 +173,69 @@ export async function getUsersForTag(tagId: string, limit = 1000, offset = 0): P
   return data.map((row: any) => row.user_id);
 }
 
-export async function assignTagsToUsers({ tagIds, userIds }: { tagIds: string[]; userIds: string[] }): Promise<void> {
+export async function assignTagsToUsers({ tagIds, userIds, allowSystemTags = false }: { tagIds: string[]; userIds: string[]; allowSystemTags?: boolean }): Promise<void> {
   const supabase = await createServerSupabaseClient();
 
-  // Check for system tags
-  const { data: systemTags } = await supabase.from('tags').select('id, name').eq('is_system', true).in('id', tagIds);
-  if (systemTags && systemTags.length > 0) {
-    throw new Error(`Cannot manually assign system tags: ${systemTags.map(t => t.name).join(', ')}`);
+  // Check for system tags (unless allowed)
+  if (!allowSystemTags) {
+    const { data: systemTags } = await supabase.from('tags').select('id, name').eq('is_system', true).in('id', tagIds);
+    if (systemTags && systemTags.length > 0) {
+      throw new Error(`Cannot manually assign system tags: ${systemTags.map(t => t.name).join(', ')}`);
+    }
   }
 
   const rows = userIds.flatMap(user_id => tagIds.map(tag_id => ({ user_id, tag_id })));
   if (rows.length === 0) return;
   const { error } = await supabase.from('user_tags').upsert(rows, { onConflict: 'user_id,tag_id' });
   if (error) throw error;
+
+  // --- Track 'tag_added' event for Automations ---
+  // We do this best-effort
+  try {
+    // Dynamic import to avoid potential circular dependencies if any
+    const { trackEvent } = await import('@/app/actions/tracking');
+
+    // We track for each user/tag modification
+    // To avoid spamming, if batch is huge, maybe we should queue?
+    // For now, iterate and send. Usually this is small batch.
+    /* 
+       Note: If assigning multiple tags to multiple users, this could be many events.
+       However, usually it's "User X gets Tag Y" or "User X gets Tags Y,Z".
+    */
+    for (const row of rows) {
+      // Fetch user email if not available? We need email for automation.
+      // We only have user_id here. 
+      // We need to fetch email.
+      const { data: user } = await supabase.from('unified_profiles').select('email').eq('id', row.user_id).single();
+      const { data: tag } = await supabase.from('tags').select('name').eq('id', row.tag_id).single();
+
+      if (user?.email) {
+        await trackEvent({
+          email: user.email,
+          contactId: row.user_id,
+          eventType: 'tag_added',
+          metadata: {
+            tag_id: row.tag_id,
+            tag_name: tag?.name
+          }
+        });
+      }
+    }
+
+  } catch (err) {
+    console.error("[Tags] Failed to track tag_added event:", err);
+  }
 }
 
-export async function removeTagsFromUsers({ tagIds, userIds }: { tagIds: string[]; userIds: string[] }): Promise<void> {
+export async function removeTagsFromUsers({ tagIds, userIds, allowSystemTags = false }: { tagIds: string[]; userIds: string[]; allowSystemTags?: boolean }): Promise<void> {
   const supabase = await createServerSupabaseClient();
 
-  // Check for system tags
-  const { data: systemTags } = await supabase.from('tags').select('id, name').eq('is_system', true).in('id', tagIds);
-  if (systemTags && systemTags.length > 0) {
-    throw new Error(`Cannot manually remove system tags: ${systemTags.map(t => t.name).join(', ')}`);
+  // Check for system tags (unless allowed)
+  if (!allowSystemTags) {
+    const { data: systemTags } = await supabase.from('tags').select('id, name').eq('is_system', true).in('id', tagIds);
+    if (systemTags && systemTags.length > 0) {
+      throw new Error(`Cannot manually remove system tags: ${systemTags.map(t => t.name).join(', ')}`);
+    }
   }
 
   for (const tag_id of tagIds) {

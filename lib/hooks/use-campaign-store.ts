@@ -5,8 +5,8 @@
  */
 
 import { create } from 'zustand';
-import { 
-  EmailCampaign, 
+import {
+  EmailCampaign,
   CampaignTemplate,
   CampaignSegment,
   CampaignAnalytics,
@@ -26,27 +26,27 @@ interface CampaignState {
   totalCampaigns: number;
   campaignsLoading: boolean;
   campaignsError: string | null;
-  
+
   // Current campaign state
   currentCampaign: StoreEmailCampaign | null;
   currentCampaignLoading: boolean;
   currentCampaignError: string | null;
-  
+
   // Campaign templates state
   campaignTemplates: CampaignTemplate[];
   templatesLoading: boolean;
   templatesError: string | null;
-  
+
   // Campaign segments state
   campaignSegments: (CampaignSegment & { segment: UserSegment })[];
   segmentsLoading: boolean;
   segmentsError: string | null;
-  
+
   // Campaign analytics state
   campaignAnalytics: CampaignAnalytics | null;
   analyticsLoading: boolean;
   analyticsError: string | null;
-  
+
   // Available segments for selection
   availableSegments: UserSegment[];
   availableSegmentsLoading: boolean;
@@ -56,7 +56,7 @@ interface CampaignState {
   estimatedAudienceSize: number | null;
   audienceSizeLoading: boolean;
   audienceSizeError: string | null;
-  
+
   // Actions
   fetchCampaigns: (params?: { status?: string; limit?: number; offset?: number }) => Promise<void>;
   fetchCampaign: (id: string) => Promise<void>;
@@ -67,6 +67,7 @@ interface CampaignState {
   scheduleCampaign: (id: string, scheduledAt: string) => Promise<EmailCampaign>;
   sendTestEmail: (id: string, testEmails: string[]) => Promise<{ success: boolean }>;
   sendCampaign: (id: string) => Promise<{ success: boolean; message?: string; details?: { queuedCount: number } }>;
+  retryFailedJobs: (campaignId: string) => Promise<{ retried: number }>;
   fetchCampaignTemplates: (campaignId: string) => Promise<void>;
   fetchCampaignSegments: (campaignId: string) => Promise<void>;
   fetchCampaignAnalytics: (campaignId: string, refresh?: boolean) => Promise<void>;
@@ -90,27 +91,27 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   totalCampaigns: 0,
   campaignsLoading: false,
   campaignsError: null,
-  
+
   // Current campaign state
   currentCampaign: null,
   currentCampaignLoading: false,
   currentCampaignError: null,
-  
+
   // Campaign templates state
   campaignTemplates: [],
   templatesLoading: false,
   templatesError: null,
-  
+
   // Campaign segments state
   campaignSegments: [],
   segmentsLoading: false,
   segmentsError: null,
-  
+
   // Campaign analytics state
   campaignAnalytics: null,
   analyticsLoading: false,
   analyticsError: null,
-  
+
   // Available segments for selection
   availableSegments: [],
   availableSegmentsLoading: false,
@@ -120,52 +121,52 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   estimatedAudienceSize: null,
   audienceSizeLoading: false,
   audienceSizeError: null,
-  
+
   // Actions
   fetchCampaigns: async (params = {}) => {
     set({ campaignsLoading: true, campaignsError: null });
-    
+
     try {
       const { status, limit = 50, offset = 0 } = params;
-      
+
       const queryParams = new URLSearchParams();
       if (status) queryParams.append('status', status);
       queryParams.append('limit', limit.toString());
       queryParams.append('offset', offset.toString());
-      
+
       const response = await fetch(`/api/admin/campaigns?${queryParams.toString()}`);
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to fetch campaigns');
       }
-      
+
       const data = await response.json();
-      
-      set({ 
-        campaigns: data.campaigns, 
+
+      set({
+        campaigns: data.campaigns,
         totalCampaigns: data.total,
-        campaignsLoading: false 
+        campaignsLoading: false
       });
     } catch (error: any) {
-      set({ 
-        campaignsLoading: false, 
-        campaignsError: error.message || 'Failed to fetch campaigns' 
+      set({
+        campaignsLoading: false,
+        campaignsError: error.message || 'Failed to fetch campaigns'
       });
     }
   },
-  
+
   fetchCampaign: async (id: string) => {
     set({ currentCampaignLoading: true, currentCampaignError: null });
-    
+
     try {
       const response = await fetch(`/api/admin/campaigns/${id}`);
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to fetch campaign');
       }
-      
+
       const data = await response.json();
       const campaignData = data.campaign as StoreEmailCampaign;
 
@@ -176,24 +177,24 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
           exclude: { segmentIds: [] },
         };
       }
-      
-      set({ 
-        currentCampaign: campaignData, 
-        currentCampaignLoading: false 
+
+      set({
+        currentCampaign: campaignData,
+        currentCampaignLoading: false
       });
       // After setting currentCampaign and ensuring segment_rules are initialized, fetch audience size.
       if (campaignData.id) { // Ensure campaignData.id is valid
         get().fetchEstimatedAudienceSize(campaignData.id);
       }
     } catch (error: any) {
-      set({ 
-        currentCampaignLoading: false, 
-        currentCampaignError: error.message || 'Failed to fetch campaign' 
+      set({
+        currentCampaignLoading: false,
+        currentCampaignError: error.message || 'Failed to fetch campaign'
       });
       throw error;
     }
   },
-  
+
   createCampaign: async (campaign) => {
     try {
       const response = await fetch('/api/admin/campaigns', {
@@ -203,23 +204,23 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
         },
         body: JSON.stringify(campaign),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to create campaign');
       }
-      
+
       const data = await response.json();
-      
+
       // Refresh campaigns list
       await get().fetchCampaigns();
-      
+
       return data.campaign;
     } catch (error: any) {
       throw new Error(error.message || 'Failed to create campaign');
     }
   },
-  
+
   updateCampaign: async (id, updates) => {
     try {
       const response = await fetch(`/api/admin/campaigns/${id}`, {
@@ -229,34 +230,34 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
         },
         body: JSON.stringify(updates),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to update campaign');
       }
-      
+
       const data = await response.json();
-      
+
       // Update current campaign if it's the one being edited
       if (get().currentCampaign?.id === id) {
         set({ currentCampaign: data.campaign });
       }
-      
+
       // Refresh campaigns list
       await get().fetchCampaigns();
-      
+
       return data.campaign;
     } catch (error: any) {
       throw new Error(error.message || 'Failed to update campaign');
     }
   },
-  
+
   updateCampaignFields: (payload: { id: string; changes: Partial<StoreEmailCampaign> }) => {
     const { id, changes } = payload;
     set((state) => {
       if (state.currentCampaign && state.currentCampaign.id === id) {
-        const updatedCampaign = { 
-          ...state.currentCampaign, 
+        const updatedCampaign = {
+          ...state.currentCampaign,
           ...changes,
           segment_rules: changes.segment_rules !== undefined ? changes.segment_rules : state.currentCampaign.segment_rules
         } as StoreEmailCampaign;
@@ -264,33 +265,33 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
           currentCampaign: updatedCampaign,
         };
       }
-      return {}; 
+      return {};
     });
   },
-  
+
   deleteCampaign: async (id: string) => {
     try {
       const response = await fetch(`/api/admin/campaigns/${id}`, {
         method: 'DELETE',
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to delete campaign');
       }
-      
+
       // Reset current campaign if it's the one being deleted
       if (get().currentCampaign?.id === id) {
         set({ currentCampaign: null });
       }
-      
+
       // Refresh campaigns list
       await get().fetchCampaigns();
     } catch (error: any) {
       throw new Error(error.message || 'Failed to delete campaign');
     }
   },
-  
+
   scheduleCampaign: async (id, scheduledAt) => {
     try {
       const response = await fetch(`/api/admin/campaigns/${id}/schedule`, {
@@ -300,28 +301,28 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
         },
         body: JSON.stringify({ scheduledAt }),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to schedule campaign');
       }
-      
+
       const data = await response.json();
-      
+
       // Update current campaign if it's the one being scheduled
       if (get().currentCampaign?.id === id) {
         set({ currentCampaign: data.campaign });
       }
-      
+
       // Refresh campaigns list
       await get().fetchCampaigns();
-      
+
       return data.campaign;
     } catch (error: any) {
       throw new Error(error.message || 'Failed to schedule campaign');
     }
   },
-  
+
   sendTestEmail: async (id, testEmails) => {
     try {
       const response = await fetch(`/api/admin/campaigns/${id}/test`, {
@@ -331,18 +332,18 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
         },
         body: JSON.stringify({ testEmails }),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to send test email');
       }
-      
+
       return await response.json();
     } catch (error: any) {
       throw new Error(error.message || 'Failed to send test email');
     }
   },
-  
+
   sendCampaign: async (id: string) => {
     try {
       const response = await fetch(`/api/admin/campaigns/${id}/send`, {
@@ -354,7 +355,7 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       if (!response.ok) {
         throw new Error(data.error || data.message || 'Failed to send campaign');
       }
-      
+
       return data;
     } catch (error: any) {
       if (error instanceof Error) {
@@ -363,89 +364,112 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       throw new Error(String(error || 'An unknown error occurred while sending campaign'));
     }
   },
-  
+
+  retryFailedJobs: async (campaignId: string) => {
+    try {
+      const response = await fetch(`/api/admin/campaigns/${campaignId}/retry`, {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.message || 'Failed to retry campaign');
+      }
+
+      // Refresh analytics to show updated counts (e.g. fewer failed, more pending if we tracked pending)
+      // Actually analytics usually tracks 'sent', 'failed', 'bounced'.
+      // If we move them to pending, they might temporarily disappear from 'failed' count if we refresh.
+      await get().fetchCampaignAnalytics(campaignId, true);
+
+      return data;
+    } catch (error: any) {
+      throw new Error(error.message || 'Failed to retry failed jobs');
+    }
+  },
+
   fetchCampaignTemplates: async (campaignId) => {
     set({ templatesLoading: true, templatesError: null });
-    
+
     try {
       // This would be an API call to fetch templates for a campaign
       // For now, we'll simulate it with a placeholder
       const response = await fetch(`/api/admin/campaigns/${campaignId}/templates`);
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to fetch campaign templates');
       }
-      
+
       const data = await response.json();
-      
-      set({ 
-        campaignTemplates: data.templates, 
-        templatesLoading: false 
+
+      set({
+        campaignTemplates: data.templates,
+        templatesLoading: false
       });
     } catch (error: any) {
-      set({ 
-        templatesLoading: false, 
-        templatesError: error.message || 'Failed to fetch campaign templates' 
+      set({
+        templatesLoading: false,
+        templatesError: error.message || 'Failed to fetch campaign templates'
       });
     }
   },
-  
+
   fetchCampaignSegments: async (campaignId) => {
     set({ segmentsLoading: true, segmentsError: null });
-    
+
     try {
       // This would be an API call to fetch segments for a campaign
       // For now, we'll simulate it with a placeholder
       const response = await fetch(`/api/admin/campaigns/${campaignId}/segments`);
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to fetch campaign segments');
       }
-      
+
       const data = await response.json();
-      
-      set({ 
-        campaignSegments: data.segments, 
-        segmentsLoading: false 
+
+      set({
+        campaignSegments: data.segments,
+        segmentsLoading: false
       });
     } catch (error: any) {
-      set({ 
-        segmentsLoading: false, 
-        segmentsError: error.message || 'Failed to fetch campaign segments' 
+      set({
+        segmentsLoading: false,
+        segmentsError: error.message || 'Failed to fetch campaign segments'
       });
     }
   },
-  
+
   fetchCampaignAnalytics: async (campaignId, refresh = false) => {
     set({ analyticsLoading: true, analyticsError: null });
-    
+
     try {
       const queryParams = new URLSearchParams();
       if (refresh) queryParams.append('refresh', 'true');
-      
+
       const response = await fetch(`/api/admin/campaigns/${campaignId}/analytics?${queryParams.toString()}`);
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to fetch campaign analytics');
       }
-      
+
       const data = await response.json();
-      
-      set({ 
-        campaignAnalytics: data.analytics, 
-        analyticsLoading: false 
+
+      set({
+        campaignAnalytics: data.analytics,
+        analyticsLoading: false
       });
     } catch (error: any) {
-      set({ 
-        analyticsLoading: false, 
-        analyticsError: error.message || 'Failed to fetch campaign analytics' 
+      set({
+        analyticsLoading: false,
+        analyticsError: error.message || 'Failed to fetch campaign analytics'
       });
     }
   },
-  
+
   fetchAvailableSegments: async () => {
     set({ availableSegmentsLoading: true, availableSegmentsError: null });
     console.log('[useCampaignStore] Fetching available segments...');
@@ -464,7 +488,7 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       }
       const rawData = await response.json();
       console.log('[useCampaignStore] API raw data:', rawData);
-      
+
       // The API route returns { data: segments }
       const segmentsData = rawData.data;
       console.log('[useCampaignStore] Segments data extracted:', segmentsData);
@@ -482,7 +506,7 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       });
     }
   },
-  
+
   fetchEstimatedAudienceSize: async (campaignId: string) => {
     const { currentCampaign } = get();
     if (!currentCampaign || !currentCampaign.segment_rules) {
@@ -492,7 +516,7 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     }
 
     set({ audienceSizeLoading: true, audienceSizeError: null });
-    
+
     try {
       const response = await fetch(`/api/admin/campaigns/estimate-audience`, {
         method: 'POST',
@@ -501,52 +525,52 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
         },
         body: JSON.stringify(currentCampaign.segment_rules),
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to fetch estimated audience size');
       }
-      
+
       const data = await response.json();
-      
-      set({ 
-        estimatedAudienceSize: data.estimatedAudienceSize, 
-        audienceSizeLoading: false 
+
+      set({
+        estimatedAudienceSize: data.estimatedAudienceSize,
+        audienceSizeLoading: false
       });
     } catch (error: any) {
-      set({ 
-        audienceSizeLoading: false, 
-        audienceSizeError: error.message, 
-        estimatedAudienceSize: null 
+      set({
+        audienceSizeLoading: false,
+        audienceSizeError: error.message,
+        estimatedAudienceSize: null
       });
     }
   },
-  
+
   addCampaignSegment: async (campaignId, segmentId) => {
     set({ segmentsLoading: true, segmentsError: null });
-    
+
     try {
       console.log(`[addCampaignSegment] Adding segment ${segmentId} to campaign ${campaignId}`);
-      
+
       const response = await fetch(`/api/admin/campaigns/${campaignId}/segments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ segmentId }),
       });
-      
+
       const responseData = await response.json();
-      
+
       if (!response.ok) {
         console.error('[addCampaignSegment] API Error:', responseData);
         throw new Error(responseData.error || 'Failed to add segment');
       }
-      
+
       console.log('[addCampaignSegment] Success:', responseData);
-      
+
       // Refresh campaign segments and then fetch audience estimate
       await get().fetchCampaignSegments(campaignId);
       await get().fetchEstimatedAudienceSize(campaignId);
-      
+
       return responseData.segment;
     } catch (error: any) {
       console.error('[addCampaignSegment] Error:', error);
@@ -557,17 +581,17 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       set({ segmentsLoading: false });
     }
   },
-  
+
   removeCampaignSegment: async (campaignId, segmentId) => {
     set({ segmentsLoading: true, segmentsError: null });
-    
+
     try {
       console.log(`[removeCampaignSegment] Removing segment ${segmentId} from campaign ${campaignId}`);
-      
+
       const response = await fetch(`/api/admin/campaigns/${campaignId}/segments/${segmentId}`, {
         method: 'DELETE',
       });
-      
+
       if (!response.ok) {
         let errorData = { error: 'Failed to remove segment. Server returned an error.' };
         let parsedJsonError: any = null;
@@ -591,7 +615,7 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
             console.error('[removeCampaignSegment] Failed to parse error response as JSON or text, and failed to read as text.');
           }
         }
-        
+
         // The detailed logs that helped us diagnose can now be removed or commented out.
         // console.log('[removeCampaignSegment] Response Status:', response.status);
         // console.log('[removeCampaignSegment] Parsed JSON Error from Server:', parsedJsonError);
@@ -615,13 +639,13 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
           console.warn('[removeCampaignSegment] Successful response but failed to parse JSON body:', e);
         }
       }
-      
+
       console.log('[removeCampaignSegment] Success:', { status: response.status, responseData });
-      
+
       // Refresh campaign segments and then fetch audience estimate
       await get().fetchCampaignSegments(campaignId);
       await get().fetchEstimatedAudienceSize(campaignId);
-      
+
       // @ts-ignore TODO: Fix this type error if responseData can have a message property
       return responseData.message || 'Segment removed successfully';
     } catch (error: any) {
@@ -633,7 +657,7 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       set({ segmentsLoading: false });
     }
   },
-  
+
   resetState: () => {
     set({
       campaigns: [],
@@ -691,8 +715,8 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   addIncludeSegmentId: (segmentId) => {
     set((state) => {
       if (
-        state.currentCampaign && 
-        state.currentCampaign.segment_rules && 
+        state.currentCampaign &&
+        state.currentCampaign.segment_rules &&
         state.currentCampaign.segment_rules.include && // Check for include object
         Array.isArray(state.currentCampaign.segment_rules.include.segmentIds) // Check if segmentIds is an array
       ) {
@@ -717,12 +741,12 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
         // If segment_rules or its substructure is missing, initialize it properly
         const initializedRules: SegmentRules = {
           version: state.currentCampaign.segment_rules?.version || 1,
-          include: { 
+          include: {
             operator: state.currentCampaign.segment_rules?.include?.operator || 'OR',
-            segmentIds: [segmentId] 
+            segmentIds: [segmentId]
           },
-          exclude: { 
-            segmentIds: state.currentCampaign.segment_rules?.exclude?.segmentIds || [] 
+          exclude: {
+            segmentIds: state.currentCampaign.segment_rules?.exclude?.segmentIds || []
           },
         };
         return {
@@ -743,8 +767,8 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   removeIncludeSegmentId: (segmentId) => {
     set((state) => {
       if (
-        state.currentCampaign && 
-        state.currentCampaign.segment_rules && 
+        state.currentCampaign &&
+        state.currentCampaign.segment_rules &&
         state.currentCampaign.segment_rules.include && // Check for include object
         Array.isArray(state.currentCampaign.segment_rules.include.segmentIds) // Check if segmentIds is an array
       ) {
@@ -774,8 +798,8 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   addExcludeSegmentId: (segmentId) => {
     set((state) => {
       if (
-        state.currentCampaign && 
-        state.currentCampaign.segment_rules && 
+        state.currentCampaign &&
+        state.currentCampaign.segment_rules &&
         state.currentCampaign.segment_rules.exclude && // Check for exclude object
         Array.isArray(state.currentCampaign.segment_rules.exclude.segmentIds) // Check if segmentIds is an array
       ) {
@@ -800,12 +824,12 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
         // If segment_rules or its substructure is missing, initialize it properly
         const initializedRules: SegmentRules = {
           version: state.currentCampaign.segment_rules?.version || 1,
-          include: { 
+          include: {
             operator: state.currentCampaign.segment_rules?.include?.operator || 'OR',
             segmentIds: state.currentCampaign.segment_rules?.include?.segmentIds || []
           },
-          exclude: { 
-            segmentIds: [segmentId] 
+          exclude: {
+            segmentIds: [segmentId]
           },
         };
         return {
@@ -826,8 +850,8 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   removeExcludeSegmentId: (segmentId) => {
     set((state) => {
       if (
-        state.currentCampaign && 
-        state.currentCampaign.segment_rules && 
+        state.currentCampaign &&
+        state.currentCampaign.segment_rules &&
         state.currentCampaign.segment_rules.exclude && // Check for exclude object
         Array.isArray(state.currentCampaign.segment_rules.exclude.segmentIds) // Check if segmentIds is an array
       ) {
