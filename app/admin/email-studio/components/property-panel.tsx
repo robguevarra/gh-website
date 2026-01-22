@@ -55,7 +55,7 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
 
                 {/* Type Specific Fields */}
 
-                {node.type === 'trigger' && (
+                {(node.type === 'trigger' || (node.type === 'funnelNode' && node.data.actionType === 'trigger')) && (
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label>Event Trigger</Label>
@@ -155,7 +155,7 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                     </div>
                 )}
 
-                {(node.type === 'action' && node.data.actionType === 'email') && (
+                {((node.type === 'action' || node.type === 'funnelNode') && node.data.actionType === 'email') && (
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label>Email Subject</Label>
@@ -192,7 +192,7 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                     </div>
                 )}
 
-                {(node.type === 'action' && node.data.actionType === 'tag') && (
+                {((node.type === 'action' || node.type === 'funnelNode') && node.data.actionType === 'tag') && (
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label>Tag Name</Label>
@@ -215,7 +215,7 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                     </div>
                 )}
 
-                {(node.type === 'action' && node.data.actionType === 'delay') && (
+                {((node.type === 'action' || node.type === 'funnelNode') && node.data.actionType === 'delay') && (
                     <div className="space-y-4">
                         <div className="space-y-2 flex gap-2">
                             <div className="flex-1">
@@ -247,7 +247,7 @@ export function PropertyPanel({ node, onChange, onClose, onDelete, templates = [
                     </div>
                 )}
 
-                {(node.type === 'action' && node.data.actionType === 'wait_event') && (
+                {((node.type === 'action' || node.type === 'funnelNode') && node.data.actionType === 'wait_event') && (
                     <div className="space-y-4">
                         <div className="p-3 bg-indigo-50 rounded text-xs text-indigo-800 border border-indigo-200">
                             Pauses the flow until this event occurs, or the timeout is reached.

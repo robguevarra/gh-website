@@ -25,7 +25,8 @@ export interface PageViewData {
 
 export async function recordPageView(data: PageViewData) {
     const supabase = createServerSupabaseClient();
-    const headersList = headers();
+    // Next.js 15 requires awaiting headers() before reading values.
+    const headersList = await headers();
 
     try {
         // Get current user if authenticated (optional)

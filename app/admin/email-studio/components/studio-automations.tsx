@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Zap, Settings, Plus, Play, Pause, MoreHorizontal, MousePointerClick, Mail, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
-import { getAutomations, toggleAutomationStatus, createAutomation } from '../actions'
+import { getAutomations, toggleAutomationStatus, createAutomation, deleteAutomation, updateAutomation } from '../actions'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -56,6 +56,18 @@ export function StudioAutomations() {
     const [newAutomationName, setNewAutomationName] = useState('')
     const [newAutomationType, setNewAutomationType] = useState('abandoned_checkout')
 
+    // Delete State
+    const [isDeleting, setIsDeleting] = useState(false)
+    const [automationToDelete, setAutomationToDelete] = useState<Automation | null>(null)
+
+    // Edit State
+    const [isEditing, setIsEditing] = useState(false)
+    const [automationToEdit, setAutomationToEdit] = useState<Automation | null>(null)
+    const [editName, setEditName] = useState('')
+    const [editDescription, setEditDescription] = useState('')
+
+    // ... existing fetchAutomations ...
+
     const fetchAutomations = async () => {
         setIsLoading(true)
         const { automations, error } = await getAutomations()
@@ -76,8 +88,10 @@ export function StudioAutomations() {
         if (error) {
             toast.error("Failed to update status")
         } else {
-            setAutomations(prev => prev.map(a => a.id === id ? { ...a, status: automation.status } : a))
-            toast.success(`Automation ${automation.status === 'active' ? 'activated' : 'deactivated'}`)
+            if (automation) {
+                setAutomations(prev => prev.map(a => a.id === id ? { ...a, status: automation.status } : a))
+                toast.success(`Automation ${automation.status === 'active' ? 'activated' : 'deactivated'}`)
+            }
         }
     }
 
@@ -94,15 +108,62 @@ export function StudioAutomations() {
             description: newAutomationType === 'abandoned_checkout' ? 'Recover lost sales' : 'Welcome new subscribers'
         })
 
-        if (error) {
+        if (error || !automation) {
             toast.error("Failed to create automation")
         } else {
             toast.success("Automation created")
-            setAutomations(prev => [automation, ...prev])
+            const newAutomation = automation as Automation
+            setAutomations(prev => [newAutomation, ...prev])
             setNewAutomationName('')
             // Close dialog logic would go here if controlled, but strictly using primitive for now
         }
         setIsCreating(false)
+    }
+
+    const confirmDelete = async () => {
+        if (!automationToDelete) return
+
+        setIsDeleting(true)
+        const { success, error } = await deleteAutomation(automationToDelete.id)
+
+        if (error) {
+            toast.error("Failed to delete automation")
+        } else {
+            toast.success("Automation deleted")
+            setAutomations(prev => prev.filter(a => a.id !== automationToDelete.id))
+            setAutomationToDelete(null)
+        }
+        setIsDeleting(false)
+    }
+
+    const openEditDialog = (automation: Automation) => {
+        setAutomationToEdit(automation)
+        setEditName(automation.name)
+        setEditDescription(automation.description || '')
+    }
+
+    const handleUpdate = async () => {
+        if (!automationToEdit) return
+        if (!editName.trim()) {
+            toast.error("Name is required")
+            return
+        }
+
+        setIsEditing(true)
+        const { automation, error } = await updateAutomation(automationToEdit.id, {
+            name: editName,
+            description: editDescription
+        })
+
+        if (error || !automation) {
+            toast.error("Failed to update automation")
+        } else {
+            toast.success("Automation updated")
+            const updatedAutomation = automation as Automation
+            setAutomations(prev => prev.map(a => a.id === automationToEdit.id ? { ...a, name: updatedAutomation.name, description: updatedAutomation.description } : a))
+            setAutomationToEdit(null)
+        }
+        setIsEditing(false)
     }
 
     const getIconForType = (type: string) => {
@@ -246,8 +307,15 @@ export function StudioAutomations() {
                                             <DropdownMenuItem onClick={() => window.location.href = `/admin/email-studio/automations/${automation.id}`}>
                                                 Edit Flow
                                             </DropdownMenuItem>
-                                            <DropdownMenuItem>Edit Settings</DropdownMenuItem>
-                                            <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => openEditDialog(automation)}>
+                                                Edit Settings
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                                className="text-destructive focus:text-destructive"
+                                                onClick={() => setAutomationToDelete(automation)}
+                                            >
+                                                Delete
+                                            </DropdownMenuItem>
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </div>
@@ -289,6 +357,63 @@ export function StudioAutomations() {
                     ))}
                 </div>
             )}
+
+            {/* Delete Confirmation Dialog */}
+            <Dialog open={!!automationToDelete} onOpenChange={(open) => !open && setAutomationToDelete(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Automation</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete "{automationToDelete?.name}"? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setAutomationToDelete(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>
+                            {isDeleting ? "Deleting..." : "Delete"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Settings Dialog */}
+            <Dialog open={!!automationToEdit} onOpenChange={(open) => !open && setAutomationToEdit(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Automation Settings</DialogTitle>
+                        <DialogDescription>
+                            Update the basic details of your automation.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="edit-name">Name</Label>
+                            <Input
+                                id="edit-name"
+                                value={editName}
+                                onChange={(e) => setEditName(e.target.value)}
+                                placeholder="Automation Name"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="edit-desc">Description</Label>
+                            <Input
+                                id="edit-desc"
+                                value={editDescription}
+                                onChange={(e) => setEditDescription(e.target.value)}
+                                placeholder="Brief description"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setAutomationToEdit(null)}>Cancel</Button>
+                        <Button onClick={handleUpdate} disabled={isEditing}>
+                            {isEditing ? "Saving..." : "Save Changes"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
+

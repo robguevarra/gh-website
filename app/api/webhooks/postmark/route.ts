@@ -247,6 +247,27 @@ export async function POST(req: NextRequest) {
       if (automationMetadata.execution_id) {
         console.info(`[Postmark Webhook] Found Automation Metadata:`, automationMetadata)
 
+        // 3.5 [NEW] Premium Funnel Analytics (Funnel Step Metrics)
+        if (automationMetadata.funnel_step_id && (eventType === 'Open' || eventType === 'Click')) {
+          try {
+            const { data: step } = await supabase.from('email_funnel_steps').select('metrics').eq('id', automationMetadata.funnel_step_id).single()
+            if (step) {
+              const currentMetrics = step.metrics || { entered: 0, completed: 0, converted: 0, revenue: 0, opened: 0, clicked: 0 }
+              // Normalize metrics keys
+              if (!currentMetrics.opened) currentMetrics.opened = 0
+              if (!currentMetrics.clicked) currentMetrics.clicked = 0
+
+              if (eventType === 'Open') currentMetrics.opened += 1
+              if (eventType === 'Click') currentMetrics.clicked += 1
+
+              await supabase.from('email_funnel_steps').update({ metrics: currentMetrics }).eq('id', automationMetadata.funnel_step_id)
+              console.info(`[Postmark Webhook] Updated funnel step metrics (${eventType}) for step ${automationMetadata.funnel_step_id}`)
+            }
+          } catch (funnelErr) {
+            console.error(`[Postmark Webhook] Failed to update funnel step metrics:`, funnelErr)
+          }
+        }
+
         if (eventType === 'Open' || eventType === 'Click') {
           try {
             const { trackEvent } = await import('@/app/actions/tracking');
