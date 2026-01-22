@@ -238,7 +238,12 @@ serve(async (req) => {
         for (const automation of automations) {
             // 4a. Filter Check
             // We check if the automation has specific filters in its start node configuration
-            const startNode = automation.graph.nodes.find((n: any) => n.type === 'trigger')
+            // Funnel nodes might have type='funnelNode' and data.actionType='trigger'
+            const startNode = automation.graph.nodes.find((n: any) =>
+                n.type === 'trigger' ||
+                n.data?.actionType === 'trigger' ||
+                n.data?.type === 'trigger'
+            )
             if (!startNode) {
                 console.warn(`[Watcher] Automation ${automation.id} has no trigger node. Skipping.`)
                 continue
