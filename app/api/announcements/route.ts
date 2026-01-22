@@ -1,19 +1,26 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
+import { unstable_cache } from 'next/cache';
 import { publicListAnnouncementsQuerySchema } from '@/lib/validations/announcement';
+import type { Database } from '@/types/supabase';
 
-// GET Handler to list published announcements for the public
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const queryParams = Object.fromEntries(searchParams.entries());
-    const parsedQuery = publicListAnnouncementsQuerySchema.parse(queryParams);
+// Enable Edge Runtime for faster cold boots and lower costs
+export const runtime = 'edge';
 
-    const { page, limit, type, sortBy, sortOrder } = parsedQuery;
+// Cache the data fetching to reduce DB load and function duration
+// Revalidates every hour (3600 seconds)
+const getCachedAnnouncements = unstable_cache(
+  async (page: number, limit: number, sortBy: string, sortOrder: string, type?: string) => {
+    // connect to Supabase using the Anon key (public access)
+    // We cannot use createServerSupabaseClient here because it relies on request cookies,
+    // which are not available/static in unstable_cache
+    const supabase = createClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+
     const offset = (page - 1) * limit;
-
-    const supabase = await createServerSupabaseClient();
     const now = new Date().toISOString();
 
     // Base query for published and active announcements
@@ -33,6 +40,32 @@ export async function GET(request: Request) {
     }
 
     const { data, error, count } = await query;
+    return { data, error, count };
+  },
+  ['public-announcements-list'],
+  {
+    revalidate: 3600,
+    tags: ['announcements']
+  }
+);
+
+// GET Handler to list published announcements for the public
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const queryParams = Object.fromEntries(searchParams.entries());
+    const parsedQuery = publicListAnnouncementsQuerySchema.parse(queryParams);
+
+    const { page, limit, type, sortBy, sortOrder } = parsedQuery;
+
+    // Fetch data using the cached function
+    const { data, error, count } = await getCachedAnnouncements(
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+      type
+    );
 
     if (error) {
       console.error('Error fetching public announcements:', error);
