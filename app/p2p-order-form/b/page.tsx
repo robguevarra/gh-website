@@ -6,6 +6,10 @@ import PapersToProfitVariantB from "../p2p-order-client-b"
  * Allows export of static metadata for SEO & OG cards while delegating all
  * interactive behaviour to the client component.
  */
+// Force static rendering to avoid expensive server-side function calls
+export const dynamic = 'force-static'
+export const revalidate = 3600 // Revalidate every hour
+
 export const metadata: Metadata = {
     title: {
         absolute: "Papers to Profits | Paper Crafts Business Course – Graceful Homeschooling",
