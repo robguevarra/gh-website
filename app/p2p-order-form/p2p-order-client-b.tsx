@@ -681,6 +681,19 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
                     </ul>
 
                     <div className="pt-4 space-y-3">
+                      {/* Optimization 2: Strengthen proof right before the CTA */}
+                      <div className="mb-2">
+                        <div className="flex items-center gap-1 mb-1">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star key={s} className="h-3 w-3 text-yellow-400 fill-yellow-400" />
+                          ))}
+                        </div>
+                        <p className="text-sm text-[#6d4c41] italic font-medium">
+                          "I earned 6 figures in 3 months using what I learned inside Papers to Profits."
+                          <span className="block text-xs font-bold not-italic mt-1 text-[#5d4037]">— Myca Andrea</span>
+                        </p>
+                      </div>
+
                       <Button
                         size="lg"
                         className="bg-brand-purple hover:bg-[#8d6e63] text-white px-6 py-4 text-lg md:px-8 md:py-6 md:text-xl rounded-full shadow-lg hover:shadow-xl transition-all duration-300 w-full sm:w-auto"
@@ -692,7 +705,8 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
                         }}
                       >
                         <span className="flex items-center">
-                          Get Instant Access — ₱1300
+                          {/* Optimization 1: Change primary CTA copy */}
+                          Start My Printing Business — ₱1300
                           <ArrowRight className="ml-2 h-5 w-5" />
                         </span>
                       </Button>
@@ -733,6 +747,14 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
                       When you enroll in Papers to Profits, you don’t just learn how to print —
                       you also get access to our partner printer to help you fulfill orders.
                     </p>
+                    {/* Optimization 3: Clarify Partner Printer = access, not outsourcing confusion */}
+                    <div className="bg-brand-purple/10 p-4 rounded-lg border border-brand-purple/20">
+                      <p className="text-xs font-bold text-brand-purple uppercase tracking-wider mb-1">Important:</p>
+                      <p className="text-sm text-[#5d4037] font-medium">
+                        You own the product, the customer, and the pricing.
+                        The partner printer is simply a fulfillment option while you’re starting.
+                      </p>
+                    </div>
                     <p className="text-[#6d4c41] italic">
                       Many students begin by using the partner printer, then transition to DIY printing later once they’re confident and profitable.
                     </p>
@@ -1565,7 +1587,7 @@ export default function PapersToProfitVariantB({ variant = 'B' }: { variant?: st
                     }}
                   >
                     <span className="flex items-center justify-center">
-                      Get Instant Access — ₱1300
+                      Start My Printing Business — ₱1300
                       <ArrowRight className="ml-2 h-5 w-5" />
                     </span>
                   </Button>
