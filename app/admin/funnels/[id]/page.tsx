@@ -27,12 +27,34 @@ export default function FunnelDetailPage() {
     const [funnelName, setFunnelName] = useState("")
     const [conversionEvent, setConversionEvent] = useState("")
     const [simulationMode, setSimulationMode] = useState(false)
+    const [stats, setStats] = useState({ entries: 0, active: 0, conversions: 0, revenue: 0 })
 
     useEffect(() => {
         if (params.id) {
             fetchFunnel(params.id as string)
+            fetchStats(params.id as string)
         }
     }, [params.id])
+
+    const fetchStats = async (id: string) => {
+        // Aggregate stats from journeys
+        const { data, error } = await (supabase as any)
+            .from('email_funnel_journeys')
+            .select(`
+                status,
+                revenue_generated
+            `)
+            .eq('funnel_id', id)
+
+        if (data) {
+            const entries = data.length
+            const active = data.filter((j: any) => ['active', 'paused'].includes(j.status)).length
+            const conversions = data.filter((j: any) => j.status === 'converted').length
+            const revenue = data.reduce((sum: number, j: any) => sum + (Number(j.revenue_generated) || 0), 0)
+
+            setStats({ entries, active, conversions, revenue })
+        }
+    }
 
     const fetchFunnel = async (id: string) => {
         setLoading(true)
@@ -200,22 +222,22 @@ export default function FunnelDetailPage() {
                             <TabsContent value="overview" className="h-full overflow-y-auto p-6 m-0">
                                 <div className="max-w-4xl mx-auto space-y-8">
                                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                                        {/* Quick Stats Placeholders */}
+                                        {/* Quick Stats */}
                                         <div className="p-4 border rounded-lg bg-card shadow-sm">
                                             <div className="text-sm font-medium text-muted-foreground">Total Entries</div>
-                                            <div className="text-2xl font-bold">0</div>
+                                            <div className="text-2xl font-bold">{stats.entries}</div>
                                         </div>
                                         <div className="p-4 border rounded-lg bg-card shadow-sm">
                                             <div className="text-sm font-medium text-muted-foreground">Active</div>
-                                            <div className="text-2xl font-bold">0</div>
+                                            <div className="text-2xl font-bold">{stats.active}</div>
                                         </div>
                                         <div className="p-4 border rounded-lg bg-card shadow-sm">
                                             <div className="text-sm font-medium text-muted-foreground">Conversions</div>
-                                            <div className="text-2xl font-bold">0</div>
+                                            <div className="text-2xl font-bold">{stats.conversions}</div>
                                         </div>
                                         <div className="p-4 border rounded-lg bg-card shadow-sm">
                                             <div className="text-sm font-medium text-muted-foreground">Revenue</div>
-                                            <div className="text-2xl font-bold">₱0.00</div>
+                                            <div className="text-2xl font-bold">₱{stats.revenue.toLocaleString()}</div>
                                         </div>
                                     </div>
 

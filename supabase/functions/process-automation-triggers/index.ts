@@ -30,12 +30,67 @@ serve(async (req) => {
         const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
         // 2. Parse Payload
-        const { event_id, type, email, contact_id, metadata, marketingOptIn } = await req.json()
+        const body = await req.json()
+        let { event_id, type, email, contact_id, metadata, marketingOptIn } = body
+
+        // [ADAPTER] Handle Supabase Native DB Webhooks (INSERT on enrollments)
+        // The UI sends: { type: 'INSERT', table: 'enrollments', record: { ... } }
+        if (body.type === 'INSERT' && body.table === 'enrollments' && body.record) {
+            console.log(`[Watcher] Detected Native DB Webhook from 'enrollments'`)
+            const record = body.record
+
+            // Map Fields
+            event_id = record.id
+            contact_id = record.user_id
+            type = 'checkout.completed'
+
+            // [ENHANCEMENT] Fetch Transaction Amount for Revenue Attribution
+            let amount = 0
+            if (record.transaction_id) {
+                const { data: tx } = await supabase
+                    .from('transactions')
+                    .select('amount')
+                    .eq('id', record.transaction_id)
+                    .maybeSingle()
+
+                if (tx && tx.amount) {
+                    amount = Number(tx.amount)
+                    console.log(`[Watcher] Fetched transaction amount: ${amount}`)
+                }
+            }
+
+            metadata = {
+                source: 'db_webhook_native',
+                enrollment_id: record.id,
+                course_id: record.course_id,
+                transaction_id: record.transaction_id,
+                amount: amount
+            }
+
+            // [CRITICAL] Fetch Email to bridge User ID -> Lead ID
+            // We need the email to find the original 'purchase_lead' and stop that execution.
+            if (contact_id) {
+                const { data: profile } = await supabase
+                    .from('unified_profiles')
+                    .select('email')
+                    .eq('id', contact_id)
+                    .maybeSingle()
+
+                if (profile && profile.email) {
+                    email = profile.email
+                    console.log(`[Watcher] Resolved email for Native Webhook: ${email}`)
+                } else {
+                    console.warn(`[Watcher] Could not resolve email for User ${contact_id} (Native Webhook)`)
+                }
+            }
+        }
 
         console.log(`[Watcher] Received event: ${type}, Email: ${email}, EventID: ${event_id}`)
 
-        if (!event_id || !type || !email) {
-            throw new Error('Missing required fields: event_id, type, email')
+        if (!event_id || !type) {
+            // relaxed check for email as some events might not need it if contact_id is enough, 
+            // but for safe attribution we usually need it.
+            if (!email && !contact_id) throw new Error('Missing required fields: event_id, type, (email or contact_id)')
         }
 
         // 3a. Resume Paused Executions (Wait Until Logic)
@@ -50,7 +105,23 @@ serve(async (req) => {
         if (contact_id && type === 'checkout.completed') {
             console.log(`[Watcher] Checking funnel attribution for checkout.completed event (User: ${contact_id})`)
 
-            // Find active journeys for this user
+            // [FIX] Resolve Contact ID by Email (Handle mismatch between UserID and LeadID)
+            let searchContactIds = [contact_id].filter(Boolean)
+            if (email) {
+                const { data: lead } = await supabase
+                    .from('purchase_leads')
+                    .select('id')
+                    .eq('email', email)
+                    .maybeSingle()
+
+                if (lead) {
+                    console.log(`[Watcher] Found Lead ID ${lead.id} for email ${email}`)
+                    searchContactIds.push(lead.id)
+                }
+            }
+            searchContactIds = [...new Set(searchContactIds)]
+
+            // Find active journeys for this user (or lead)
             const { data: activeJourneys } = await supabase
                 .from('email_funnel_journeys')
                 .select(`
@@ -63,7 +134,7 @@ serve(async (req) => {
                         settings
                     )
                 `)
-                .eq('contact_id', contact_id)
+                .in('contact_id', searchContactIds)
                 .eq('status', 'active')
 
             if (activeJourneys && activeJourneys.length > 0) {
@@ -142,11 +213,43 @@ serve(async (req) => {
                             if (activeExec) {
                                 console.log(`[Watcher] Stopping execution ${activeExec.id} due to conversion.`)
                                 await supabase.from('automation_executions').update({
-                                    status: 'completed', // Or 'cancelled' - 'completed' is cleaner regarding success.
+                                    status: 'converted', // Explicitly mark as converted
                                     completed_at: new Date().toISOString(),
                                     last_error: 'Stopped by Conversion Goal'
                                 }).eq('id', activeExec.id)
                             }
+                        }
+                    }
+                }
+            }
+
+            // [ROBUSTNESS FIX] Stop Executions Directly (Fallback)
+            // Even if no active journey is found (e.g. creation failed), we must stop the automation
+            // if the conversion goal is met.
+            const { data: goalFunnels } = await supabase
+                .from('email_funnels')
+                .select('automation_id')
+                .eq('conversion_goal_event', type) // e.g. 'checkout.completed'
+
+            if (goalFunnels && goalFunnels.length > 0) {
+                const automationIds = goalFunnels.map((f: any) => f.automation_id).filter(Boolean)
+
+                if (automationIds.length > 0) {
+                    const { data: lingeringExecs } = await supabase
+                        .from('automation_executions')
+                        .select('id')
+                        .in('automation_id', automationIds)
+                        .in('contact_id', searchContactIds) // [contact_id, lead_id]
+                        .in('status', ['active', 'paused'])
+
+                    if (lingeringExecs && lingeringExecs.length > 0) {
+                        console.log(`[Watcher] Found ${lingeringExecs.length} lingering executions to stop (Direct Match).`)
+                        for (const exec of lingeringExecs) {
+                            await supabase.from('automation_executions').update({
+                                status: 'converted', // Explicitly mark as converted
+                                completed_at: new Date().toISOString(),
+                                last_error: 'Stopped by Conversion Goal (Direct Match)'
+                            }).eq('id', exec.id)
                         }
                     }
                 }

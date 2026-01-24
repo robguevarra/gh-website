@@ -180,6 +180,51 @@ serve(async (req) => {
                     console.log(`[Walker] Executing Action: ${actionType}`)
 
                     if (actionType === 'email') { // Corrected from 'send_email' to match UI 'email'
+
+                        // [SAFETY NET] Just-In-Time Check: Has the user purchased?
+                        // This prevents race conditions where the "Stop" signal was missed or lagged.
+                        const userEmail = context?.email
+                        if (userEmail) {
+                            // Check for any successful transaction for this email
+                            const { data: purchase } = await supabase
+                                .from('transactions')
+                                .select('id')
+                                .eq('contact_email', userEmail)
+                                .in('status', ['paid', 'completed'])
+                                .maybeSingle()
+
+                            if (purchase) {
+                                console.log(`[Walker] SAFETY NET: Blocked email to ${userEmail} because a purchase was found (Tx: ${purchase.id}).`)
+
+                                // Mark as converted and stop
+                                await supabase.from('automation_executions').update({
+                                    status: 'converted',
+                                    completed_at: new Date().toISOString(),
+                                    last_error: 'Stopped by JIT Safety Check'
+                                }).eq('id', execution_id)
+
+                                return new Response(JSON.stringify({ status: 'converted', reason: 'jit_safety_check' }), { headers: corsHeaders })
+                            }
+
+                            // Secondary Check: Check Enrollments (if no transaction record but enrolled via other means)
+                            // Find user by email
+                            const { data: userProfile } = await supabase.from('unified_profiles').select('id').eq('email', userEmail).maybeSingle()
+                            if (userProfile) {
+                                const { data: enrollment } = await supabase.from('enrollments').select('id').eq('user_id', userProfile.id).maybeSingle()
+                                if (enrollment) {
+                                    console.log(`[Walker] SAFETY NET: Blocked email to ${userEmail} because enrollment found (User: ${userProfile.id}).`)
+
+                                    await supabase.from('automation_executions').update({
+                                        status: 'converted',
+                                        completed_at: new Date().toISOString(),
+                                        last_error: 'Stopped by JIT Safety Check (Enrollment)'
+                                    }).eq('id', execution_id)
+
+                                    return new Response(JSON.stringify({ status: 'converted', reason: 'jit_safety_check_enrollment' }), { headers: corsHeaders })
+                                }
+                            }
+                        }
+
                         const marketingOptIn = context?.marketing_opt_in
 
                         // Check Opt-in (unless transactional - todo logic)

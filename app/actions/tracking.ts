@@ -67,7 +67,7 @@ export async function trackEvent({
         // Using explicit URL from env or construction
         const startAutomationUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/process-automation-triggers`
 
-        fetch(startAutomationUrl, {
+        await fetch(startAutomationUrl, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
