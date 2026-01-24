@@ -6,15 +6,16 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { motion, AnimatePresence, useInView, useScroll, useTransform } from "framer-motion"
-import { BookOpen, ChevronRight, ArrowRight, Star, Check, Shield, Play, Clock, Heart } from "lucide-react"
+import { BookOpen, ChevronRight, ArrowRight, Star, Check, Shield, Heart, Printer, Lightbulb, Package, Rocket, Clock } from "lucide-react"
 
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
+
 import { PublicHeader } from "@/components/layout/public-header"
 import { PublicFooter } from "@/components/layout/public-footer"
 import { useMobile } from "@/hooks/use-mobile"
@@ -36,15 +37,7 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [showSuccessMessage, setShowSuccessMessage] = useState(false)
-  const [marketingOptIn, setMarketingOptIn] = useState(true) // Default to true or false based on preference/law. Defaulting to true for "opt-out" style or checking by default. Copy says "Email me...", usually unchecked or checked depending on aggression level. User didn't specify default. Let's make it unchecked (false) for GDPR compliance safe default, or true if aggressive.
-  // Actually, usually beneficial to have it checked if copy implies "Yes, email me".
-  // Let's set to FALSE to be safe, or TRUE? "Email me guidance" sounds like a request.
-  // The copy "You can unsubscribe anytime" implies standard marketing list.
-  // I will set it to FALSE (unchecked) to be explicit opt-in, unless user requested pre-checked. 
-  // User just said "add opt-in checkbox". I'll default to FALSE.
-  // Wait, commonly "Keep me updated" is checked.
-  // I'll stick to FALSE.
-
+  const [marketingOptIn, setMarketingOptIn] = useState(true) // Pre-checked as requested
 
 
   const heroRef = useRef<HTMLDivElement>(null)
@@ -184,9 +177,9 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
             firstName: formData.firstName || 'Guest',
             lastName: formData.lastName || 'Guest',
             productType: 'P2P',
-            sourcePage: '/p2p-order-form',
+            sourcePage: '/p2p-order-form', // Changed back to main path
             marketingOptIn: marketingOptIn,
-            metadata: { event: 'email_blur' }
+            metadata: { event: 'email_blur', variant: variant }
           })
         });
       } catch (e) {
@@ -250,10 +243,9 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
               plan: selectedPlan,
               course_id: '7e386720-8839-4252-bd5f-09a33c3e1afb',
               ...(fbp && { fbp }),
-              ...(fbp && { fbp }),
               ...(fbc && { fbc }),
-            },
-            marketingOptIn: marketingOptIn
+              marketing_opt_in: marketingOptIn,
+            }
           })
         });
 
@@ -335,10 +327,10 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
           source: "website",
           course_id: "7e386720-8839-4252-bd5f-09a33c3e1afb",
           ...(leadId && { lead_id: leadId }), // Include lead_id for tracking
-          marketing_opt_in: marketingOptIn,
           ...(fbp && { fbp }),
           ...(fbc && { fbc }),
           variant, // Track A/B variant in payment metadata
+          marketing_opt_in: marketingOptIn
         },
       })
 
@@ -464,71 +456,24 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
     ))
   }
 
-  // Module data (updated July 5 2025)
-  const modules = [
-    {
-      title: "Module 1: Print Class",
-      description:
-        "Start strong with the core foundations of creating profitable paper products.",
-      lessons: [
-        "How to turn your creative ideas into tangible, high-quality products",
-        "Basics of printing and paper crafting for beginners",
-        "The essential mindset to start your paperpreneur journey",
-        "Clarifying your purpose, passion, vision, mission, and values",
-        "Building a strong foundation before moving to design and production",
-      ],
-      duration: "2 hours",
-    },
-    {
-      title: "Module 2: Product Creation Class",
-      description:
-        "Learn how to confidently turn your ideas into polished, sellable products.",
-      lessons: [
-        "The full process of developing your own paper product from idea to output",
-        "How to bring your unique ideas to life, whether you're a beginner or already selling",
-        "Ways to improve or refine existing designs for better quality and appeal",
-        "A clear, step-by-step approach to creating with purpose and strategy",
-      ],
-      duration: "2.5 hours",
-    },
-    {
-      title: "Module 3: Launch Class",
-      description:
-        "Turn your product into profit with a successful and strategic launch.",
-      lessons: [
-        "A step-by-step guide to launching your paper products with confidence",
-        "Key strategies to bring your product to market successfully",
-        "How to plan, prepare, and execute a strong product launch",
-        "Tips for launching a new collection or expanding an existing line",
-        "Insights to help you stand out and sell well from day one",
-      ],
-      duration: "3 hours",
-    },
-    {
-      title: "Module 4: Binding Techniques",
-      description: "Upgrade your paper products with professional binding skills.",
-      lessons: [
-        "How binding methods impact product quality, durability, and appearance",
-        "Choosing the best binding technique for your journals, planners, or notepads",
-        "Practical tips to make your products look polished and premium",
-        "Skills that elevate your brand and set your products apart",
-      ],
-      duration: "2 hours",
-    },
-    {
-      title: "Module 5: Bonus Elective",
-      description:
-        "Strengthen the backbone of your paper product business with practical tools and strategies.",
-      lessons: [
-        "Core principles every paperpreneur needs to run a sustainable business",
-        "How to manage and price your products with confidence",
-        "Key mindset shifts for growth and long-term success",
-        "Practical systems to help you stay organized and profitable",
-        "Foundations that prepare you to scale your brand with purpose",
-      ],
-      duration: "1.5 hours",
-    },
-  ]
+  // Header visibility logic
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true)
+  const { scrollY } = useScroll()
+  const lastScrollY = useRef(0)
+
+  useEffect(() => {
+    return scrollY.onChange((latest) => {
+      const currentScrollY = latest
+      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+        setIsHeaderVisible(false)
+      } else {
+        setIsHeaderVisible(true)
+      }
+      lastScrollY.current = currentScrollY
+    })
+  }, [scrollY])
+
+  // FAQ data
 
   // FAQ data
   const faqs = [
@@ -538,19 +483,19 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
         "You'll have lifetime access to all course materials, including any future updates. Once you enroll, the content is yours forever.",
     },
     {
-      question: "Do I need any special equipment or supplies?",
+      question: "Do I need to buy a printer immediately?",
       answer:
-        "The course is designed to start with basic supplies that are affordable and easy to find. We provide a complete supply list, and as you progress, you can invest in more specialized tools if you choose.",
+        "No. You get access to our partner printer, allowing you to start selling and fulfilling orders without buying your own equipment first. You can invest in your own printer later once you're profitable.",
     },
     {
       question: "I'm not very artistic. Can I still create beautiful paper products?",
       answer:
-        "The course includes step-by-step instructions and templates that make it easy for anyone to create professional-looking products, regardless of artistic ability.",
+        "The course includes step-by-step instructions and templates that make it easy for anyone to create professional-looking products, regardless of artistic ability. Plus, we have free digital products you can use immediately to start selling right away.",
     },
     {
       question: "How much time do I need to commit to the course?",
       answer:
-        "The course is self-paced, so you can work through it on your own schedule. Each module takes approximately 2-3 hours to complete, and you can spread this out over days or weeks as needed.",
+        "The course is self-paced, so you can work through it on your own schedule. Each module takes approximately 5-20 minutes to complete, and you can spread this out over days or weeks as needed.",
     },
     {
       question: "Can I really make money selling paper products?",
@@ -590,7 +535,14 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
     <>
       <PageTracker metadata={{ variant }} />
       <div className="flex min-h-screen flex-col bg-[#f9f6f2]">
-        <PublicHeader />
+        <motion.header
+          className="sticky top-0 z-50 w-full"
+          initial={{ y: 0 }}
+          animate={{ y: isHeaderVisible ? 0 : -100 }}
+          transition={{ duration: 0.3 }}
+        >
+          <PublicHeader />
+        </motion.header>
 
         <main ref={pageRef} className="relative min-h-screen overflow-x-hidden">
           {/* Success Message */}
@@ -631,10 +583,10 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
             )}
           </AnimatePresence>
 
-          {/* Empathy Section - New! */}
+          {/* Hero Section (Variant B) - Replaces Empathy Section */}
           <section
             ref={empathyRef}
-            className="w-full py-12 md:py-20 bg-gradient-to-b from-brand-purple/20 to-brand-purple/5 relative overflow-hidden"
+            className="w-full py-8 md:py-20 bg-gradient-to-b from-brand-purple/20 to-brand-purple/5 relative overflow-hidden snap-start shrink-0"
           >
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <motion.div
@@ -666,7 +618,7 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
 
             <div className="container px-4 md:px-6">
               <div className="grid gap-8 lg:grid-cols-[1fr_1fr] items-center">
-                {/* Left side - Instructor's Message */}
+                {/* Left side - Image */}
                 <motion.div
                   initial="hidden"
                   animate={isEmpathyInView ? "visible" : "hidden"}
@@ -681,7 +633,7 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
                       height={500}
                       className="h-auto"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-brand-purple/80 via-brand-purple/30 to-transparent"></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-brand-purple/80 via-transparent to-transparent"></div>
 
                     <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
                       <motion.div
@@ -691,57 +643,47 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
                         className="space-y-3"
                       >
                         <h3 className="text-2xl font-serif">Grace</h3>
-                        <p className="text-white/90 text-sm">Homeschooling Mom of 3</p>
-                        <div className="flex items-center gap-2 text-white/80">
-                          <Heart className="h-4 w-4 text-brand-pink" />
-                          <span className="text-sm font-light">Passionate about helping you succeed</span>
-                        </div>
                       </motion.div>
                     </div>
                   </div>
-
-                  {/* Quote bubble */}
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.8, duration: 0.6 }}
-                    className="absolute top-8 -right-4 md:-right-12 bg-white rounded-2xl p-4 shadow-lg max-w-[200px] z-10"
-                  >
-                    <p className="text-[#6d4c41] text-sm italic">{"Let me guide you on this journey..."}</p>
-                    <div className="absolute -bottom-2 right-6 w-4 h-4 bg-white transform rotate-45"></div>
-                  </motion.div>
                 </motion.div>
 
-                {/* Right side - Empathy Message */}
+                {/* Right side - New Hero Content */}
                 <motion.div
                   initial="hidden"
                   animate={isEmpathyInView ? "visible" : "hidden"}
                   variants={staggerContainer}
-                  className="flex flex-col justify-center space-y-6"
+                  className="flex flex-col justify-center space-y-4 md:space-y-6"
                 >
                   <motion.div variants={fadeIn} className="space-y-4">
-                    <h2 className="text-3xl md:text-4xl font-serif tracking-tight text-[#5d4037]">
-                      I understand your journey as a homeschooling mom
-                    </h2>
+                    <h1 className="text-3xl md:text-4xl lg:text-5xl font-serif tracking-tight text-[#5d4037]">
+                      Start a Home-Based Printing Business and Earn From Home — <span className="text-brand-purple">Even Without Your Own Printer</span>
+                    </h1>
                     <p className="text-[#6d4c41] text-lg font-light">
-                      As a stay-at-home mom homeschooling 3 kids, I know the challenges you face every day:
+                      Papers to Profits teaches you how to create paper products people actually buy — with access to our partner printer so you can start selling even without your own equipment.
                     </p>
                   </motion.div>
 
-                  <div className="space-y-4">{renderChallenges()}</div>
+                  <motion.div variants={fadeIn} className="space-y-4">
+                    <ul className="space-y-2">
+                      <li className="flex items-center gap-2 text-[#6d4c41] text-lg">
+                        <Check className="h-5 w-5 text-green-500 flex-shrink-0" />
+                        <span>Beginner-friendly (no experience required)</span>
+                      </li>
+                      <li className="flex items-center gap-2 text-[#6d4c41] text-lg">
+                        <Check className="h-5 w-5 text-green-500 flex-shrink-0" />
+                        <span>One-time payment, lifetime access</span>
+                      </li>
+                      <li className="flex items-center gap-2 text-[#6d4c41] text-lg">
+                        <Check className="h-5 w-5 text-green-500 flex-shrink-0" />
+                        <span>Includes bonus design templates worth Php 5000+</span>
+                      </li>
+                    </ul>
 
-                  <motion.div variants={fadeIn} className="pt-4">
-                    <p className="text-[#6d4c41] text-lg border-l-4 border-brand-purple pl-4 italic">
-                      That is why I created Papers to Profits - to help moms like us create beautiful paper products that
-                      sell while still being present for our families.
-                    </p>
-                  </motion.div>
-
-                  <motion.div variants={fadeIn} className="pt-4">
-                    <motion.div animate={pulseAnimation} className="inline-block">
+                    <div className="pt-4 space-y-3">
                       <Button
                         size="lg"
-                        className="bg-brand-purple hover:bg-[#8d6e63] text-white px-8 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
+                        className="bg-brand-purple hover:bg-[#8d6e63] text-white px-6 py-4 text-lg md:px-8 md:py-6 md:text-xl rounded-full shadow-lg hover:shadow-xl transition-all duration-300 w-full sm:w-auto"
                         onClick={() => {
                           const element = document.getElementById("enrollment-form")
                           if (element) {
@@ -750,19 +692,85 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
                         }}
                       >
                         <span className="flex items-center">
-                          Join Me on This Journey
+                          Get Instant Access — ₱1300
                           <ArrowRight className="ml-2 h-5 w-5" />
                         </span>
                       </Button>
-                    </motion.div>
+                      <p className="text-xs text-muted-foreground flex items-center gap-2">
+                        <Shield className="h-3 w-3" />
+                        Secure checkout via Xendit • Pay with GCash / Maya / Cards
+                      </p>
+                      <p className="text-xs font-medium text-[#6d4c41]/80 mt-1">
+                        ⭐⭐⭐⭐⭐ Trusted by 4,000+ students across the Philippines
+                      </p>
+                    </div>
+
+
                   </motion.div>
                 </motion.div>
               </div>
             </div>
           </section>
 
+
+
+          {/* Partner Printer Access (Standalone Section) */}
+          <section className="w-full py-16 md:py-24 bg-white snap-start shrink-0">
+            <div className="container px-4 md:px-6">
+              <div className="max-w-4xl mx-auto">
+                <div className="text-center mb-10">
+                  <div className="inline-flex items-center space-x-1 rounded-full bg-brand-purple/10 px-4 py-1.5 mb-4">
+                    <Printer className="h-4 w-4 text-brand-purple mr-1" />
+                    <span className="font-medium text-brand-purple">Exclusive Benefit</span>
+                  </div>
+                  <h2 className="text-3xl md:text-4xl font-serif text-[#5d4037] mb-4">Partner Printer Access</h2>
+                  <p className="text-xl text-[#6d4c41]">Print Without Heavy Equipment</p>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-8 items-center bg-brand-purple/5 rounded-3xl p-6 md:p-10">
+                  <div className="space-y-4">
+                    <p className="text-[#6d4c41] text-lg leading-relaxed">
+                      When you enroll in Papers to Profits, you don’t just learn how to print —
+                      you also get access to our partner printer to help you fulfill orders.
+                    </p>
+                    <p className="text-[#6d4c41] italic">
+                      Many students begin by using the partner printer, then transition to DIY printing later once they’re confident and profitable.
+                    </p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-2xl shadow-sm">
+                    <p className="text-sm font-semibold text-brand-purple mb-4">This allows you to:</p>
+                    <ul className="space-y-3">
+                      <li className="flex items-start gap-3 text-sm text-[#6d4c41]">
+                        <div className="mt-1 bg-green-100 p-1 rounded-full">
+                          <Check className="h-3 w-3 text-green-600 flex-shrink-0" />
+                        </div>
+                        <span>Start selling without immediately buying expensive equipment</span>
+                      </li>
+                      <li className="flex items-start gap-3 text-sm text-[#6d4c41]">
+                        <div className="mt-1 bg-green-100 p-1 rounded-full">
+                          <Check className="h-3 w-3 text-green-600 flex-shrink-0" />
+                        </div>
+                        <span>Use our partner printer while you’re getting started</span>
+                      </li>
+                      <li className="flex items-start gap-3 text-sm text-[#6d4c41]">
+                        <div className="mt-1 bg-green-100 p-1 rounded-full">
+                          <Check className="h-3 w-3 text-green-600 flex-shrink-0" />
+                        </div>
+                        <span>Learn the printing process properly before deciding to invest in your own setup</span>
+                      </li>
+                    </ul>
+                    <p className="text-xs text-[#6d4c41]/80 mt-4 border-t border-gray-100 pt-3">
+                      Partner printer access details are explained inside the course after enrollment.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
           {/* Hero Section with Immediate Enrollment Form */}
-          <section ref={heroRef} className="w-full py-12 md:py-20 bg-white relative overflow-hidden">
+          <section ref={heroRef} className="w-full py-8 md:py-20 bg-white relative overflow-hidden snap-start shrink-0">
             {/* Decorative elements */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <svg
@@ -799,592 +807,487 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
                   duration: 18,
                   repeat: Number.POSITIVE_INFINITY,
                   repeatType: "reverse",
-                  delay: 2,
                 }}
               />
             </div>
 
-            <div className="container px-4 md:px-6">
-              <div className="grid gap-8 lg:grid-cols-2 lg:gap-12 items-center">
-                {/* Left side - Hero Content */}
-                <motion.div
-                  initial="hidden"
-                  animate={isHeroInView ? "visible" : "hidden"}
-                  variants={staggerContainer}
-                  className="flex flex-col justify-center space-y-6"
-                  style={{ y: heroTextY }}
-                >
-                  <motion.div variants={fadeIn} className="space-y-2">
-                    <div className="inline-flex items-center space-x-1 rounded-full bg-brand-purple/10 px-3 py-1 text-xs font-medium text-brand-purple mb-4">
-                      <Star className="h-3 w-3 mr-1" />
-                      <span>Limited Time Offer</span>
+            <div className="container px-4 md:px-6 relative z-10">
+              <div className="max-w-6xl mx-auto">
+                <div className="grid md:grid-cols-2 gap-12 items-start">
+                  <div className="space-y-8">
+                    <div className="space-y-4">
+                      <h2 className="text-3xl md:text-4xl font-serif text-[#5d4037]">
+                        Enrollment is Open for Papers to Profits!
+                      </h2>
+                      <p className="text-lg text-[#6d4c41]">
+                        Get immediate access to the course and start your journey to a profitable printing business.
+                      </p>
                     </div>
-                    <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif tracking-tight text-[#5d4037]">
-                      Papers to Profits
-                    </h1>
-                    <p className="text-xl md:text-2xl text-brand-purple font-light">
-                      Transform Your Passion for Paper Products Into A Thriving Business
-                    </p>
-                  </motion.div>
 
-                  <motion.div variants={fadeIn} className="space-y-4">
-                    <p className="text-[#6d4c41] text-lg">
-                      Create beautiful, functional paper products that sell while being present for your family.
-                    </p>
+                    <div className="space-y-6">
+                      <Card className="border-brand-purple/20 shadow-md">
+                        <CardHeader className="bg-brand-purple/5 pb-4">
+                          <CardTitle className="flex items-center gap-2 text-[#5d4037]">
+                            <BookOpen className="h-5 w-5 text-brand-purple" />
+                            What's Included:
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                          <div className="grid gap-3">
+                            {renderFeatures()}
+                          </div>
+                        </CardContent>
+                      </Card>
 
-                    <div className="flex flex-col sm:flex-row gap-4 items-center">
-                      <div className="flex items-center">
-                        <div className="flex -space-x-2">
-                          {[
-                            "https://images.unsplash.com/photo-1544725176-7c40e5a71c5e?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
-                            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
-                            "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop&crop=face&auto=format&q=80",
-                            "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop&crop=face&auto=format&q=80"
-                          ].map((src, i) => (
-                            <div key={i} className="relative">
-                              <Image
-                                src={src}
-                                alt={`Student ${i + 1}`}
-                                width={32}
-                                height={32}
-                                className="w-8 h-8 rounded-full border-2 border-white object-cover"
-                              />
-                            </div>
-                          ))}
+                      <div className="bg-orange-50 p-6 rounded-xl border border-orange-100">
+                        <div className="flex items-start gap-3">
+                          <Star className="h-6 w-6 text-orange-400 fill-orange-400 flex-shrink-0 mt-1" />
+                          <div>
+                            <h3 className="font-semibold text-[#5d4037] mb-1">Risk-Free Enrollment</h3>
+                            <p className="text-sm text-[#6d4c41]">
+                              We're confident you'll love the course. Join thousands of other happy students today!
+                            </p>
+                          </div>
                         </div>
-                        <span className="ml-2 text-sm text-[#6d4c41]">
-                          <span className="font-medium">4,000+ students</span> enrolled
-                        </span>
-                      </div>
-
-                      <div className="flex items-center">
-                        <div className="flex">
-                          {[1, 2, 3, 4, 5].map((i) => (
-                            <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          ))}
-                        </div>
-                        <span className="ml-2 text-sm text-[#6d4c41]">
-                          <span className="font-medium">4.9/5</span> rating
-                        </span>
                       </div>
                     </div>
-                  </motion.div>
-
-                  <motion.div variants={fadeIn} className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <div className="text-3xl font-bold text-brand-purple">
-                        ₱{(courseDetails.fullPrice / 100).toFixed(2)}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-3">{renderFeatures()}</div>
-                  </motion.div>
-
-                  <motion.div variants={fadeIn} className="flex flex-col sm:flex-row gap-4 pt-4">
-                    <Button
-                      size="lg"
-                      className="bg-brand-purple hover:bg-[#8d6e63] text-white px-8 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-                      onClick={() => {
-                        const element = document.getElementById("enrollment-form")
-                        if (element) {
-                          element.scrollIntoView({ behavior: "smooth" })
-                        }
-                      }}
-                    >
-                      <span className="flex items-center">
-                        Enroll Now
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                      </span>
-                    </Button>
-
-                    <Button
-                      size="lg"
-                      variant="outline"
-                      className="border-brand-purple text-brand-purple hover:bg-brand-purple/10 px-8 py-6 text-lg rounded-full"
-                      onClick={() => {
-                        const element = document.getElementById("course-details")
-                        if (element) {
-                          element.scrollIntoView({ behavior: "smooth" })
-                        }
-                      }}
-                    >
-                      Learn More
-                    </Button>
-                  </motion.div>
-                </motion.div>
-
-                {/* Right side - Enrollment Form */}
-                <motion.div
-                  ref={formRef}
-                  id="enrollment-form"
-                  initial="hidden"
-                  animate={isFormInView ? "visible" : "hidden"}
-                  variants={fadeInFromRight}
-                  className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100"
-                >
-                  <div className="bg-gradient-to-r from-brand-purple to-brand-pink p-6 text-white">
-                    <h2 className="text-2xl font-serif">Enroll Now</h2>
-                    <p className="text-white/90">Get instant access to the full course</p>
                   </div>
 
-                  <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="firstName" className="text-[#5d4037]">
-                          First Name
-                        </Label>
-                        <Input
-                          id="firstName"
-                          name="firstName"
-                          value={formData.firstName}
-                          onChange={handleInputChange}
-                          className={`bg-white ${errors.firstName ? "border-red-500" : ""}`}
-                          placeholder="Your first name"
-                        />
-                        {errors.firstName && <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="lastName" className="text-[#5d4037]">
-                          Last Name
-                        </Label>
-                        <Input
-                          id="lastName"
-                          name="lastName"
-                          value={formData.lastName}
-                          onChange={handleInputChange}
-                          className={`bg-white ${errors.lastName ? "border-red-500" : ""}`}
-                          placeholder="Your last name"
-                        />
-                        {errors.lastName && <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>}
-                      </div>
+                  <div id="enrollment-form" ref={formRef} className="bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-gray-100 sticky top-24">
+                    <div className="mb-6 text-center">
+                      <h3 className="text-2xl font-bold text-[#5d4037] mb-2">Secure Your Spot</h3>
+                      <p className="text-sm text-[#6d4c41]">Choose your payment plan below</p>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-[#5d4037]">
-                        Email
-                      </Label>
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        className={`bg-white ${errors.email ? "border-red-500" : ""}`}
-                        placeholder="your.email@example.com"
-                        onBlur={handleEmailBlur}
-                      />
-                      {errors.email && <p className="text-red-500 text-xs mt-1">{errors.email}</p>}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="phone" className="text-[#5d4037]">
-                        Phone Number
-                      </Label>
-                      <Input
-                        id="phone"
-                        name="phone"
-                        type="tel"
-                        value={formData.phone}
-                        onChange={handleInputChange}
-                        className={`bg-white ${errors.phone ? "border-red-500" : ""}`}
-                        placeholder="+63 XXX XXX XXXX"
-                      />
-                      {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
-                    </div>
-
-                    <div className="bg-brand-purple/5 rounded-lg p-4 flex items-center text-sm text-[#6d4c41]">
-                      <Shield className="h-5 w-5 text-brand-purple mr-2 flex-shrink-0" />
-                      <p>You'll be redirected to our secure payment page after submitting your information.</p>
-                    </div>
-
-                    {errors.payment && (
-                      <div className="bg-red-50 text-red-500 p-4 rounded-lg text-sm">{errors.payment}</div>
-                    )}
-
-                    <div className="flex items-start space-x-2 my-4">
-                      <Checkbox
-                        id="marketing-opt-in"
-                        checked={marketingOptIn}
-                        onCheckedChange={(checked) => setMarketingOptIn(checked as boolean)}
-                        className="mt-1"
-                      />
-                      <div className="grid gap-1.5 leading-none">
-                        <label
-                          htmlFor="marketing-opt-in"
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-[#5d4037]"
+                    <Tabs defaultValue="full" onValueChange={setSelectedPlan} className="w-full mb-6">
+                      <TabsList className="grid w-full grid-cols-2 h-auto p-1 bg-gray-100/50">
+                        <TabsTrigger
+                          value="full"
+                          className="py-3 data-[state=active]:bg-white data-[state=active]:text-brand-purple data-[state=active]:shadow-sm"
                         >
-                          Email me guidance, reminders, occasional offers and discounts related to this purchase
-                        </label>
-                        <p className="text-xs text-muted-foreground">
-                          You can unsubscribe anytime. We don’t spam.
-                        </p>
-                      </div>
-                    </div>
+                          <div className="text-center">
+                            <div className="font-bold">Full Payment</div>
+                            <div className="text-xs opacity-90">Save ₱1,000</div>
+                          </div>
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="monthly"
+                          className="py-3 data-[state=active]:bg-white data-[state=active]:text-brand-purple data-[state=active]:shadow-sm"
+                        >
+                          <div className="text-center">
+                            <div className="font-bold">Installment</div>
+                            <div className="text-xs opacity-90">3 Monthly Payments</div>
+                          </div>
+                        </TabsTrigger>
+                      </TabsList>
 
-                    <Button
-                      type="submit"
-                      className="w-full bg-brand-purple hover:bg-[#8d6e63] text-white py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-                      disabled={isProcessing}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <svg
-                            className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
+                      <AnimatePresence mode="wait">
+                        <TabsContent value="full" className="mt-4">
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="text-center mb-6"
                           >
-                            <circle
-                              className="opacity-25"
-                              cx="12"
-                              cy="12"
-                              r="10"
-                              stroke="currentColor"
-                              strokeWidth="4"
-                            ></circle>
-                            <path
-                              className="opacity-75"
-                              fill="currentColor"
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                            ></path>
-                          </svg>
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          Proceed to Payment
-                          <ArrowRight className="ml-2 h-5 w-5" />
-                        </>
+                            <div className="text-4xl font-bold text-brand-purple">₱1,300</div>
+                            <div className="text-sm text-[#6d4c41] line-through">Regular Price: ₱2,300</div>
+                            <div className="mt-2 inline-block bg-green-100 text-green-700 text-xs px-3 py-1 rounded-full font-medium">
+                              Best Value - Save 19%
+                            </div>
+                          </motion.div>
+                        </TabsContent>
+                        <TabsContent value="monthly" className="mt-4">
+                          <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="text-center mb-6"
+                          >
+                            <div className="text-4xl font-bold text-brand-purple">₱499</div>
+                            <div className="text-sm text-[#6d4c41]">billed monthly for 3 months</div>
+                            <div className="mt-2 inline-block bg-blue-100 text-blue-700 text-xs px-3 py-1 rounded-full font-medium">
+                              Flexible Option
+                            </div>
+                          </motion.div>
+                        </TabsContent>
+                      </AnimatePresence>
+                    </Tabs>
+
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="firstName">First Name</Label>
+                          <Input
+                            id="firstName"
+                            name="firstName"
+                            value={formData.firstName}
+                            onChange={handleInputChange}
+                            placeholder="Maria"
+                            className={errors.firstName ? "border-red-500" : ""}
+                          />
+                          {errors.firstName && <p className="text-xs text-red-500">{errors.firstName}</p>}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="lastName">Last Name</Label>
+                          <Input
+                            id="lastName"
+                            name="lastName"
+                            value={formData.lastName}
+                            onChange={handleInputChange}
+                            placeholder="Santos"
+                            className={errors.lastName ? "border-red-500" : ""}
+                          />
+                          {errors.lastName && <p className="text-xs text-red-500">{errors.lastName}</p>}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email Address</Label>
+                        <Input
+                          id="email"
+                          name="email"
+                          type="email"
+                          value={formData.email}
+                          onChange={handleInputChange}
+                          onBlur={handleEmailBlur}
+                          placeholder="maria@example.com"
+                          className={errors.email ? "border-red-500" : ""}
+                        />
+                        {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="phone">Phone Number</Label>
+                        <div className="flex">
+                          <div className="flex items-center justify-center px-3 border border-r-0 rounded-l-md bg-muted text-muted-foreground text-sm">
+                            +63
+                          </div>
+                          <Input
+                            id="phone"
+                            name="phone"
+                            type="tel"
+                            value={formData.phone}
+                            onChange={handleInputChange}
+                            placeholder="912 345 6789"
+                            className={`rounded-l-none ${errors.phone ? "border-red-500" : ""}`}
+                          />
+                        </div>
+                        {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
+                      </div>
+
+                      <div className="flex items-top space-x-2 pt-2">
+                        <Checkbox
+                          id="marketing"
+                          checked={marketingOptIn}
+                          onCheckedChange={(checked) => setMarketingOptIn(checked as boolean)}
+                        />
+                        <div className="grid gap-1.5 leading-none">
+                          <label
+                            htmlFor="marketing"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-[#5d4037]"
+                          >
+                            Email me guidance and tips for starting my printing business (Unsubscribe anytime)
+                          </label>
+                        </div>
+                      </div>
+
+                      {errors.payment && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-600 flex items-center gap-2">
+                          <Shield className="h-4 w-4" />
+                          {errors.payment}
+                        </div>
                       )}
-                    </Button>
-                  </form>
-                </motion.div>
+
+                      <Button
+                        type="submit"
+                        className="w-full bg-brand-purple hover:bg-[#8d6e63] text-white py-6 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
+                        disabled={isProcessing}
+                      >
+                        {isProcessing ? (
+                          <div className="flex items-center gap-2">
+                            <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Processing...
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            Enroll Now <ArrowRight className="h-5 w-5" />
+                          </div>
+                        )}
+                      </Button>
+
+                      <p className="text-xs text-center text-gray-500 mt-4">
+                        By enrolling, you agree to our Terms of Service and Privacy Policy.
+                        Secure payment processing powered by Xendit.
+                      </p>
+                    </form>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
 
-          {/* Course Details Section */}
-          <section id="course-details" className="w-full py-20 md:py-28 bg-brand-purple/5">
+          {/* Module Curriculum */}
+          <section className="w-full py-16 md:py-24 bg-[#f3e5f5]">
             <div className="container px-4 md:px-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6 }}
-                className="flex flex-col items-center space-y-4 text-center mb-16"
-              >
-                <div className="inline-flex items-center space-x-1 rounded-full bg-brand-purple/10 px-4 py-1.5 mb-4">
-                  <BookOpen className="h-4 w-4 text-brand-purple mr-1" />
-                  <span className="font-medium text-brand-purple">Course Overview</span>
-                </div>
-                <h2 className="text-3xl md:text-4xl font-serif tracking-tighter text-[#5d4037]">What You'll Learn</h2>
-                <p className="max-w-[700px] text-[#6d4c41] md:text-lg font-light">
-                  Our comprehensive curriculum covers everything you need to create beautiful, functional paper products
-                  that sell.
+              <div className="text-center mb-12">
+                <h2 className="text-3xl md:text-4xl font-serif text-[#5d4037] mb-4">Course Curriculum</h2>
+                <p className="text-lg text-[#6d4c41] max-w-2xl mx-auto">
+                  A comprehensive step-by-step guide to building your paper products business
                 </p>
-              </motion.div>
+              </div>
 
-              <Tabs defaultValue="curriculum" className="w-full">
-                <TabsList className="w-full p-1 bg-white rounded-full grid grid-cols-3 mb-8 overflow-x-auto">
-                  {["curriculum", "instructor", "faq"].map((tab) => (
-                    <TabsTrigger
-                      key={tab}
-                      value={tab}
-                      className="rounded-full data-[state=active]:bg-brand-purple data-[state=active]:text-white transition-all duration-500 capitalize"
-                    >
-                      {tab === "curriculum" ? "Curriculum" : tab === "instructor" ? "Your Instructor" : "FAQ"}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-
-                <TabsContent value="curriculum" className="space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {modules.map((module, i) => (
-                      <motion.div
-                        key={i}
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: i * 0.1, duration: 0.5 }}
-                      >
-                        <Card className="h-full bg-white border-none shadow-lg hover:shadow-xl transition-all duration-300">
-                          <CardHeader className="pb-2">
-                            <div className="flex justify-between items-start">
-                              <CardTitle className="text-xl font-serif text-[#5d4037]">{module.title}</CardTitle>
-                              <div className="flex items-center text-xs text-[#6d4c41] bg-brand-purple/5 px-2 py-1 rounded-full">
-                                <Clock className="h-3 w-3 mr-1" />
-                                {module.duration}
-                              </div>
-                            </div>
-                            <p className="text-[#6d4c41] text-sm">{module.description}</p>
-                          </CardHeader>
-                          <CardContent>
-                            <ul className="space-y-2">
-                              {module.lessons.map((lesson, j) => (
-                                <li key={j} className="flex items-start gap-2 text-sm">
-                                  <Play className="h-4 w-4 text-brand-purple mt-0.5" />
-                                  <span className="text-[#6d4c41]">{lesson}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </CardContent>
-                        </Card>
-                      </motion.div>
-                    ))}
-                  </div>
-
-                  <div className="flex justify-center mt-8">
-                    <Button
-                      className="bg-brand-purple hover:bg-[#8d6e63] text-white px-8 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-                      onClick={() => {
-                        const element = document.getElementById("enrollment-form")
-                        if (element) {
-                          element.scrollIntoView({ behavior: "smooth" })
-                        }
-                      }}
-                    >
-                      <span className="flex items-center">
-                        Enroll Now
-                        <ArrowRight className="ml-2 h-5 w-5" />
-                      </span>
-                    </Button>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="instructor" className="space-y-8">
-                  <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-8 items-start">
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      whileInView={{ opacity: 1, scale: 1 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.5 }}
-                      className="relative"
-                    >
-                      <div className="relative rounded-2xl overflow-hidden aspect-[3/4] shadow-xl">
-                        <Image
-                          src="/Grace Edited.png"
-                          alt="Grace - Your Instructor"
-                          width={400}
-                          height={500}
-                          className="h-auto"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-                        <div className="absolute bottom-4 left-4 right-4">
-                          <div className="text-white">
-                            <h3 className="text-xl font-serif">Grace</h3>
-                            <p className="text-white/80 text-sm">Homeschooling Expert & Paper Crafting Specialist</p>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-
-                    <motion.div
-                      initial={{ opacity: 0, x: 20 }}
-                      whileInView={{ opacity: 1, x: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ duration: 0.5, delay: 0.2 }}
-                      className="space-y-6"
-                    >
-                      <div>
-                        <h3 className="text-2xl font-serif text-[#5d4037] mb-4">Meet Your Instructor</h3>
-                        <p className="text-[#6d4c41] mb-4">
-                          As a stay-at-home mom homeschooling 3 kids, I understand the unique challenges and joys of
-                          educating your children at home. My journey into paper crafting began as a way to create
-                          customized educational materials for my own children.
-                        </p>
-                        <p className="text-[#6d4c41] mb-4">
-                          What started as a passion project quickly grew into a thriving business as other homeschooling
-                          parents began requesting my journals and planners. Over the past 5 years, I've refined my
-                          techniques and business strategies, and now I'm excited to share everything I've learned with
-                          you.
-                        </p>
-                        <p className="text-[#6d4c41]">
-                          In this course, I'll guide you step-by-step through the entire process of creating beautiful
-                          paper products that not only enhance your homeschooling journey but can also become a
-                          sustainable source of income for your family.
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
-                        <div className="bg-brand-purple/5 rounded-lg p-4 text-center">
-                          <div className="text-3xl font-bold text-brand-purple mb-1">5+</div>
-                          <div className="text-sm text-[#6d4c41]">Years of Experience</div>
-                        </div>
-                        <div className="bg-brand-purple/5 rounded-lg p-4 text-center">
-                          <div className="text-3xl font-bold text-brand-purple mb-1">4,000+</div>
-                          <div className="text-sm text-[#6d4c41]">Students Taught</div>
-                        </div>
-                        <div className="bg-brand-purple/5 rounded-lg p-4 text-center">
-                          <div className="text-3xl font-bold text-brand-purple mb-1">$100k+</div>
-                          <div className="text-sm text-[#6d4c41]">Revenue Generated</div>
-                        </div>
-                      </div>
-
-                      <div className="pt-4">
-                        <Button
-                          className="bg-brand-purple hover:bg-[#8d6e63] text-white"
-                          onClick={() => {
-                            const element = document.getElementById("enrollment-form")
-                            if (element) {
-                              element.scrollIntoView({ behavior: "smooth" })
-                            }
-                          }}
-                        >
-                          <span className="flex items-center">
-                            Learn from Grace
-                            <ArrowRight className="ml-2 h-4 w-4" />
-                          </span>
-                        </Button>
-                      </div>
-                    </motion.div>
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="faq" className="space-y-6">
-                  {faqs.map((faq, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, y: 10 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: i * 0.1, duration: 0.5 }}
-                    >
-                      <Card className="bg-white border-none shadow-md hover:shadow-lg transition-all duration-300">
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-lg font-medium text-[#5d4037]">{faq.question}</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="text-[#6d4c41]">{faq.answer}</p>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  ))}
-
-                  <div className="bg-brand-purple/5 rounded-lg p-6 mt-8">
-                    <h3 className="text-lg font-medium text-[#5d4037] mb-4">Still have questions?</h3>
-                    <p className="text-[#6d4c41] mb-4">
-                      We're here to help! Contact us at{" "}
-                      <span className="text-brand-purple">help@gracefulhomeschooling.com</span> and we'll get back to
-                      you as soon as possible.
+              <div className="max-w-4xl mx-auto space-y-6">
+                {/* Module 1 */}
+                <Card className="border-none shadow-sm hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="text-xl text-[#5d4037]">Module 1: Print Class</CardTitle>
+                    <p className="text-[#6d4c41]">
+                      Start strong with the core foundations of creating profitable paper products.
                     </p>
-                    <Button
-                      className="bg-brand-purple hover:bg-[#8d6e63] text-white"
-                      onClick={() => {
-                        const element = document.getElementById("enrollment-form")
-                        if (element) {
-                          element.scrollIntoView({ behavior: "smooth" })
-                        }
-                      }}
-                    >
-                      <span className="flex items-center">
-                        Enroll Now
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </span>
-                    </Button>
-                  </div>
-                </TabsContent>
-              </Tabs>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        How to turn your creative ideas into tangible, high-quality products
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Basics of printing and paper crafting for beginners
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        The essential mindset to start your paperpreneur journey
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Clarifying your purpose, passion, vision, mission, and values
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Building a strong foundation before moving to design and production
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                {/* Module 2 */}
+                <Card className="border-none shadow-sm hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="text-xl text-[#5d4037]">Module 2: Product Creation Class</CardTitle>
+                    <p className="text-[#6d4c41]">
+                      Learn how to confidently turn your ideas into polished, sellable products.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        The full process of developing your own paper product from idea to output
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        How to bring your unique ideas to life, whether you're a beginner or already selling
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Ways to improve or refine existing designs for better quality and appeal
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        A clear, step-by-step approach to creating with purpose and strategy
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                {/* Module 3 */}
+                <Card className="border-none shadow-sm hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="text-xl text-[#5d4037]">Module 3: Launch Class</CardTitle>
+                    <p className="text-[#6d4c41]">
+                      Turn your product into profit with a successful and strategic launch.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        A step-by-step guide to launching your paper products with confidence
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Key strategies to bring your product to market successfully
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        How to plan, prepare, and execute a strong product launch
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Tips for launching a new collection or expanding an existing line
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Insights to help you stand out and sell well from day one
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                {/* Module 4 */}
+                <Card className="border-none shadow-sm hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="text-xl text-[#5d4037]">Module 4: Binding Techniques</CardTitle>
+                    <p className="text-[#6d4c41]">Upgrade your paper products with professional binding skills.</p>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        How binding methods impact product quality, durability, and appearance
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Choosing the best binding technique for your journals, planners, or notepads
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Practical tips to make your products look polished and premium
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Skills that elevate your brand and set your products apart
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+
+                {/* Module 5 */}
+                <Card className="border-none shadow-sm hover:shadow-md transition-shadow">
+                  <CardHeader>
+                    <CardTitle className="text-xl text-[#5d4037]">Module 5: Bonus Elective</CardTitle>
+                    <p className="text-[#6d4c41]">
+                      Strengthen the backbone of your paper product business with practical tools and strategies.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-2">
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Core principles every paperpreneur needs to run a sustainable business
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        How to manage and price your products with confidence
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Key mindset shifts for growth and long-term success
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Practical systems to help you stay organized and profitable
+                      </li>
+                      <li className="flex items-start gap-2 text-sm text-[#6d4c41]">
+                        <div className="mt-1.5 w-1.5 h-1.5 bg-brand-purple rounded-full flex-shrink-0" />
+                        Foundations that prepare you to scale your brand with purpose
+                      </li>
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </section>
 
-          {/* Testimonials Section */}
-          <section className="w-full py-20 md:py-28 bg-white">
-            <div className="container px-4 md:px-6">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6 }}
-                className="flex flex-col items-center space-y-4 text-center mb-16"
-              >
-                <div className="inline-flex items-center space-x-1 rounded-full bg-brand-purple/10 px-4 py-1.5 mb-4">
-                  <Star className="h-4 w-4 text-brand-purple mr-1" />
-                  <span className="font-medium text-brand-purple">Success Stories</span>
-                </div>
-                <h2 className="text-3xl md:text-4xl font-serif tracking-tighter text-[#5d4037]">What Our Students Say</h2>
-                <p className="max-w-[700px] text-[#6d4c41] md:text-lg font-light">
-                  Join hundreds of successful students who have transformed their passion into profit
+          {/* Testimonials */}
+          <section className="w-full py-16 md:py-24 bg-white relative overflow-hidden">
+            <div className="absolute inset-0 bg-[#f9f6f2] transform -skew-y-3 z-0 origin-right scale-110"></div>
+            <div className="container px-4 md:px-6 relative z-10">
+              <div className="text-center mb-12">
+                <h2 className="text-3xl md:text-4xl font-serif text-[#5d4037] mb-4">Moms Like You Taking Action</h2>
+                <p className="text-lg text-[#6d4c41]">
+                  Join a community of homeschooling moms building their own businesses
                 </p>
-              </motion.div>
+              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="grid md:grid-cols-3 gap-8">
                 {testimonials.map((testimonial, i) => (
                   <motion.div
                     key={i}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true }}
-                    transition={{ delay: i * 0.1, duration: 0.5 }}
-                    whileHover={{ y: -10 }}
+                    transition={{ delay: i * 0.2 }}
+                    className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center text-center"
                   >
-                    <Card className="h-full bg-white border-none shadow-lg hover:shadow-xl transition-all duration-300">
-                      <CardContent className="p-6">
-                        <div className="flex items-center gap-4 mb-4">
-                          <div className="relative w-16 h-16 rounded-full overflow-hidden">
-                            <Image
-                              src={testimonial.image || "/placeholder.svg"}
-                              alt={`${testimonial.name}'s testimonial`}
-                              width={100}
-                              height={125}
-                              className="h-auto"
-                            />
-                          </div>
-                          <div>
-                            <h3 className="font-medium text-[#5d4037]">{testimonial.name}</h3>
-                            <div className="flex items-center gap-1">
-                              {[...Array(5)].map((_, index) => (
-                                <Star key={index} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <p className="text-[#6d4c41] italic">{testimonial.text}</p>
-                      </CardContent>
-                    </Card>
+                    <div className="w-20 h-20 rounded-full overflow-hidden mb-4 border-2 border-brand-purple/20">
+                      <Image
+                        src={testimonial.image || "/placeholder.svg"}
+                        alt={testimonial.name}
+                        width={80}
+                        height={80}
+                        className="object-cover w-full h-full"
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <div className="flex justify-center gap-1 mb-2">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star key={s} className="h-4 w-4 text-yellow-400 fill-yellow-400" />
+                        ))}
+                      </div>
+                      <p className="text-[#6d4c41] italic text-sm">"{testimonial.text}"</p>
+                    </div>
+                    <div className="mt-auto">
+                      <span className="font-bold text-[#5d4037] block">{testimonial.name}</span>
+                      <span className="text-xs text-[#6d4c41]">Verified Student</span>
+                    </div>
                   </motion.div>
                 ))}
-              </div>
-
-              <div className="flex justify-center mt-12">
-                <Button
-                  className="bg-brand-purple hover:bg-[#8d6e63] text-white px-8 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
-                  onClick={() => {
-                    const element = document.getElementById("enrollment-form")
-                    if (element) {
-                      element.scrollIntoView({ behavior: "smooth" })
-                    }
-                  }}
-                >
-                  <span className="flex items-center">
-                    Join Our Community
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </span>
-                </Button>
               </div>
             </div>
           </section>
 
           {/* Final CTA */}
-          <section className="w-full py-16 md:py-24 bg-gradient-to-r from-brand-purple to-brand-pink text-white">
-            <div className="container px-4 md:px-6 text-center">
+          <section className="w-full py-20 md:py-32 bg-brand-purple relative overflow-hidden text-center">
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.6 }}
-                className="space-y-6 max-w-3xl mx-auto"
-              >
-                <h2 className="text-3xl md:text-4xl lg:text-5xl font-serif">
-                  Ready to Transform Your Passion into Profit?
+                className="absolute top-10 left-10 w-64 h-64 rounded-full bg-white/5"
+                animate={{
+                  scale: [1, 1.2, 1],
+                  opacity: [0.1, 0.2, 0.1],
+                }}
+                transition={{
+                  duration: 8,
+                  repeat: Number.POSITIVE_INFINITY,
+                }}
+              />
+              <motion.div
+                className="absolute bottom-10 right-10 w-96 h-96 rounded-full bg-white/5"
+                animate={{
+                  scale: [1, 1.1, 1],
+                  opacity: [0.1, 0.15, 0.1],
+                }}
+                transition={{
+                  duration: 10,
+                  repeat: Number.POSITIVE_INFINITY,
+                  delay: 2,
+                }}
+              />
+            </div>
+
+            <div className="container px-4 md:px-6 relative z-10">
+              <div className="max-w-3xl mx-auto space-y-8">
+                <h2 className="text-3xl md:text-5xl font-serif text-white">
+                  Ready to Start Your Paper Products Business?
                 </h2>
                 <p className="text-xl text-white/90">
-                  Enroll Today and Start Creating Beautiful Paper Products That Sell!
+                  Don't let doubt hold you back. You have everything you need to start today.
                 </p>
-
-                <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
+                <div className="pt-4">
                   <Button
                     size="lg"
-                    className="bg-white text-brand-purple hover:bg-white/90 px-8 py-6 text-lg rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
+                    className="bg-white text-brand-purple hover:bg-gray-100 px-8 py-6 text-xl rounded-full shadow-xl transition-all duration-300"
                     onClick={() => {
                       const element = document.getElementById("enrollment-form")
                       if (element) {
@@ -1392,27 +1295,20 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
                       }
                     }}
                   >
-                    <span className="flex items-center">
-                      Enroll Now
-                      <ArrowRight className="ml-2 h-5 w-5" />
-                    </span>
-                  </Button>
-
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="border-white text-brand-purple hover:bg-white/10 px-8 py-6 text-lg rounded-full"
-                    onClick={() => {
-                      const element = document.getElementById("course-details")
-                      if (element) {
-                        element.scrollIntoView({ behavior: "smooth" })
-                      }
-                    }}
-                  >
-                    Learn More
+                    Enroll Now
                   </Button>
                 </div>
-              </motion.div>
+                <div className="pt-8 flex justify-center gap-8 text-white/70 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    Secure Payment
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
+                    Lifetime Access
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
         </main>
@@ -1422,4 +1318,3 @@ export default function PapersToProfit({ variant = 'A' }: { variant?: string }) 
     </>
   )
 }
-

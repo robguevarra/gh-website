@@ -15,107 +15,64 @@ export const revalidate = 60
 async function getABTestStats() {
     const supabase = getAdminClient()
 
-    // 1. Fetch Visitors (Page Views)
-    // Note: We filter by path starting with /p2p-order-form to capture both / and /b rewrites if logged differently,
-    // but usually tracking logs the browser URL. Our PageTracker logs 'path' which is usePathname().
-    // Middleware rewrite preserves usePathname() as /p2p-order-form usually, BUT we are explicitly
-    // logging metadata.variant.
+    // 1. Fetch Config to get Start Date
+    const { data: configData } = await supabase
+        .from('ab_test_config')
+        .select('value')
+        .eq('key', 'current_test_start_date')
+        .single();
 
-    // A. Visitors for Variant A
-    const { data: pvA } = await supabase
-        .from("page_views")
-        .select("visitor_id")
-        .eq('metadata->>variant', 'A')
-        .ilike("path", "%p2p-order-form%")
+    // Default to a fallback if not set (though migration sets it)
+    let startDate = configData?.value?.start_date
+        ? new Date(configData.value.start_date)
+        : (configData?.value // handle if value is just string
+            ? new Date(configData.value as unknown as string)
+            : null);
 
-    // B. Visitors for Variant B
-    const { data: pvB } = await supabase
-        .from("page_views")
-        .select("visitor_id")
-        .eq('metadata->>variant', 'B')
-        .ilike("path", "%p2p-order-form%")
+    // 2. Call RPC to get accurate stats (server-side counting)
+    const { data, error } = await supabase.rpc('get_ab_test_stats', {
+        start_date: startDate?.toISOString() || null // Pass null to let RPC handle fallback/config lookup if needed, but explicit is better
+    });
 
-    // 2. Fetch Checkouts (Initiate Checkout Events)
-    const { count: checkoutsA } = await supabase
-        .from("events")
-        .select("id", { count: "exact", head: true })
-        .eq('event_name', 'initiate_checkout')
-        .eq('event_data->>variant', 'A')
-
-    const { count: checkoutsB } = await supabase
-        .from("events")
-        .select("id", { count: "exact", head: true })
-        .eq('event_name', 'initiate_checkout')
-        .eq('event_data->>variant', 'B')
-
-    // 3. Fetch Sales (Transactions)
-    // A. Sales for Variant A
-    const { data: salesAData } = await supabase
-        .from("transactions")
-        .select("amount")
-        .eq('metadata->>variant', 'A')
-        .in('status', ['paid', 'completed'])
-    // Assuming 'completed' is the success status. Adjust if needed (e.g. 'paid').
-
-    const { data: salesBData } = await supabase
-        .from("transactions")
-        .select("amount")
-        .eq('metadata->>variant', 'B')
-        .in('status', ['paid', 'completed'])
-
-    // Calculate Aggregates
-    const visitorsCountA = pvA?.length || 0
-    const visitorsCountB = pvB?.length || 0
-
-    // Unique Visitors
-    // We use a Set to count distinct visitor_ids
-    const uniqueVisitorsA = new Set(pvA?.map(p => p.visitor_id).filter(Boolean)).size
-    const uniqueVisitorsB = new Set(pvB?.map(p => p.visitor_id).filter(Boolean)).size
-
-    const checkoutCountA = checkoutsA || 0
-    const checkoutCountB = checkoutsB || 0
-
-    const salesCountA = salesAData?.length || 0
-    const salesCountB = salesBData?.length || 0
-
-    const revenueA = salesAData?.reduce((acc, curr) => acc + (curr.amount || 0), 0) || 0
-    const revenueB = salesBData?.reduce((acc, curr) => acc + (curr.amount || 0), 0) || 0
-
-    // Calculate Rates (based on Unique Visitors usually, but typically conversion is Sales / Unique Visitors)
-    // Rate 1: Interest Rate (Checkout / Unique)
-    // Rate 2: Conversion Rate (Sales / Unique)
-
-    const calculateRate = (numerator: number, denominator: number) => {
-        return denominator > 0 ? (numerator / denominator) * 100 : 0
+    if (error) {
+        console.error("Error fetching A/B stats:", error);
+        return {
+            stats: [],
+            totalVisitors: 0,
+            totalUniqueVisitors: 0,
+            totalSales: 0,
+            totalRevenue: 0,
+            startDate: startDate?.toISOString() || null
+        }
     }
 
+    const result = data as any;
+    const statsA = result.stats[0];
+    const statsB = result.stats[1];
+
+    // RPC returns raw counts. We need to calculate rates.
+    const enrichStats = (s: any) => ({
+        ...s,
+        checkoutRate: s.uniqueVisitors > 0 ? (s.checkouts / s.uniqueVisitors) * 100 : 0,
+        conversionRate: s.uniqueVisitors > 0 ? (s.sales / s.uniqueVisitors) * 100 : 0
+    });
+
+    const enrichedStats = [enrichStats(statsA), enrichStats(statsB)];
+
+    // 3. Fetch History
+    const { data: historyData } = await supabase
+        .from('ab_test_history')
+        .select('*')
+        .order('snapshot_date', { ascending: false });
+
     return {
-        stats: [
-            {
-                variant: "A",
-                visitors: visitorsCountA,
-                uniqueVisitors: uniqueVisitorsA,
-                checkouts: checkoutCountA,
-                sales: salesCountA,
-                checkoutRate: calculateRate(checkoutCountA, uniqueVisitorsA),
-                conversionRate: calculateRate(salesCountA, uniqueVisitorsA),
-                revenue: revenueA,
-            },
-            {
-                variant: "B",
-                visitors: visitorsCountB,
-                uniqueVisitors: uniqueVisitorsB,
-                checkouts: checkoutCountB,
-                sales: salesCountB,
-                checkoutRate: calculateRate(checkoutCountB, uniqueVisitorsB),
-                conversionRate: calculateRate(salesCountB, uniqueVisitorsB),
-                revenue: revenueB,
-            },
-        ],
-        totalVisitors: visitorsCountA + visitorsCountB,
-        totalUniqueVisitors: uniqueVisitorsA + uniqueVisitorsB,
-        totalSales: salesCountA + salesCountB,
-        totalRevenue: revenueA + revenueB,
+        stats: enrichedStats,
+        history: historyData || [],
+        totalVisitors: (statsA?.visitors || 0) + (statsB?.visitors || 0),
+        totalUniqueVisitors: (statsA?.uniqueVisitors || 0) + (statsB?.uniqueVisitors || 0),
+        totalSales: (statsA?.sales || 0) + (statsB?.sales || 0),
+        totalRevenue: (statsA?.revenue || 0) + (statsB?.revenue || 0),
+        startDate: result.meta?.start_date || startDate?.toISOString()
     }
 }
 
