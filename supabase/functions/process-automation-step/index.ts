@@ -81,11 +81,13 @@ serve(async (req) => {
 
         // 4.5 [NEW] Premium Funnel Logic (Journey & Step Resolution)
         let funnelStepId: string | null = null
+        let activeFunnelId: string | null = null
         try {
             // Find the funnel associated with this automation
             const { data: funnel } = await supabase.from('email_funnels').select('id').eq('automation_id', automation.id).maybeSingle()
 
             if (funnel) {
+                activeFunnelId = funnel.id
                 // Find or Create the Step for this Node
                 let { data: step } = await supabase.from('email_funnel_steps')
                     .select('id, metrics')
@@ -188,13 +190,48 @@ serve(async (req) => {
                             // Check for any successful transaction for this email
                             const { data: purchase } = await supabase
                                 .from('transactions')
-                                .select('id')
+                                .select('id, amount')
                                 .eq('contact_email', userEmail)
                                 .in('status', ['paid', 'completed'])
                                 .maybeSingle()
 
                             if (purchase) {
                                 console.log(`[Walker] SAFETY NET: Blocked email to ${userEmail} because a purchase was found (Tx: ${purchase.id}).`)
+
+                                // [ATTRIBUTION FIX] If we stop here, we MUST attribute the revenue, otherwise stats will be 0.
+                                // The Watcher usually handles this, but if JIT stops it first, Watcher might miss it or we want to be sure.
+                                // To prevent double counting, we check if journey is active.
+                                if (funnelStepId && context.contact_id) {
+                                    // 1. Update Journey to 'converted' (Atomic-ish lock against Watcher)
+                                    const { data: journey, error: journeyError } = await supabase
+                                        .from('email_funnel_journeys')
+                                        .update({
+                                            status: 'converted',
+                                            revenue_generated: purchase.amount,
+                                            completed_at: new Date().toISOString()
+                                        })
+                                        .eq('funnel_id', activeFunnelId)
+                                        .eq('contact_id', context.contact_id)
+                                        .eq('status', 'active') // Only update if still active (prevent double attribution)
+                                        .select('current_step_id') // Return to confirm we did the update
+                                        .maybeSingle()
+
+                                    // 2. If we won the race (journey was active), update step metrics
+                                    if (journey && journey.current_step_id) {
+                                        console.log(`[Walker] JIT Attribution: Attributed ${purchase.amount} to Step ${journey.current_step_id}`)
+
+                                        // Fetch current metrics to increment safely
+                                        const { data: stepData } = await supabase.from('email_funnel_steps').select('metrics').eq('id', journey.current_step_id).single()
+                                        if (stepData) {
+                                            const newMetrics = {
+                                                ...stepData.metrics,
+                                                revenue: (stepData.metrics?.revenue || 0) + Number(purchase.amount || 0),
+                                                converted: (stepData.metrics?.converted || 0) + 1
+                                            }
+                                            await supabase.from('email_funnel_steps').update({ metrics: newMetrics }).eq('id', journey.current_step_id)
+                                        }
+                                    }
+                                }
 
                                 // Mark as converted and stop
                                 await supabase.from('automation_executions').update({
@@ -253,9 +290,66 @@ serve(async (req) => {
                             let subject = currentNode.data?.subject || template.subject || ''
 
                             // Prepare Substitution Data
+                            let firstName = context?.first_name
+
+                            // [ENRICHMENT 1] Check Transactions (Guest/P2P Users) - PRIMARY
+                            // User indicates this is the most reliable source for P2P/Funnel users.
+                            // We prioritize this because P2P users often don't have a profile yet (or it's empty).
+                            if (!firstName && (context?.email || context?.contact_id)) {
+                                let q = supabase
+                                    .from('transactions')
+                                    .select('metadata')
+                                    .order('created_at', { ascending: false })
+                                    .limit(1)
+
+                                if (context.email) q = q.eq('contact_email', context.email)
+                                // Note: contact_id/lead_id matching in transaction metadata is complex without knowing structure. Email is safest link.
+
+                                const { data: txn } = await q.maybeSingle()
+
+                                if (txn?.metadata) {
+                                    const meta = txn.metadata as any
+                                    const metaName = meta.firstName || meta.first_name || meta.name
+                                    if (metaName) {
+                                        firstName = metaName
+                                        console.log(`[Walker] Enriched context with first_name (Transaction): ${firstName}`)
+                                    }
+                                }
+                            }
+
+                            // [ENRICHMENT 2] Check Purchase Leads (Secondary)
+                            // If transaction didn't have it (maybe pre-transaction?), check leads table.
+                            if (!firstName && context?.email) {
+                                const { data: lead } = await supabase
+                                    .from('purchase_leads')
+                                    .select('first_name')
+                                    .eq('email', context.email)
+                                    .maybeSingle()
+
+                                if (lead?.first_name) {
+                                    firstName = lead.first_name
+                                    console.log(`[Walker] Enriched context with first_name (Purchase Lead): ${firstName}`)
+                                }
+                            }
+
+                            // [ENRICHMENT 3] Check Unified Profiles (Registered Users) - FALLBACK
+                            // Only check this if nothing else worked.
+                            if (!firstName && context?.contact_id) {
+                                const { data: profile } = await supabase
+                                    .from('unified_profiles')
+                                    .select('first_name')
+                                    .eq('id', context.contact_id)
+                                    .maybeSingle()
+
+                                if (profile?.first_name) {
+                                    firstName = profile.first_name
+                                    console.log(`[Walker] Enriched context with first_name (Profile): ${firstName}`)
+                                }
+                            }
+
                             const substitutionData = {
-                                ...context, // contains email, first_name, etc. derived from event
-                                first_name: context?.first_name || 'Friend',
+                                ...context, // contains email, etc.
+                                first_name: firstName || 'Friend', // Fallback to Friend only if DB lookup also fails
                                 company_name: 'Graceful Homeschooling',
                                 current_year: new Date().getFullYear().toString(),
                                 login_url: 'https://gracefulhomeschooling.com/auth/signin'
@@ -265,15 +359,23 @@ serve(async (req) => {
                             const htmlBody = substituteVariables(template.html_content || '', substitutionData)
                             const textBody = stripHtml(htmlBody)
 
+                            // Construct Friendly Sender Name
+                            // If env var is just email, wrap it. If it already has <>, trust it.
+                            let fromAddress = POSTMARK_FROM_EMAIL
+                            if (!fromAddress.includes('<')) {
+                                fromAddress = `"Graceful Homeschooling" <${fromAddress}>`
+                            }
+
                             if (context?.dry_run) {
                                 console.log(`[Walker] DRY RUN: Mocking email send to ${context?.email}`)
+                                console.log(`[Walker] From: ${fromAddress}`)
                                 console.log(`[Walker] Subject: ${subject}`)
                                 actionResult = { email_sent: true, dry_run: true, messageId: 'mock-message-id' }
                             } else {
                                 // Send via Postmark
                                 console.log(`[Walker] Sending email to ${context?.email} via Postmark`)
                                 const response = await POSTMARK_CLIENT.sendEmail({
-                                    From: POSTMARK_FROM_EMAIL,
+                                    From: fromAddress,
                                     To: context.email,
                                     Subject: subject,
                                     HtmlBody: htmlBody,
@@ -526,4 +628,3 @@ function substituteVariables(content: string, vars: Record<string, any>): string
         return value !== undefined && value !== null ? String(value) : match
     })
 }
-

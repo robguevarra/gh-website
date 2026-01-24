@@ -40,6 +40,12 @@ export default function FunnelsPage() {
     const [deleteId, setDeleteId] = useState<string | null>(null)
     const [isDeleting, setIsDeleting] = useState(false)
 
+    const [globalStats, setGlobalStats] = useState({
+        revenue: 0,
+        activeJourneys: 0,
+        conversionRate: 0
+    })
+
     useEffect(() => {
         fetchFunnels()
     }, [])
@@ -51,11 +57,16 @@ export default function FunnelsPage() {
             .select(`
                 *,
                 steps:email_funnel_steps(metrics),
-                journeys:email_funnel_journeys(count)
+                journeys:email_funnel_journeys(status) 
             `)
             .order('updated_at', { ascending: false })
 
         if (data) {
+            let globalRevenue = 0
+            let globalActive = 0
+            let globalEntered = 0
+            let globalConverted = 0
+
             // Calculate aggregate stats for the list view
             const processed = (data as any[]).map(funnel => {
                 let totalRevenue = 0
@@ -66,20 +77,48 @@ export default function FunnelsPage() {
                 funnel.steps?.forEach((step: any) => {
                     const metrics = step.metrics || {}
                     totalRevenue += Number(metrics.revenue || 0)
-                    totalEntered = Math.max(totalEntered, Number(metrics.entered || 0))
+                    // Entered should be taken from the FIRST step usually, or max of any step?
+                    // Taking max means "at least reached this deep".
+                    // Taking sum is wrong.
+                    // Let's use the First Step's entered count as "Total Participants".
+                    // Assuming step_order 1 is first.
+                    if (step.step_order === 1) {
+                        totalEntered = Number(metrics.entered || 0)
+                    }
+                    // For conversion, we sum all 'converted' metrics (if multiple conversion points?)
+                    // Or usually just one conversion goal.
                     totalConverted += Number(metrics.converted || 0)
                 })
+
+                // Fallback if step_order 1 not found or 0
+                if (totalEntered === 0 && funnel.steps?.length > 0) {
+                    totalEntered = Math.max(...funnel.steps.map((s: any) => Number(s.metrics?.entered || 0)))
+                }
+
+                // Active Count: Filter JS side
+                const activeCount = funnel.journeys?.filter((j: any) => j.status === 'active').length || 0
+
+                // Global Accumulation
+                globalRevenue += totalRevenue
+                globalActive += activeCount
+                globalEntered += totalEntered
+                globalConverted += totalConverted
 
                 return {
                     ...funnel,
                     stats: {
                         revenue: totalRevenue,
-                        active_users: funnel.journeys?.[0]?.count || 0,
+                        active_users: activeCount,
                         conversion_rate: totalEntered > 0 ? (totalConverted / totalEntered) * 100 : 0
                     }
                 }
             })
             setFunnels(processed)
+            setGlobalStats({
+                revenue: globalRevenue,
+                activeJourneys: globalActive,
+                conversionRate: globalEntered > 0 ? (globalConverted / globalEntered) * 100 : 0
+            })
         }
         setLoading(false)
     }
@@ -135,7 +174,9 @@ export default function FunnelsPage() {
                                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold">₱0.00</div>
+                                <div className="text-2xl font-bold">
+                                    {new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(globalStats.revenue)}
+                                </div>
                                 <p className="text-xs text-muted-foreground">+0% from last month</p>
                             </CardContent>
                         </Card>
@@ -145,7 +186,7 @@ export default function FunnelsPage() {
                                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold">0</div>
+                                <div className="text-2xl font-bold">{globalStats.activeJourneys}</div>
                                 <p className="text-xs text-muted-foreground">Across all funnels</p>
                             </CardContent>
                         </Card>
@@ -155,7 +196,7 @@ export default function FunnelsPage() {
                                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold">0.0%</div>
+                                <div className="text-2xl font-bold">{globalStats.conversionRate.toFixed(1)}%</div>
                                 <p className="text-xs text-muted-foreground">Global average</p>
                             </CardContent>
                         </Card>
